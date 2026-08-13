@@ -94,6 +94,7 @@ dialog::backdrop{background:rgba(0,0,0,.3)}
     <select id="ymSel"></select>
     <button class="btn sm line" id="btnNewMonth">+ 새 달</button>
     <span class="fbchip" id="fbChip">로컬 저장</span>
+    <button class="btn sm gray" id="btnLogoutTop" style="display:none">로그아웃</button>
     <span class="savechip" id="saveChip">-</span>
   </div>
   <div class="tabs">
@@ -220,45 +221,107 @@ function ymLabel(ym){return `20${ym.slice(0,2)}년 ${parseInt(ym.slice(2))}월 (
 function getPath(o,p){return p.split('.').reduce((a,k)=>a==null?undefined:a[k],o);}
 function setPath(o,p,v){const ks=p.split('.');let t=o;for(let i=0;i<ks.length-1;i++){if(t[ks[i]]==null)t[ks[i]]={};t=t[ks[i]];}t[ks[ks.length-1]]=v;}
 
-/* ============ 데이터 모델 ============ */
+/* ============ 데이터 모델 (v2 — 엑셀 수식 구조와 동일) ============ */
 function emptyMonth(){return{
-  v:1,
-  market:{gye:0,myeon:0,cashGye:0,cashMyeon:0,cardGye:0,cardMyeon:0,zeropay:0,point:0,credit:0,jeongyukGye:0,jeongyukMyeon:0,pointAccum:0,guest:0},
-  members:{insadongGye:0,insadongMyeon:0,bojagiGye:0,bojagiMyeon:0,siksaGye:0,siksaMyeon:0,pangongGye:0,pangongMyeon:0,taxinvGye:0,taxinvMyeon:0},
-  bpos:{kiosk:0,marketpos:0,coupang:0,zeropay:0,liquor:0},
-  corner:{cardTotal:0,cardBojagi:0,cashTotal:0,cashBojagi:0},
+  v:2,
+  market:{total:0,myeon:0,gong:0,buga:0,cashMyeon:0,cashGong:0,cashBuga:0,cardMyeon:0,cardGong:0,cardBuga:0,zeropay:0,point:0,credit:0,jeongyukMyeon:0,jeongyukGwase:0,pointAccum:0,guest:0},
+  members:{insadongGye:0,insadongGong:0,insadongBuga:0,bojagiGye:0,bojagiGong:0,bojagiBuga:0,siksaGye:0,siksaGong:0,siksaBuga:0,pangongGye:0,pangongGong:0,pangongBuga:0},
+  bpos:{kioskGye:0,kioskGong:0,kioskBuga:0,marketpos:0,coupangGye:0,coupangGong:0,coupangBuga:0,zeropay:0,liquor:0},
+  corner:{cardTotal:0,cashTotal:0,cardBojagi:0},
   nts:{card:0,zeropay:0,hyeonGong:0,hyeonBuga:0,hyeonMyeon:0,cardGong:null,cardBuga:null},
   ss:{gwase:0,myeon:0,card:0,hyeon:0,gita:0,split:null},
   taxEtc:{gong:0,buga:0,myeon:0},
-  kkotbap:{catchT:0,card:0,cash:0,ntsCard:0,ntsHyeon:0,guest:0},
-  misc:{jaegoMarket:0,jaegoBojagi:0,jaegoPida:0,feeKkotbap:0,feeMarket:0,feeBojagi:0,feePida:0},
+  kkotbap:{catchGye:0,catchGong:0,catchBuga:0,card:0,cash:0,ntsCard:0,ntsCardGong:0,ntsCardBuga:0,ntsHyeon:0,ntsHyeonGong:0,ntsHyeonBuga:0,guest:0},
+  misc:{jaegoMarket:0,jaegoBojagi:0,jaegoPida:0,feeMarket:0,feeBojagi:0,feePida:0},
   buyBojagi:[],buyPida:[],memo:'',savedAt:null
 };}
-function migrate(m){const e=emptyMonth();for(const k in e){if(m[k]===undefined)m[k]=e[k];else if(typeof e[k]==='object'&&!Array.isArray(e[k])&&e[k]!==null){for(const k2 in e[k])if(m[k][k2]===undefined)m[k][k2]=e[k][k2];}}return m;}
-
-let MONTHS={};   // ym -> month data
-let CUR=null;    // 현재 ym
-let DIRTY=false, SAVETIMER=null;
-let db=null, FB=false;
-
-/* ============ 확정 계산 ============ */
+function fillDefaults(m){const e=emptyMonth();for(const k in e){if(m[k]===undefined)m[k]=e[k];else if(typeof e[k]==='object'&&!Array.isArray(e[k])&&e[k]!==null){for(const k2 in e[k])if(m[k][k2]===undefined)m[k][k2]=e[k][k2];}}return m;}
+function migrate(m){
+  if(m&&m.v>=2)return fillDefaults(m);
+  // ---- v1 → v2 변환 (예전 저장분·클라우드 데이터 자동 업그레이드) ----
+  const o=m||{},n=emptyMonth();
+  const g=(obj,k)=>((obj||{})[k])||0;
+  const vat=(gye,myeon)=>{const gw=gye-myeon,go=exVat(gw);return[go,gw-go];};
+  // 마켓
+  const mkGye=g(o.market,'gye'),mkMy=g(o.market,'myeon');
+  n.market.total=mkGye+g(o.bpos,'marketpos');
+  n.market.myeon=mkMy;[n.market.gong,n.market.buga]=vat(mkGye,mkMy);
+  n.market.cashMyeon=g(o.market,'cashMyeon');[n.market.cashGong,n.market.cashBuga]=vat(g(o.market,'cashGye'),n.market.cashMyeon);
+  n.market.cardMyeon=g(o.market,'cardMyeon');[n.market.cardGong,n.market.cardBuga]=vat(g(o.market,'cardGye'),n.market.cardMyeon);
+  n.market.zeropay=g(o.market,'zeropay');n.market.point=g(o.market,'point');n.market.credit=g(o.market,'credit');
+  n.market.jeongyukMyeon=g(o.market,'jeongyukMyeon');
+  n.market.jeongyukGwase=g(o.market,'jeongyukGye')-g(o.market,'jeongyukMyeon');
+  n.market.pointAccum=g(o.market,'pointAccum');n.market.guest=g(o.market,'guest');
+  // 회원분석
+  for(const x of['insadong','bojagi','siksa','pangong']){
+    const gye=g(o.members,x+'Gye'),my=g(o.members,x+'Myeon');
+    n.members[x+'Gye']=gye;const[go,bu]=vat(gye,my);n.members[x+'Gong']=go;n.members[x+'Buga']=bu;
+  }
+  // 보자기포스
+  const kg=g(o.bpos,'kiosk');n.bpos.kioskGye=kg;n.bpos.kioskGong=exVat(kg);n.bpos.kioskBuga=kg-exVat(kg);
+  n.bpos.marketpos=g(o.bpos,'marketpos');
+  const cg=g(o.bpos,'coupang');n.bpos.coupangGye=cg;n.bpos.coupangGong=exVat(cg);n.bpos.coupangBuga=cg-exVat(cg);
+  n.bpos.zeropay=g(o.bpos,'zeropay');n.bpos.liquor=g(o.bpos,'liquor');
+  n.corner.cardTotal=g(o.corner,'cardTotal');n.corner.cashTotal=g(o.corner,'cashTotal');n.corner.cardBojagi=g(o.corner,'cardBojagi');
+  if(!n.bpos.marketpos&&(g(o.corner,'cardBojagi')||g(o.corner,'cashBojagi')))n.bpos.marketpos=g(o.corner,'cardBojagi')+g(o.corner,'cashBojagi');
+  // 국세청/스마트스토어/기타
+  if(o.nts){n.nts={...n.nts,...o.nts};}
+  if(o.ss){n.ss={...n.ss,...o.ss};}
+  if(o.taxEtc){n.taxEtc={...n.taxEtc,...o.taxEtc};}
+  // 꽃밥
+  const ct=g(o.kkotbap,'catchT');n.kkotbap.catchGye=ct;n.kkotbap.catchGong=exVat(ct);n.kkotbap.catchBuga=ct-exVat(ct);
+  n.kkotbap.card=g(o.kkotbap,'card');n.kkotbap.cash=g(o.kkotbap,'cash');
+  const nc=g(o.kkotbap,'ntsCard');n.kkotbap.ntsCard=nc;n.kkotbap.ntsCardGong=exVat(nc);n.kkotbap.ntsCardBuga=nc-exVat(nc);
+  const nh=g(o.kkotbap,'ntsHyeon');n.kkotbap.ntsHyeon=nh;n.kkotbap.ntsHyeonGong=exVat(nh);n.kkotbap.ntsHyeonBuga=nh-exVat(nh);
+  n.kkotbap.guest=g(o.kkotbap,'guest');
+  // 재고/수수료
+  n.misc.jaegoMarket=g(o.misc,'jaegoMarket');n.misc.jaegoBojagi=g(o.misc,'jaegoBojagi');n.misc.jaegoPida=g(o.misc,'jaegoPida');
+  n.misc.feeMarket=g(o.misc,'feeMarket');n.misc.feeBojagi=g(o.misc,'feeBojagi');n.misc.feePida=g(o.misc,'feePida');
+  if(!n.misc.feeMarket&&!n.misc.feeBojagi&&g(o.misc,'feeKkotbap'))n.misc.feeMarket=g(o.misc,'feeKkotbap');
+  n.buyBojagi=o.buyBojagi||[];n.buyPida=o.buyPida||[];n.memo=o.memo||'';n.savedAt=o.savedAt||null;
+  return n;
+}
+/* ============ 파생값 (엑셀 수식과 동일) ============ */
+function derived(m){
+  const d={};
+  d.cashBojagi=m.bpos.marketpos-m.corner.cardBojagi;              // L23 =마켓포스계-카드보자기
+  d.marketGye=m.market.total-m.bpos.marketpos;                    // B4 =전체-마켓포스분
+  d.cashGye=m.corner.cashTotal-d.cashBojagi;                      // B5 =승인현금-보자기현금
+  d.cardGye=m.corner.cardTotal-m.corner.cardBojagi;               // B6 =승인카드-보자기카드
+  d.gwase=d.marketGye-m.market.myeon;                             // D4
+  d.cashGwase=d.cashGye-m.market.cashMyeon;
+  d.cardGwase=d.cardGye-m.market.cardMyeon;
+  d.jeongyukGye=m.market.jeongyukMyeon+m.market.jeongyukGwase;
+  for(const x of['insadong','bojagi','siksa','pangong']){
+    d[x+'Gwase']=m.members[x+'Gong']+m.members[x+'Buga'];
+    d[x+'Myeon']=m.members[x+'Gye']-d[x+'Gwase'];
+  }
+  d.taxinvGye=0;d.taxinvGong=0;d.taxinvBuga=0;d.taxinvMyeon=0;
+  for(const x of['insadong','bojagi','siksa','pangong']){
+    d.taxinvGye+=m.members[x+'Gye'];d.taxinvGong+=m.members[x+'Gong'];
+    d.taxinvBuga+=m.members[x+'Buga'];d.taxinvMyeon+=d[x+'Myeon'];
+  }
+  d.bposGye=m.bpos.kioskGye+m.bpos.marketpos;                     // C20
+  d.marketCardK=m.corner.cardTotal-m.corner.cardBojagi;           // K22
+  d.marketCashK=m.corner.cashTotal-d.cashBojagi;                  // K23
+  d.ntsTotal=m.nts.card+m.nts.zeropay;
+  d.feeKkotbap=m.misc.feeMarket+m.misc.feeBojagi;                 // D40 =마켓+보자기
+  return d;
+}
 function deriveInputs(m){
-  const pair=(gye,myeon)=>{const D=gye-myeon,g=exVat(D);return{g,v:D-g,m:myeon};};
-  const card=pair(m.market.cardGye,m.market.cardMyeon);
-  const cash=pair(m.market.cashGye,m.market.cashMyeon);
-  const tot=pair(m.market.gye,m.market.myeon);
-  const kb=pair(m.members.taxinvGye,m.members.taxinvMyeon);
-  const bjCashG=exVat(m.corner.cashBojagi), bjCardG=exVat(m.corner.cardBojagi);
-  const kioskG=exVat(m.bpos.kiosk), cpG=exVat(m.bpos.coupang);
-  const ntsTotal=m.nts.card+m.nts.zeropay;
-  // 국세청 카드 과세분 추정
-  const K18=(card.g+card.v)+(m.corner.cardBojagi)+(m.bpos.kiosk);
+  const d=derived(m);
+  const card={g:m.market.cardGong,v:m.market.cardBuga,m:m.market.cardMyeon};
+  const cash={g:m.market.cashGong,v:m.market.cashBuga,m:m.market.cashMyeon};
+  const tot={g:m.market.gong,v:m.market.buga,m:m.market.myeon};
+  const kb={g:d.taxinvGong,v:d.taxinvBuga,m:d.taxinvMyeon};
+  const bjCashG=exVat(d.cashBojagi),bjCardG=exVat(m.corner.cardBojagi);
+  const ntsTotal=d.ntsTotal;
+  const K18=(card.g+card.v)+m.corner.cardBojagi+m.bpos.kioskGye;
   const M18=K18+card.m;
   const est=M18>0?ntsTotal*K18/M18:0;
-  const estG=exVat(est), estV=Math.round(est)-estG;
+  const estG=exVat(est),estV=Math.round(est)-estG;
   const cardGong=m.nts.cardGong!=null?m.nts.cardGong:estG;
   const cardBuga=m.nts.cardBuga!=null?m.nts.cardBuga:estV;
-  // 스마트스토어 분배
   let sp=m.ss.split;
   if(!sp){
     sp={card:[0,0],hyeon:[0,0],gita:[0,0]};
@@ -272,10 +335,10 @@ function deriveInputs(m){
         sp[c[0]]=[k,l];});
     }
   }
-  return{card,cash,tot,kb,bjCashG,bjCardG,kioskG,cpG,ntsTotal,cardGong,cardBuga,estG,estV,sp};
+  return{d,card,cash,tot,kb,bjCashG,bjCardG,ntsTotal,cardGong,cardBuga,estG,estV,sp};
 }
 function compute(m){
-  const I=deriveInputs(m);
+  const I=deriveInputs(m),d=I.d;
   const V={};
   V.B3=I.card.g;V.C3=I.card.v;V.E3=I.card.m;
   V.B4=I.cash.g;V.C4=I.cash.v;V.E4=I.cash.m;
@@ -283,17 +346,17 @@ function compute(m){
   V.B7=I.tot.g;V.C7=I.tot.v;V.E7=I.tot.m;
   V.B8=I.kb.g;V.C8=I.kb.v;V.E8=I.kb.m;
   V.B9=m.taxEtc.gong;V.C9=m.taxEtc.buga;V.E9=m.taxEtc.myeon;
-  V.B11=I.bjCashG;V.C11=m.corner.cashBojagi-I.bjCashG;V.E11=0;
+  V.B11=I.bjCashG;V.C11=d.cashBojagi-I.bjCashG;V.E11=0;
   V.B12=I.bjCardG;V.C12=m.corner.cardBojagi-I.bjCardG;V.E12=0;
-  V.B13=I.kioskG;V.C13=m.bpos.kiosk-I.kioskG;V.E13=0;
+  V.B13=m.bpos.kioskGong;V.C13=m.bpos.kioskBuga;V.E13=0;
   V.B16=I.cardGong;V.C16=I.cardBuga;
   V.B17=m.nts.hyeonGong;V.C17=m.nts.hyeonBuga;V.E17=m.nts.hyeonMyeon;
-  V.H19=I.ntsTotal;V.N18=m.misc.feeKkotbap;
+  V.H19=I.ntsTotal;V.N18=d.feeKkotbap;
   V.K26=m.ss.gwase;V.L26=m.ss.myeon;V.I26=exVat(V.K26);V.J26=V.K26-V.I26;
   V.K27=I.sp.card[0];V.L27=I.sp.card[1];V.I27=exVat(V.K27);V.J27=V.K27-V.I27;V.M27=V.K27+V.L27;
   V.K28=I.sp.hyeon[0];V.L28=I.sp.hyeon[1];V.I28=exVat(V.K28);V.J28=V.K28-V.I28;V.M28=V.K28+V.L28;
   V.K29=I.sp.gita[0];V.L29=I.sp.gita[1];V.I29=exVat(V.K29);V.J29=V.K29-V.I29;V.M29=V.K29+V.L29;
-  V.B37=I.cpG;V.C37=m.bpos.coupang-I.cpG;
+  V.B37=m.bpos.coupangGong;V.C37=m.bpos.coupangBuga;
   V.D3=V.B3+V.C3;V.F3=V.D3+V.E3;
   V.D4=V.B4+V.C4;V.F4=V.D4+V.E4;V.G4=V.E3+V.E4;
   V.B5=V.F5+V.F6;
@@ -338,16 +401,25 @@ function compute(m){
 }
 function kkotbapCalc(m){
   const gye=m.kkotbap.card+m.kkotbap.cash;
-  const all=gye+m.kkotbap.catchT;
+  const all=gye+m.kkotbap.catchGye;
   const somae=gye-m.kkotbap.ntsCard-m.kkotbap.ntsHyeon;
-  return{gye,all,somae,gong:exVat(all),buga:all-exVat(all)};
+  const gong=exVat(gye);
+  const somaeGong=gong-m.kkotbap.ntsCardGong-m.kkotbap.ntsHyeonGong;
+  return{gye,all,somae,gong,buga:gye-gong,somaeGong};
 }
 function validations(m){
-  const w=[],V=compute(m);
+  const w=[],V=compute(m),d=derived(m);
   const near=(a,b,t)=>Math.abs(a-b)<=(t||2);
-  const compSum=m.market.cashGye+m.market.cardGye+m.market.zeropay+m.market.point+m.market.credit;
-  if(m.market.gye>0&&!near(m.market.gye,compSum))w.push(`마켓 계(${fmt(m.market.gye)})와 현금+카드+제로페이+포인트+외상 합(${fmt(compSum)})이 ${fmt(Math.abs(m.market.gye-compSum))}원 차이납니다.`);
-  if(m.bpos.marketpos>0&&!near(m.corner.cardBojagi+m.corner.cashBojagi,m.bpos.marketpos))w.push(`승인현황 보자기 카드+현금(${fmt(m.corner.cardBojagi+m.corner.cashBojagi)})과 보자기포스 '마켓포스' 계(${fmt(m.bpos.marketpos)})가 다릅니다.`);
+  const compSum=d.cashGye+d.cardGye+m.market.zeropay+m.market.point+m.market.credit;
+  if(d.marketGye>0&&!near(d.marketGye,compSum))w.push(`마켓 계(${fmt(d.marketGye)})와 현금+카드+제로페이+포인트+외상 합(${fmt(compSum)})이 ${fmt(Math.abs(d.marketGye-compSum))}원 차이납니다. 전체 계·승인현황 숫자를 확인하세요.`);
+  if(d.cashBojagi<0)w.push(`보자기 현금이 음수입니다 — 보자기포스 '마켓포스' 계와 승인현황 '카드 보자기' 값을 확인하세요.`);
+  const pairChk=[["마켓 계",d.gwase,m.market.gong,m.market.buga],["마켓 현금",d.cashGwase,m.market.cashGong,m.market.cashBuga],["마켓 카드",d.cardGwase,m.market.cardGong,m.market.cardBuga],["키오스크",m.bpos.kioskGye,m.bpos.kioskGong,m.bpos.kioskBuga],["쿠팡이츠",m.bpos.coupangGye,m.bpos.coupangGong,m.bpos.coupangBuga]];
+  for(const[nm,gw,go,bu]of pairChk){
+    if((go||bu)&&!near(gw,go+bu))w.push(`${nm}: 공급가+부가세(${fmt(go+bu)})가 과세 계(${fmt(gw)})와 다릅니다.`);
+  }
+  for(const[x,nm]of[["insadong","인사동"],["bojagi","보자기"],["siksa","식사"],["pangong","판공"]]){
+    if(d[x+'Myeon']<0)w.push(`회원분석 ${nm}: 공급가+부가세가 계보다 커서 면세가 음수입니다.`);
+  }
   if(V.H19>0&&V.D16>V.H19)w.push(`국세청 카드 과세계(${fmt(V.D16)})가 카드 총액(${fmt(V.H19)})보다 큽니다.`);
   if(Math.abs(V.K27+V.K28+V.K29-V.K26)>2||Math.abs(V.L27+V.L28+V.L29-V.L26)>2)w.push(`스마트스토어 채널 분배 합이 과세/면세 총액과 맞지 않습니다.`);
   if(m.bpos.liquor>0)w.push(`주류 매출 ${fmt(m.bpos.liquor)}원은 확정표에 자동 반영되지 않습니다(2606 양식 기준). 기록용으로만 저장됩니다.`);
@@ -358,108 +430,121 @@ function validations(m){
   return w;
 }
 
-/* ============ 입력 탭 렌더 ============ */
-const AUTO={}; // id -> fn(m)
+let MONTHS={};   // ym -> month data
+let CUR=null;    // 현재 ym
+let DIRTY=false, SAVETIMER=null;
+let db=null, FB=false;
+
+/* ============ 입력 탭 렌더 (v2 — 엑셀과 동일한 입력/자동 구분) ============ */
+const AUTO={};
 function autoCell(id,fn,strong){AUTO[id]=fn;return `<td class="au${strong?' strong':''}" data-ac="${id}"></td>`;}
 function inp(path,cls){return `<td><input data-p="${path}" class="${cls||''}"></td>`;}
-function pairRow(lb,gyeP,myeonP,m){
-  const id=gyeP.replace(/\./g,'_');
-  return `<tr><td class="lb">${lb}</td>${inp(gyeP)}${inp(myeonP)}`+
-    autoCell(id+'_D',mm=>getPath(mm,gyeP)-getPath(mm,myeonP))+
-    autoCell(id+'_G',mm=>exVat(getPath(mm,gyeP)-getPath(mm,myeonP)))+
-    autoCell(id+'_V',mm=>{const D=getPath(mm,gyeP)-getPath(mm,myeonP);return D-exVat(D);})+`</tr>`;
-}
-function singleRow(lb,path,note){
-  return `<tr><td class="lb">${lb}</td>${inp(path)}<td class="au" colspan="4" style="text-align:left;color:var(--sub)">${note||''}</td></tr>`;
-}
+function blank(n){return `<td class="au" colspan="${n||1}"></td>`;}
 function renderInput(){
   const m=MONTHS[CUR];
   const pg=$("#pg-input");
-  const PH=`<tr><th style="width:170px">항목</th><th>계</th><th>면세</th><th>과세 계</th><th>공급가</th><th>부가세</th></tr>`;
   let h='';
-  h+=`<div class="card"><h2>① 꽃밥마켓 — 마켓포스 <small>OKPOS 매출분석 기준</small></h2><table class="g">${PH}
-    ${pairRow('계 (마켓 전체)','market.gye','market.myeon')}
-    ${pairRow('현금','market.cashGye','market.cashMyeon')}
-    ${pairRow('카드','market.cardGye','market.cardMyeon')}
-    ${singleRow('제로페이 (계)','market.zeropay')}
-    ${singleRow('포인트 사용 (계)','market.point')}
-    ${singleRow('외상 (계)','market.credit')}
-    ${pairRow('정육','market.jeongyukGye','market.jeongyukMyeon')}
-    ${singleRow('포인트 적립','market.pointAccum')}
-    ${singleRow('고객수','market.guest','명')}
+  h+=`<div class="card" style="padding:10px 16px"><div class="flex"><button class="btn sm line" id="btnAutofill">🪄 빈 공급가·부가세 자동 채우기</button><span class="hint">계·면세를 넣은 뒤 누르면 비어있는 공급가/부가세를 자동 계산합니다 (이미 입력한 칸은 건드리지 않아요)</span></div></div>`;
+  // ① 마켓
+  h+=`<div class="card"><h2>① 꽃밥마켓 — 마켓포스 <small>OKPOS 매출분석 기준 · 회색 칸은 자동 계산</small></h2>
+  <table class="g"><tr><th style="width:160px">항목</th><th>계</th><th>면세</th><th>과세 계</th><th>공급가</th><th>부가세</th></tr>
+    <tr><td class="lb">포스 전체 계<div class="hint">보자기 결제분 포함</div></td>${inp('market.total')}<td class="au" colspan="4" style="text-align:left;color:var(--sub)">엑셀의 맨 위 총액 (여기서 보자기 몫을 빼서 마켓 계가 계산됩니다)</td></tr>
+    <tr><td class="lb">마켓 계</td>`+autoCell('mk_gye',mm=>derived(mm).marketGye,true)+`${inp('market.myeon')}`+autoCell('mk_gw',mm=>derived(mm).gwase)+`${inp('market.gong')}${inp('market.buga')}</tr>
+    <tr><td class="lb">현금</td>`+autoCell('mk_cash',mm=>derived(mm).cashGye)+`${inp('market.cashMyeon')}`+autoCell('mk_cashgw',mm=>derived(mm).cashGwase)+`${inp('market.cashGong')}${inp('market.cashBuga')}</tr>
+    <tr><td class="lb">카드</td>`+autoCell('mk_card',mm=>derived(mm).cardGye)+`${inp('market.cardMyeon')}`+autoCell('mk_cardgw',mm=>derived(mm).cardGwase)+`${inp('market.cardGong')}${inp('market.cardBuga')}</tr>
+    <tr><td class="lb">제로페이 (계)</td>${inp('market.zeropay')}${blank(4)}</tr>
+    <tr><td class="lb">포인트 사용 (계)</td>${inp('market.point')}${blank(4)}</tr>
+    <tr><td class="lb">외상 (계)</td>${inp('market.credit')}${blank(4)}</tr>
+    <tr><td class="lb">정육</td>`+autoCell('mk_jy',mm=>derived(mm).jeongyukGye)+`${inp('market.jeongyukMyeon')}${inp('market.jeongyukGwase')}<td class="au" colspan="2" style="text-align:left;color:var(--sub)">면세(한우 등)·과세 입력 → 계 자동</td></tr>
+    <tr><td class="lb">포인트 적립</td>${inp('market.pointAccum')}${blank(4)}</tr>
+    <tr><td class="lb">고객수</td>${inp('market.guest')}<td class="au" colspan="4" style="text-align:left;color:var(--sub)">명</td></tr>
   </table><div id="vMarket"></div></div>`;
-  h+=`<div class="card"><h2>② 회원분석 세부 <small>OKPOS 회원관리-일자별회원구매내역</small></h2><table class="g">${PH}
-    ${pairRow('인사동','members.insadongGye','members.insadongMyeon')}
-    ${pairRow('보자기','members.bojagiGye','members.bojagiMyeon')}
-    ${pairRow('식사','members.siksaGye','members.siksaMyeon')}
-    ${pairRow('판공','members.pangongGye','members.pangongMyeon')}
-    ${pairRow('세금계산서발행','members.taxinvGye','members.taxinvMyeon')}
-  </table></div>`;
-  h+=`<div class="card"><h2>③ 보자기꽃밥 — 보자기포스 <small>키오스크 + 마켓포스로 받은 보자기 결제</small></h2>
-  <table class="g"><tr><th style="width:170px">항목</th><th>계</th><th>공급가</th><th>부가세</th><th colspan="2"></th></tr>
-    ${(()=>{let r='';
-      const rows=[['키오스크','bpos.kiosk'],['쿠팡이츠','bpos.coupang'],['제로페이','bpos.zeropay'],['주류','bpos.liquor']];
-      for(const[lb,p]of rows){const id=p.replace(/\./g,'_');
-        r+=`<tr><td class="lb">${lb}</td>${inp(p)}`+autoCell(id+'_G',mm=>exVat(getPath(mm,p)))+autoCell(id+'_V',mm=>getPath(mm,p)-exVat(getPath(mm,p)))+`<td class="au" colspan="2"></td></tr>`;}
-      r+=`<tr><td class="lb">보자기포스 계</td>`+autoCell('bpos_tot',mm=>mm.bpos.kiosk+mm.corner.cardBojagi+mm.corner.cashBojagi,true)+`<td class="au" colspan="4" style="text-align:left;color:var(--sub)">키오스크 + 아래 승인현황의 보자기 카드/현금</td></tr>`;
-      return r;})()}
+  // ② 회원분석
+  h+=`<div class="card"><h2>② 회원분석 세부 <small>OKPOS 일자별회원구매내역 — 계·공급가·부가세 입력, 면세는 자동</small></h2>
+  <table class="g"><tr><th style="width:160px">항목</th><th>계</th><th>면세 (자동)</th><th>과세 계 (자동)</th><th>공급가</th><th>부가세</th></tr>
+    ${[['insadong','인사동'],['bojagi','보자기'],['siksa','식사'],['pangong','판공']].map(([x,nm])=>
+      `<tr><td class="lb">${nm}</td>${inp('members.'+x+'Gye')}`
+      +autoCell('mb_'+x+'_m',mm=>derived(mm)[x+'Myeon'])
+      +autoCell('mb_'+x+'_g',mm=>derived(mm)[x+'Gwase'])
+      +`${inp('members.'+x+'Gong')}${inp('members.'+x+'Buga')}</tr>`).join('')}
+    <tr><td class="lb">세금계산서발행 (자동 합계)</td>`
+      +autoCell('mb_tx_gye',mm=>derived(mm).taxinvGye,true)
+      +autoCell('mb_tx_m',mm=>derived(mm).taxinvMyeon,true)
+      +autoCell('mb_tx_gw',mm=>derived(mm).taxinvGong+derived(mm).taxinvBuga,true)
+      +autoCell('mb_tx_g',mm=>derived(mm).taxinvGong,true)
+      +autoCell('mb_tx_v',mm=>derived(mm).taxinvBuga,true)+`</tr>
+  </table><div class="hint">세금계산서발행은 위 네 줄의 합으로 자동 계산되어 매출확정의 '꽃밥(세금계산서)'로 들어갑니다.</div></div>`;
+  // ③ 보자기포스
+  h+=`<div class="card"><h2>③ 보자기꽃밥 — 보자기포스</h2>
+  <table class="g"><tr><th style="width:160px">항목</th><th>계</th><th>공급가</th><th>부가세</th><th colspan="2"></th></tr>
+    <tr><td class="lb">키오스크</td>${inp('bpos.kioskGye')}${inp('bpos.kioskGong')}${inp('bpos.kioskBuga')}${blank(2)}</tr>
+    <tr><td class="lb">마켓포스 (보자기 결제분 계)</td>${inp('bpos.marketpos')}<td class="au" colspan="4" style="text-align:left;color:var(--sub)">마켓포스로 받은 보자기 현금+카드 총액</td></tr>
+    <tr><td class="lb">쿠팡이츠</td>${inp('bpos.coupangGye')}${inp('bpos.coupangGong')}${inp('bpos.coupangBuga')}${blank(2)}</tr>
+    <tr><td class="lb">제로페이 (계)</td>${inp('bpos.zeropay')}${blank(4)}</tr>
+    <tr><td class="lb">주류 (계)</td>${inp('bpos.liquor')}${blank(4)}</tr>
+    <tr><td class="lb">보자기포스 계 (자동)</td>`+autoCell('bp_tot',mm=>derived(mm).bposGye,true)+`<td class="au" colspan="4" style="text-align:left;color:var(--sub)">키오스크 + 마켓포스분</td></tr>
   </table>
-  <h2 style="margin-top:14px">승인현황 — 코너(식당) <small>"보자기현금 빼주기" — 마켓포스로 결제된 보자기 몫</small></h2>
-  <table class="g"><tr><th style="width:170px">구분</th><th>마켓포스 전체</th><th>보자기 몫</th><th>마켓 몫 (자동)</th><th colspan="2"></th></tr>
-    <tr><td class="lb">카드</td>${inp('corner.cardTotal')}${inp('corner.cardBojagi')}`+autoCell('corner_cardM',mm=>mm.corner.cardTotal-mm.corner.cardBojagi)+`<td class="au" colspan="2"></td></tr>
-    <tr><td class="lb">현금</td>${inp('corner.cashTotal')}${inp('corner.cashBojagi')}`+autoCell('corner_cashM',mm=>mm.corner.cashTotal-mm.corner.cashBojagi)+`<td class="au" colspan="2"></td></tr>
+  <h2 style="margin-top:14px">승인현황 — 코너(식당) <small>"보자기현금 빼주기"</small></h2>
+  <table class="g"><tr><th style="width:160px">구분</th><th>마켓포스 전체</th><th>보자기 몫</th><th>마켓 몫 (자동)</th><th colspan="2"></th></tr>
+    <tr><td class="lb">카드</td>${inp('corner.cardTotal')}${inp('corner.cardBojagi')}`+autoCell('cn_cardK',mm=>derived(mm).marketCardK)+`${blank(2)}</tr>
+    <tr><td class="lb">현금</td>${inp('corner.cashTotal')}`+autoCell('cn_cashB',mm=>derived(mm).cashBojagi)+autoCell('cn_cashK',mm=>derived(mm).marketCashK)+`<td class="au" colspan="2" style="text-align:left;color:var(--sub)">보자기 현금 = 마켓포스분 계 − 카드 보자기 (자동)</td></tr>
   </table><div id="vCorner"></div></div>`;
-  h+=`<div class="card"><h2>④ 국세청 (홈택스) <small>사업자 전체 카드·현금영수증 매출</small></h2>
-  <table class="g"><tr><th style="width:170px">항목</th><th>①</th><th>②</th><th>③</th><th colspan="2"></th></tr>
+  // ④ 국세청
+  h+=`<div class="card"><h2>④ 국세청 (홈택스) <small>사업자 전체</small></h2>
+  <table class="g"><tr><th style="width:160px">항목</th><th>①</th><th>②</th><th>③</th><th colspan="2"></th></tr>
     <tr><td class="lb">카드매출 (계)</td>${inp('nts.card')}<td class="au" colspan="4" style="text-align:left;color:var(--sub)">신용카드 합계</td></tr>
-    <tr><td class="lb">제로페이 (계)</td>${inp('nts.zeropay')}<td class="au" colspan="4" style="text-align:left;color:var(--sub)">카드 총액에 합산됨</td></tr>
-    <tr><td class="lb">현금영수증</td>${inp('nts.hyeonGong')}${inp('nts.hyeonBuga')}${inp('nts.hyeonMyeon')}`+autoCell('nts_hy_t',mm=>mm.nts.hyeonGong+mm.nts.hyeonBuga+mm.nts.hyeonMyeon)+`<td class="au"></td></tr>
-    <tr><td class="lb">카드 과세분 <span class="tag" id="ntsEstTag">추정</span></td><td><input data-p="nts.cardGong" class="est" data-nullable="1"></td><td><input data-p="nts.cardBuga" class="est" data-nullable="1"></td><td class="au" colspan="3" style="text-align:left"><span class="hint">공급가/부가세 — 비워두면 비율로 자동 추정 · </span><span class="addrow" id="ntsReset">추정값으로 되돌리기</span></td></tr>
+    <tr><td class="lb">제로페이 (계)</td>${inp('nts.zeropay')}<td class="au" colspan="4" style="text-align:left;color:var(--sub)">카드 총액(합계)에 합산됩니다</td></tr>
+    <tr><td class="lb">현금영수증</td>${inp('nts.hyeonGong')}${inp('nts.hyeonBuga')}${inp('nts.hyeonMyeon')}`+autoCell('nts_hy_t',mm=>mm.nts.hyeonGong+mm.nts.hyeonBuga+mm.nts.hyeonMyeon)+blank(1)+`</tr>
+    <tr><td class="lb">카드 과세분 <span class="tag" id="ntsEstTag">추정</span></td><td><input data-p="nts.cardGong" class="est" data-nullable="1"></td><td><input data-p="nts.cardBuga" class="est" data-nullable="1"></td><td class="au" colspan="3" style="text-align:left"><span class="hint">공급가·부가세 — 비워두면 자동 추정 · </span><span class="addrow" id="ntsReset">추정값으로 되돌리기</span></td></tr>
   </table>
-  <div class="hint">현금영수증은 ① 공급가 ② 부가세 ③ 면세 순서입니다. 계는 자동 계산됩니다.</div></div>`;
+  <div class="hint">현금영수증은 ① 공급가 ② 부가세 ③ 면세 순서, 계는 자동입니다.</div></div>`;
+  // ⑤ 스마트스토어
   h+=`<div class="card"><h2>⑤ 스마트스토어</h2>
-  <table class="g"><tr><th style="width:170px">항목</th><th>과세</th><th>면세</th><th>계 (자동)</th><th colspan="2"></th></tr>
-    <tr><td class="lb">합계</td>${inp('ss.gwase')}${inp('ss.myeon')}`+autoCell('ss_tot',mm=>mm.ss.gwase+mm.ss.myeon,true)+`<td class="au" colspan="2"></td></tr>
+  <table class="g"><tr><th style="width:160px">항목</th><th>과세</th><th>면세</th><th>계 (자동)</th><th colspan="2"></th></tr>
+    <tr><td class="lb">합계</td>${inp('ss.gwase')}${inp('ss.myeon')}`+autoCell('ss_tot',mm=>mm.ss.gwase+mm.ss.myeon,true)+blank(2)+`</tr>
   </table>
-  <table class="g" style="margin-top:8px"><tr><th style="width:170px">채널</th><th>채널 매출(계)</th><th>과세 배분</th><th>면세 배분</th><th colspan="2"></th></tr>
+  <table class="g" style="margin-top:8px"><tr><th style="width:160px">채널</th><th>채널 매출(계)</th><th>과세 배분</th><th>면세 배분</th><th colspan="2"></th></tr>
     ${['card:카드','hyeon:현금영수증','gita:기타'].map(x=>{const[k,lb]=x.split(':');
-      return `<tr><td class="lb">${lb}</td>${inp('ss.'+k)}<td><input data-sp="${k}.0" class="est"></td><td><input data-sp="${k}.1" class="est"></td>`+autoCell('ss_'+k+'_chk',mm=>{const I=deriveInputs(mm);return I.sp[k][0]+I.sp[k][1];})+`<td class="au"></td></tr>`;}).join('')}
+      return `<tr><td class="lb">${lb}</td>${inp('ss.'+k)}<td><input data-sp="${k}.0" class="est"></td><td><input data-sp="${k}.1" class="est"></td>`+autoCell('ss_'+k+'_chk',mm=>{const I=deriveInputs(mm);return I.sp[k][0]+I.sp[k][1];})+blank(1)+`</tr>`;}).join('')}
   </table>
-  <div class="hint">채널이 하나뿐이면 배분은 자동입니다. 여러 채널이면 배분 칸을 스마트스토어 정산 기준으로 수정하세요. <span class="addrow" id="ssReset">배분 자동으로 되돌리기</span></div>
+  <div class="hint">채널이 하나뿐이면 배분은 자동입니다. <span class="addrow" id="ssReset">배분 자동으로 되돌리기</span></div>
   <div id="vSS"></div></div>`;
-  h+=`<div class="card"><h2>⑥ 기타 (세금계산서) <small>현황표에 없던, 확정에 직접 넣던 값</small></h2>
-  <table class="g"><tr><th style="width:170px">항목</th><th>공급가</th><th>부가세</th><th>면세</th><th>계 (자동)</th><th></th></tr>
-    <tr><td class="lb">기타 세금계산서</td>${inp('taxEtc.gong')}${inp('taxEtc.buga')}${inp('taxEtc.myeon')}`+autoCell('taxetc_t',mm=>mm.taxEtc.gong+mm.taxEtc.buga+mm.taxEtc.myeon)+`<td class="au"></td></tr>
+  // ⑥ 기타 세금계산서
+  h+=`<div class="card"><h2>⑥ 기타 (세금계산서) <small>매출확정에 직접 넣던 값</small></h2>
+  <table class="g"><tr><th style="width:160px">항목</th><th>공급가</th><th>부가세</th><th>면세</th><th>계 (자동)</th><th></th></tr>
+    <tr><td class="lb">기타 세금계산서</td>${inp('taxEtc.gong')}${inp('taxEtc.buga')}${inp('taxEtc.myeon')}`+autoCell('taxetc_t',mm=>mm.taxEtc.gong+mm.taxEtc.buga+mm.taxEtc.myeon)+blank(1)+`</tr>
   </table></div>`;
-  h+=`<div class="card"><h2>⑦ 꽃밥에피다 — 인사동 식당 <small>기록용 (매출확정 표와는 별도)</small></h2>
-  <table class="g"><tr><th style="width:170px">항목</th><th>금액</th><th colspan="4"></th></tr>
-    ${singleRow('캐치테이블 (계)','kkotbap.catchT')}
-    ${singleRow('꽃밥 카드','kkotbap.card')}
-    ${singleRow('꽃밥 현금','kkotbap.cash')}
-    ${singleRow('국세청 카드 (계)','kkotbap.ntsCard')}
-    ${singleRow('국세청 현금영수증 (계)','kkotbap.ntsHyeon')}
-    ${singleRow('고객수','kkotbap.guest','명')}
-    <tr><td class="lb">꽃밥 계 (카드+현금)</td>`+autoCell('kb_gye',mm=>kkotbapCalc(mm).gye,true)+`<td class="au" colspan="4"></td></tr>
-    <tr><td class="lb">전체 (캐치 포함)</td>`+autoCell('kb_all',mm=>kkotbapCalc(mm).all,true)+`<td class="au" colspan="4"></td></tr>
-    <tr><td class="lb">소매 (자동)</td>`+autoCell('kb_somae',mm=>kkotbapCalc(mm).somae)+`<td class="au" colspan="4" style="text-align:left;color:var(--sub)">꽃밥 계 − 국세청 카드 − 현금영수증</td></tr>
+  // ⑦ 꽃밥
+  h+=`<div class="card"><h2>⑦ 꽃밥에피다 — 인사동 식당 <small>기록용 (확정표와 별도)</small></h2>
+  <table class="g"><tr><th style="width:160px">항목</th><th>계</th><th>공급가</th><th>부가세</th><th colspan="2"></th></tr>
+    <tr><td class="lb">캐치테이블</td>${inp('kkotbap.catchGye')}${inp('kkotbap.catchGong')}${inp('kkotbap.catchBuga')}${blank(2)}</tr>
+    <tr><td class="lb">꽃밥 카드 (계)</td>${inp('kkotbap.card')}${blank(4)}</tr>
+    <tr><td class="lb">꽃밥 현금 (계)</td>${inp('kkotbap.cash')}${blank(4)}</tr>
+    <tr><td class="lb">꽃밥 계 (자동)</td>`+autoCell('kb_gye',mm=>kkotbapCalc(mm).gye,true)+autoCell('kb_gong',mm=>kkotbapCalc(mm).gong)+autoCell('kb_buga',mm=>kkotbapCalc(mm).buga)+blank(2)+`</tr>
+    <tr><td class="lb">국세청 카드</td>${inp('kkotbap.ntsCard')}${inp('kkotbap.ntsCardGong')}${inp('kkotbap.ntsCardBuga')}${blank(2)}</tr>
+    <tr><td class="lb">국세청 현금영수증</td>${inp('kkotbap.ntsHyeon')}${inp('kkotbap.ntsHyeonGong')}${inp('kkotbap.ntsHyeonBuga')}${blank(2)}</tr>
+    <tr><td class="lb">소매 (자동)</td>`+autoCell('kb_sm',mm=>kkotbapCalc(mm).somae)+autoCell('kb_smg',mm=>kkotbapCalc(mm).somaeGong)+autoCell('kb_smv',mm=>{const k=kkotbapCalc(mm);return k.somae-k.somaeGong;})+`<td class="au" colspan="2" style="text-align:left;color:var(--sub)">꽃밥 계 − 국세청 카드 − 현금영수증</td></tr>
+    <tr><td class="lb">전체 (캐치 포함, 자동)</td>`+autoCell('kb_all',mm=>kkotbapCalc(mm).all,true)+blank(4)+`</tr>
+    <tr><td class="lb">고객수</td>${inp('kkotbap.guest')}<td class="au" colspan="4" style="text-align:left;color:var(--sub)">명</td></tr>
   </table></div>`;
+  // ⑧ 재고·수수료
   h+=`<div class="card"><h2>⑧ 재고 · 판매수수료</h2>
-  <table class="g"><tr><th style="width:170px">재고 (부가세 제외)</th><th>금액</th><th style="width:170px">판매수수료</th><th>금액</th><th colspan="2"></th></tr>
-    <tr><td class="lb">마켓</td>${inp('misc.jaegoMarket')}<td class="lb">꽃밥이야기 (계)</td>${inp('misc.feeKkotbap')}<td class="au" colspan="2" style="text-align:left;color:var(--sub)">확정표 판매수수료로 들어감</td></tr>
-    <tr><td class="lb">보자기</td>${inp('misc.jaegoBojagi')}<td class="lb">마켓</td>${inp('misc.feeMarket')}<td class="au" colspan="2"></td></tr>
-    <tr><td class="lb">피다</td>${inp('misc.jaegoPida')}<td class="lb">보자기</td>${inp('misc.feeBojagi')}<td class="au" colspan="2"></td></tr>
-    <tr><td class="lb"></td><td class="au"></td><td class="lb">피다</td>${inp('misc.feePida')}<td class="au" colspan="2"></td></tr>
+  <table class="g"><tr><th style="width:160px">재고 (부가세 제외)</th><th>금액</th><th style="width:160px">판매수수료</th><th>금액</th><th colspan="2"></th></tr>
+    <tr><td class="lb">마켓</td>${inp('misc.jaegoMarket')}<td class="lb">마켓</td>${inp('misc.feeMarket')}${blank(2)}</tr>
+    <tr><td class="lb">보자기</td>${inp('misc.jaegoBojagi')}<td class="lb">보자기</td>${inp('misc.feeBojagi')}${blank(2)}</tr>
+    <tr><td class="lb">피다</td>${inp('misc.jaegoPida')}<td class="lb">꽃밥이야기 (자동)</td>`+autoCell('fee_kb',mm=>derived(mm).feeKkotbap,true)+`<td class="au" colspan="2" style="text-align:left;color:var(--sub)">마켓+보자기 — 확정표 판매수수료로 들어감</td></tr>
+    <tr><td class="lb"></td><td class="au"></td><td class="lb">피다</td>${inp('misc.feePida')}${blank(2)}</tr>
   </table></div>`;
-  // 매입정산
+  // ⑨ 매입정산
   const buyRows=(list,key)=>list.map((it,i)=>`<tr><td class="lb"><input class="txt" data-buy="${key}.${i}.name" value="${esc(it.name)}" style="width:150px"></td><td><input data-buy="${key}.${i}.amt" value="${fmt(it.amt)}"></td><td class="au" style="text-align:center"><span class="addrow" data-buydel="${key}.${i}">삭제</span></td><td class="au" colspan="3"></td></tr>`).join('');
   h+=`<div class="card"><h2>⑨ 매입정산</h2>
-  <table class="g"><tr><th style="width:170px">보자기 매입정산</th><th>금액</th><th style="width:70px"></th><th colspan="3"></th></tr>
+  <table class="g"><tr><th style="width:160px">보자기 매입정산</th><th>금액</th><th style="width:70px"></th><th colspan="3"></th></tr>
     <tr><td class="lb">꽃밥마켓 (자동)</td>`+autoCell('buy_kkotbap',mm=>mm.members.bojagiGye)+`<td class="au"></td><td class="au" colspan="3" style="text-align:left;color:var(--sub)">회원분석 '보자기' 계와 동일</td></tr>
     ${buyRows(m.buyBojagi,'buyBojagi')}
     <tr><td colspan="6" style="text-align:left;border:1px solid var(--line);padding:6px"><span class="addrow" data-buyadd="buyBojagi">+ 항목 추가</span></td></tr>
     <tr><td class="lb">합계</td>`+autoCell('buy_bj_tot',mm=>mm.members.bojagiGye+mm.buyBojagi.reduce((a,b)=>a+(b.amt||0),0),true)+`<td class="au" colspan="4"></td></tr>
   </table>
-  <table class="g" style="margin-top:10px"><tr><th style="width:170px">피다 매입정산</th><th>금액</th><th style="width:70px"></th><th colspan="3"></th></tr>
+  <table class="g" style="margin-top:10px"><tr><th style="width:160px">피다 매입정산</th><th>금액</th><th style="width:70px"></th><th colspan="3"></th></tr>
     ${buyRows(m.buyPida,'buyPida')}
     <tr><td colspan="6" style="text-align:left;border:1px solid var(--line);padding:6px"><span class="addrow" data-buyadd="buyPida">+ 항목 추가</span></td></tr>
     <tr><td class="lb">합계</td>`+autoCell('buy_pd_tot',mm=>mm.buyPida.reduce((a,b)=>a+(b.amt||0),0),true)+`<td class="au" colspan="4"></td></tr>
@@ -502,7 +587,23 @@ function renderInput(){
   pg.querySelector("textarea[data-memo]").addEventListener("change",e=>{m.memo=e.target.value;touch();});
   const ntsReset=$("#ntsReset");if(ntsReset)ntsReset.addEventListener("click",()=>{m.nts.cardGong=null;m.nts.cardBuga=null;touch();renderInput();});
   const ssReset=$("#ssReset");if(ssReset)ssReset.addEventListener("click",()=>{m.ss.split=null;touch();renderInput();});
+  const af=$("#btnAutofill");if(af)af.addEventListener("click",()=>{autofillEmpty(m);touch();renderInput();});
   recalcAutos();refreshNtsTag();refreshValidWarns();
+}
+function autofillEmpty(m){
+  const d=derived(m);
+  const fill=(goK,buK,gwase,obj)=>{
+    obj=obj||m.market;
+    if(!obj[goK]&&!obj[buK]&&gwase>0){obj[goK]=exVat(gwase);obj[buK]=gwase-obj[goK];}
+  };
+  fill('gong','buga',d.gwase);
+  fill('cashGong','cashBuga',d.cashGwase);
+  fill('cardGong','cardBuga',d.cardGwase);
+  fill('kioskGong','kioskBuga',m.bpos.kioskGye,m.bpos);
+  fill('coupangGong','coupangBuga',m.bpos.coupangGye,m.bpos);
+  fill('catchGong','catchBuga',m.kkotbap.catchGye,m.kkotbap);
+  fill('ntsCardGong','ntsCardBuga',m.kkotbap.ntsCard,m.kkotbap);
+  fill('ntsHyeonGong','ntsHyeonBuga',m.kkotbap.ntsHyeon,m.kkotbap);
 }
 function recalcAutos(){
   const m=MONTHS[CUR];
@@ -513,12 +614,12 @@ function refreshNtsTag(){
   if(tag)tag.textContent=(m.nts.cardGong===null&&m.nts.cardBuga===null)?'추정':'직접입력';
 }
 function refreshValidWarns(){
-  const m=MONTHS[CUR];
-  const compSum=m.market.cashGye+m.market.cardGye+m.market.zeropay+m.market.point+m.market.credit;
+  const m=MONTHS[CUR],d=derived(m);
+  const compSum=d.cashGye+d.cardGye+m.market.zeropay+m.market.point+m.market.credit;
   const el1=$("#vMarket");
-  if(el1)el1.innerHTML=m.market.gye===0?'':Math.abs(m.market.gye-compSum)<=2?`<div class="vok">✓ 계 = 구성 합 일치</div>`:`<div class="vwarn">⚠ 계와 구성 합이 ${fmt(Math.abs(m.market.gye-compSum))}원 차이</div>`;
+  if(el1)el1.innerHTML=d.marketGye===0?'':Math.abs(d.marketGye-compSum)<=2?`<div class="vok">✓ 마켓 계 = 현금+카드+제로페이+포인트+외상 일치</div>`:`<div class="vwarn">⚠ 마켓 계(${fmt(d.marketGye)})와 구성 합(${fmt(compSum)})이 ${fmt(Math.abs(d.marketGye-compSum))}원 차이</div>`;
   const el2=$("#vCorner");
-  if(el2)el2.innerHTML=m.bpos.marketpos>0?(Math.abs(m.corner.cardBojagi+m.corner.cashBojagi-m.bpos.marketpos)<=2?`<div class="vok">✓ 보자기 카드+현금 = 마켓포스 계 일치</div>`:`<div class="vwarn">⚠ 보자기 카드+현금(${fmt(m.corner.cardBojagi+m.corner.cashBojagi)}) ≠ 현황표 마켓포스 계(${fmt(m.bpos.marketpos)})</div>`):'';
+  if(el2)el2.innerHTML=d.cashBojagi<0?`<div class="vwarn">⚠ 보자기 현금이 음수입니다 — 마켓포스분 계와 카드 보자기 값을 확인하세요</div>`:(m.bpos.marketpos>0?`<div class="vok">✓ 보자기 현금 자동 계산: ${fmt(d.cashBojagi)}원</div>`:'');
   const el3=$("#vSS");
   if(el3){const V=compute(m);el3.innerHTML=(Math.abs(V.K27+V.K28+V.K29-V.K26)>2||Math.abs(V.L27+V.L28+V.L29-V.L26)>2)?`<div class="vwarn">⚠ 채널 배분 합이 과세/면세 총액과 다릅니다</div>`:'';}
 }
@@ -659,6 +760,9 @@ async function ensureAuth(){
 }
 function updateAuthUI(){
   const chip=$("#fbChip");
+  const lo=$("#btnLogoutTop");
+  const u0=(typeof firebase!=='undefined'&&firebase.apps&&firebase.apps.length)?firebase.auth().currentUser:null;
+  if(lo)lo.style.display=(FB&&u0)?'':'none';
   if(!FB){chip.classList.remove('on');chip.textContent='로컬 저장';return;}
   const u=(typeof firebase!=='undefined'&&firebase.apps.length)?firebase.auth().currentUser:null;
   if(u){
@@ -808,29 +912,30 @@ function gridHelpers(grid){
 function importStatusSheet(grid){
   const{num,str,maxR}=gridHelpers(grid);
   const m=emptyMonth(),w=[];
+  // 전체 계 (A열, '보자기현금 빼주기!' 옆)
+  for(let r=1;r<=Math.min(maxR,5);r++)if(str(r,2).includes('보자기현금')){m.market.total=num(r,1);break;}
   // 마켓 블록
-  let mh=0;
+  let mh=0,mkGyeCached=0;
   for(let r=1;r<=maxR;r++)if(str(r,1)==="마켓"&&str(r,2)==="계"){mh=r;break;}
   if(mh){
     for(let r=mh+1;r<=mh+9;r++){
-      const lb=str(r,1),B=num(r,2),C=num(r,3);
-      if(lb==="계"){m.market.gye=B;m.market.myeon=C;}
-      else if(lb==="현금"){m.market.cashGye=B;m.market.cashMyeon=C;}
-      else if(lb==="카드"){m.market.cardGye=B;m.market.cardMyeon=C;}
-      else if(lb==="제로페이")m.market.zeropay=B;
-      else if(lb==="포인트 사용"||lb==="포인트")m.market.point=B;
-      else if(lb==="외상")m.market.credit=B;
+      const lb=str(r,1);
+      if(lb==="계"){mkGyeCached=num(r,2);m.market.myeon=num(r,3);m.market.gong=num(r,5);m.market.buga=num(r,6);}
+      else if(lb==="현금"){m.market.cashMyeon=num(r,3);m.market.cashGong=num(r,5);m.market.cashBuga=num(r,6);}
+      else if(lb==="카드"){m.market.cardMyeon=num(r,3);m.market.cardGong=num(r,5);m.market.cardBuga=num(r,6);}
+      else if(lb==="제로페이")m.market.zeropay=num(r,2);
+      else if(lb==="포인트 사용"||lb==="포인트")m.market.point=num(r,2);
+      else if(lb==="외상")m.market.credit=num(r,2);
     }
   }else w.push("마켓 블록을 찾지 못함");
   for(let r=1;r<=maxR;r++){
     const lb=str(r,1);
-    if(lb==="정육"){m.market.jeongyukGye=num(r,2);m.market.jeongyukMyeon=num(r,3);}
+    if(lb==="정육"){m.market.jeongyukMyeon=num(r,3);m.market.jeongyukGwase=num(r,4);}
     else if(lb==="포인트적립"&&!m.market.pointAccum)m.market.pointAccum=num(r,2);
-    else if(lb==="인사동"){m.members.insadongGye=num(r,2);m.members.insadongMyeon=num(r,3);}
-    else if(lb==="보자기"&&r<30&&!m.members.bojagiGye){m.members.bojagiGye=num(r,2);m.members.bojagiMyeon=num(r,3);}
-    else if(lb==="식사"){m.members.siksaGye=num(r,2);m.members.siksaMyeon=num(r,3);}
-    else if(lb==="판공"){m.members.pangongGye=num(r,2);m.members.pangongMyeon=num(r,3);}
-    else if(lb==="세금계산서발행"){m.members.taxinvGye=num(r,2);m.members.taxinvMyeon=num(r,3);}
+    else if(lb==="인사동"){m.members.insadongGye=num(r,2);m.members.insadongGong=num(r,5);m.members.insadongBuga=num(r,6);}
+    else if(lb==="보자기"&&r<30&&!m.members.bojagiGye){m.members.bojagiGye=num(r,2);m.members.bojagiGong=num(r,5);m.members.bojagiBuga=num(r,6);}
+    else if(lb==="식사"){m.members.siksaGye=num(r,2);m.members.siksaGong=num(r,5);m.members.siksaBuga=num(r,6);}
+    else if(lb==="판공"){m.members.pangongGye=num(r,2);m.members.pangongGong=num(r,5);m.members.pangongBuga=num(r,6);}
   }
   // 고객수 (첫번째=마켓)
   outer_g:
@@ -840,15 +945,16 @@ function importStatusSheet(grid){
   for(let r=1;r<=maxR;r++)if(str(r,1).replace(/\s/g,'').startsWith("보자기(포스)")){bh=r;break;}
   if(bh){
     for(let r=bh+1;r<=bh+8;r++){
-      const lb=str(r,2),C=num(r,3);
-      if(lb==="키오스크")m.bpos.kiosk=C;
-      else if(lb==="마켓포스")m.bpos.marketpos=C;
-      else if(lb==="현금"&&!m.bpos.marketpos)m.bpos.marketpos=C;
-      else if(lb==="쿠팡이츠")m.bpos.coupang=C;
-      else if(lb==="제로페이")m.bpos.zeropay=C;
-      else if(lb==="주류")m.bpos.liquor=C;
+      const lb=str(r,2);
+      if(lb==="키오스크"){m.bpos.kioskGye=num(r,3);m.bpos.kioskGong=num(r,4);m.bpos.kioskBuga=num(r,5);}
+      else if(lb==="마켓포스")m.bpos.marketpos=num(r,3);
+      else if(lb==="현금"&&!m.bpos.marketpos)m.bpos.marketpos=num(r,3);
+      else if(lb==="쿠팡이츠"){m.bpos.coupangGye=num(r,3);m.bpos.coupangGong=num(r,4);m.bpos.coupangBuga=num(r,5);}
+      else if(lb==="제로페이")m.bpos.zeropay=num(r,3);
+      else if(lb==="주류")m.bpos.liquor=num(r,3);
     }
   }else w.push("보자기(포스) 블록을 찾지 못함");
+  if(!m.market.total&&mkGyeCached)m.market.total=mkGyeCached+m.bpos.marketpos;
   // 승인현황 코너
   let found=false;
   outer_c:
@@ -861,7 +967,7 @@ function importStatusSheet(grid){
           for(let rr=hr+1;rr<=hr+4;rr++){
             const lb=str(rr,cM-1);
             if(lb==="카드"){m.corner.cardTotal=num(rr,cM);m.corner.cardBojagi=num(rr,cB);}
-            if(lb==="현금"){m.corner.cashTotal=num(rr,cM);m.corner.cashBojagi=num(rr,cB);}
+            if(lb==="현금")m.corner.cashTotal=num(rr,cM);
           }
           found=true;break outer_c;
         }
@@ -884,7 +990,7 @@ function importStatusSheet(grid){
     m.ss.gwase=num(r+1,2);m.ss.myeon=num(r+1,3);m.ss.card=num(r+1,4);m.ss.hyeon=num(r+1,5);m.ss.gita=num(r+1,6);break;
   }
   // 꽃밥
-  for(let r=1;r<=maxR;r++)if(str(r,2)==="캐치테이블"){m.kkotbap.catchT=num(r,3);break;}
+  for(let r=1;r<=maxR;r++)if(str(r,2)==="캐치테이블"){m.kkotbap.catchGye=num(r,3);m.kkotbap.catchGong=num(r,4);m.kkotbap.catchBuga=num(r,5);break;}
   let kbRow=0;
   for(let r=1;r<=maxR;r++)if(str(r,1)==="꽃밥"&&str(r,2)==="계"){kbRow=r;break;}
   if(kbRow){
@@ -894,8 +1000,8 @@ function importStatusSheet(grid){
       if(str(r,2)==="현금")m.kkotbap.cash=num(r,3);
     }
     for(let r=kbRow;r<=maxR;r++)if(str(r,1)==="국세청"&&str(r,2)==="카드"&&r>ntsRow){
-      m.kkotbap.ntsCard=num(r,3);
-      for(let x=r+1;x<=r+2;x++)if(str(x,2)==="현금영수증")m.kkotbap.ntsHyeon=num(x,3);
+      m.kkotbap.ntsCard=num(r,3);m.kkotbap.ntsCardGong=num(r,4);m.kkotbap.ntsCardBuga=num(r,5);
+      for(let x=r+1;x<=r+2;x++)if(str(x,2)==="현금영수증"){m.kkotbap.ntsHyeon=num(x,3);m.kkotbap.ntsHyeonGong=num(x,4);m.kkotbap.ntsHyeonBuga=num(x,5);}
       break;
     }
     outer_g2:
@@ -915,8 +1021,7 @@ function importStatusSheet(grid){
   for(let r=1;r<=maxR;r++)for(let c=1;c<=10;c++)if(str(r,c)==="판매수수료"){
     for(let rr=r+1;rr<=r+6&&rr<=maxR;rr++)for(let cc=1;cc<=10;cc++){
       const lb=str(rr,cc);
-      if(lb==="꽃밥이야기")m.misc.feeKkotbap=num(rr,cc+1);
-      else if(lb==="마켓"&&cc>=4)m.misc.feeMarket=num(rr,cc+1);
+      if(lb==="마켓"&&cc>=4)m.misc.feeMarket=num(rr,cc+1);
       else if(lb==="보자기"&&cc>=4)m.misc.feeBojagi=num(rr,cc+1);
       else if(lb==="피다"&&cc>=4)m.misc.feePida=num(rr,cc+1);
     }
@@ -947,9 +1052,12 @@ function backfillFromConfirm(m,grid){
   let r;
   if((r=rowOf(["국세청 카드","이야기국세청 카드"]))){m.nts.cardGong=num(r,2)||null;m.nts.cardBuga=num(r,3)||null;}
   if((r=rowOf(["기타(세금계산서)"]))){m.taxEtc.gong=num(r,2);m.taxEtc.buga=num(r,3);m.taxEtc.myeon=num(r,5);}
-  if(!m.corner.cashBojagi&&(r=rowOf(["보자기포스 현금"])))m.corner.cashBojagi=num(r,2)+num(r,3);
   if(!m.corner.cardBojagi&&(r=rowOf(["보자기포스 카드"])))m.corner.cardBojagi=num(r,2)+num(r,3);
-  if(!m.bpos.kiosk&&(r=rowOf(["키오스크"])))m.bpos.kiosk=num(r,2)+num(r,3);
+  if(!m.bpos.marketpos){
+    const rc=rowOf(["보자기포스 현금"]),rd=rowOf(["보자기포스 카드"]);
+    if(rc||rd)m.bpos.marketpos=(rc?num(rc,2)+num(rc,3):0)+(rd?num(rd,2)+num(rd,3):0);
+  }
+  if(!m.bpos.kioskGye&&(r=rowOf(["키오스크"]))){m.bpos.kioskGong=num(r,2);m.bpos.kioskBuga=num(r,3);m.bpos.kioskGye=num(r,2)+num(r,3);}
   // 스마트스토어 분배
   for(let x=1;x<=maxR;x++)if(str(x,8)==="스마트스토어"){
     const sp={card:[0,0],hyeon:[0,0],gita:[0,0]};let any=false;
@@ -1010,6 +1118,12 @@ function renderAll(){
 }
 $$(".tab").forEach(t=>t.addEventListener("click",()=>showTab(t.dataset.pg)));
 $("#ymSel").addEventListener("change",e=>{if(e.target.value)selectMonth(e.target.value);});
+$("#btnLogoutTop").addEventListener("click",async()=>{
+  if(!confirm('로그아웃할까요? 다시 보려면 로그인해야 합니다.'))return;
+  if(typeof firebase!=='undefined'&&firebase.apps.length){await firebase.auth().signOut();}
+  updateAuthUI();
+  if(needsGate()){$("#gateId").value='';$("#gatePw").value='';showGate();}
+});
 $("#btnNewMonth").addEventListener("click",()=>{$("#newErr").style.display='none';$("#newYm").value='';$("#dlgNew").showModal();});
 $("#btnCancelYm").addEventListener("click",()=>$("#dlgNew").close());
 $("#btnCreateYm").addEventListener("click",()=>{
@@ -1171,7 +1285,7 @@ $("#gateLogin").addEventListener("click",async()=>{
 });
 $("#gatePw").addEventListener("keydown",e=>{if(e.key==='Enter')$("#gateLogin").click();});
 $("#gateOfflineBtn").addEventListener("click",()=>{startApp();});
-window.__app={get MONTHS(){return MONTHS},get CUR(){return CUR},compute,deriveInputs,selectMonth,showTab,touch,
+window.__app={get MONTHS(){return MONTHS},get CUR(){return CUR},compute,deriveInputs,derived,selectMonth,showTab,touch,
   setVal(p,v){setPath(MONTHS[CUR],p,v);touch();renderAll();},
   monthData(){return MONTHS[CUR];}};
 </script>
