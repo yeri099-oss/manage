@@ -5008,7 +5008,7 @@ window.__cfmApp={get MONTHS(){return MONTHS},get CUR(){return CUR},compute,deriv
 </script>
 <script>
 /* ================================================================
-   매출확정 앱 연동 — "매출확정에서 불러오기" (2026-08-18c)
+   매출확정 앱 연동 — 불러오기·보고 반영·불일치 알림 (2026-08-19d)
    revenue2 index.html 의 </body> 바로 위에 이 블록 전체를 붙여넣으세요.
    이미 이전 버전 블록이 있다면 그 블록을 지우고 이걸로 교체하세요.
    ================================================================ */
@@ -5220,11 +5220,16 @@ function preview(raw){
     coupangTemp: !!(m.bpos&&m.bpos.coupangTemp),
     pos:{ insadong: kb.all, market: V.F7, online: m.ss.gwase+m.ss.myeon, bojagi: V.F14+m.bpos.coupangGye },
     nts:{ total: epida+market+bojagi, epida, market, bojagi },
-    mk:{ total: V.F7, internal: m.members.insadongGye+m.members.bojagiGye, hanwoo: m.market.jeongyukMyeon, pork: m.market.jeongyukGwase }
+    mk:{ total: V.F7, internal: m.members.insadongGye+m.members.bojagiGye, hanwoo: m.market.jeongyukMyeon, pork: m.market.jeongyukGwase },
+    ag:{ coupang: m.bpos.coupangGye, smartstore: m.ss.gwase+m.ss.myeon }
   };
 }
 async function fetchConfirm(year, month){
   const ym=String(year).slice(2)+String(month).padStart(2,"0");
+  try{
+    const app=window.__cfmApp;
+    if(app&&app.MONTHS&&app.MONTHS[ym])return preview(JSON.parse(JSON.stringify(app.MONTHS[ym])));
+  }catch(e){}
   const snap=await db.collection("salesStatus_months").doc(ym).get();
   if(!snap.exists)return null;
   const raw=snap.data()&&snap.data().data;
@@ -5241,6 +5246,7 @@ function wrapModal(fnName,kind){
 wrapModal("openMonthlyForm","monthly");
 wrapModal("openCompareForm","compare");
 wrapModal("openMarketForm","market");
+wrapModal("openAgencyForm","agency");
 function injectBtn(kind){
   const body=document.getElementById("modal-body");
   if(!body||body.querySelector(".kb-pull"))return;
@@ -5274,15 +5280,175 @@ async function pull(kind,hint){
       setV("f-total",c.mk.total);setV("f-internal",c.mk.internal);
       setV("f-hanwoo",c.mk.hanwoo);setV("f-pork",c.mk.pork);
       hint.textContent="불러왔어요 — 기타(명절음식)는 직접 입력하세요. 확인 후 저장!";
+    }else if(kind==="agency"){
+      let n=0;
+      document.querySelectorAll("#modal-body .ag-d, #modal-body .ag-o").forEach(inp=>{
+        const ch=inp.dataset.ch||"";
+        let v=null;
+        if(ch.indexOf("쿠팡")>=0)v=c.ag.coupang;
+        else if(ch.indexOf("스마트")>=0||ch.indexOf("네이버")>=0)v=c.ag.smartstore;
+        if(v!=null&&v>0){inp.value=Math.round(v).toLocaleString("ko-KR");n++;}
+      });
+      hint.textContent=n?"쿠팡이츠·스마트스토어 값을 채웠어요 — 다른 채널은 직접 입력하세요. 확인 후 저장!"+warn
+        :"채울 수 있는 채널이 없어요 (채널 이름에 쿠팡/스마트가 들어가야 자동으로 채워져요)";
     }
   }catch(e){
     console.error(e);
     hint.textContent="불러오기 실패: "+(e.message||"권한 또는 연결 문제");
   }
 }
+
+/* ================================================================
+   ① 원클릭 보고 반영 — 매출확정 탭 상단 [📤 보고 탭에 반영] 버튼
+   ================================================================ */
+function cfmOpenPushModal(){
+  try{
+    const app=window.__cfmApp;
+    if(!app||!app.CUR){toast("매출확정에서 달을 먼저 선택하세요",true);return;}
+    const ym=app.CUR;
+    const y="20"+ym.slice(0,2), mo=String(Number(ym.slice(2)));
+    const c=preview(JSON.parse(JSON.stringify(app.monthData())));
+    window.__cfmPushPending={y,mo,c};
+    const F=v=>Math.round(v||0).toLocaleString("ko-KR");
+    const rows=[
+      ["월별 — 인사동",c.pos.insadong],["월별 — 마켓",c.pos.market],
+      ["월별 — 온라인",c.pos.online],["월별 — 보자기(쿠팡 포함)",c.pos.bojagi],
+      ["매출비교 — 꽃밥이야기",c.nts.total],["매출비교 — 꽃밥에피다",c.nts.epida],
+      ["매출비교 — 꽃밥마켓",c.nts.market],["매출비교 — 보자기꽃밥",c.nts.bojagi],
+      ["마켓 — 총매출",c.mk.total],["마켓 — 사내",c.mk.internal],
+      ["마켓 — 대관령한우",c.mk.hanwoo],["마켓 — 씨알돈육",c.mk.pork],
+      ["판매대행 — 쿠팡이츠",c.ag.coupang],["판매대행 — 스마트스토어",c.ag.smartstore],
+    ];
+    const body=`<table class="rpt" style="width:100%">`+rows.map(r=>
+      `<tr><td class="l">${r[0]}</td><td>${r[1]>0?F(r[1])+"원":'<span class="dim">값 없음 — 건너뜀</span>'}</td></tr>`).join("")+`</table>
+      ${c.coupangTemp?'<div class="check-box warn" style="margin-top:10px">⏳ 쿠팡이츠 임시값이 포함돼 있어요. 국세청 금액 확정 후 이 버튼을 다시 눌러주세요.</div>':""}
+      <div class="form-hint" style="margin-top:10px">값이 있는 항목만 저장돼요. 마켓 "기타(명절음식)"·비고 등 나머지는 그대로 유지돼요. 판매대행은 채널 이름에 쿠팡/스마트가 들어간 채널만 채워요.</div>`;
+    openModal(`${y}년 ${mo}월 매출확정 → 보고 반영`,body,
+      `<button class="btn btn-ghost" onclick="closeModal()">취소</button><button class="btn btn-primary" onclick="cfmDoPush()">반영</button>`);
+  }catch(e){console.error(e);toast(e.message||"미리보기 실패",true);}
+}
+async function cfmDoPush(){
+  const P=window.__cfmPushPending;
+  if(!P)return;
+  const btns=document.querySelectorAll("#modal-foot button");
+  btns.forEach(b=>b.disabled=true);
+  try{
+    const y=P.y, mo=P.mo, c=P.c;
+    const R=v=>Math.round(v||0);
+    const setIf=(obj,key,v)=>{if(v>0)obj[key]=R(v);};
+    /* 월별 */
+    const md=(S.data.monthly[y]=S.data.monthly[y]||{months:{}});
+    md.months=md.months||{};
+    const cur=Object.assign({},md.months[mo]||{});
+    setIf(cur,"insadong",c.pos.insadong);setIf(cur,"market",c.pos.market);
+    setIf(cur,"online",c.pos.online);setIf(cur,"bojagi",c.pos.bojagi);
+    let note=(cur.note||"").replace(/\s*\/\s*쿠팡이츠 임시값|쿠팡이츠 임시값\s*\/\s*|쿠팡이츠 임시값/g,"").trim();
+    if(c.coupangTemp)note=note?note+" / 쿠팡이츠 임시값":"쿠팡이츠 임시값";
+    if(note)cur.note=note;else delete cur.note;
+    md.months[mo]=cur;
+    await saveYearDoc("monthly",y,md);
+    /* 매출비교 */
+    const sc=(S.data.salesComparison[y]=S.data.salesComparison[y]||{months:{}});
+    sc.months=sc.months||{};
+    if(c.nts.total>0)sc.months[mo]=R(c.nts.total);
+    for(const k of["epida","market","bojagi"]){if(c.nts[k]>0){sc[k]=sc[k]||{};sc[k][mo]=R(c.nts[k]);}}
+    await saveYearDoc("salesComparison",y,sc);
+    /* 마켓 */
+    const mk=(S.data.marketDetail[y]=S.data.marketDetail[y]||{months:{}});
+    mk.months=mk.months||{};
+    const mcur=Object.assign({},mk.months[mo]||{});
+    setIf(mcur,"total",c.mk.total);setIf(mcur,"internal",c.mk.internal);
+    setIf(mcur,"hanwoo",c.mk.hanwoo);setIf(mcur,"pork",c.mk.pork);
+    mk.months[mo]=mcur;
+    await saveYearDoc("marketDetail",y,mk);
+    /* 판매대행 — 쿠팡/스마트 채널만 */
+    const ag=S.data.agency[y];
+    if(ag&&((ag.deliveryChannels||[]).length||(ag.onlineChannels||[]).length)){
+      ag.months=ag.months||{};
+      const m2=ag.months[mo]||{delivery:{},online:{}};
+      let touched=false;
+      for(const ch of(ag.deliveryChannels||[]))if(ch.indexOf("쿠팡")>=0&&c.ag.coupang>0){m2.delivery=m2.delivery||{};m2.delivery[ch]=R(c.ag.coupang);touched=true;}
+      for(const ch of(ag.onlineChannels||[]))if((ch.indexOf("스마트")>=0||ch.indexOf("네이버")>=0)&&c.ag.smartstore>0){m2.online=m2.online||{};m2.online[ch]=R(c.ag.smartstore);touched=true;}
+      if(touched){ag.months[mo]=m2;await saveYearDoc("agency",y,ag);}
+    }
+    window.__cfmPushPending=null;
+    closeModal();
+    toast(y+"년 "+mo+"월을 보고 데이터에 반영했어요");
+  }catch(e){
+    console.error(e);
+    toast(e.message||"반영 실패",true);
+    btns.forEach(b=>b.disabled=false);
+  }
+}
+window.cfmDoPush=cfmDoPush;
+(function(){
+  const top=document.querySelector("#cfm-root .top");
+  if(top&&!document.getElementById("btnPushReport")){
+    const b=document.createElement("button");
+    b.className="btn sm line";b.id="btnPushReport";b.textContent="📤 보고 탭에 반영";
+    b.addEventListener("click",cfmOpenPushModal);
+    const chip=document.getElementById("fbChip");
+    top.insertBefore(b,chip||null);
+  }
+})();
+/* ================================================================
+   ② 확정↔보고 불일치 알림 — 요약 탭 (관리자 · 2026년부터)
+   ================================================================ */
+let __mmSeq=0;
+async function cfmCheckMismatch(){
+  try{
+    if(typeof S==="undefined"||!S.user||S.user.role!=="admin")return;
+    const y=S.ui.homeYear, mo=S.ui.homeMonth;
+    if(!y||Number(y)<2026)return;
+    const seq=++__mmSeq;
+    const c=await fetchConfirm(y,mo);
+    if(seq!==__mmSeq)return;
+    if(S.ui.tab!=="home"||S.ui.homeYear!==y||S.ui.homeMonth!==mo)return;
+    const el=document.getElementById("tab-home");
+    if(!el)return;
+    const old=el.querySelector(".cfm-mismatch");
+    if(old)old.remove();
+    if(!c)return;
+    const diffs=[];
+    const cmp=(label,rep,conf)=>{
+      if(rep==null||!(conf>0))return;
+      const d=Math.round(conf)-rep;
+      if(d)diffs.push(label+" "+(d>0?"+":"−")+Math.abs(d).toLocaleString("ko-KR")+"원");
+    };
+    const ys=String(y);
+    const mrow=(S.data.monthly[ys]?.months||{})[mo]||{};
+    cmp("월별 인사동",mrow.insadong,c.pos.insadong);
+    cmp("월별 마켓",mrow.market,c.pos.market);
+    cmp("월별 온라인",mrow.online,c.pos.online);
+    cmp("월별 보자기",mrow.bojagi,c.pos.bojagi);
+    cmp("매출비교 전체",scGet(ys,mo,"total"),c.nts.total);
+    cmp("매출비교 에피다",scGet(ys,mo,"epida"),c.nts.epida);
+    cmp("매출비교 마켓",scGet(ys,mo,"market"),c.nts.market);
+    cmp("매출비교 보자기",scGet(ys,mo,"bojagi"),c.nts.bojagi);
+    cmp("마켓 총매출",(S.data.marketDetail[ys]?.months||{})[mo]?.total,c.mk.total);
+    if(!diffs.length)return;
+    const div=document.createElement("div");
+    div.className="check-box warn cfm-mismatch";
+    div.innerHTML="⚠️ "+mo+"월 보고 값이 매출확정과 달라요 (확정 기준 차이): "+diffs.join(" · ")
+      +'<br><span style="font-size:12px">확정을 나중에 고쳤다면, 매출확정 탭의 <b>📤 보고 탭에 반영</b> 버튼으로 한 번에 맞출 수 있어요.</span>';
+    const tiles=el.querySelector(".stat-tiles");
+    if(tiles)tiles.after(div);else el.prepend(div);
+  }catch(e){console.warn("불일치 확인 실패",e);}
+}
+if(typeof window.renderHome==="function"){
+  const _cfmRH=window.renderHome;
+  window.renderHome=function(){
+    const r=_cfmRH.apply(this,arguments);
+    cfmCheckMismatch();
+    return r;
+  };
+}
+
 })();
 </script>
 <!-- ═══════════ 매출확정 통합 블록 끝 ═══════════ -->
 
 </body>
 </html>
+
+  
