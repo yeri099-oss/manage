@@ -201,8 +201,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 const EMBEDDED_FB_CONFIG = {
   apiKey: "AIzaSyCIvN2Y1a9ByNmz4UpgdmaTFrd5SAYZZGY",
   authDomain: "trip-84bd3.firebaseapp.com",
-  projectId: "trip-84bd3",
   storageBucket: "trip-84bd3.firebasestorage.app",
+  projectId: "trip-84bd3",
   messagingSenderId: "830387988854",
   appId: "1:830387988854:web:71dec7e602b6d2d814b257"
 };
@@ -745,9 +745,42 @@ function renderMonths(){
     h+=`<tr><td class="lb" data-goym="${ym}">${ymLabel(ym)}</td><td>${fmt(V.F10)}</td><td>${fmt(V.F14)}</td><td>${fmt(kb.all)}</td><td>${fmt(V.F29)}</td><td>${fmt(V.F8+V.F9)}</td><td><b>${fmt(V.F34)}</b></td></tr>`;
   }
   h+=`</table></div>`;
-  pg.innerHTML=h;
-  pg.querySelectorAll("[data-goym]").forEach(el=>el.addEventListener("click",()=>{selectMonth(el.dataset.goym);showTab('input');}));
+  // ── 이카운트 입력용 표 (현재 선택된 달) ──
+  if(CUR&&MONTHS[CUR]){
+    const m=MONTHS[CUR],V=compute(m),kb=kkotbapCalc(m);
+    const dash='<td style="color:#c7cbd1">—</td>';
+    const row=(lb,g,v,gw,my,gye,cls)=>`<tr${cls?` class="${cls}"`:''}><td class="lb">${lb}</td><td>${fmt(g)}</td><td>${fmt(v)}</td><td>${fmt(gw)}</td>${my===null?dash:`<td>${fmt(my)}</td>`}<td>${fmt(gye)}</td></tr>`;
+    const r=n=>row.name;
+    let e='';
+    e+=row('보자기 카드',V.B23,V.C23,V.D23,V.E23,V.F23);
+    e+=row('보자기 소매',V.B24,V.C24,V.D24,V.E24,V.F24);
+    e+=row('보자기 계',V.B25,V.C25,V.D25,V.E25,V.F25,'sub');
+    e+=row('스마트스토어 카드',V.B26,V.C26,V.D26,V.E26,V.F26);
+    e+=row('스마트스토어 현영',V.B27,V.C27,V.D27,V.E27,V.F27);
+    e+=row('스마트스토어 소매',V.B28,V.C28,V.D28,V.E28,V.F28);
+    e+=row('온라인 계',V.B29,V.C29,V.D29,V.E29,V.F29,'sub');
+    e+=row('마켓 카드',V.B30,V.C30,V.D30,V.E30,V.F30);
+    e+=row('마켓 현영',V.B31,V.C31,V.D31,V.E31,V.F31);
+    e+=row('마켓 소매',V.B32,V.C32,V.D32,V.E32,V.F32);
+    e+=row('마켓 계',V.B33,V.C33,V.D33,V.E33,V.F33,'sub');
+    e+=row('합계 (보자기+온라인+마켓)',V.B34,V.C34,V.D34,V.E34,V.F34,'tot');
+    e+=`<tr class="sp"><td colspan="6"></td></tr>`;
+    e+=row('쿠팡이츠 소매',V.B37,V.C37,V.D37,null,V.D37);
+    e+=`<tr class="sp"><td colspan="6"></td></tr>`;
+    const smBuga=kb.somae-kb.somaeGong;
+    e+=row('인사동 카드',m.kkotbap.ntsCardGong,m.kkotbap.ntsCardBuga,m.kkotbap.ntsCard,null,m.kkotbap.ntsCard);
+    e+=row('인사동 현영',m.kkotbap.ntsHyeonGong,m.kkotbap.ntsHyeonBuga,m.kkotbap.ntsHyeon,null,m.kkotbap.ntsHyeon);
+    e+=row('인사동 소매',kb.somaeGong,smBuga,kb.somae,null,kb.somae);
+    e+=row('인사동 캐치테이블',m.kkotbap.catchGong,m.kkotbap.catchBuga,m.kkotbap.catchGye,null,m.kkotbap.catchGye);
+    e+=row('인사동 계 (캐치 포함)',m.kkotbap.ntsCardGong+m.kkotbap.ntsHyeonGong+kb.somaeGong+m.kkotbap.catchGong,m.kkotbap.ntsCardBuga+m.kkotbap.ntsHyeonBuga+smBuga+m.kkotbap.catchBuga,kb.all,null,kb.all,'sub');
+    let h2=`<div class="card"><h2>💼 이카운트 입력용 — ${ymLabel(CUR)} <small>매출확정과 같은 값 · 위의 월 선택으로 다른 달 보기</small></h2>
+    <table class="cf"><tr><th style="width:170px">구분</th><th>공급가</th><th>부가세</th><th>과세 계</th><th>면세</th><th>계</th></tr>${e}</table>
+    <div class="hint">인사동·쿠팡이츠는 전부 과세라 면세 칸이 없습니다(—). 표 값은 입력 탭 숫자에서 자동 계산됩니다.</div></div>`;
+    pg.innerHTML=h2+pg_monthsHtml(h);
+  }else pg.innerHTML=h;
+  pg.querySelectorAll("[data-goym]").forEach(el=>el.addEventListener("click",()=>{selectMonth(el.dataset.goym);showTab('months');}));
 }
+function pg_monthsHtml(h){return h;}
 
 /* ============ 저장 ============ */
 function touch(){
