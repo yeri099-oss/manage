@@ -54,6 +54,8 @@ table.cf td.lb{text-align:left;font-weight:600;background:#fafafa}
 table.cf tr.sub td{background:#f8fafc;font-weight:600}
 table.cf tr.tot td{background:#dbeafe;font-weight:700}
 table.cf tr.sp td{border:0;background:transparent;height:10px}
+td.redcell{background:#fecaca !important;font-weight:700}
+td.pinkcell{background:#fee2e2 !important;font-weight:700}
 .warnbox{background:var(--warnbg);border:1px solid #fcd34d;border-radius:10px;padding:11px 14px;margin-bottom:12px}
 .warnbox h3{font-size:13px;color:var(--warn);margin-bottom:5px}
 .warnbox ul{margin-left:18px;color:#78350f;font-size:13px}
@@ -459,10 +461,10 @@ function renderInput(){
     <tr><td class="lb">포인트 적립</td>${inp('market.pointAccum')}${blank(4)}</tr>
     <tr><td class="lb">고객수</td>${inp('market.guest')}<td class="au" colspan="4" style="text-align:left;color:var(--sub)">명</td></tr>
   </table><div id="vMarket"></div></div>`;
-  // ② 회원분석
-  h+=`<div class="card"><h2>② 회원분석 세부 <small>OKPOS 일자별회원구매내역 — 계·공급가·부가세 입력, 면세는 자동</small></h2>
+  // ② 꽃밥(세금계산서)
+  h+=`<div class="card"><h2>② 꽃밥 (세금계산서) <small>OKPOS-회원관리-회원분석-일자별회원구매내역</small></h2>
   <table class="g"><tr><th style="width:160px">항목</th><th>계</th><th>면세 (자동)</th><th>과세 계 (자동)</th><th>공급가</th><th>부가세</th></tr>
-    ${[['insadong','인사동'],['bojagi','보자기'],['siksa','식사'],['pangong','판공']].map(([x,nm])=>
+    ${[['insadong','인사동'],['bojagi','보자기'],['siksa','식사'],['pangong','판공']].filter(([x])=>x==='insadong'||x==='bojagi'||m.members[x+'Gye']||m.members[x+'Gong']||m.members[x+'Buga']).map(([x,nm])=>
       `<tr><td class="lb">${nm}</td>${inp('members.'+x+'Gye')}`
       +autoCell('mb_'+x+'_m',mm=>derived(mm)[x+'Myeon'])
       +autoCell('mb_'+x+'_g',mm=>derived(mm)[x+'Gwase'])
@@ -473,31 +475,42 @@ function renderInput(){
       +autoCell('mb_tx_gw',mm=>derived(mm).taxinvGong+derived(mm).taxinvBuga,true)
       +autoCell('mb_tx_g',mm=>derived(mm).taxinvGong,true)
       +autoCell('mb_tx_v',mm=>derived(mm).taxinvBuga,true)+`</tr>
-  </table><div class="hint">세금계산서발행은 위 네 줄의 합으로 자동 계산되어 매출확정의 '꽃밥(세금계산서)'로 들어갑니다.</div></div>`;
+  </table><div class="hint">인사동+보자기 합계가 매출확정의 '꽃밥(세금계산서)'로 자동 반영됩니다.</div></div>`;
   // ③ 보자기포스
   h+=`<div class="card"><h2>③ 보자기꽃밥 — 보자기포스</h2>
   <table class="g"><tr><th style="width:160px">항목</th><th>계</th><th>공급가</th><th>부가세</th><th colspan="2"></th></tr>
     <tr><td class="lb">키오스크</td>${inp('bpos.kioskGye')}${inp('bpos.kioskGong')}${inp('bpos.kioskBuga')}${blank(2)}</tr>
     <tr><td class="lb">마켓포스 (보자기 결제분 계)</td>${inp('bpos.marketpos')}<td class="au" colspan="4" style="text-align:left;color:var(--sub)">마켓포스로 받은 보자기 현금+카드 총액</td></tr>
     <tr><td class="lb">쿠팡이츠</td>${inp('bpos.coupangGye')}${inp('bpos.coupangGong')}${inp('bpos.coupangBuga')}${blank(2)}</tr>
-    <tr><td class="lb">제로페이 (계)</td>${inp('bpos.zeropay')}${blank(4)}</tr>
-    <tr><td class="lb">주류 (계)</td>${inp('bpos.liquor')}${blank(4)}</tr>
     <tr><td class="lb">보자기포스 계 (자동)</td>`+autoCell('bp_tot',mm=>derived(mm).bposGye,true)+`<td class="au" colspan="4" style="text-align:left;color:var(--sub)">키오스크 + 마켓포스분</td></tr>
+    <tr><td class="lb">계 + 쿠팡이츠 (자동)</td>`+autoCell('bp_tot2',mm=>derived(mm).bposGye+mm.bpos.coupangGye,true)+`<td class="au" colspan="4" style="text-align:left;color:var(--sub)">키오스크 + 마켓포스분 + 쿠팡이츠</td></tr>
   </table>
-  <h2 style="margin-top:14px">승인현황 — 코너(식당) <small>"보자기현금 빼주기"</small></h2>
+  <div class="hint">제로페이는 마켓포스 금액에 합산되어 있어 따로 적지 않습니다.</div>
+  <h2 style="margin-top:14px">승인현황 — 코너(식당) <small>매출관리-승인현황-코너(식당) · "보자기현금 빼주기"</small></h2>
   <table class="g"><tr><th style="width:160px">구분</th><th>마켓포스 전체</th><th>보자기 몫</th><th>마켓 몫 (자동)</th><th colspan="2"></th></tr>
     <tr><td class="lb">카드</td>${inp('corner.cardTotal')}${inp('corner.cardBojagi')}`+autoCell('cn_cardK',mm=>derived(mm).marketCardK)+`${blank(2)}</tr>
     <tr><td class="lb">현금</td>${inp('corner.cashTotal')}`+autoCell('cn_cashB',mm=>derived(mm).cashBojagi)+autoCell('cn_cashK',mm=>derived(mm).marketCashK)+`<td class="au" colspan="2" style="text-align:left;color:var(--sub)">보자기 현금 = 마켓포스분 계 − 카드 보자기 (자동)</td></tr>
   </table><div id="vCorner"></div></div>`;
-  // ④ 국세청
-  h+=`<div class="card"><h2>④ 국세청 (홈택스) <small>사업자 전체</small></h2>
-  <table class="g"><tr><th style="width:160px">항목</th><th>①</th><th>②</th><th>③</th><th colspan="2"></th></tr>
-    <tr><td class="lb">카드매출 (계)</td>${inp('nts.card')}<td class="au" colspan="4" style="text-align:left;color:var(--sub)">신용카드 합계</td></tr>
-    <tr><td class="lb">제로페이 (계)</td>${inp('nts.zeropay')}<td class="au" colspan="4" style="text-align:left;color:var(--sub)">카드 총액(합계)에 합산됩니다</td></tr>
-    <tr><td class="lb">현금영수증</td>${inp('nts.hyeonGong')}${inp('nts.hyeonBuga')}${inp('nts.hyeonMyeon')}`+autoCell('nts_hy_t',mm=>mm.nts.hyeonGong+mm.nts.hyeonBuga+mm.nts.hyeonMyeon)+blank(1)+`</tr>
-    <tr><td class="lb">카드 과세분 <span class="tag" id="ntsEstTag">추정</span></td><td><input data-p="nts.cardGong" class="est" data-nullable="1"></td><td><input data-p="nts.cardBuga" class="est" data-nullable="1"></td><td class="au" colspan="3" style="text-align:left"><span class="hint">공급가·부가세 — 비워두면 자동 추정 · </span><span class="addrow" id="ntsReset">추정값으로 되돌리기</span></td></tr>
+  // ④ 국세청 (마켓+보자기)
+  h+=`<div class="card"><h2>④ 국세청 — 마켓+보자기 <small>홈택스 · 이 금액을 기준으로 마켓/보자기 매출을 나눕니다</small></h2>
+  <table class="g"><tr><th style="width:160px">카드매출</th><th>계</th><th colspan="4"></th></tr>
+    <tr><td class="lb">카드</td>${inp('nts.card')}${blank(4)}</tr>
+    <tr><td class="lb">제로페이</td>${inp('nts.zeropay')}${blank(4)}</tr>
+    <tr><td class="lb">카드매출 합계 (자동)</td>`+autoCell('nts_tot',mm=>derived(mm).ntsTotal,true)+`<td class="au" colspan="4" style="text-align:left;color:var(--sub)">아래 배분표의 빨간 칸으로 들어갑니다</td></tr>
   </table>
-  <div class="hint">현금영수증은 ① 공급가 ② 부가세 ③ 면세 순서, 계는 자동입니다.</div></div>`;
+  <table class="g" style="margin-top:8px"><tr><th style="width:160px">현금영수증</th><th>계 (자동)</th><th>공급가</th><th>부가세</th><th>면세</th><th></th></tr>
+    <tr><td class="lb">현금영수증</td>`+autoCell('nts_hy_t',mm=>mm.nts.hyeonGong+mm.nts.hyeonBuga+mm.nts.hyeonMyeon)+`${inp('nts.hyeonGong')}${inp('nts.hyeonBuga')}${inp('nts.hyeonMyeon')}${blank(1)}</tr>
+  </table>
+  <h2 style="margin-top:14px">카드 배분표 <small>국세청 카드매출을 과세/면세 비율로 나누는 수식표 (엑셀의 빨간 칸)</small></h2>
+  <table class="g"><tr><th style="width:160px">구분</th><th>공급가</th><th>부가세</th><th>과세 계</th><th>면세</th><th>계</th></tr>
+    <tr><td class="lb">마켓포스 카드</td>`+autoCell('al_i16',mm=>compute(mm).I16)+autoCell('al_j16',mm=>compute(mm).J16)+autoCell('al_k16',mm=>compute(mm).K16)+autoCell('al_l16',mm=>compute(mm).L16)+autoCell('al_m16',mm=>compute(mm).M16)+`</tr>
+    <tr><td class="lb">보자기포스 카드 (키오스크 포함)</td>`+autoCell('al_i17',mm=>compute(mm).I17)+autoCell('al_j17',mm=>compute(mm).J17)+autoCell('al_k17',mm=>compute(mm).K17)+autoCell('al_l17',mm=>compute(mm).L17)+autoCell('al_m17',mm=>compute(mm).M17)+`</tr>
+    <tr><td class="lb">합계</td>`+autoCell('al_i18',mm=>compute(mm).I18,true)+autoCell('al_j18',mm=>compute(mm).J18,true)+autoCell('al_k18',mm=>compute(mm).K18,true)+autoCell('al_l18',mm=>compute(mm).L18,true)+autoCell('al_m18',mm=>compute(mm).M18,true)+`</tr>
+    <tr><td class="lb">국세청 카드매출 → 배분</td><td class="au redcell" data-ac="al_h19"></td><td class="au"></td><td class="au pinkcell" data-ac="al_k19"></td><td class="au pinkcell" data-ac="al_l19"></td><td class="au" style="text-align:left;color:var(--sub)">과세/면세 배분 결과</td></tr>
+  </table>
+  <table class="g" style="margin-top:8px"><tr><th style="width:160px">카드 과세분</th><th>공급가</th><th>부가세</th><th colspan="3"></th></tr>
+    <tr><td class="lb">국세청 카드 과세분 <span class="tag" id="ntsEstTag">추정</span></td><td><input data-p="nts.cardGong" class="est" data-nullable="1"></td><td><input data-p="nts.cardBuga" class="est" data-nullable="1"></td><td class="au" colspan="3" style="text-align:left"><span class="hint">배분표의 과세 배분값으로 자동 계산 · 비우면 자동, 고치면 직접입력 · </span><span class="addrow" id="ntsReset">자동으로 되돌리기</span></td></tr>
+  </table></div>`;
   // ⑤ 스마트스토어
   h+=`<div class="card"><h2>⑤ 스마트스토어</h2>
   <table class="g"><tr><th style="width:160px">항목</th><th>과세</th><th>면세</th><th>계 (자동)</th><th colspan="2"></th></tr>
@@ -507,7 +520,11 @@ function renderInput(){
     ${['card:카드','hyeon:현금영수증','gita:기타'].map(x=>{const[k,lb]=x.split(':');
       return `<tr><td class="lb">${lb}</td>${inp('ss.'+k)}<td><input data-sp="${k}.0" class="est"></td><td><input data-sp="${k}.1" class="est"></td>`+autoCell('ss_'+k+'_chk',mm=>{const I=deriveInputs(mm);return I.sp[k][0]+I.sp[k][1];})+blank(1)+`</tr>`;}).join('')}
   </table>
-  <div class="hint">채널이 하나뿐이면 배분은 자동입니다. <span class="addrow" id="ssReset">배분 자동으로 되돌리기</span></div>
+  <div class="hint">채널이 하나뿐이면 배분은 자동입니다. <span class="addrow" id="ssReset">배분 자동으로 되돌리기</span> · <span class="addrow" id="ssPasteBtn">📋 스마트스토어 표 붙여넣어 자동 입력</span></div>
+  <div id="ssPasteBox" style="display:none;margin-top:8px">
+    <textarea id="ssPasteTa" style="min-height:90px;font-size:12px" placeholder="스마트스토어 '부가세 신고내역' 표를 마우스로 드래그해서 복사(Ctrl+C)한 뒤 여기에 붙여넣고(Ctrl+V) 적용을 누르세요"></textarea>
+    <div class="flex" style="margin-top:6px"><button class="btn sm" id="ssPasteApply">적용</button><span class="hint" id="ssPasteMsg"></span></div>
+  </div>
   <div id="vSS"></div></div>`;
   // ⑥ 기타 세금계산서
   h+=`<div class="card"><h2>⑥ 기타 (세금계산서) <small>매출확정에 직접 넣던 값</small></h2>
@@ -587,8 +604,44 @@ function renderInput(){
   pg.querySelector("textarea[data-memo]").addEventListener("change",e=>{m.memo=e.target.value;touch();});
   const ntsReset=$("#ntsReset");if(ntsReset)ntsReset.addEventListener("click",()=>{m.nts.cardGong=null;m.nts.cardBuga=null;touch();renderInput();});
   const ssReset=$("#ssReset");if(ssReset)ssReset.addEventListener("click",()=>{m.ss.split=null;touch();renderInput();});
+  const spB=$("#ssPasteBtn");if(spB)spB.addEventListener("click",()=>{const b=$("#ssPasteBox");b.style.display=b.style.display==='none'?'block':'none';});
+  const spA=$("#ssPasteApply");if(spA)spA.addEventListener("click",()=>{
+    try{
+      const res=parseSmartstore($("#ssPasteTa").value);
+      if(!res.rows)throw new Error('날짜로 시작하는 행을 찾지 못했습니다 — 표 전체를 드래그해서 복사했는지 확인하세요');
+      m.ss.gwase=res.gwase;m.ss.myeon=res.myeon;
+      m.ss.card=res.ch.card[2];m.ss.hyeon=res.ch.hyeon[2];m.ss.gita=res.ch.gita[2];
+      m.ss.split={card:[res.ch.card[0],res.ch.card[1]],hyeon:[res.ch.hyeon[0],res.ch.hyeon[1]],gita:[res.ch.gita[0],res.ch.gita[1]]};
+      touch();renderInput();
+      $("#ssPasteMsg").textContent=`${res.rows}일치 인식 — 과세 ${fmt(res.gwase)} / 면세 ${fmt(res.myeon)} 배분 완료`;
+      $("#ssPasteBox").style.display='block';
+    }catch(e){$("#ssPasteMsg").textContent='⚠ '+e.message;}
+  });
   const af=$("#btnAutofill");if(af)af.addEventListener("click",()=>{autofillEmpty(m);touch();renderInput();});
   recalcAutos();refreshNtsTag();refreshValidWarns();
+}
+function parseSmartstore(text){
+  const out={rows:0,gwase:0,myeon:0,ch:{card:[0,0,0],hyeon:[0,0,0],gita:[0,0,0]}}; // [과세,면세,계]
+  for(const line of String(text).split(/\r?\n/)){
+    const t=line.trim();
+    if(!/^\d{4}[.\-/]\d{1,2}[.\-/]\d{1,2}/.test(t))continue;
+    const nums=(t.replace(/^\d{4}[.\-/]\d{1,2}[.\-/]\d{1,2}\.?/,'').match(/-?[\d,]+/g)||[]).map(s=>parseInt(s.replace(/,/g,''))||0);
+    if(nums.length<8)continue;
+    const[tot,gw,my,card,so,ji,bal,gita]=nums;
+    const hyeon=so+ji+bal;
+    out.rows++;out.gwase+=gw;out.myeon+=my;
+    const chs=[['card',card],['hyeon',hyeon],['gita',gita]].filter(c=>c[1]>0);
+    const chSum=chs.reduce((a,c)=>a+c[1],0);
+    if(!chSum)continue;
+    let gwAcc=0,myAcc=0;
+    chs.forEach((c,i)=>{
+      let g,mn;
+      if(i===chs.length-1){g=gw-gwAcc;mn=my-myAcc;}
+      else{g=Math.round(gw*c[1]/chSum);mn=Math.round(my*c[1]/chSum);gwAcc+=g;myAcc+=mn;}
+      out.ch[c[0]][0]+=g;out.ch[c[0]][1]+=mn;out.ch[c[0]][2]+=c[1];
+    });
+  }
+  return out;
 }
 function autofillEmpty(m){
   const d=derived(m);
@@ -605,6 +658,9 @@ function autofillEmpty(m){
   fill('ntsCardGong','ntsCardBuga',m.kkotbap.ntsCard,m.kkotbap);
   fill('ntsHyeonGong','ntsHyeonBuga',m.kkotbap.ntsHyeon,m.kkotbap);
 }
+AUTO.al_h19=mm=>compute(mm).H19;
+AUTO.al_k19=mm=>compute(mm).K19;
+AUTO.al_l19=mm=>compute(mm).L19;
 function recalcAutos(){
   const m=MONTHS[CUR];
   $$("[data-ac]").forEach(td=>{const fn=AUTO[td.dataset.ac];if(fn)td.textContent=fmt(fn(m));});
@@ -659,6 +715,13 @@ function renderConfirm(){
     <tr><td class="lb">보자기포스 카드 몫</td><td>${fmt(V.N17)}</td></tr>
     <tr class="sub"><td class="lb">판매수수료 계</td><td>${fmt(V.N18)}</td></tr>
     <tr><td class="lb">국세청 카드 총액</td><td>${fmt(V.H19)}</td></tr>
+  </table>
+  <h2 style="margin-top:14px">카드 배분표 <small>국세청 카드매출 → 과세/면세 배분</small></h2>
+  <table class="cf" style="max-width:720px"><tr><th>구분</th><th>공급가</th><th>부가세</th><th>과세 계</th><th>면세</th><th>계</th></tr>
+    <tr><td class="lb">마켓포스 카드</td><td>${fmt(V.I16)}</td><td>${fmt(V.J16)}</td><td>${fmt(V.K16)}</td><td>${fmt(V.L16)}</td><td>${fmt(V.M16)}</td></tr>
+    <tr><td class="lb">보자기포스 카드 (키오스크 포함)</td><td>${fmt(V.I17)}</td><td>${fmt(V.J17)}</td><td>${fmt(V.K17)}</td><td>${fmt(V.L17)}</td><td>${fmt(V.M17)}</td></tr>
+    <tr class="sub"><td class="lb">합계</td><td>${fmt(V.I18)}</td><td>${fmt(V.J18)}</td><td>${fmt(V.K18)}</td><td>${fmt(V.L18)}</td><td>${fmt(V.M18)}</td></tr>
+    <tr><td class="lb">국세청 카드매출 → 배분</td><td class="redcell">${fmt(V.H19)}</td><td></td><td class="pinkcell">${fmt(V.K19)}</td><td class="pinkcell">${fmt(V.L19)}</td><td></td></tr>
   </table>
   <div style="margin-top:14px" class="flex"><button class="btn" id="btnXlsx">📥 이 달 확정 엑셀 다운로드</button><span class="hint">기존 매출확정 양식 그대로, 수식 포함으로 저장됩니다</span></div>
   <div class="err" id="xlsxErr" style="display:none"></div></div>`;
