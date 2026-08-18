@@ -1294,19 +1294,11 @@ function renderHome() {
       <span class="grow ${c.ok ? "" : "name"}">${c.name}</span>
       <span class="meta">${c.ok ? "입력됨" : "미입력"}</span>
     </li>`).join("");
-  // 검증
+  // 검증: 이상(사업장 합>전체)일 때만 경고 · 2026년 이후 자료만
   const chk = entityCheck(year, month);
   let chkHtml = "";
-  if (chk) {
-    if (chk.state === "ok")
-      chkHtml = `<div class="check-box ok">✅ 사업장 합계가 전체와 일치해요 (공통 매출 0원 · 전체 ${fmt(chk.total)}원)</div>`;
-    else if (chk.state === "diff" && chk.diff > 0)
-      chkHtml = `<div class="check-box ok">ℹ️ ${month}월 공통 매출: <b>${fmt(chk.diff)}원</b> — 전체 ${fmt(chk.total)} = 사업장 합 ${fmt(chk.sum)} + 공통. 매출비교 탭의 "공통"에서 자세히 볼 수 있어요.</div>`;
-    else if (chk.state === "diff")
-      chkHtml = `<div class="check-box warn">⚠️ 사업장 합계(${fmt(chk.sum)}원)가 전체(${fmt(chk.total)}원)보다 커요. 입력을 확인해주세요.</div>`;
-    else
-      chkHtml = `<div class="check-box">ℹ️ 사업장별 매출이 일부만 입력됐어요. 전부 입력되면 공통 매출(전체−사업장 합)을 자동 계산해드려요.</div>`;
-  }
+  if (chk && year >= 2026 && chk.state === "diff" && chk.diff < 0)
+    chkHtml = `<div class="check-box warn">⚠️ 사업장 합계(${fmt(chk.sum)}원)가 전체(${fmt(chk.total)}원)보다 커요. 입력을 확인해주세요.</div>`;
   // 분기 정산 안내
   const settleMonths = { 1: "10~12월", 4: "1~3월", 7: "4~6월", 10: "7~9월" };
   const nowM = new Date().getMonth() + 1;
@@ -1452,10 +1444,9 @@ function openReport(year, month) {
         ${entRow("꽃밥에피다", "epida")}
         ${entRow("꽃밥마켓", "market")}
         ${entRow("보자기꽃밥", "bojagi")}
-        ${entRow("공통 (자동계산)", "common")}
       </tbody>
     </table>
-    ${chk && chk.state === "diff" && chk.diff < 0 ? `<p class="rp-warn">⚠️ 사업장 합계가 전체보다 ${fmt(-chk.diff)}원 커요. 입력 확인이 필요해요.</p>` : ""}
+    ${chk && year >= 2026 && chk.state === "diff" && chk.diff < 0 ? `<p class="rp-warn">⚠️ 사업장 합계가 전체보다 ${fmt(-chk.diff)}원 커요. 입력 확인이 필요해요.</p>` : ""}
     ${cur.note ? `<p class="rp-note">비고: ${esc(cur.note)}</p>` : ""}
   `;
   document.getElementById("report-overlay").classList.remove("hidden");
@@ -2057,26 +2048,23 @@ function renderCompare() {
       } else trT += `<td class="dim"></td>`;
     }
   });
-  const entTabs = `<div class="subtabs" style="flex-wrap:wrap">` + SC_ENTITIES.map((e) =>
+  const entTabs = `<div class="subtabs" style="flex-wrap:wrap">` + SC_ENTITIES.filter((e) => !e.computed).map((e) =>
     `<button class="subtab ${e.key === ent ? "active" : ""}" onclick="setCompareEntity('${e.key}')">${e.short}</button>`).join("") + `</div>`;
   const hasAny = MONTHS.some((m) => yrs.some((y) => get(y, m) != null));
-  // 사업장 합계 확인 (전체 화면에서만): 차액은 '공통' 매출로 자동 집계, 음수면 입력 오류 경고
+  // 사업장 합계 확인 (전체 화면에서만): 이상(사업장 합>전체)일 때만 경고 · 2026년 이후 자료만
   let verifyHtml = "";
   if (ent === "total") {
     const negs = [];
-    let commonCnt = 0, commonSum = 0;
     for (const y of allYears) {
+      if (y < 2026) continue; // 2025년 이전 자료는 알림 제외
       for (const m of MONTHS) {
         const c = entityCheck(y, m);
         if (!c || c.state === "partial") continue;
         if (c.diff != null && c.diff < 0) negs.push(`${y}년 ${m}월: 사업장 합 ${fmt(c.sum)}이 전체 ${fmt(c.total)}보다 커요 (차이 ${fmt(c.diff)})`);
-        else if (c.diff != null && c.diff > 0) { commonCnt++; commonSum += c.diff; }
       }
     }
     if (negs.length)
       verifyHtml = `<div class="check-box warn">⚠️ 사업장 합계가 전체보다 큰 달이 있어요. 입력을 확인해주세요.<br>${negs.join("<br>")}</div>`;
-    else if (commonCnt)
-      verifyHtml = `<div class="check-box">ℹ️ 전체와 사업장 합계의 차액은 <b>"공통"</b> 매출로 자동 집계돼요 (위 공통 버튼에서 확인 · ${commonCnt}개월, 누적 ${fmt(commonSum)}원).</div>`;
   }
   // 월 목표 대비 (해당 사업장에 목표가 있는 최근 연도 — 직접입력 모드에선 목표가 없어도 표시)
   let targetYear = [...allYears].reverse().find((y) => hasTargets(String(y), ent));
