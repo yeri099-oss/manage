@@ -4015,7 +4015,6 @@ let DIRTY=false, SAVETIMER=null;
 let db=_R?_R.firestore():null, FB=!!_R;
 
 /* ============ 홈택스 현금영수증 매출내역 붙여넣기 ============ */
-let HY_PARSED=null;
 function hyParse(txt){
   const lines=txt.split(/\r?\n/).map(l=>l.split('\t'));
   const num=s=>{const t=String(s==null?'':s).replace(/[,\s원]/g,'');if(!t||t==='-')return null;const n=Number(t);return isNaN(n)?null:n;};
@@ -4079,8 +4078,28 @@ function hyParse(txt){
   return M;
 }
 function hyGwase(o){return o.tot-o.myeon-o.svc;}
-function hyRenderPreview(){
-  const M=HY_PARSED;if(!M)return;
+function hyBoxHtml(biz){
+  const label=biz==='epida'?'피다 (인사동)':'꽃밥이야기 (마켓·보자기)';
+  return `
+  <div class="flex" style="margin-top:8px"><span class="addrow hyBtn">📋 홈택스 현금영수증 매출내역 붙여넣기 — ${label}</span></div>
+  <div class="hy-wrap" id="hy-wrap-${biz}" data-hybiz="${biz}" style="display:none;margin-top:8px">
+    <div class="hint">홈택스 현금영수증 매출내역을 그대로 붙여넣으세요 — 엑셀 다운로드 내용도, 조회 화면에서 긁어 복사한 것도 다 돼요. 부가세 0원 줄은 면세, 부가세 있는 줄은 과세로 나누고, 한 영수증에 과세·면세가 섞인 줄도 자동으로 갈라내요. 여러 달이 섞여 있으면 달별로 나눠서 보여줘요.${biz==='epida'?' 피다는 전부 과세라 면세가 나오면 경고만 하고 반영하지 않아요.':''}</div>
+    <textarea class="hyTa" style="min-height:110px" placeholder="여기에 표를 붙여넣으세요"></textarea>
+    <div class="flex" style="margin-top:6px"><button class="btn sm hyGo">정리하기</button></div>
+    <div class="hyPrev" style="margin-top:8px"></div>
+    <div class="err hyErr" style="display:none"></div>
+  </div>`;
+}
+async function hyParseClickW(wrap){
+  const ee=wrap.querySelector('.hyErr');if(ee)ee.style.display='none';
+  try{
+    wrap.__hyM=hyParse(wrap.querySelector('.hyTa').value);
+    hyRenderPreviewW(wrap);
+  }catch(e){if(ee){ee.style.display='block';ee.textContent=e.message;}console.error(e);}
+}
+function hyRenderPreviewW(wrap){
+  const M=wrap.__hyM;if(!M)return;
+  const biz=wrap.dataset.hybiz;
   const yms=Object.keys(M).sort();
   let html='<table class="g"><tr><th>달</th><th>건수</th><th>합계</th><th>면세</th><th>과세 (자동)</th><th>공급가액</th><th>부가세</th><th style="width:80px"></th></tr>';
   for(const ym of yms){
@@ -4098,19 +4117,17 @@ function hyRenderPreview(){
   }
   html+='</table>';
   html+='<div class="hint">면세를 고치면 과세(=합계−면세)와 공급가·부가세(1.1 나눔)가 따라서 다시 계산돼요. 공급가나 부가세만 직접 고칠 수도 있어요. 기본 부가세는 표의 부가세 합계(국세청 값)예요 — "1.1로 계산"을 누르면 과세÷1.1 방식으로 바꿔요.</div>';
-  html+='<div class="flex" style="margin-top:6px"><button class="btn sm" id="hyApply">적용하기</button><span class="hint" id="hyTarget"></span></div>';
-  $("#hyPreview").innerHTML=html;
-  const tgt=()=>{const b=document.querySelector('input[name=hyBiz]:checked');const t=$("#hyTarget");if(t)t.textContent=b&&b.value==='epida'?'→ ⑦ 꽃밥에피다 국세청 현금영수증 칸에 저장':'→ ④ 국세청 현금영수증 칸(공급가·부가세·면세)에 저장';};
-  tgt();document.querySelectorAll('input[name=hyBiz]').forEach(r=>r.addEventListener('change',tgt));
+  html+=`<div class="flex" style="margin-top:6px"><button class="btn sm hyApply">적용하기</button><span class="hint">→ ${biz==='epida'?'⑦ 피다 국세청 현금영수증':'④ 국세청 현금영수증(공급가·부가세·면세)'} 칸에 저장</span></div>`;
+  wrap.querySelector('.hyPrev').innerHTML=html;
   const setRow=ym=>{
     const o=M[ym];
-    const q=sel=>document.querySelector(sel);
+    const q=sel=>wrap.querySelector(sel);
     const gw=q(`[data-hygw="${ym}"]`);if(gw)gw.textContent=fmt(hyGwase(o));
     const gi=q(`[data-hy="${ym}.gong"]`);if(gi)gi.value=fmt(o.gongV);
     const vi=q(`[data-hy="${ym}.vat"]`);if(vi)vi.value=fmt(o.vatV);
     const mi=q(`[data-hy="${ym}.myeon"]`);if(mi)mi.value=fmt(o.myeon);
   };
-  document.querySelectorAll('[data-hy]').forEach(inp=>{
+  wrap.querySelectorAll('[data-hy]').forEach(inp=>{
     inp.addEventListener('change',()=>{
       const[ym,f]=inp.dataset.hy.split('.');
       const o=M[ym];const v=Math.round(parseNum(inp.value)||0);
@@ -4120,26 +4137,20 @@ function hyRenderPreview(){
       setRow(ym);
     });
   });
-  document.querySelectorAll('[data-hy11]').forEach(el=>{
+  wrap.querySelectorAll('[data-hy11]').forEach(el=>{
     el.addEventListener('click',()=>{
       const ym=el.dataset.hy11;const o=M[ym];
       const gw=hyGwase(o);o.gongV=exVat(gw);o.vatV=gw-o.gongV;
       setRow(ym);
     });
   });
-  const ap=$("#hyApply");if(ap)ap.addEventListener("click",hyApplyClick);
+  const ap=wrap.querySelector('.hyApply');if(ap)ap.addEventListener("click",()=>hyApplyClickW(wrap));
 }
-async function hyParseClick(){
-  const ee=$("#hyErr");if(ee)ee.style.display='none';
+async function hyApplyClickW(wrap){
+  const ee=wrap.querySelector('.hyErr');if(ee)ee.style.display='none';
   try{
-    HY_PARSED=hyParse($("#hyPasteTa").value);
-    hyRenderPreview();
-  }catch(e){const er=$("#hyErr");if(er){er.style.display='block';er.textContent=e.message;}console.error(e);}
-}
-async function hyApplyClick(){
-  try{
-    const M=HY_PARSED;if(!M)return;
-    const biz=(document.querySelector('input[name=hyBiz]:checked')||{}).value||'story';
+    const M=wrap.__hyM;if(!M)return;
+    const biz=wrap.dataset.hybiz;
     const applied=[],skipped=[],warns=[];
     for(const ym of Object.keys(M).sort()){
       if(!MONTHS[ym]){skipped.push(ym);continue;}
@@ -4148,7 +4159,7 @@ async function hyApplyClick(){
         m.kkotbap.ntsHyeonGong=o.gongV;
         m.kkotbap.ntsHyeonBuga=o.vatV;
         m.kkotbap.ntsHyeon=o.gongV+o.vatV;
-        if(o.myeon>0)warns.push(ymLabel(ym)+': 면세 '+fmt(o.myeon)+'원은 에피다(전부 과세) 칸에 없어 반영하지 않았어요');
+        if(o.myeon>0)warns.push(ymLabel(ym)+': 면세 '+fmt(o.myeon)+'원은 피다(전부 과세) 칸에 없어 반영하지 않았어요');
       }else{
         m.nts.hyeonGong=o.gongV;
         m.nts.hyeonBuga=o.vatV;
@@ -4160,15 +4171,15 @@ async function hyApplyClick(){
     if(!applied.length)throw new Error('적용할 수 있는 달이 없어요'+(skipped.length?' (앱에 없는 달: '+skipped.map(ymLabel).join(', ')+')':'')+'.');
     localStorage.setItem('ssv2_months',JSON.stringify(MONTHS));
     if(FB)for(const ym of applied){try{await db.collection('salesStatus_months').doc(ym).set({v:1,savedAt:MONTHS[ym].savedAt,data:JSON.parse(JSON.stringify(MONTHS[ym]))});}catch(e){console.error(e);}}
-    let rep='<div class="okbox" style="margin-top:8px;margin-bottom:8px">'+(biz==='epida'?'⑦ 꽃밥에피다':'④ 국세청(마켓·보자기)')+' 현금영수증 반영 완료: '
+    let rep='<div class="okbox" style="margin-top:8px;margin-bottom:8px">'+(biz==='epida'?'⑦ 피다':'④ 국세청(마켓·보자기)')+' 현금영수증 반영 완료: '
       +applied.map(ym=>ymLabel(ym)+' (공급가 '+fmt(M[ym].gongV)+' · 부가세 '+fmt(M[ym].vatV)+(biz==='epida'?'':' · 면세 '+fmt(M[ym].myeon))+')').join(' / ')
       +(skipped.length?'<br>앱에 없는 달이라 건너뜀: '+skipped.map(ymLabel).join(', '):'')+'</div>';
     for(const w of warns)rep+='<div class="vwarn">⚠ '+w+'</div>';
     renderInput();
-    const box=$("#hyPasteBox");if(box)box.style.display='block';
-    const pv=$("#hyPreview");if(pv)pv.innerHTML=rep;
+    const w2=document.getElementById('hy-wrap-'+biz);
+    if(w2){w2.style.display='block';const pv=w2.querySelector('.hyPrev');if(pv)pv.innerHTML=rep;}
     setChip('','현금영수증 반영됨');
-  }catch(e){const er=$("#hyErr");if(er){er.style.display='block';er.textContent=e.message;}console.error(e);}
+  }catch(e){if(ee){ee.style.display='block';ee.textContent=e.message;}console.error(e);}
 }
 /* ============ 이카운트 거래처별 표 붙여넣기 ============ */
 let EC_PARSED=null;
@@ -4360,18 +4371,7 @@ function renderInput(){
   <table class="g" style="margin-top:8px"><tr><th style="width:160px">현금영수증</th><th>계 (자동)</th><th>공급가</th><th>부가세</th><th>면세</th><th></th></tr>
     <tr><td class="lb">현금영수증</td>`+autoCell('nts_hy_t',mm=>mm.nts.hyeonGong+mm.nts.hyeonBuga+mm.nts.hyeonMyeon)+`${inp('nts.hyeonGong')}${inp('nts.hyeonBuga')}${inp('nts.hyeonMyeon')}${blank(1)}</tr>
   </table>
-  <div class="flex" style="margin-top:8px"><span class="addrow" id="hyPasteBtn">📋 홈택스 현금영수증 매출내역 붙여넣기 (과세·면세 자동 분리)</span></div>
-  <div id="hyPasteBox" style="display:none;margin-top:8px">
-    <div class="hint">홈택스 현금영수증 매출내역을 그대로 붙여넣으세요 — 엑셀 다운로드 내용도, 조회 화면에서 마우스로 긁어 복사한 것도 다 돼요. 부가세 0원 줄은 면세, 부가세 있는 줄은 과세로 나누고, 한 영수증에 과세·면세가 섞인 줄도 자동으로 갈라내요. 여러 달이 섞여 있으면 달별로 나눠서 보여줘요.</div>
-    <div class="flex" style="margin:6px 0">
-      <label style="font-size:13px"><input type="radio" name="hyBiz" value="story" checked> 꽃밥이야기 (마켓·보자기)</label>
-      <label style="font-size:13px"><input type="radio" name="hyBiz" value="epida"> 꽃밥에피다 (인사동)</label>
-    </div>
-    <textarea id="hyPasteTa" style="min-height:110px" placeholder="여기에 표를 붙여넣으세요"></textarea>
-    <div class="flex" style="margin-top:6px"><button class="btn sm" id="hyPasteParse">정리하기</button></div>
-    <div id="hyPreview" style="margin-top:8px"></div>
-    <div class="err" id="hyErr" style="display:none"></div>
-  </div>
+  ${hyBoxHtml('story')}
   <h2 style="margin-top:14px">카드 배분표 <small>국세청 카드매출을 과세/면세 비율로 나누는 수식표 (엑셀의 빨간 칸)</small></h2>
   <table class="g"><tr><th style="width:160px">구분</th><th>공급가</th><th>부가세</th><th>과세 계</th><th>면세</th><th>계</th></tr>
     <tr><td class="lb">마켓포스 카드</td>`+autoCell('al_i16',mm=>compute(mm).I16)+autoCell('al_j16',mm=>compute(mm).J16)+autoCell('al_k16',mm=>compute(mm).K16)+autoCell('al_l16',mm=>compute(mm).L16)+autoCell('al_m16',mm=>compute(mm).M16)+`</tr>
@@ -4414,7 +4414,9 @@ function renderInput(){
     <tr><td class="lb">소매 (자동)</td>`+autoCell('kb_sm',mm=>kkotbapCalc(mm).somae)+autoCell('kb_smg',mm=>kkotbapCalc(mm).somaeGong)+autoCell('kb_smv',mm=>{const k=kkotbapCalc(mm);return k.somae-k.somaeGong;})+`<td class="au" colspan="2" style="text-align:left;color:var(--sub)">꽃밥 계 − 국세청 카드 − 현금영수증</td></tr>
     <tr><td class="lb">전체 (캐치 포함, 자동)</td>`+autoCell('kb_all',mm=>kkotbapCalc(mm).all,true)+blank(4)+`</tr>
     <tr><td class="lb">고객수</td>${inp('kkotbap.guest')}<td class="au" colspan="4" style="text-align:left;color:var(--sub)">명</td></tr>
-  </table></div>`;
+  </table>
+  ${hyBoxHtml('epida')}
+  </div>`;
   // ⑧ 재고·수수료
   h+=`<div class="card"><h2>⑧ 재고 · 판매수수료</h2>
   <table class="g"><tr><th style="width:160px">재고 (부가세 제외)</th><th>금액</th><th style="width:160px">판매수수료</th><th>금액</th><th colspan="2"></th></tr>
@@ -4511,8 +4513,8 @@ function renderInput(){
   pg.querySelectorAll("[data-exdel]").forEach(el=>el.addEventListener("click",()=>{m.extra.splice(+el.dataset.exdel,1);touch();renderInput();}));
   const exAdd=$("#exAdd");if(exAdd)exAdd.addEventListener("click",()=>{m.extra.push({name:'',amt:0,unit:'market'});touch();renderInput();});
   const ecB=$("#ecPasteBtn");if(ecB)ecB.addEventListener("click",()=>{const b=$("#ecPasteBox");b.style.display=b.style.display==='none'?'block':'none';});
-  const hyB=$("#hyPasteBtn");if(hyB)hyB.addEventListener("click",()=>{const b=$("#hyPasteBox");b.style.display=b.style.display==='none'?'block':'none';});
-  const hyPp=$("#hyPasteParse");if(hyPp)hyPp.addEventListener("click",hyParseClick);
+  pg.querySelectorAll(".hyBtn").forEach(btn=>btn.addEventListener("click",()=>{const w=btn.closest(".flex").nextElementSibling;if(w)w.style.display=w.style.display==='none'?'block':'none';}));
+  pg.querySelectorAll(".hy-wrap .hyGo").forEach(b=>b.addEventListener("click",()=>hyParseClickW(b.closest(".hy-wrap"))));
   const ecPp=$("#ecPasteParse");if(ecPp)ecPp.addEventListener("click",ecParseClick);
   pg.querySelectorAll("[data-buydel]").forEach(el=>el.addEventListener("click",()=>{const[key,i]=el.dataset.buydel.split('.');m[key].splice(+i,1);touch();renderInput();}));
   pg.querySelector("textarea[data-memo]").addEventListener("change",e=>{m.memo=e.target.value;touch();});
