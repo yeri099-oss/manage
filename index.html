@@ -4026,35 +4026,114 @@ let db=_R?_R.firestore():null, FB=!!_R;
 
 /* ============ 오케이포스 임의결제 승인내역 붙여넣기 ============ */
 function parseAnyPay(txt){
-  const lines=txt.split(/\r?\n/).map(l=>l.split('\t'));
-  const num=s=>{const t=String(s==null?'':s).replace(/[,\s원]/g,'');if(!t||t==='-')return null;const n=Number(t);return isNaN(n)?null:n;};
-  const M={};
-  for(const c of lines){
-    if(!c||c.length<6)continue;
-    const di=c.findIndex(x=>/^\d{4}[.\-\/]\d{1,2}[.\-\/]\d{1,2}$/.test(String(x).trim()));
-    if(di<0)continue; /* 합계·머리글 줄은 날짜가 없어 자동 제외 */
-    let ai=-1;
-    for(let j=di+1;j+2<c.length;j++){
-      const a=num(c[j]),b=num(c[j+1]),v=num(c[j+2]);
-      if(a!=null&&b!=null&&v!=null&&String(c[j]).indexOf(':')<0){ai=j;break;}
-    }
-    if(ai<0)continue;
-    const tot0=num(c[ai]),vat0=num(c[ai+2]);
-    if(tot0==null)continue;
-    const sgn=c.some(x=>String(x).trim().indexOf('취소')>=0)?-1:1;
-    const isCredit=c.some(x=>String(x).trim()==='외상입금');
-    /* 카드번호 칸(금액 바로 앞): 숫자가 있으면 일반 카드승인, 별표뿐이면 임의결제 */
-    const cardNo=String(c[ai-1]||'').trim();
-    const isNormalCard=/\d/.test(cardNo);
-    const dm=String(c[di]).trim().match(/^(\d{4})[.\-\/](\d{1,2})/);
-    const ym=dm[1].slice(2)+dm[2].padStart(2,'0');
-    const o=(M[ym]=M[ym]||{cnt:0,tot:0,vat:0,crCnt:0,crTot:0,crVat:0,cdCnt:0,cdTot:0});
-    if(isCredit){o.crCnt++;o.crTot+=sgn*tot0;o.crVat+=sgn*(vat0||0);}
-    else if(isNormalCard){o.cdCnt++;o.cdTot+=sgn*tot0;}
-    else{o.cnt++;o.tot+=sgn*tot0;o.vat+=sgn*(vat0||0);}
+  return parseAnyPayRows(txt.split(/\r?\n/).map(l=>l.split('\t')));
+}
+function apYmOf(sv){
+  const t=String(sv==null?'':sv).trim();
+  let m=t.match(/^(\d{4})[.\-\/](\d{1,2})[.\-\/]\d{1,2}/);
+  if(m)return m[1].slice(2)+m[2].padStart(2,'0');
+  if(/^\d{5}(\.\d+)?$/.test(t)){ /* 엑셀 직렬 날짜 */
+    const d=new Date(Date.UTC(1899,11,30)+parseFloat(t)*86400000);
+    const y=d.getUTCFullYear();
+    if(y>2000&&y<2100)return String(y).slice(2)+String(d.getUTCMonth()+1).padStart(2,'0');
   }
-  if(!Object.keys(M).length)throw new Error('승인 줄을 찾지 못했어요. 승인현황 표 전체(머리글 포함)를 복사해서 붙여넣어 주세요.');
+  return null;
+}
+function parseAnyPayRows(lines){
+  const num=s=>{const t=String(s==null?'':s).replace(/[,\s원]/g,'');if(!t||t==='-')return null;const n=Number(t);return isNaN(n)?null:n;};
+  /* 머리글에서 열 위치 찾기 (엑셀 파일·정갈한 표) — 못 찾으면 휴리스틱 */
+  let dCol=-1,aCol=-1,vCol=-1,cCol=-1;
+  for(const c of lines){
+    if(!c)continue;
+    const t=c.map(x=>String(x).replace(/[\r\n\s]/g,''));
+    if(dCol<0){const i=t.findIndex(x=>x==='영업일자');if(i>=0)dCol=i;}
+    if(cCol<0){const i=t.findIndex(x=>x==='카드번호');if(i>=0)cCol=i;}
+    if(aCol<0||vCol<0){
+      const i=t.findIndex(x=>x==='요청금액'),j=t.findIndex(x=>x==='부가세');
+      if(i>=0&&j>=0){aCol=i;vCol=j;}
+    }
+    if(dCol>=0&&aCol>=0&&vCol>=0&&cCol>=0)break;
+  }
+  const canStructured=dCol>=0&&aCol>=0&&vCol>=0&&cCol>=0;
+  const run=structured=>{
+    const M={};
+    const put=(ym,tot0,vat0,cardNo,isCredit,isCancel)=>{
+      if(isCancel&&tot0>0){tot0=-tot0;vat0=-vat0;} /* 이미 음수로 적힌 취소는 그대로 */
+      const o=(M[ym]=M[ym]||{cnt:0,tot:0,vat:0,crCnt:0,crTot:0,crVat:0,cdCnt:0,cdTot:0});
+      const isNormalCard=/\d/.test(String(cardNo||'').trim());
+      if(isCredit){o.crCnt++;o.crTot+=tot0;o.crVat+=vat0;}
+      else if(isNormalCard){o.cdCnt++;o.cdTot+=tot0;}
+      else{o.cnt++;o.tot+=tot0;o.vat+=vat0;}
+    };
+    for(const c of lines){
+      if(!c||c.length<6)continue;
+      const isCancel=c.some(x=>String(x).trim()==='취소'||String(x).trim()==='취소거래');
+      const isCredit=c.some(x=>String(x).trim()==='외상입금');
+      if(structured){
+        const ym=apYmOf(c[dCol]);
+        if(!ym)continue; /* 머리글·합계 줄 제외 */
+        const tot0=num(c[aCol]);if(tot0==null)continue;
+        put(ym,tot0,num(c[vCol])||0,c[cCol],isCredit,isCancel);
+      }else{
+        const di=c.findIndex(x=>/^\d{4}[.\-\/]\d{1,2}[.\-\/]\d{1,2}$/.test(String(x).trim()));
+        if(di<0)continue;
+        let ai=-1;
+        for(let j=di+1;j+2<c.length;j++){
+          const a=num(c[j]),b=num(c[j+1]),v=num(c[j+2]);
+          if(a!=null&&b!=null&&v!=null&&String(c[j]).indexOf(':')<0){ai=j;break;}
+        }
+        if(ai<0)continue;
+        const tot0=num(c[ai]);if(tot0==null)continue;
+        const ym=apYmOf(c[di]);if(!ym)continue;
+        put(ym,tot0,num(c[ai+2])||0,c[ai-1],isCredit,isCancel);
+      }
+    }
+    return M;
+  };
+  let M=canStructured?run(true):{};
+  if(!Object.keys(M).length)M=run(false); /* 붙여넣기(병합 머리글로 열이 어긋난 경우) 자동 전환 */
+  if(!Object.keys(M).length)throw new Error('승인 줄을 찾지 못했어요. 승인현황 표 전체(머리글 포함)를 붙여넣거나, 엑셀 파일을 선택해 주세요.');
   return M;
+}
+async function apReadXlsx(file){
+  const zip=await JSZip.loadAsync(await file.arrayBuffer());
+  const shName=Object.keys(zip.files).filter(n=>/^xl\/worksheets\/sheet\d+\.xml$/.test(n)).sort()[0];
+  if(!shName)throw new Error('엑셀 파일에서 시트를 찾지 못했어요 (.xlsx 형식으로 저장해 주세요).');
+  let strs=[];
+  const ssf=zip.file('xl/sharedStrings.xml');
+  if(ssf){
+    const sdoc=new DOMParser().parseFromString(await ssf.async('string'),'application/xml');
+    strs=[...sdoc.getElementsByTagName('si')].map(si=>si.textContent);
+  }
+  const doc=new DOMParser().parseFromString(await zip.file(shName).async('string'),'application/xml');
+  const rows=[];
+  for(const r of doc.getElementsByTagName('row')){
+    const arr=[];
+    for(const cel of r.getElementsByTagName('c')){
+      const ref=cel.getAttribute('r')||'';
+      const col=ref.replace(/\d+/g,'');
+      let idx=0;for(let k=0;k<col.length;k++)idx=idx*26+(col.charCodeAt(k)-64);idx--;
+      const t=cel.getAttribute('t');let v='';
+      if(t==='inlineStr')v=cel.textContent;
+      else{
+        const vEl=cel.getElementsByTagName('v')[0];
+        if(vEl){v=vEl.textContent;if(t==='s')v=strs[+v]!=null?strs[+v]:'';}
+      }
+      while(arr.length<idx)arr.push('');
+      arr[idx]=v;
+    }
+    rows.push(arr);
+  }
+  return rows;
+}
+async function apFileChangeW(wrap,file){
+  const ee=wrap.querySelector('.apErr');if(ee)ee.style.display='none';
+  try{
+    if(!file)return;
+    if(!/\.xlsx$/i.test(file.name))throw new Error('.xlsx 파일만 읽을 수 있어요. 오케이포스에서 엑셀(xlsx)로 저장해 주세요.');
+    wrap.__apM=parseAnyPayRows(await apReadXlsx(file));
+    apRenderPreviewW(wrap);
+  }catch(e){if(ee){ee.style.display='block';ee.textContent=e.message;}console.error(e);}
 }
 function apParseClickW(wrap){
   const ee=wrap.querySelector('.apErr');if(ee)ee.style.display='none';
@@ -4066,51 +4145,23 @@ function apParseClickW(wrap){
 function apRenderPreviewW(wrap){
   const M=wrap.__apM;if(!M)return;
   const yms=Object.keys(M).sort();
-  let html='<table class="g"><tr><th>달</th><th>임의결제</th><th>총액</th><th>부가세 합</th><th>→ 과세 (부가세×11)</th><th>→ 면세</th></tr>';
+  let html='<table class="g"><tr><th>달</th><th>단말기 간편결제</th><th>총액</th><th>부가세 합</th><th>과세분</th><th>면세분</th></tr>';
   for(const ym of yms){
     const o=M[ym],inApp=!!MONTHS[ym];
     const tax=o.vat*11,myeon=o.tot-tax;
     html+=`<tr><td class="lb">${ymLabel(ym)}${inApp?'':' <span class="tag">앱에 없음</span>'}</td>
       <td class="au">${o.cnt}건</td><td class="au"><b>${fmt(o.tot)}</b></td>
       <td class="au">${fmt(o.vat)}</td><td class="au">${fmt(tax)}</td><td class="au">${fmt(myeon)}</td></tr>`;
+    if(o.cdCnt)html+=`<tr><td colspan="6" class="au" style="text-align:left;color:var(--sub)">${ymLabel(ym)}: 일반 카드결제 ${o.cdCnt}건 ${fmt(o.cdTot)}원 (카드번호 있음) — 간편결제와 합치면 ${fmt(o.cdTot+o.tot)}원이 포스 '신용카드' 집계예요.</td></tr>`;
+    if(o.crCnt)html+=`<tr><td colspan="6" class="au" style="text-align:left;color:var(--sub)">참고: ${ymLabel(ym)} 외상입금 ${o.crCnt}건 ${fmt(o.crTot)}원 — 매출 아님(외상 상환), 확정표 소매를 줄일 뿐 이중으로 안 잡혀요.</td></tr>`;
     if(inApp){
-      const zp=MONTHS[ym].nts.zeropay||0,mzp=MONTHS[ym].market.zeropay||0;
-      if(zp&&Math.abs(zp-o.tot)>2)html+=`<tr><td colspan="6" class="au" style="text-align:left;color:var(--warn)">⚠ ${ymLabel(ym)}: 국세청 제로페이 입력값(${fmt(zp)})과 임의결제 합(${fmt(o.tot)})이 달라요 — 위챗 등 홈택스에 안 잡히는 결제가 있으면 정상이에요.</td></tr>`;
-      else if(!zp&&mzp&&Math.abs(mzp-o.tot)>2)html+=`<tr><td colspan="6" class="au" style="text-align:left;color:var(--warn)">⚠ ${ymLabel(ym)}: 매출분석 기타수단(${fmt(mzp)})과 임의결제 합(${fmt(o.tot)})이 달라요.</td></tr>`;
+      const mzp=MONTHS[ym].market.zeropay||0;
+      if(mzp)html+=`<tr><td colspan="6" class="au" style="text-align:left;color:var(--sub)">${ymLabel(ym)} 기타수단결제(제로페이 행)는 ${fmt(mzp)}원 — 위 단말기 간편결제와는 별개로, 포스에 수기 등록된 결제예요.</td></tr>`;
     }
-    if(o.cdCnt)html+=`<tr><td colspan="6" class="au" style="text-align:left;color:var(--sub)">${ymLabel(ym)}: 일반 카드결제 ${o.cdCnt}건 ${fmt(o.cdTot)}원은 카드번호가 있어 자동 제외했어요.</td></tr>`;
-    if(o.crCnt)html+=`<tr><td colspan="6" class="au" style="text-align:left;color:var(--sub)">참고: ${ymLabel(ym)} 외상입금 ${o.crCnt}건 ${fmt(o.crTot)}원은 매출이 아니라 반영하지 않아요 — 국세청 카드에 포함돼 확정표 소매를 그만큼 줄일 뿐, 총매출엔 이중으로 안 잡혀요.</td></tr>`;
   }
   html+='</table>';
-  html+='<div class="hint">적용하면 각 달의 <b>제로페이 부가세 합</b>이 저장되고, 국세청 카드 과세분에 부가세×11이 보태져요 (비율 추정 대신 정확값). 제로페이 총액 칸이 비어 있으면 임의결제 합으로 채워요.</div>';
-  html+='<div class="flex" style="margin-top:6px"><button class="btn sm apApply">적용하기</button></div>';
+  html+='<div class="hint">💡 카드번호 없는 단말기 간편결제(제로페이·카카오페이 등)는 <b>포스가 이미 신용카드로 집계</b>해요 — 카드 행에 다 들어 있으니 확정표에 따로 반영할 게 없어요. 확정표에서 따로 다루는 건 <b>기타수단결제(제로페이 행)</b>뿐이고, 그 과세·면세는 마켓 비율로 자동 추정돼요 (실제 부가세 합을 알면 위 "부가세 합" 칸에 직접 적어도 돼요).</div>';
   wrap.querySelector('.apPrev').innerHTML=html;
-  const ap=wrap.querySelector('.apApply');if(ap)ap.addEventListener("click",()=>apApplyClickW(wrap));
-}
-async function apApplyClickW(wrap){
-  const ee=wrap.querySelector('.apErr');if(ee)ee.style.display='none';
-  try{
-    const M=wrap.__apM;if(!M)return;
-    const applied=[],skipped=[];
-    for(const ym of Object.keys(M).sort()){
-      if(!MONTHS[ym]){skipped.push(ym);continue;}
-      const o=M[ym],m=MONTHS[ym];
-      m.nts.zeropayVat=o.vat;
-      if(!m.nts.zeropay)m.nts.zeropay=o.tot;
-      m.savedAt=new Date().toISOString();
-      applied.push(ym);
-    }
-    if(!applied.length)throw new Error('적용할 수 있는 달이 없어요'+(skipped.length?' (앱에 없는 달: '+skipped.map(ymLabel).join(', ')+')':'')+'.');
-    localStorage.setItem('ssv2_months',JSON.stringify(MONTHS));
-    if(FB)for(const ym of applied){try{await db.collection('salesStatus_months').doc(ym).set({v:1,savedAt:MONTHS[ym].savedAt,data:JSON.parse(JSON.stringify(MONTHS[ym]))});}catch(e){console.error(e);}}
-    let rep='<div class="okbox" style="margin-top:8px">임의결제 반영 완료: '
-      +applied.map(ym=>ymLabel(ym)+' (부가세 '+fmt(M[ym].vat)+' → 과세 '+fmt(M[ym].vat*11)+' · 면세 '+fmt(M[ym].tot-M[ym].vat*11)+')').join(' / ')
-      +(skipped.length?'<br>앱에 없는 달이라 건너뜀: '+skipped.map(ymLabel).join(', '):'')+'</div>';
-    renderInput();
-    const w2=document.getElementById('ap-wrap');
-    if(w2){w2.style.display='block';const pv=w2.querySelector('.apPrev');if(pv)pv.innerHTML=rep;}
-    setChip('','임의결제(제로페이) 반영됨');
-  }catch(e){if(ee){ee.style.display='block';ee.textContent=e.message;}console.error(e);}
 }
 /* ============ POPS CLOUD 일일매출상세내역 붙여넣기 (피다 포스) ============ */
 function parsePops(txt){
@@ -4578,15 +4629,15 @@ function renderInput(){
   h+=`<div class="card"><h2>④ 국세청 — 마켓+보자기 <small>홈택스 · 이 금액을 기준으로 마켓/보자기 매출을 나눕니다</small></h2>
   <table class="g"><tr><th style="width:160px">카드매출</th><th>계</th><th colspan="4"></th></tr>
     <tr><td class="lb">카드</td>${inp('nts.card')}${blank(4)}</tr>
-    <tr><td class="lb">제로페이·기타수단</td>${inp('nts.zeropay')}<td class="au" colspan="4" style="text-align:left;color:var(--sub);font-size:12px">임의결제(제로페이·위챗 등) 총액</td></tr>
-    <tr><td class="lb">└ 부가세 합 <span class="tag" id="zpVatTag">추정</span></td><td><input data-p="nts.zeropayVat" class="est" data-nullable="1"></td><td class="au" colspan="4" style="text-align:left;color:var(--sub);font-size:12px">비우면 마켓 비율로 추정 · 채우면 과세 = 부가세×11로 정확 배분 — 아래 붙여넣기로 자동 입력</td></tr>
+    <tr><td class="lb">제로페이·기타수단</td>${inp('nts.zeropay')}<td class="au" colspan="4" style="text-align:left;color:var(--sub);font-size:12px">기타수단결제(포스 수기 등록분) 총액 — 단말기로 승인된 간편결제는 카드에 이미 포함되니 여기 넣지 마세요</td></tr>
+    <tr><td class="lb">└ 부가세 합 <span class="tag" id="zpVatTag">추정</span></td><td><input data-p="nts.zeropayVat" class="est" data-nullable="1"></td><td class="au" colspan="4" style="text-align:left;color:var(--sub);font-size:12px">기타수단결제의 실제 부가세 합을 알면 적어주세요 (과세 = 부가세×11) · 비우면 마켓 비율로 추정</td></tr>
     <tr><td class="lb">카드매출 합계 (자동)</td>`+autoCell('nts_tot',mm=>derived(mm).ntsTotal,true)+`<td class="au" colspan="4" style="text-align:left;color:var(--sub)">아래 배분표의 빨간 칸으로 들어갑니다</td></tr>
   </table>
-  <div class="flex" style="margin-top:8px"><span class="addrow apBtn">📋 오케이포스 임의결제 승인내역 붙여넣기 — 제로페이 과세·면세 정확 배분</span></div>
+  <div class="flex" style="margin-top:8px"><span class="addrow apBtn">📋 승인내역 확인 — 단말기 간편결제(카드번호 없는 승인)가 얼마나 되는지 보기</span></div>
   <div id="ap-wrap" style="display:none;margin-top:8px">
-    <div class="hint">오케이포스 <b>승인현황 표 전체</b>를 그대로 복사해 붙여넣으세요 (여러 달도 한꺼번에 돼요). <b>카드번호가 별표뿐인 줄(임의결제)만</b> 골라 월별로 합산하고, 과세는 부가세×11로 정확히 나눠요. 카드번호가 있는 일반 카드결제와 <b>외상입금</b> 줄은 자동으로 걸러내요.</div>
-    <textarea class="apTa" style="min-height:110px" placeholder="여기에 표를 붙여넣으세요"></textarea>
-    <div class="flex" style="margin-top:6px"><button class="btn sm apGo">정리하기</button></div>
+    <div class="hint">오케이포스 <b>승인현황</b>을 붙여넣거나 <b>엑셀 파일(.xlsx)을 그대로 선택</b>하면, 카드번호가 별표뿐인 <b>단말기 간편결제</b>를 월별로 집계해 보여줘요 (확인용 — 이 결제들은 포스가 신용카드로 집계해서 카드 행에 이미 포함돼 있어요).</div>
+    <textarea class="apTa" style="min-height:110px" placeholder="여기에 표를 붙여넣으세요 — 또는 아래에서 엑셀 파일을 선택하세요"></textarea>
+    <div class="flex" style="margin-top:6px"><button class="btn sm apGo">붙여넣은 표 정리하기</button><label class="btn sm" style="cursor:pointer;display:inline-flex;align-items:center">📂 엑셀 파일 선택 (.xlsx)<input type="file" class="apFile" accept=".xlsx" style="display:none"></label></div>
     <div class="apPrev" style="margin-top:8px"></div>
     <div class="err apErr" style="display:none"></div>
   </div>
@@ -4786,6 +4837,7 @@ function renderInput(){
   const ntsReset=$("#ntsReset");if(ntsReset)ntsReset.addEventListener("click",()=>{m.nts.cardGong=null;m.nts.cardBuga=null;touch();renderInput();});
   const apB=pg.querySelector(".apBtn");if(apB)apB.addEventListener("click",()=>{const w=document.getElementById("ap-wrap");if(w)w.style.display=w.style.display==='none'?'block':'none';});
   const apG=pg.querySelector("#ap-wrap .apGo");if(apG)apG.addEventListener("click",()=>apParseClickW(document.getElementById("ap-wrap")));
+  const apF=pg.querySelector("#ap-wrap .apFile");if(apF)apF.addEventListener("change",e=>{apFileChangeW(document.getElementById("ap-wrap"),e.target.files[0]);e.target.value='';});
   const ssReset=$("#ssReset");if(ssReset)ssReset.addEventListener("click",()=>{m.ss.split=null;touch();renderInput();});
   const spB=$("#ssPasteBtn");if(spB)spB.addEventListener("click",()=>{const b=$("#ssPasteBox");b.style.display=b.style.display==='none'?'block':'none';});
   const spA=$("#ssPasteApply");if(spA)spA.addEventListener("click",()=>{
