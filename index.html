@@ -4014,6 +4014,98 @@ let CUR=null;    // 현재 ym
 let DIRTY=false, SAVETIMER=null;
 let db=_R?_R.firestore():null, FB=!!_R;
 
+/* ============ POPS CLOUD 일일매출상세내역 붙여넣기 (피다 포스) ============ */
+function parsePops(txt){
+  const lines=txt.split(/\r?\n/).map(l=>l.split('\t'));
+  let hi=-1,ci=null;
+  for(let i=0;i<lines.length;i++){
+    const c=lines[i].map(x=>String(x).trim());
+    const di=c.findIndex(x=>x==='거래일시');
+    const si=c.findIndex(x=>x==='매출금액');
+    const ki=c.findIndex(x=>x.indexOf('정산(현금)')>=0);
+    const ti=c.findIndex(x=>x.indexOf('정산총금액')>=0);
+    if(di>=0&&si>=0&&ki>=0&&ti>=0){
+      hi=i;
+      ci={date:di,sales:si,cash:ki,tot:ti,
+          disc:c.findIndex(x=>x.indexOf('할인금액')>=0),
+          svc:c.findIndex(x=>x==='서비스')};
+      break;
+    }
+  }
+  if(hi<0)throw new Error('머리글(거래일시·매출금액·정산(현금)·정산총금액)을 찾지 못했어요. 일일매출상세내역 표 전체를 복사해서 붙여넣어 주세요.');
+  const num=s=>{const t=String(s==null?'':s).replace(/[,\s원]/g,'');if(!t||t==='-')return null;const n=Number(t);return isNaN(n)?null:n;};
+  const M={};
+  for(let i=hi+1;i<lines.length;i++){
+    const c=lines[i];if(!c||c.length<=ci.tot)continue;
+    const dm=String(c[ci.date]||'').trim().match(/^(\d{4})[.\-\/](\d{1,2})[.\-\/]\d{1,2}/);
+    if(!dm)continue; /* 품목 줄·[계]·RUNDATE 등은 자동 제외 */
+    const tot=num(c[ci.tot]);
+    if(tot==null)continue;
+    const cash=num(c[ci.cash])||0;
+    const ym=dm[1].slice(2)+dm[2].padStart(2,'0');
+    const o=(M[ym]=M[ym]||{cnt:0,sales:0,cash:0,card:0,disc:0,svc:0});
+    o.cnt++;
+    o.sales+=num(c[ci.sales])||0;
+    o.cash+=cash;
+    o.card+=tot-cash;
+    if(ci.disc>=0)o.disc+=num(c[ci.disc])||0;
+    if(ci.svc>=0)o.svc+=num(c[ci.svc])||0;
+  }
+  if(!Object.keys(M).length)throw new Error('영수증 줄을 찾지 못했어요. 표 전체(머리글 포함)를 복사해서 붙여넣어 주세요.');
+  return M;
+}
+async function ppParseClickW(wrap){
+  const ee=wrap.querySelector('.ppErr');if(ee)ee.style.display='none';
+  try{
+    wrap.__ppM=parsePops(wrap.querySelector('.ppTa').value);
+    ppRenderPreviewW(wrap);
+  }catch(e){if(ee){ee.style.display='block';ee.textContent=e.message;}console.error(e);}
+}
+function ppRenderPreviewW(wrap){
+  const M=wrap.__ppM;if(!M)return;
+  const yms=Object.keys(M).sort();
+  let html='<table class="g"><tr><th>달</th><th>영수증</th><th>매출 합</th><th>현금</th><th>카드(현금 외)</th><th>할인</th><th>서비스</th></tr>';
+  for(const ym of yms){
+    const o=M[ym];
+    const inApp=!!MONTHS[ym];
+    const gap=o.sales-(o.cash+o.card);
+    html+=`<tr><td class="lb">${ymLabel(ym)}${inApp?'':' <span class="tag">앱에 없음</span>'}</td>
+      <td class="au">${o.cnt}건</td><td class="au"><b>${fmt(o.sales)}</b></td>
+      <td class="au">${fmt(o.cash)}</td><td class="au">${fmt(o.card)}</td>
+      <td class="au">${fmt(o.disc)}</td><td class="au">${fmt(o.svc)}</td></tr>`;
+    if(gap)html+=`<tr><td colspan="7" class="au" style="text-align:left;color:var(--warn)">⚠ ${ymLabel(ym)}: 매출 합과 정산 합이 ${fmt(gap)}원 달라요 (미수금 등) — 카드·현금은 정산 기준으로 채워요.</td></tr>`;
+  }
+  html+='</table>';
+  html+='<div class="hint">현금 = 정산(현금), 카드 = 정산총금액 − 현금 (카드·페이류 포함). 적용하면 ⑦ 꽃밥 카드(계)·꽃밥 현금(계)에 저장되고, 꽃밥 계는 자동 합산돼요.</div>';
+  html+='<div class="flex" style="margin-top:6px"><button class="btn sm ppApply">적용하기</button></div>';
+  wrap.querySelector('.ppPrev').innerHTML=html;
+  const ap=wrap.querySelector('.ppApply');if(ap)ap.addEventListener("click",()=>ppApplyClickW(wrap));
+}
+async function ppApplyClickW(wrap){
+  const ee=wrap.querySelector('.ppErr');if(ee)ee.style.display='none';
+  try{
+    const M=wrap.__ppM;if(!M)return;
+    const applied=[],skipped=[];
+    for(const ym of Object.keys(M).sort()){
+      if(!MONTHS[ym]){skipped.push(ym);continue;}
+      const o=M[ym],m=MONTHS[ym];
+      m.kkotbap.cash=o.cash;
+      m.kkotbap.card=o.card;
+      m.savedAt=new Date().toISOString();
+      applied.push(ym);
+    }
+    if(!applied.length)throw new Error('적용할 수 있는 달이 없어요'+(skipped.length?' (앱에 없는 달: '+skipped.map(ymLabel).join(', ')+')':'')+'.');
+    localStorage.setItem('ssv2_months',JSON.stringify(MONTHS));
+    if(FB)for(const ym of applied){try{await db.collection('salesStatus_months').doc(ym).set({v:1,savedAt:MONTHS[ym].savedAt,data:JSON.parse(JSON.stringify(MONTHS[ym]))});}catch(e){console.error(e);}}
+    let rep='<div class="okbox" style="margin-top:8px">⑦ 피다 포스 반영 완료: '
+      +applied.map(ym=>ymLabel(ym)+' (카드 '+fmt(M[ym].card)+' · 현금 '+fmt(M[ym].cash)+' · 계 '+fmt(M[ym].cash+M[ym].card)+')').join(' / ')
+      +(skipped.length?'<br>앱에 없는 달이라 건너뜀: '+skipped.map(ymLabel).join(', '):'')+'</div>';
+    renderInput();
+    const w2=document.getElementById('pp-wrap');
+    if(w2){w2.style.display='block';const pv=w2.querySelector('.ppPrev');if(pv)pv.innerHTML=rep;}
+    setChip('','피다 포스 매출 반영됨');
+  }catch(e){if(ee){ee.style.display='block';ee.textContent=e.message;}console.error(e);}
+}
 /* ============ 홈택스 현금영수증 매출내역 붙여넣기 ============ */
 function hyParse(txt){
   const lines=txt.split(/\r?\n/).map(l=>l.split('\t'));
@@ -4403,7 +4495,7 @@ function renderInput(){
     <tr><td class="lb">기타 세금계산서</td>${inp('taxEtc.gong')}${inp('taxEtc.buga')}${inp('taxEtc.myeon')}`+autoCell('taxetc_t',mm=>mm.taxEtc.gong+mm.taxEtc.buga+mm.taxEtc.myeon)+blank(1)+`</tr>
   </table></div>`;
   // ⑦ 꽃밥
-  h+=`<div class="card"><h2>⑦ 꽃밥에피다 — 인사동 식당 <small>기록용 (확정표와 별도)</small></h2>
+  h+=`<div class="card"><h2>⑦ 꽃밥에피다 — 인사동 식당 <small>기록용 (확정표와 별도) · 포스 매출 확인: 영업속보 → 영업집계 → 부가세구분별</small></h2>
   <table class="g"><tr><th style="width:160px">항목</th><th>계</th><th>공급가</th><th>부가세</th><th colspan="2"></th></tr>
     <tr><td class="lb">캐치테이블</td>${inp('kkotbap.catchGye')}${inp('kkotbap.catchGong')}${inp('kkotbap.catchBuga')}${blank(2)}</tr>
     <tr><td class="lb">꽃밥 카드 (계)</td>${inp('kkotbap.card')}${blank(4)}</tr>
@@ -4415,6 +4507,14 @@ function renderInput(){
     <tr><td class="lb">전체 (캐치 포함, 자동)</td>`+autoCell('kb_all',mm=>kkotbapCalc(mm).all,true)+blank(4)+`</tr>
     <tr><td class="lb">고객수</td>${inp('kkotbap.guest')}<td class="au" colspan="4" style="text-align:left;color:var(--sub)">명</td></tr>
   </table>
+  <div class="flex" style="margin-top:8px"><span class="addrow ppBtn">📋 포스 일일매출상세내역 붙여넣기 — 피다 꽃밥 카드·현금 자동 채움</span></div>
+  <div class="pp-wrap" id="pp-wrap" style="display:none;margin-top:8px">
+    <div class="hint">POPS CLOUD의 <b>영업속보 → 일일매출상세내역</b> 표를 통째로 복사해서 붙여넣으세요. 영수증 줄만 골라 읽고 품목 줄·[계]·RUNDATE는 자동으로 걸러내요. 현금은 정산(현금), 카드는 정산총금액에서 현금을 뺀 값(카드·페이류 포함)으로 계산해요.</div>
+    <textarea class="ppTa" style="min-height:110px" placeholder="여기에 표를 붙여넣으세요"></textarea>
+    <div class="flex" style="margin-top:6px"><button class="btn sm ppGo">정리하기</button></div>
+    <div class="ppPrev" style="margin-top:8px"></div>
+    <div class="err ppErr" style="display:none"></div>
+  </div>
   ${hyBoxHtml('epida')}
   </div>`;
   // ⑧ 재고·수수료
@@ -4475,6 +4575,15 @@ function renderInput(){
       if(el.dataset.nullable&&el.value.trim()===''){val=null;el.value='';}
       else{const n=parseNum(el.value);val=n==null?0:Math.round(n);el.value=val?fmt(val):'';}
       setPath(m,el.dataset.p,val);
+      /* 피다: 계 입력 → 공급가·부가세 자동 (전부 과세 ÷1.1, 이후 수정 가능) */
+      const ASPL={'kkotbap.catchGye':['kkotbap.catchGong','kkotbap.catchBuga'],'kkotbap.ntsCard':['kkotbap.ntsCardGong','kkotbap.ntsCardBuga'],'kkotbap.ntsHyeon':['kkotbap.ntsHyeonGong','kkotbap.ntsHyeonBuga']};
+      const asp=ASPL[el.dataset.p];
+      if(asp){
+        const t0=val||0,g0=exVat(t0);
+        setPath(m,asp[0],g0);setPath(m,asp[1],t0-g0);
+        const gi=pg.querySelector(`input[data-p="${asp[0]}"]`);if(gi)gi.value=g0?fmt(g0):'';
+        const bi=pg.querySelector(`input[data-p="${asp[1]}"]`);if(bi)bi.value=(t0-g0)?fmt(t0-g0):'';
+      }
       touch();recalcAutos();refreshNtsTag();refreshValidWarns();
     });
   });
@@ -4515,6 +4624,8 @@ function renderInput(){
   const ecB=$("#ecPasteBtn");if(ecB)ecB.addEventListener("click",()=>{const b=$("#ecPasteBox");b.style.display=b.style.display==='none'?'block':'none';});
   pg.querySelectorAll(".hyBtn").forEach(btn=>btn.addEventListener("click",()=>{const w=btn.closest(".flex").nextElementSibling;if(w)w.style.display=w.style.display==='none'?'block':'none';}));
   pg.querySelectorAll(".hy-wrap .hyGo").forEach(b=>b.addEventListener("click",()=>hyParseClickW(b.closest(".hy-wrap"))));
+  const ppB=pg.querySelector(".ppBtn");if(ppB)ppB.addEventListener("click",()=>{const w=document.getElementById("pp-wrap");if(w)w.style.display=w.style.display==='none'?'block':'none';});
+  const ppG=pg.querySelector(".pp-wrap .ppGo");if(ppG)ppG.addEventListener("click",()=>ppParseClickW(document.getElementById("pp-wrap")));
   const ecPp=$("#ecPasteParse");if(ecPp)ecPp.addEventListener("click",ecParseClick);
   pg.querySelectorAll("[data-buydel]").forEach(el=>el.addEventListener("click",()=>{const[key,i]=el.dataset.buydel.split('.');m[key].splice(+i,1);touch();renderInput();}));
   pg.querySelector("textarea[data-memo]").addEventListener("change",e=>{m.memo=e.target.value;touch();});
