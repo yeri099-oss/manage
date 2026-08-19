@@ -3897,8 +3897,14 @@ function deriveInputs(m){
   const ntsTotal=d.ntsTotal;
   const K18=(card.g+card.v)+m.corner.cardBojagi+m.bpos.kioskGye;
   const M18=K18+card.m;
+  /* 면세는 전체 면세에서 세금계산서·현금영수증 몫을 뺀 '남은 면세'까지만 국세청 카드에 배정.
+     국세청 카드에는 외상 상환 등 이번 달 매출이 아닌 (과세) 금액이 껴 있을 수 있어서,
+     비율로만 추정하면 면세가 실제보다 커져 소매 면세가 음수가 된다. */
+  const availMyeon=Math.max(0,tot.m-kb.m-m.taxEtc.myeon-m.nts.hyeonMyeon);
   const est=M18>0?ntsTotal*K18/M18:0;
-  const estG=exVat(est),estV=Math.round(est)-estG;
+  let estTax=Math.round(est),estCapped=false;
+  if(ntsTotal-estTax>availMyeon){estTax=ntsTotal-availMyeon;estCapped=true;}
+  const estG=exVat(estTax),estV=estTax-estG;
   /* 제로페이는 마켓 손님 결제라 마켓포스 과세비중으로 과세/면세를 나눔.
      홈택스 카드 과세분(직접입력)은 카드사 자료만이라 제로페이 과세분을 보태야
      면세가 과대 계산(→ 소매 면세 음수)되지 않는다. 추정 모드(est)는 이미 총액 비율이라 보정 불필요. */
@@ -3921,7 +3927,7 @@ function deriveInputs(m){
         sp[c[0]]=[k,l];});
     }
   }
-  return{d,card,cash,tot,kb,bjCashG,bjCardG,ntsTotal,cardGong,cardBuga,estG,estV,sp,zpTax,zpG,zpV};
+  return{d,card,cash,tot,kb,bjCashG,bjCardG,ntsTotal,cardGong,cardBuga,estG,estV,sp,zpTax,zpG,zpV,estCapped,availMyeon};
 }
 function compute(m){
   const I=deriveInputs(m),d=I.d;
@@ -4007,7 +4013,7 @@ function validations(m){
     if(d[x+'Myeon']<0)w.push(`회원분석 ${nm}: 공급가+부가세가 계보다 커서 면세가 음수입니다.`);
   }
   if(m.nts.zeropayVat!=null&&m.nts.zeropay>0&&m.nts.zeropayVat*11>m.nts.zeropay+2)w.push(`제로페이 부가세×11(${fmt(m.nts.zeropayVat*11)})이 제로페이 총액(${fmt(m.nts.zeropay)})보다 큽니다 — 부가세 합 또는 총액을 확인하세요.`);
-  if(V.E19<0)w.push(`국세청 소매 면세가 음수(${fmt(V.E19)})예요 — 국세청 카드 과세분(직접입력)·제로페이·현금영수증 면세 값을 확인하세요.`);
+  if(V.E19<0)w.push(`국세청 소매 면세가 음수(${fmt(V.E19)})예요 — 직접입력한 국세청 카드 과세분이 실제보다 작을 수 있어요. '자동으로 되돌리기'를 누르면 남은 면세에 맞춰 자동 계산돼요.`);
   if(V.F19<0)w.push(`국세청 소매가 음수(${fmt(V.F19)})예요 — 국세청 카드매출에 이번 달 매출이 아닌 결제(외상 상환 등)가 많이 껴 있는지 확인하세요.`);
   if(V.H20>0&&V.D17>V.H20)w.push(`국세청 카드 과세계(${fmt(V.D17)})가 카드 총액(${fmt(V.H20)})보다 큽니다.`);
   if(Math.abs(V.K28+V.K29+V.K30-V.K27)>2||Math.abs(V.L28+V.L29+V.L30-V.L27)>2)w.push(`스마트스토어 채널 분배 합이 과세/면세 총액과 맞지 않습니다.`);
@@ -4947,6 +4953,7 @@ function renderConfirm(){
   }
   h+=`</table>
   <div class="hint">제로페이·위챗페이 등 기타수단결제(임의결제)는 소계와 합계에 원래부터 포함되어 있어요. 내려받는 확정 엑셀에도 같은 자리에 제로페이 행이 들어갑니다.</div>
+  ${(()=>{const I=deriveInputs(m);return (I.estCapped&&m.nts.cardGong==null)?`<div class="hint">ℹ️ 국세청 카드의 면세 몫을 남은 면세(${fmt(I.availMyeon)}원)까지로 제한했어요 — 국세청 카드매출에는 외상 상환처럼 이번 달 매출이 아닌 과세 금액이 껴 있어서, 비율로만 나누면 면세가 실제보다 커지기 때문이에요. 그래서 소매 면세는 0으로 표시됩니다 (소매 합계는 그대로예요).</div>`:'';})()}
   <table class="cf" style="margin-top:12px;max-width:520px"><tr><th>판매수수료 배분</th><th>금액</th></tr>
     <tr><td class="lb">마켓포스 카드 몫</td><td>${fmt(V.N17)}</td></tr>
     <tr><td class="lb">보자기포스 카드 몫</td><td>${fmt(V.N18)}</td></tr>
