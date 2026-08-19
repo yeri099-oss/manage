@@ -3804,6 +3804,7 @@ function emptyMonth(){return{
   taxEtc:{gong:0,buga:0,myeon:0},
   kkotbap:{catchGye:0,catchGong:0,catchBuga:0,card:0,cash:0,ntsCard:0,ntsCardGong:0,ntsCardBuga:0,ntsHyeon:0,ntsHyeonGong:0,ntsHyeonBuga:0,guest:0},
   misc:{jaegoMarket:0,jaegoBojagi:0,jaegoPida:0,feeMarket:0,feeBojagi:0,feePida:0},
+  kkotbapPos:null,
   extra:[],buyBojagi:[],buyPida:[],memo:'',savedAt:null
 };}
 function fillDefaults(m){const e=emptyMonth();for(const k in e){if(m[k]===undefined)m[k]=e[k];else if(typeof e[k]==='object'&&!Array.isArray(e[k])&&e[k]!==null){for(const k2 in e[k])if(m[k][k2]===undefined)m[k][k2]=e[k][k2];}}return m;}
@@ -3920,7 +3921,7 @@ function compute(m){
   const V={};
   V.B3=I.card.g;V.C3=I.card.v;V.E3=I.card.m;
   V.B4=I.cash.g;V.C4=I.cash.v;V.E4=I.cash.m;
-  V.F5=m.market.credit;V.F6=m.market.point;
+  V.F5=m.market.credit;V.F6=m.market.point;V.F6z=m.market.zeropay;
   V.B7=I.tot.g;V.C7=I.tot.v;V.E7=I.tot.m;
   V.B8=I.kb.g;V.C8=I.kb.v;V.E8=I.kb.m;
   V.B9=m.taxEtc.gong;V.C9=m.taxEtc.buga;V.E9=m.taxEtc.myeon;
@@ -3938,7 +3939,7 @@ function compute(m){
   V.D3=V.B3+V.C3;V.F3=V.D3+V.E3;
   V.D4=V.B4+V.C4;V.F4=V.D4+V.E4;V.G4=V.E3+V.E4;
   V.B5=V.F5+V.F6;
-  V.D7=V.B7+V.C7;V.F7=V.D7+V.E7;V.G7=V.F3+V.F4+V.F5+V.F6;
+  V.D7=V.B7+V.C7;V.F7=V.D7+V.E7;V.G7=V.F3+V.F4+V.F5+V.F6+V.F6z;
   V.D8=V.B8+V.C8;V.F8=V.D8+V.E8;
   V.D9=V.B9+V.C9;V.F9=V.D9+V.E9;
   for(const c of["B","C","D","E","F"])V[c+"10"]=V[c+"7"]-V[c+"8"]-V[c+"9"];
@@ -4001,7 +4002,6 @@ function validations(m){
   if(V.H19>0&&V.D16>V.H19)w.push(`국세청 카드 과세계(${fmt(V.D16)})가 카드 총액(${fmt(V.H19)})보다 큽니다.`);
   if(Math.abs(V.K27+V.K28+V.K29-V.K26)>2||Math.abs(V.L27+V.L28+V.L29-V.L26)>2)w.push(`스마트스토어 채널 분배 합이 과세/면세 총액과 맞지 않습니다.`);
   if(m.bpos.liquor>0)w.push(`주류 매출 ${fmt(m.bpos.liquor)}원은 확정표에 자동 반영되지 않습니다(2606 양식 기준). 기록용으로만 저장됩니다.`);
-  if(m.market.zeropay>0)w.push(`마켓 제로페이 ${fmt(m.market.zeropay)}원은 확정표 마켓포스 행에 포함되지 않습니다(2606 양식 기준). 소계에는 반영되어 있습니다.`);
   if(V.H19===0)w.push(`국세청 카드매출이 0입니다 — 홈택스 조회 후 국세청 칸을 채우면 확정표가 완성됩니다.`);
   if(m.bpos.coupangTemp)w.push(`⏳ 쿠팡이츠 금액이 정산 확정 전 임시값입니다 — 국세청 분기 정산이 나오면 이 달에 돌아와 쿠팡 칸만 수정하세요.`);
   const kb=kkotbapCalc(m);
@@ -4113,6 +4113,7 @@ async function ppApplyClickW(wrap){
       m.kkotbap.cash=o.cash;
       m.kkotbap.card=o.card;
       if(o.guest>0)m.kkotbap.guest=Math.round(o.guest);
+      m.kkotbapPos={cnt:o.cnt,sales:o.sales,cash:o.cash,card:o.card,guest:Math.round(o.guest||0),disc:o.disc,svc:o.svc};
       m.savedAt=new Date().toISOString();
       applied.push(ym);
     }
@@ -4438,7 +4439,7 @@ function renderInput(){
     <tr><td class="lb">마켓 계</td>`+autoCell('mk_gye',mm=>derived(mm).marketGye,true)+`${inp('market.myeon')}`+autoCell('mk_gw',mm=>derived(mm).gwase)+`${inp('market.gong')}${inp('market.buga')}</tr>
     <tr><td class="lb">현금</td>`+autoCell('mk_cash',mm=>derived(mm).cashGye)+`${inp('market.cashMyeon')}`+autoCell('mk_cashgw',mm=>derived(mm).cashGwase)+`${inp('market.cashGong')}${inp('market.cashBuga')}</tr>
     <tr><td class="lb">카드</td>`+autoCell('mk_card',mm=>derived(mm).cardGye)+`${inp('market.cardMyeon')}`+autoCell('mk_cardgw',mm=>derived(mm).cardGwase)+`${inp('market.cardGong')}${inp('market.cardBuga')}</tr>
-    <tr><td class="lb">제로페이 (계)</td>${inp('market.zeropay')}${blank(4)}</tr>
+    <tr><td class="lb">제로페이·기타수단 (계)</td>${inp('market.zeropay')}${blank(4)}</tr>
     <tr><td class="lb">포인트 사용 (계)</td>${inp('market.point')}${blank(4)}</tr>
     <tr><td class="lb">외상 (계)</td>${inp('market.credit')}${blank(4)}</tr>
     <tr><td class="lb">정육</td>`+autoCell('mk_jy',mm=>derived(mm).jeongyukGye)+`${inp('market.jeongyukMyeon')}${inp('market.jeongyukGwase')}<td class="au" colspan="2" style="text-align:left;color:var(--sub)">면세(한우 등)·과세 입력 → 계 자동</td></tr>
@@ -4529,6 +4530,9 @@ function renderInput(){
     <tr><td class="lb">전체 (캐치 포함, 자동)</td>`+autoCell('kb_all',mm=>kkotbapCalc(mm).all,true)+blank(4)+`</tr>
     <tr><td class="lb">고객수</td>${inp('kkotbap.guest')}<td class="au" colspan="4" style="text-align:left;color:var(--sub)">명</td></tr>
   </table>
+  ${m.kkotbapPos?`<table class="g" style="margin-top:10px"><tr><th style="width:160px">포스 요약</th><th>영수증</th><th>매출 합</th><th>현금</th><th>카드(현금 외)</th><th>고객수</th><th>할인</th><th>서비스</th></tr>
+    <tr><td class="lb">일일매출상세내역</td><td class="au" style="text-align:center">${fmt(m.kkotbapPos.cnt)}건</td><td class="au"><b>${fmt(m.kkotbapPos.sales)}</b></td><td class="au">${fmt(m.kkotbapPos.cash)}</td><td class="au">${fmt(m.kkotbapPos.card)}</td><td class="au" style="text-align:center">${fmt(m.kkotbapPos.guest)}명</td><td class="au">${fmt(m.kkotbapPos.disc)}</td><td class="au">${fmt(m.kkotbapPos.svc)}</td></tr>
+  </table>`:''}
   <div class="flex" style="margin-top:8px"><span class="addrow ppBtn">📋 포스 일일매출상세내역 붙여넣기 — 피다 꽃밥 카드·현금 자동 채움</span></div>
   <div class="pp-wrap" id="pp-wrap" style="display:none;margin-top:8px">
     <div class="hint">POPS CLOUD의 <b>영업속보 → 일일매출상세내역</b> 표를 통째로 복사해서 붙여넣으세요. 영수증 줄만 골라 읽고 품목 줄·[계]·RUNDATE는 자동으로 걸러내요. 현금은 정산(현금), 카드는 정산총금액에서 현금을 뺀 값(카드·페이류 포함)으로 계산해요.</div>
@@ -4542,7 +4546,7 @@ function renderInput(){
   // ⑧ 재고·수수료
   h+=`<div class="card"><h2>⑧ 재고 · 판매수수료</h2>
   <table class="g"><tr><th style="width:160px">재고 (부가세 제외)</th><th>금액</th><th style="width:190px">판매수수료</th><th>금액</th><th colspan="2"></th></tr>
-    <tr><td class="lb">마켓</td>${inp('misc.jaegoMarket')}<td class="lb">꽃밥이야기 (여신금융 합계)</td><td><input id="feeTotalIn"></td>${blank(2)}</tr>
+    <tr><td class="lb">마켓</td>${inp('misc.jaegoMarket')}<td class="lb">꽃밥이야기 (여신금융 합계)<div class="hint">여신금융 → 월별매입내역 → 수수료계</div></td><td><input id="feeTotalIn"></td>${blank(2)}</tr>
     <tr><td class="lb">보자기</td>${inp('misc.jaegoBojagi')}<td class="lb">└ 마켓 (자동·수정 가능)</td>${inp('misc.feeMarket')}${blank(2)}</tr>
     <tr><td class="lb">피다</td>${inp('misc.jaegoPida')}<td class="lb">└ 보자기 (자동·수정 가능)</td>${inp('misc.feeBojagi')}${blank(2)}</tr>
     <tr><td class="lb"></td><td class="au"></td><td class="lb">피다</td>${inp('misc.feePida')}${blank(2)}</tr>
@@ -4554,7 +4558,7 @@ function renderInput(){
     <tr><td class="lb">꽃밥마켓 (자동)</td>`+autoCell('buy_kkotbap',mm=>mm.members.bojagiGye)+`<td class="au"></td><td class="au" colspan="3" style="text-align:left;color:var(--sub)">회원분석 '보자기' 계와 동일</td></tr>
     ${buyRows(m.buyBojagi,'buyBojagi')}
     <tr><td colspan="6" style="text-align:left;border:1px solid var(--line);padding:6px"><span class="addrow" data-buyadd="buyBojagi">+ 항목 추가</span></td></tr>
-    <tr><td class="lb">합계</td>`+autoCell('buy_bj_tot',mm=>mm.members.bojagiGye+mm.buyBojagi.reduce((a,b)=>a+(b.amt||0),0),true)+`<td class="au" colspan="4"></td></tr>
+    <tr><td class="lb">합계 (꽃밥마켓+항목)</td>`+autoCell('buy_bj_tot',mm=>mm.members.bojagiGye+mm.buyBojagi.reduce((a,b)=>a+(b.amt||0),0),true)+`<td class="au"></td><td class="au" colspan="3" style="text-align:left;color:var(--sub)">이카운트에 한 번에 입력하는 금액</td></tr>
   </table>
   <table class="g" style="margin-top:10px"><tr><th style="width:160px">피다 매입정산</th><th>금액</th><th style="width:70px"></th><th colspan="3"></th></tr>
     ${buyRows(m.buyPida,'buyPida')}
@@ -4750,7 +4754,7 @@ function refreshValidWarns(){
 
 /* ============ 확정 탭 ============ */
 const CF_ROWS=[
-  ["마켓포스 카드","3"],["마켓포스 현금","4"],["마켓포스 외상","5",{only:["B","F"]}],["마켓포스 포인트","6",{only:["F"]}],
+  ["마켓포스 카드","3"],["마켓포스 현금","4"],["마켓포스 외상","5",{only:["B","F"]}],["마켓포스 포인트","6",{only:["F"]}],["마켓포스 제로페이·기타수단","6z",{only:["F"]}],
   ["소계","7","sub"],["꽃밥 (세금계산서)","8"],["기타(세금계산서)","9"],["마켓포스매출 계","10","sub"],
   ["SP"],
   ["보자기포스 현금","11"],["보자기포스 카드","12"],["키오스크","13"],["소계","14","sub"],["계","15","tot"],
@@ -4778,6 +4782,7 @@ function renderConfirm(){
     h+=`<tr${cls}><td class="lb">${lb}</td>${cell("B")}${cell("C")}${cell("D")}${cell("E")}${cell("F")}</tr>`;
   }
   h+=`</table>
+  <div class="hint">제로페이·위챗페이 등 기타수단결제(임의결제)는 소계와 합계에 원래부터 포함되어 있어요. 확정 엑셀(2606 양식)에는 별도 행이 없어서, 내려받은 엑셀에서는 소계에 합쳐진 채로 나옵니다.</div>
   <table class="cf" style="margin-top:12px;max-width:520px"><tr><th>판매수수료 배분</th><th>금액</th></tr>
     <tr><td class="lb">마켓포스 카드 몫</td><td>${fmt(V.N16)}</td></tr>
     <tr><td class="lb">보자기포스 카드 몫</td><td>${fmt(V.N17)}</td></tr>
@@ -5084,7 +5089,7 @@ function importStatusSheet(grid){
       if(lb==="계"){mkGyeCached=num(r,2);m.market.myeon=num(r,3);m.market.gong=num(r,5);m.market.buga=num(r,6);}
       else if(lb==="현금"){m.market.cashMyeon=num(r,3);m.market.cashGong=num(r,5);m.market.cashBuga=num(r,6);}
       else if(lb==="카드"){m.market.cardMyeon=num(r,3);m.market.cardGong=num(r,5);m.market.cardBuga=num(r,6);}
-      else if(lb==="제로페이")m.market.zeropay=num(r,2);
+      else if(lb==="제로페이"||lb==="기타수단결제"||lb==="기타수단")m.market.zeropay=num(r,2);
       else if(lb==="포인트 사용"||lb==="포인트")m.market.point=num(r,2);
       else if(lb==="외상")m.market.credit=num(r,2);
     }
