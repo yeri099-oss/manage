@@ -4937,6 +4937,67 @@ const CF_ROWS=[
   ["SP"],
   ["쿠팡이츠 소매","38",{only:["B","C","D"]}]
 ];
+/* ============ 확정 검증하기 ============ */
+function prevYm(ym){let y=+ym.slice(0,2),mo=+ym.slice(2);mo--;if(mo<1){mo=12;y--;}return String(y).padStart(2,'0')+String(mo).padStart(2,'0');}
+function cfmVerifyHtml(m){
+  const V=compute(m),d=derived(m),I=deriveInputs(m);
+  const rows=[];
+  const add=(name,a,b,note,tol)=>{const diff=a-b;const ok=Math.abs(diff)<=(tol==null?2:tol);
+    rows.push({name,a,b,diff,ok,note});return ok;};
+  /* 서로 다른 곳에서 입력된 자료끼리 맞춰보기 (엑셀에서 하시던 교차 확인) */
+  add('마켓 과세·면세 합 = 마켓 몫 전체',
+      I.tot.g+I.tot.v+I.tot.m, m.market.total-m.bpos.marketpos,
+      '매출분석의 공급가+부가세+면세 ↔ 결제합계에서 보자기분(마켓포스분 계)을 뺀 값');
+  add('카드·현금·외상·포인트·제로페이 합 = 소계',
+      V.F3+V.F4+V.F5+V.F6+V.F7, V.F8,
+      '결제수단별 합 ↔ 매출분석 전체 계');
+  add('마켓포스 카드: 매출분석 ↔ 승인현황',
+      V.F3, m.corner.cardTotal-m.corner.cardBojagi,
+      '매출분석의 카드 계 ↔ 승인현황 카드 전체에서 카드 보자기를 뺀 값');
+  add('마켓포스 현금: 매출분석 ↔ 승인현황',
+      V.F4, m.corner.cashTotal-(m.bpos.marketpos-m.corner.cardBojagi),
+      '매출분석의 현금 계 ↔ 승인현황 현금 전체에서 보자기 현금(자동)을 뺀 값');
+  add('현금영수증: 공급가+부가세+면세 = 계',
+      m.nts.hyeonGong+m.nts.hyeonBuga+m.nts.hyeonMyeon, V.F18,
+      '홈택스 현금영수증 각 칸의 합 ↔ 확정표 국세청 현영 계');
+  add('국세청 카드 과세+면세 = 카드매출 합계',
+      V.D17+V.E17, V.H20, '배분된 과세·면세를 다시 합치면 국세청 총액이 나와야 해요');
+  add('세 사업부 합 = 전체 합계',
+      V.F26+V.F30+V.F34, V.F16,
+      '보자기 계 + 온라인 계 + 마켓 계 ↔ 위쪽 표의 계 — 나눈 걸 다시 합쳐 확인');
+  add('국세청 카드+현영+소매 = 전체 합계',
+      V.F17+V.F18+V.F19, V.F16, '카드로 잡힌 것, 현금영수증, 소매(나머지)를 합치면 전체와 같아야 해요');
+  const smOk=V.F19>=0&&V.D19>=-2&&V.E19>=-2;
+  rows.push({name:'소매가 음수가 아닌지',a:V.F19,b:0,diff:null,ok:smOk,note:'소매 계 '+fmt(V.F19)+' · 과세 '+fmt(V.D19)+' · 면세 '+fmt(V.E19)});
+  /* 참고 정보 (틀림이 아니라 차이 설명) */
+  const infos=[];
+  const gap=V.H20-V.M19;
+  if(Math.abs(gap)>2)infos.push('국세청 카드매출('+fmt(V.H20)+')과 포스 카드 합('+fmt(V.M19)+')의 차이 '+fmt(gap)+'원 — 외상 상환 카드결제, 단말기 간편결제의 홈택스 집계 차이 등으로 생기는 정상적인 차이예요. 이 차이는 소매에서 자동으로 조절돼요.');
+  if(I.estCapped&&m.nts.cardGong==null)infos.push('국세청 카드의 면세 몫을 남은 면세('+fmt(I.availMyeon)+'원)까지로 제한해 소매 면세가 0이 됐어요.');
+  const pv=MONTHS[prevYm(CUR)];
+  if(pv){const pV=compute(pv);if(pV.F16>0)infos.push('전월 대비: 이번 달 합계 '+fmt(V.F16)+'원은 전월('+fmt(pV.F16)+'원)의 '+(Math.round(V.F16/pV.F16*1000)/10)+'% 수준이에요.');}
+  const okCnt=rows.filter(r=>r.ok).length;
+  let h='<div class="card" style="margin-top:10px"><h2>🔍 검증 결과 <small>'+okCnt+'/'+rows.length+' 항목 통과</small></h2>';
+  h+=okCnt===rows.length?'<div class="okbox">✅ 교차검증 '+rows.length+'건이 모두 맞아떨어져요 — 엑셀에서 하시던 확인 항목들이 전부 일치해요.</div>':'<div class="warnbox">⚠ 일부 항목이 어긋나요 — 아래에서 어떤 자료끼리 다른지 확인하세요.</div>';
+  h+='<table class="g" style="margin-top:8px"><tr><th style="width:230px">확인 항목</th><th>왼쪽 값</th><th>오른쪽 값</th><th style="width:90px">차이</th><th style="width:50px"></th></tr>';
+  for(const r of rows){
+    h+='<tr><td class="lb">'+r.name+'<div style="color:var(--sub);font-size:11px;font-weight:400">'+r.note+'</div></td>'
+      +'<td class="au">'+fmt(r.a)+'</td><td class="au">'+fmt(r.b)+'</td>'
+      +'<td class="au">'+(r.diff==null?'—':(r.diff?fmt(r.diff):'0'))+'</td>'
+      +'<td class="au" style="font-size:16px">'+(r.ok?'✓':'⚠')+'</td></tr>';
+  }
+  h+='</table>';
+  if(infos.length)h+='<div class="hint" style="margin-top:8px">'+infos.map(x=>'ℹ️ '+x).join('<br>')+'</div>';
+  /* 숫자 흐름: 계산기로 따라 눌러볼 수 있는 풀이 */
+  h+='<h2 style="margin-top:14px">🧮 숫자가 만들어진 순서 <small>계산기로 그대로 따라가 볼 수 있어요</small></h2><div class="hint" style="line-height:2">'
+    +'① 마켓포스 소계 <b>'+fmt(V.F8)+'</b> = 카드 '+fmt(V.F3)+' + 현금 '+fmt(V.F4)+' + 외상 '+fmt(V.F5)+' + 포인트 '+fmt(V.F6)+' + 제로페이 '+fmt(V.F7)+'<br>'
+    +'② 마켓포스매출 계 <b>'+fmt(V.F11)+'</b> = 소계 '+fmt(V.F8)+' − 꽃밥 세금계산서 '+fmt(V.F9)+' − 기타 세금계산서 '+fmt(V.F10)+'<br>'
+    +'③ 전체 합계 <b>'+fmt(V.F16)+'</b> = 마켓포스매출 계 '+fmt(V.F11)+' + 보자기포스 소계 '+fmt(V.F15)+'<br>'
+    +'④ 소매 <b>'+fmt(V.F19)+'</b> = 전체 '+fmt(V.F16)+' − 국세청 카드 '+fmt(V.F17)+' − 현금영수증 '+fmt(V.F18)+'<br>'
+    +'⑤ 사업부로 다시 나누면: 보자기 '+fmt(V.F26)+' + 온라인 '+fmt(V.F30)+' + 마켓 '+fmt(V.F34)+' = <b>'+fmt(V.F35)+'</b> (③과 같아야 해요)</div>';
+  h+='</div>';
+  return h;
+}
 function renderConfirm(){
   const m=MONTHS[CUR],V=compute(m),pg=$("#pg-confirm");
   const warns=validations(m);
@@ -4967,9 +5028,15 @@ function renderConfirm(){
     <tr class="sub"><td class="lb">합계</td><td>${fmt(V.I19)}</td><td>${fmt(V.J19)}</td><td>${fmt(V.K19)}</td><td>${fmt(V.L19)}</td><td>${fmt(V.M19)}</td></tr>
     <tr><td class="lb">국세청 카드매출 → 배분</td><td class="redcell">${fmt(V.H20)}</td><td></td><td class="pinkcell">${fmt(V.K20)}</td><td class="pinkcell">${fmt(V.L20)}</td><td></td></tr>
   </table>
-  <div style="margin-top:14px" class="flex"><button class="btn" id="btnXlsx">📥 이 달 확정 엑셀 다운로드</button><span class="hint">기존 매출확정 양식 그대로, 수식 포함으로 저장됩니다</span></div>
+  <div style="margin-top:14px" class="flex"><button class="btn" id="btnVerify">🔍 검증하기</button><button class="btn" id="btnXlsx">📥 이 달 확정 엑셀 다운로드</button><span class="hint">검증하기 = 붙여넣은 자료끼리 교차 확인 + 숫자 계산 과정 풀이</span></div>
+  <div id="cfmVfy"></div>
   <div class="err" id="xlsxErr" style="display:none"></div></div>`;
   pg.innerHTML=h;
+  $("#btnVerify").addEventListener("click",()=>{
+    const box=$("#cfmVfy");
+    box.innerHTML=box.innerHTML?'':cfmVerifyHtml(m);
+    if(box.innerHTML)box.scrollIntoView({behavior:"smooth",block:"nearest"});
+  });
   $("#btnXlsx").addEventListener("click",async()=>{
     try{$("#xlsxErr").style.display="none";await exportXlsx();}
     catch(e){const eb=$("#xlsxErr");eb.style.display="block";eb.textContent="엑셀 생성 실패: "+e.message;console.error(e);}
