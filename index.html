@@ -4018,6 +4018,17 @@ let db=_R?_R.firestore():null, FB=!!_R;
 let HY_PARSED=null;
 function hyParse(txt){
   const lines=txt.split(/\r?\n/).map(l=>l.split('\t'));
+  const num=s=>{const t=String(s==null?'':s).replace(/[,\s원]/g,'');if(!t||t==='-')return null;const n=Number(t);return isNaN(n)?null:n;};
+  const M={};
+  const add=(ym,gong,vat,svc,tot,kind)=>{
+    if(String(kind||'').indexOf('취소')>=0&&tot>0){tot=-tot;vat=-vat;gong=-gong;svc=-svc;}
+    const o=(M[ym]=M[ym]||{cnt:0,cancel:0,tot:0,vat:0,myeon:0,svc:0});
+    o.cnt++;if(tot<0)o.cancel++;
+    o.tot+=tot;o.vat+=vat;o.svc+=svc;
+    if(vat===0)o.myeon+=tot;
+    else{const diff=gong-vat*10;if(diff>20)o.myeon+=diff;}
+  };
+  /* 1) 머리글이 있는 형식 (엑셀 다운로드) */
   let hi=-1,ci=null;
   for(let i=0;i<lines.length;i++){
     const c=lines[i].map(x=>String(x).trim());
@@ -4033,28 +4044,37 @@ function hyParse(txt){
       break;
     }
   }
-  if(hi<0)throw new Error('머리글(매출일시·부가세·총금액)을 찾지 못했어요. 머리글 줄부터 표 전체를 복사해서 붙여넣어 주세요.');
-  const num=s=>{const t=String(s==null?'':s).replace(/[,\s원]/g,'');if(!t||t==='-')return null;const n=Number(t);return isNaN(n)?null:n;};
-  const M={};
-  for(let i=hi+1;i<lines.length;i++){
-    const c=lines[i];if(!c||c.length<3)continue;
-    const dm=String(c[ci.date]||'').match(/(\d{4})[.\-\/](\d{1,2})/);
-    let tot=num(c[ci.tot]);
-    if(!dm||tot==null)continue;
-    let vat=num(c[ci.vat])||0;
-    let gong=ci.gong>=0?(num(c[ci.gong])||0):0;
-    let svc=ci.svc>=0?(num(c[ci.svc])||0):0;
-    const kind=ci.kind>=0?String(c[ci.kind]||''):'';
-    if(kind.indexOf('취소')>=0&&tot>0){tot=-tot;vat=-vat;gong=-gong;svc=-svc;}
-    const ym=dm[1].slice(2)+dm[2].padStart(2,'0');
-    const o=(M[ym]=M[ym]||{cnt:0,cancel:0,tot:0,vat:0,myeon:0,svc:0});
-    o.cnt++;if(tot<0)o.cancel++;
-    o.tot+=tot;o.vat+=vat;o.svc+=svc;
-    if(vat===0)o.myeon+=tot;
-    else{const diff=gong-vat*10;if(diff>20)o.myeon+=diff;}
+  if(hi>=0){
+    for(let i=hi+1;i<lines.length;i++){
+      const c=lines[i];if(!c||c.length<3)continue;
+      const dm=String(c[ci.date]||'').match(/(\d{4})[.\-\/](\d{1,2})/);
+      const tot=num(c[ci.tot]);
+      if(!dm||tot==null)continue;
+      add(dm[1].slice(2)+dm[2].padStart(2,'0'),
+          ci.gong>=0?(num(c[ci.gong])||0):0,
+          num(c[ci.vat])||0,
+          ci.svc>=0?(num(c[ci.svc])||0):0,
+          tot,
+          ci.kind>=0?c[ci.kind]:'');
+    }
+  }else{
+    /* 2) 머리글 없이 조회 화면에서 긁어온 형식:
+       날짜 칸 바로 뒤에 숫자 4개(공급가액·부가세·봉사료·총금액)가 오는 줄을 찾음 */
+    for(const c of lines){
+      if(!c||c.length<5)continue;
+      let d=-1;
+      for(let j=0;j+4<c.length;j++){
+        if(!/^\d{4}[.\-\/]\d{1,2}[.\-\/]\d{1,2}/.test(String(c[j]).trim()))continue;
+        if(num(c[j+1])!=null&&num(c[j+2])!=null&&num(c[j+3])!=null&&num(c[j+4])!=null){d=j;break;}
+      }
+      if(d<0)continue;
+      const dm=String(c[d]).trim().match(/(\d{4})[.\-\/](\d{1,2})/);
+      const kind=c.slice(d+5).map(x=>String(x).trim()).find(x=>x==='승인거래'||x==='취소거래'||x.indexOf('취소')>=0)||'';
+      add(dm[1].slice(2)+dm[2].padStart(2,'0'),num(c[d+1])||0,num(c[d+2])||0,num(c[d+3])||0,num(c[d+4]),kind);
+    }
   }
   const yms=Object.keys(M);
-  if(!yms.length)throw new Error('읽을 수 있는 거래 줄이 없어요.');
+  if(!yms.length)throw new Error('거래 줄을 찾지 못했어요. 조회 화면에서 표를 긁어 붙여넣거나(머리글 없어도 돼요), 엑셀 다운로드 내용을 붙여넣어 주세요.');
   for(const ym of yms){const o=M[ym];const gw=o.tot-o.myeon-o.svc;o.gongV=gw-o.vat;o.vatV=o.vat;}
   return M;
 }
@@ -4342,7 +4362,7 @@ function renderInput(){
   </table>
   <div class="flex" style="margin-top:8px"><span class="addrow" id="hyPasteBtn">📋 홈택스 현금영수증 매출내역 붙여넣기 (과세·면세 자동 분리)</span></div>
   <div id="hyPasteBox" style="display:none;margin-top:8px">
-    <div class="hint">홈택스에서 받은 현금영수증 매출내역(발행구분·매출일시·공급가액·부가세·총금액… 열)을 그대로 붙여넣으세요. 부가세 0원 줄은 면세, 부가세 있는 줄은 과세로 나누고, 한 영수증에 과세·면세가 섞인 줄도 자동으로 갈라내요. 여러 달이 섞여 있으면 달별로 나눠서 보여줘요.</div>
+    <div class="hint">홈택스 현금영수증 매출내역을 그대로 붙여넣으세요 — 엑셀 다운로드 내용도, 조회 화면에서 마우스로 긁어 복사한 것도 다 돼요. 부가세 0원 줄은 면세, 부가세 있는 줄은 과세로 나누고, 한 영수증에 과세·면세가 섞인 줄도 자동으로 갈라내요. 여러 달이 섞여 있으면 달별로 나눠서 보여줘요.</div>
     <div class="flex" style="margin:6px 0">
       <label style="font-size:13px"><input type="radio" name="hyBiz" value="story" checked> 꽃밥이야기 (마켓·보자기)</label>
       <label style="font-size:13px"><input type="radio" name="hyBiz" value="epida"> 꽃밥에피다 (인사동)</label>
@@ -4404,7 +4424,7 @@ function renderInput(){
     <tr><td class="lb"></td><td class="au"></td><td class="lb">피다</td>${inp('misc.feePida')}${blank(2)}</tr>
   </table></div>`;
   // ⑨ 매입정산
-  const buyRows=(list,key)=>list.map((it,i)=>`<tr><td class="lb"><input class="txt" data-buy="${key}.${i}.name" value="${esc(it.name)}" style="width:150px"></td><td><input data-buy="${key}.${i}.amt" value="${fmt(it.amt)}"></td><td class="au" style="text-align:center"><span class="addrow" data-buydel="${key}.${i}">삭제</span></td><td class="au" colspan="3"></td></tr>`).join('');
+  const buyRows=(list,key)=>list.map((it,i)=>`<tr><td class="lb"><input class="txt" data-buy="${key}.${i}.name" value="${esc(it.name)}" style="width:150px"></td><td><input data-buy="${key}.${i}.amt" value="${it.amt?fmt(it.amt):''}"></td><td class="au" style="text-align:center"><span class="addrow" data-buydel="${key}.${i}">삭제</span></td><td class="au" colspan="3"></td></tr>`).join('');
   h+=`<div class="card"><h2>⑨ 매입정산</h2>
   <table class="g"><tr><th style="width:160px">보자기 매입정산</th><th>금액</th><th style="width:70px"></th><th colspan="3"></th></tr>
     <tr><td class="lb">꽃밥마켓 (자동)</td>`+autoCell('buy_kkotbap',mm=>mm.members.bojagiGye)+`<td class="au"></td><td class="au" colspan="3" style="text-align:left;color:var(--sub)">회원분석 '보자기' 계와 동일</td></tr>
@@ -4420,7 +4440,7 @@ function renderInput(){
   const exUnits=[['insadong','인사동'],['market','마켓'],['bojagi','보자기']];
   const exRows=(m.extra||[]).map((it,i)=>`<tr>
     <td class="lb"><input class="txt" data-ex="${i}.name" value="${esc(it.name)}" style="width:150px"></td>
-    <td><input data-ex="${i}.amt" value="${fmt(it.amt)}"></td>
+    <td><input data-ex="${i}.amt" value="${it.amt?fmt(it.amt):''}"></td>
     <td style="text-align:center"><select data-ex="${i}.unit" style="font:inherit;font-size:13px;padding:4px 6px;border:1px solid var(--line);border-radius:6px">${exUnits.map(([k,n])=>`<option value="${k}" ${it.unit===k?'selected':''}>${n}</option>`).join('')}</select></td>
     <td class="au" style="text-align:center"><span class="addrow" data-exdel="${i}">삭제</span></td><td class="au" colspan="2"></td></tr>`).join('');
   h+=`<div class="card"><h2>⑩ 기타 거래처 매출 <small>이카운트에 별도 입력하는 거래처 (농림부·네니아·비즈플레이·백패커 등) — 보고앱 매출비교에 합산됩니다</small></h2>
@@ -4446,31 +4466,31 @@ function renderInput(){
   // 값 채우기 + 이벤트
   pg.querySelectorAll("input[data-p]").forEach(el=>{
     const v=getPath(m,el.dataset.p);
-    el.value=el.dataset.nullable&&v===null?'':fmt(v);
-    if(el.dataset.p==='nts.cardGong'||el.dataset.p==='nts.cardBuga'){if(v===null){const I=deriveInputs(m);el.value=fmt(el.dataset.p==='nts.cardGong'?I.estG:I.estV);}}
+    el.value=(v===null||v===undefined||v===0)?'':fmt(v);
+    if(el.dataset.p==='nts.cardGong'||el.dataset.p==='nts.cardBuga'){if(v===null){const I=deriveInputs(m);const ev=el.dataset.p==='nts.cardGong'?I.estG:I.estV;el.value=ev?fmt(ev):'';}}
     el.addEventListener("change",()=>{
       let val;
       if(el.dataset.nullable&&el.value.trim()===''){val=null;el.value='';}
-      else{val=Math.round(parseNum(el.value));el.value=fmt(val);}
+      else{const n=parseNum(el.value);val=n==null?0:Math.round(n);el.value=val?fmt(val):'';}
       setPath(m,el.dataset.p,val);
       touch();recalcAutos();refreshNtsTag();refreshValidWarns();
     });
   });
   pg.querySelectorAll("input[data-sp]").forEach(el=>{
     const[k,i]=el.dataset.sp.split('.');
-    const I=deriveInputs(m);el.value=fmt(I.sp[k][+i]);
+    const I=deriveInputs(m);const sv0=I.sp[k][+i];el.value=sv0?fmt(sv0):'';
     el.addEventListener("change",()=>{
       const I2=deriveInputs(m);
       const sp=m.ss.split?m.ss.split:{card:[...I2.sp.card],hyeon:[...I2.sp.hyeon],gita:[...I2.sp.gita]};
-      sp[k][+i]=Math.round(parseNum(el.value));m.ss.split=sp;
-      el.value=fmt(sp[k][+i]);touch();recalcAutos();refreshValidWarns();
+      {const n=parseNum(el.value);sp[k][+i]=n==null?0:Math.round(n);}m.ss.split=sp;
+      el.value=sp[k][+i]?fmt(sp[k][+i]):'';touch();recalcAutos();refreshValidWarns();
     });
   });
   pg.querySelectorAll("input[data-buy]").forEach(el=>{
     el.addEventListener("change",()=>{
       const[key,i,f]=el.dataset.buy.split('.');
       if(f==='name')m[key][+i].name=el.value;
-      else{m[key][+i].amt=Math.round(parseNum(el.value));el.value=fmt(m[key][+i].amt);}
+      else{const n=parseNum(el.value);m[key][+i].amt=n==null?0:Math.round(n);el.value=m[key][+i].amt?fmt(m[key][+i].amt):'';}
       touch();recalcAutos();
     });
   });
@@ -4484,7 +4504,7 @@ function renderInput(){
       const[i,f]=el.dataset.ex.split('.');
       if(f==='name')m.extra[+i].name=el.value;
       else if(f==='unit')m.extra[+i].unit=el.value;
-      else{m.extra[+i].amt=Math.round(parseNum(el.value));el.value=fmt(m.extra[+i].amt);}
+      else{const n=parseNum(el.value);m.extra[+i].amt=n==null?0:Math.round(n);el.value=m.extra[+i].amt?fmt(m.extra[+i].amt):'';}
       touch();recalcAutos();
     });
   });
@@ -5751,4 +5771,3 @@ if(typeof window.renderHome==="function"){
 
 </body>
 </html>
-
