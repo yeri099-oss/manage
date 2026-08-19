@@ -4028,28 +4028,41 @@ function parsePops(txt){
       hi=i;
       ci={date:di,sales:si,cash:ki,tot:ti,
           disc:c.findIndex(x=>x.indexOf('할인금액')>=0),
-          svc:c.findIndex(x=>x==='서비스')};
+          svc:c.findIndex(x=>x==='서비스'),
+          name:c.findIndex(x=>x==='품명'),
+          qty:c.findIndex(x=>x==='수량')};
       break;
     }
   }
   if(hi<0)throw new Error('머리글(거래일시·매출금액·정산(현금)·정산총금액)을 찾지 못했어요. 일일매출상세내역 표 전체를 복사해서 붙여넣어 주세요.');
   const num=s=>{const t=String(s==null?'':s).replace(/[,\s원]/g,'');if(!t||t==='-')return null;const n=Number(t);return isNaN(n)?null:n;};
   const M={};
+  let curYm=null;
   for(let i=hi+1;i<lines.length;i++){
-    const c=lines[i];if(!c||c.length<=ci.tot)continue;
+    const c=lines[i];if(!c||c.length<3)continue;
     const dm=String(c[ci.date]||'').trim().match(/^(\d{4})[.\-\/](\d{1,2})[.\-\/]\d{1,2}/);
-    if(!dm)continue; /* 품목 줄·[계]·RUNDATE 등은 자동 제외 */
-    const tot=num(c[ci.tot]);
-    if(tot==null)continue;
-    const cash=num(c[ci.cash])||0;
-    const ym=dm[1].slice(2)+dm[2].padStart(2,'0');
-    const o=(M[ym]=M[ym]||{cnt:0,sales:0,cash:0,card:0,disc:0,svc:0});
-    o.cnt++;
-    o.sales+=num(c[ci.sales])||0;
-    o.cash+=cash;
-    o.card+=tot-cash;
-    if(ci.disc>=0)o.disc+=num(c[ci.disc])||0;
-    if(ci.svc>=0)o.svc+=num(c[ci.svc])||0;
+    if(dm){
+      const tot=num(c[ci.tot]);
+      if(tot!=null){
+        const cash=num(c[ci.cash])||0;
+        curYm=dm[1].slice(2)+dm[2].padStart(2,'0');
+        const o=(M[curYm]=M[curYm]||{cnt:0,sales:0,cash:0,card:0,disc:0,svc:0,guest:0});
+        o.cnt++;
+        o.sales+=num(c[ci.sales])||0;
+        o.cash+=cash;
+        o.card+=tot-cash;
+        if(ci.disc>=0)o.disc+=num(c[ci.disc])||0;
+        if(ci.svc>=0)o.svc+=num(c[ci.svc])||0;
+      }else curYm=null;
+    }
+    /* 고객수 추정: 세트·코스 품목 수량 합 (품목 줄 포함, 취소분은 마이너스로 반영) */
+    if(curYm&&ci.name>=0&&ci.qty>=0&&M[curYm]){
+      const nm=String(c[ci.name]||'').trim();
+      if(nm&&(nm.indexOf('세트-')===0||nm.indexOf('코스')>=0)){
+        const q=num(c[ci.qty]);
+        if(q!=null)M[curYm].guest+=q;
+      }
+    }
   }
   if(!Object.keys(M).length)throw new Error('영수증 줄을 찾지 못했어요. 표 전체(머리글 포함)를 복사해서 붙여넣어 주세요.');
   return M;
@@ -4064,7 +4077,7 @@ async function ppParseClickW(wrap){
 function ppRenderPreviewW(wrap){
   const M=wrap.__ppM;if(!M)return;
   const yms=Object.keys(M).sort();
-  let html='<table class="g"><tr><th>달</th><th>영수증</th><th>매출 합</th><th>현금</th><th>카드(현금 외)</th><th>할인</th><th>서비스</th></tr>';
+  let html='<table class="g"><tr><th>달</th><th>영수증</th><th>매출 합</th><th>현금</th><th>카드(현금 외)</th><th>고객수(추정)</th><th>할인</th><th>서비스</th></tr>';
   for(const ym of yms){
     const o=M[ym];
     const inApp=!!MONTHS[ym];
@@ -4072,13 +4085,21 @@ function ppRenderPreviewW(wrap){
     html+=`<tr><td class="lb">${ymLabel(ym)}${inApp?'':' <span class="tag">앱에 없음</span>'}</td>
       <td class="au">${o.cnt}건</td><td class="au"><b>${fmt(o.sales)}</b></td>
       <td class="au">${fmt(o.cash)}</td><td class="au">${fmt(o.card)}</td>
+      <td><input data-ppg="${ym}" value="${o.guest?fmt(Math.round(o.guest)):''}" style="width:70px"></td>
       <td class="au">${fmt(o.disc)}</td><td class="au">${fmt(o.svc)}</td></tr>`;
-    if(gap)html+=`<tr><td colspan="7" class="au" style="text-align:left;color:var(--warn)">⚠ ${ymLabel(ym)}: 매출 합과 정산 합이 ${fmt(gap)}원 달라요 (미수금 등) — 카드·현금은 정산 기준으로 채워요.</td></tr>`;
+    if(gap)html+=`<tr><td colspan="8" class="au" style="text-align:left;color:var(--warn)">⚠ ${ymLabel(ym)}: 매출 합과 정산 합이 ${fmt(gap)}원 달라요 (미수금 등) — 카드·현금은 정산 기준으로 채워요.</td></tr>`;
   }
   html+='</table>';
-  html+='<div class="hint">현금 = 정산(현금), 카드 = 정산총금액 − 현금 (카드·페이류 포함). 적용하면 ⑦ 꽃밥 카드(계)·꽃밥 현금(계)에 저장되고, 꽃밥 계는 자동 합산돼요.</div>';
+  html+='<div class="hint">현금 = 정산(현금), 카드 = 정산총금액 − 현금 (카드·페이류 포함). 고객수는 세트·코스 주문 수량 합으로 추정한 값이라 필요하면 고쳐서 적용하세요 (포스 인원수 칸은 거의 1로 찍혀 있어 쓰지 않아요). 적용하면 ⑦ 꽃밥 카드(계)·현금(계)·고객수에 저장돼요.</div>';
   html+='<div class="flex" style="margin-top:6px"><button class="btn sm ppApply">적용하기</button></div>';
   wrap.querySelector('.ppPrev').innerHTML=html;
+  wrap.querySelectorAll('[data-ppg]').forEach(inp=>{
+    inp.addEventListener('change',()=>{
+      const n=parseNum(inp.value);
+      M[inp.dataset.ppg].guest=n==null?0:Math.round(n);
+      inp.value=M[inp.dataset.ppg].guest?fmt(M[inp.dataset.ppg].guest):'';
+    });
+  });
   const ap=wrap.querySelector('.ppApply');if(ap)ap.addEventListener("click",()=>ppApplyClickW(wrap));
 }
 async function ppApplyClickW(wrap){
@@ -4091,6 +4112,7 @@ async function ppApplyClickW(wrap){
       const o=M[ym],m=MONTHS[ym];
       m.kkotbap.cash=o.cash;
       m.kkotbap.card=o.card;
+      if(o.guest>0)m.kkotbap.guest=Math.round(o.guest);
       m.savedAt=new Date().toISOString();
       applied.push(ym);
     }
@@ -4098,7 +4120,7 @@ async function ppApplyClickW(wrap){
     localStorage.setItem('ssv2_months',JSON.stringify(MONTHS));
     if(FB)for(const ym of applied){try{await db.collection('salesStatus_months').doc(ym).set({v:1,savedAt:MONTHS[ym].savedAt,data:JSON.parse(JSON.stringify(MONTHS[ym]))});}catch(e){console.error(e);}}
     let rep='<div class="okbox" style="margin-top:8px">⑦ 피다 포스 반영 완료: '
-      +applied.map(ym=>ymLabel(ym)+' (카드 '+fmt(M[ym].card)+' · 현금 '+fmt(M[ym].cash)+' · 계 '+fmt(M[ym].cash+M[ym].card)+')').join(' / ')
+      +applied.map(ym=>ymLabel(ym)+' (카드 '+fmt(M[ym].card)+' · 현금 '+fmt(M[ym].cash)+' · 계 '+fmt(M[ym].cash+M[ym].card)+(M[ym].guest>0?' · 고객수 '+fmt(Math.round(M[ym].guest))+'명':'')+')').join(' / ')
       +(skipped.length?'<br>앱에 없는 달이라 건너뜀: '+skipped.map(ymLabel).join(', '):'')+'</div>';
     renderInput();
     const w2=document.getElementById('pp-wrap');
@@ -4520,7 +4542,7 @@ function renderInput(){
   // ⑧ 재고·수수료
   h+=`<div class="card"><h2>⑧ 재고 · 판매수수료</h2>
   <table class="g"><tr><th style="width:160px">재고 (부가세 제외)</th><th>금액</th><th style="width:190px">판매수수료</th><th>금액</th><th colspan="2"></th></tr>
-    <tr><td class="lb">마켓</td>${inp('misc.jaegoMarket')}<td class="lb">꽃밥이야기 (여신금융 합계)</td><td><input id="feeTotalIn"></td><td class="au" colspan="2" style="text-align:left;color:var(--sub)">여신금융에는 이야기로 합쳐 나옴 — 입력하면 배분표 카드 계 비율로 마켓·보자기 자동 분배</td></tr>
+    <tr><td class="lb">마켓</td>${inp('misc.jaegoMarket')}<td class="lb">꽃밥이야기 (여신금융 합계)</td><td><input id="feeTotalIn"></td>${blank(2)}</tr>
     <tr><td class="lb">보자기</td>${inp('misc.jaegoBojagi')}<td class="lb">└ 마켓 (자동·수정 가능)</td>${inp('misc.feeMarket')}${blank(2)}</tr>
     <tr><td class="lb">피다</td>${inp('misc.jaegoPida')}<td class="lb">└ 보자기 (자동·수정 가능)</td>${inp('misc.feeBojagi')}${blank(2)}</tr>
     <tr><td class="lb"></td><td class="au"></td><td class="lb">피다</td>${inp('misc.feePida')}${blank(2)}</tr>
