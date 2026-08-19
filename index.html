@@ -4495,7 +4495,7 @@ function renderInput(){
     <tr><td class="lb">기타 세금계산서</td>${inp('taxEtc.gong')}${inp('taxEtc.buga')}${inp('taxEtc.myeon')}`+autoCell('taxetc_t',mm=>mm.taxEtc.gong+mm.taxEtc.buga+mm.taxEtc.myeon)+blank(1)+`</tr>
   </table></div>`;
   // ⑦ 꽃밥
-  h+=`<div class="card"><h2>⑦ 꽃밥에피다 — 인사동 식당 <small>기록용 (확정표와 별도) · 포스 매출 확인: 영업속보 → 영업집계 → 부가세구분별</small></h2>
+  h+=`<div class="card"><h2>⑦ 꽃밥에피다 — 인사동 식당 <small>기록용 (확정표와 별도)</small></h2>
   <table class="g"><tr><th style="width:160px">항목</th><th>계</th><th>공급가</th><th>부가세</th><th colspan="2"></th></tr>
     <tr><td class="lb">캐치테이블</td>${inp('kkotbap.catchGye')}${inp('kkotbap.catchGong')}${inp('kkotbap.catchBuga')}${blank(2)}</tr>
     <tr><td class="lb">꽃밥 카드 (계)</td>${inp('kkotbap.card')}${blank(4)}</tr>
@@ -4519,10 +4519,10 @@ function renderInput(){
   </div>`;
   // ⑧ 재고·수수료
   h+=`<div class="card"><h2>⑧ 재고 · 판매수수료</h2>
-  <table class="g"><tr><th style="width:160px">재고 (부가세 제외)</th><th>금액</th><th style="width:160px">판매수수료</th><th>금액</th><th colspan="2"></th></tr>
-    <tr><td class="lb">마켓</td>${inp('misc.jaegoMarket')}<td class="lb">마켓</td>${inp('misc.feeMarket')}${blank(2)}</tr>
-    <tr><td class="lb">보자기</td>${inp('misc.jaegoBojagi')}<td class="lb">보자기</td>${inp('misc.feeBojagi')}${blank(2)}</tr>
-    <tr><td class="lb">피다</td>${inp('misc.jaegoPida')}<td class="lb">꽃밥이야기 (자동)</td>`+autoCell('fee_kb',mm=>derived(mm).feeKkotbap,true)+`<td class="au" colspan="2" style="text-align:left;color:var(--sub)">마켓+보자기 — 확정표 판매수수료로 들어감</td></tr>
+  <table class="g"><tr><th style="width:160px">재고 (부가세 제외)</th><th>금액</th><th style="width:190px">판매수수료</th><th>금액</th><th colspan="2"></th></tr>
+    <tr><td class="lb">마켓</td>${inp('misc.jaegoMarket')}<td class="lb">꽃밥이야기 (여신금융 합계)</td><td><input id="feeTotalIn"></td><td class="au" colspan="2" style="text-align:left;color:var(--sub)">여신금융에는 이야기로 합쳐 나옴 — 입력하면 배분표 카드 계 비율로 마켓·보자기 자동 분배</td></tr>
+    <tr><td class="lb">보자기</td>${inp('misc.jaegoBojagi')}<td class="lb">└ 마켓 (자동·수정 가능)</td>${inp('misc.feeMarket')}${blank(2)}</tr>
+    <tr><td class="lb">피다</td>${inp('misc.jaegoPida')}<td class="lb">└ 보자기 (자동·수정 가능)</td>${inp('misc.feeBojagi')}${blank(2)}</tr>
     <tr><td class="lb"></td><td class="au"></td><td class="lb">피다</td>${inp('misc.feePida')}${blank(2)}</tr>
   </table></div>`;
   // ⑨ 매입정산
@@ -4584,6 +4584,10 @@ function renderInput(){
         const gi=pg.querySelector(`input[data-p="${asp[0]}"]`);if(gi)gi.value=g0?fmt(g0):'';
         const bi=pg.querySelector(`input[data-p="${asp[1]}"]`);if(bi)bi.value=(t0-g0)?fmt(t0-g0):'';
       }
+      if(el.dataset.p==='misc.feeMarket'||el.dataset.p==='misc.feeBojagi'){
+        const ft=$("#feeTotalIn");
+        if(ft){const sfee=m.misc.feeMarket+m.misc.feeBojagi;ft.value=sfee?fmt(sfee):'';}
+      }
       touch();recalcAutos();refreshNtsTag();refreshValidWarns();
     });
   });
@@ -4620,6 +4624,21 @@ function renderInput(){
     });
   });
   pg.querySelectorAll("[data-exdel]").forEach(el=>el.addEventListener("click",()=>{m.extra.splice(+el.dataset.exdel,1);touch();renderInput();}));
+  const ftIn=$("#feeTotalIn");
+  if(ftIn){
+    const curFee=m.misc.feeMarket+m.misc.feeBojagi;
+    ftIn.value=curFee?fmt(curFee):'';
+    ftIn.addEventListener("change",()=>{
+      const n=parseNum(ftIn.value);const total=n==null?0:Math.round(n);
+      ftIn.value=total?fmt(total):'';
+      const V=compute(m);
+      const fm=(V.M18>0)?Math.round(total*V.M16/V.M18):total;
+      m.misc.feeMarket=fm;m.misc.feeBojagi=total-fm;
+      const a1=pg.querySelector('input[data-p="misc.feeMarket"]');if(a1)a1.value=fm?fmt(fm):'';
+      const a2=pg.querySelector('input[data-p="misc.feeBojagi"]');if(a2)a2.value=(total-fm)?fmt(total-fm):'';
+      touch();recalcAutos();
+    });
+  }
   const exAdd=$("#exAdd");if(exAdd)exAdd.addEventListener("click",()=>{m.extra.push({name:'',amt:0,unit:'market'});touch();renderInput();});
   const ecB=$("#ecPasteBtn");if(ecB)ecB.addEventListener("click",()=>{const b=$("#ecPasteBox");b.style.display=b.style.display==='none'?'block':'none';});
   pg.querySelectorAll(".hyBtn").forEach(btn=>btn.addEventListener("click",()=>{const w=btn.closest(".flex").nextElementSibling;if(w)w.style.display=w.style.display==='none'?'block':'none';}));
