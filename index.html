@@ -5698,7 +5698,7 @@ window.__cfmInit=async function(){
   __cfmReady=true;
 };
 /* 게이트 리스너 없음 (통합 모드) */
-window.__cfmApp={get MONTHS(){return MONTHS},get CUR(){return CUR},compute,deriveInputs,derived,selectMonth,showTab,touch,
+window.__cfmApp={get MONTHS(){return MONTHS},get CUR(){return CUR},compute,deriveInputs,derived,migrate,kkotbapCalc,selectMonth,showTab,touch,
   setVal(p,v){setPath(MONTHS[CUR],p,v);touch();renderAll();},
   monthData(){return MONTHS[CUR];}};
 })();
@@ -5750,213 +5750,24 @@ window.__cfmApp={get MONTHS(){return MONTHS},get CUR(){return CUR},compute,deriv
    ================================================================ */
 (function(){
 "use strict";
-function exVat(t){return Math.floor(t/1.1+1e-6);}
-
-function emptyMonth(){return{
-  v:2,
-  market:{total:0,myeon:0,gong:0,buga:0,cashMyeon:0,cashGong:0,cashBuga:0,cardMyeon:0,cardGong:0,cardBuga:0,zeropay:0,point:0,credit:0,jeongyukMyeon:0,jeongyukGwase:0,pointAccum:0,guest:0},
-  members:{insadongGye:0,insadongGong:0,insadongBuga:0,bojagiGye:0,bojagiGong:0,bojagiBuga:0,siksaGye:0,siksaGong:0,siksaBuga:0,pangongGye:0,pangongGong:0,pangongBuga:0},
-  bpos:{kioskGye:0,kioskGong:0,kioskBuga:0,marketpos:0,coupangGye:0,coupangGong:0,coupangBuga:0,coupangTemp:false,zeropay:0,liquor:0},
-  corner:{cardTotal:0,cashTotal:0,cardBojagi:0},
-  nts:{card:0,zeropay:0,hyeonGong:0,hyeonBuga:0,hyeonMyeon:0,cardGong:null,cardBuga:null},
-  ss:{gwase:0,myeon:0,card:0,hyeon:0,gita:0,split:null},
-  taxEtc:{gong:0,buga:0,myeon:0},
-  kkotbap:{catchGye:0,catchGong:0,catchBuga:0,card:0,cash:0,ntsCard:0,ntsCardGong:0,ntsCardBuga:0,ntsHyeon:0,ntsHyeonGong:0,ntsHyeonBuga:0,guest:0},
-  misc:{jaegoMarket:0,jaegoBojagi:0,jaegoPida:0,feeMarket:0,feeBojagi:0,feePida:0},
-  extra:[],buyBojagi:[],buyPida:[],memo:'',savedAt:null
-};}
-function fillDefaults(m){const e=emptyMonth();for(const k in e){if(m[k]===undefined)m[k]=e[k];else if(typeof e[k]==='object'&&!Array.isArray(e[k])&&e[k]!==null){for(const k2 in e[k])if(m[k][k2]===undefined)m[k][k2]=e[k][k2];}}return m;}
-function migrate(m){
-  if(m&&m.v>=2)return fillDefaults(m);
-  // ---- v1 → v2 변환 (예전 저장분·클라우드 데이터 자동 업그레이드) ----
-  const o=m||{},n=emptyMonth();
-  const g=(obj,k)=>((obj||{})[k])||0;
-  const vat=(gye,myeon)=>{const gw=gye-myeon,go=exVat(gw);return[go,gw-go];};
-  // 마켓
-  const mkGye=g(o.market,'gye'),mkMy=g(o.market,'myeon');
-  n.market.total=mkGye+g(o.bpos,'marketpos');
-  n.market.myeon=mkMy;[n.market.gong,n.market.buga]=vat(mkGye,mkMy);
-  n.market.cashMyeon=g(o.market,'cashMyeon');[n.market.cashGong,n.market.cashBuga]=vat(g(o.market,'cashGye'),n.market.cashMyeon);
-  n.market.cardMyeon=g(o.market,'cardMyeon');[n.market.cardGong,n.market.cardBuga]=vat(g(o.market,'cardGye'),n.market.cardMyeon);
-  n.market.zeropay=g(o.market,'zeropay');n.market.point=g(o.market,'point');n.market.credit=g(o.market,'credit');
-  n.market.jeongyukMyeon=g(o.market,'jeongyukMyeon');
-  n.market.jeongyukGwase=g(o.market,'jeongyukGye')-g(o.market,'jeongyukMyeon');
-  n.market.pointAccum=g(o.market,'pointAccum');n.market.guest=g(o.market,'guest');
-  // 회원분석
-  for(const x of['insadong','bojagi','siksa','pangong']){
-    const gye=g(o.members,x+'Gye'),my=g(o.members,x+'Myeon');
-    n.members[x+'Gye']=gye;const[go,bu]=vat(gye,my);n.members[x+'Gong']=go;n.members[x+'Buga']=bu;
-  }
-  // 보자기포스
-  const kg=g(o.bpos,'kiosk');n.bpos.kioskGye=kg;n.bpos.kioskGong=exVat(kg);n.bpos.kioskBuga=kg-exVat(kg);
-  n.bpos.marketpos=g(o.bpos,'marketpos');
-  const cg=g(o.bpos,'coupang');n.bpos.coupangGye=cg;n.bpos.coupangGong=exVat(cg);n.bpos.coupangBuga=cg-exVat(cg);
-  n.bpos.zeropay=g(o.bpos,'zeropay');n.bpos.liquor=g(o.bpos,'liquor');
-  n.corner.cardTotal=g(o.corner,'cardTotal');n.corner.cashTotal=g(o.corner,'cashTotal');n.corner.cardBojagi=g(o.corner,'cardBojagi');
-  if(!n.bpos.marketpos&&(g(o.corner,'cardBojagi')||g(o.corner,'cashBojagi')))n.bpos.marketpos=g(o.corner,'cardBojagi')+g(o.corner,'cashBojagi');
-  // 국세청/스마트스토어/기타
-  if(o.nts){n.nts={...n.nts,...o.nts};}
-  if(o.ss){n.ss={...n.ss,...o.ss};}
-  if(o.taxEtc){n.taxEtc={...n.taxEtc,...o.taxEtc};}
-  // 꽃밥
-  const ct=g(o.kkotbap,'catchT');n.kkotbap.catchGye=ct;n.kkotbap.catchGong=exVat(ct);n.kkotbap.catchBuga=ct-exVat(ct);
-  n.kkotbap.card=g(o.kkotbap,'card');n.kkotbap.cash=g(o.kkotbap,'cash');
-  const nc=g(o.kkotbap,'ntsCard');n.kkotbap.ntsCard=nc;n.kkotbap.ntsCardGong=exVat(nc);n.kkotbap.ntsCardBuga=nc-exVat(nc);
-  const nh=g(o.kkotbap,'ntsHyeon');n.kkotbap.ntsHyeon=nh;n.kkotbap.ntsHyeonGong=exVat(nh);n.kkotbap.ntsHyeonBuga=nh-exVat(nh);
-  n.kkotbap.guest=g(o.kkotbap,'guest');
-  // 재고/수수료
-  n.misc.jaegoMarket=g(o.misc,'jaegoMarket');n.misc.jaegoBojagi=g(o.misc,'jaegoBojagi');n.misc.jaegoPida=g(o.misc,'jaegoPida');
-  n.misc.feeMarket=g(o.misc,'feeMarket');n.misc.feeBojagi=g(o.misc,'feeBojagi');n.misc.feePida=g(o.misc,'feePida');
-  if(!n.misc.feeMarket&&!n.misc.feeBojagi&&g(o.misc,'feeKkotbap'))n.misc.feeMarket=g(o.misc,'feeKkotbap');
-  n.extra=o.extra||[];n.buyBojagi=o.buyBojagi||[];n.buyPida=o.buyPida||[];n.memo=o.memo||'';n.savedAt=o.savedAt||null;
-  return n;
-}
-
-function derived(m){
-  const d={};
-  d.cashBojagi=m.bpos.marketpos-m.corner.cardBojagi;              // L23 =마켓포스계-카드보자기
-  d.marketGye=m.market.total-m.bpos.marketpos;                    // B4 =전체-마켓포스분
-  d.cashGye=m.corner.cashTotal-d.cashBojagi;                      // B5 =승인현금-보자기현금
-  d.cardGye=m.corner.cardTotal-m.corner.cardBojagi;               // B6 =승인카드-보자기카드
-  d.gwase=d.marketGye-m.market.myeon;                             // D4
-  d.cashGwase=d.cashGye-m.market.cashMyeon;
-  d.cardGwase=d.cardGye-m.market.cardMyeon;
-  d.jeongyukGye=m.market.jeongyukMyeon+m.market.jeongyukGwase;
-  for(const x of['insadong','bojagi','siksa','pangong']){
-    d[x+'Gwase']=m.members[x+'Gong']+m.members[x+'Buga'];
-    d[x+'Myeon']=m.members[x+'Gye']-d[x+'Gwase'];
-  }
-  d.taxinvGye=0;d.taxinvGong=0;d.taxinvBuga=0;d.taxinvMyeon=0;
-  for(const x of['insadong','bojagi','siksa','pangong']){
-    d.taxinvGye+=m.members[x+'Gye'];d.taxinvGong+=m.members[x+'Gong'];
-    d.taxinvBuga+=m.members[x+'Buga'];d.taxinvMyeon+=d[x+'Myeon'];
-  }
-  d.bposGye=m.bpos.kioskGye+m.bpos.marketpos;                     // C20
-  d.marketCardK=m.corner.cardTotal-m.corner.cardBojagi;           // K22
-  d.marketCashK=m.corner.cashTotal-d.cashBojagi;                  // K23
-  d.ntsTotal=m.nts.card+m.nts.zeropay;
-  d.feeKkotbap=m.misc.feeMarket+m.misc.feeBojagi;                 // D40 =마켓+보자기
-  d.extraIns=0;d.extraMkt=0;d.extraBoj=0;
-  for(const x of(m.extra||[])){
-    const a=x.amt||0;
-    if(x.unit==='insadong')d.extraIns+=a;
-    else if(x.unit==='bojagi')d.extraBoj+=a;
-    else d.extraMkt+=a;
-  }
-  return d;
-}
-function deriveInputs(m){
-  const d=derived(m);
-  const card={g:m.market.cardGong,v:m.market.cardBuga,m:m.market.cardMyeon};
-  const cash={g:m.market.cashGong,v:m.market.cashBuga,m:m.market.cashMyeon};
-  const tot={g:m.market.gong,v:m.market.buga,m:m.market.myeon};
-  const kb={g:d.taxinvGong,v:d.taxinvBuga,m:d.taxinvMyeon};
-  const bjCashG=exVat(d.cashBojagi),bjCardG=exVat(m.corner.cardBojagi);
-  const ntsTotal=d.ntsTotal;
-  const K18=(card.g+card.v)+m.corner.cardBojagi+m.bpos.kioskGye;
-  const M18=K18+card.m;
-  const est=M18>0?ntsTotal*K18/M18:0;
-  const estG=exVat(est),estV=Math.round(est)-estG;
-  const cardGong=m.nts.cardGong!=null?m.nts.cardGong:estG;
-  const cardBuga=m.nts.cardBuga!=null?m.nts.cardBuga:estV;
-  let sp=m.ss.split;
-  if(!sp){
-    sp={card:[0,0],hyeon:[0,0],gita:[0,0]};
-    const chs=[["card",m.ss.card],["hyeon",m.ss.hyeon],["gita",m.ss.gita]].filter(c=>c[1]>0);
-    if(chs.length===1)sp[chs[0][0]]=[m.ss.gwase,m.ss.myeon];
-    else if(chs.length>1){
-      const t=chs.reduce((a,c)=>a+c[1],0);let ka=0,la=0;
-      chs.forEach((c,i)=>{let k,l;
-        if(i===chs.length-1){k=m.ss.gwase-ka;l=m.ss.myeon-la;}
-        else{k=Math.round(m.ss.gwase*c[1]/t);l=Math.round(m.ss.myeon*c[1]/t);ka+=k;la+=l;}
-        sp[c[0]]=[k,l];});
-    }
-  }
-  return{d,card,cash,tot,kb,bjCashG,bjCardG,ntsTotal,cardGong,cardBuga,estG,estV,sp};
-}
-function compute(m){
-  const I=deriveInputs(m),d=I.d;
-  const V={};
-  V.B3=I.card.g;V.C3=I.card.v;V.E3=I.card.m;
-  V.B4=I.cash.g;V.C4=I.cash.v;V.E4=I.cash.m;
-  V.F5=m.market.credit;V.F6=m.market.point;
-  V.B7=I.tot.g;V.C7=I.tot.v;V.E7=I.tot.m;
-  V.B8=I.kb.g;V.C8=I.kb.v;V.E8=I.kb.m;
-  V.B9=m.taxEtc.gong;V.C9=m.taxEtc.buga;V.E9=m.taxEtc.myeon;
-  V.B11=I.bjCashG;V.C11=d.cashBojagi-I.bjCashG;V.E11=0;
-  V.B12=I.bjCardG;V.C12=m.corner.cardBojagi-I.bjCardG;V.E12=0;
-  V.B13=m.bpos.kioskGong;V.C13=m.bpos.kioskBuga;V.E13=0;
-  V.B16=I.cardGong;V.C16=I.cardBuga;
-  V.B17=m.nts.hyeonGong;V.C17=m.nts.hyeonBuga;V.E17=m.nts.hyeonMyeon;
-  V.H19=I.ntsTotal;V.N18=d.feeKkotbap;
-  V.K26=m.ss.gwase;V.L26=m.ss.myeon;V.I26=exVat(V.K26);V.J26=V.K26-V.I26;
-  V.K27=I.sp.card[0];V.L27=I.sp.card[1];V.I27=exVat(V.K27);V.J27=V.K27-V.I27;V.M27=V.K27+V.L27;
-  V.K28=I.sp.hyeon[0];V.L28=I.sp.hyeon[1];V.I28=exVat(V.K28);V.J28=V.K28-V.I28;V.M28=V.K28+V.L28;
-  V.K29=I.sp.gita[0];V.L29=I.sp.gita[1];V.I29=exVat(V.K29);V.J29=V.K29-V.I29;V.M29=V.K29+V.L29;
-  V.B37=m.bpos.coupangGong;V.C37=m.bpos.coupangBuga;
-  V.D3=V.B3+V.C3;V.F3=V.D3+V.E3;
-  V.D4=V.B4+V.C4;V.F4=V.D4+V.E4;V.G4=V.E3+V.E4;
-  V.B5=V.F5+V.F6;
-  V.D7=V.B7+V.C7;V.F7=V.D7+V.E7;V.G7=V.F3+V.F4+V.F5+V.F6;
-  V.D8=V.B8+V.C8;V.F8=V.D8+V.E8;
-  V.D9=V.B9+V.C9;V.F9=V.D9+V.E9;
-  for(const c of["B","C","D","E","F"])V[c+"10"]=V[c+"7"]-V[c+"8"]-V[c+"9"];
-  V.D11=V.B11+V.C11;V.F11=V.D11+V.E11;
-  V.D12=V.B12+V.C12;V.F12=V.D12+V.E12;V.G12=V.F11+V.F12;
-  V.D13=V.B13+V.C13;V.F13=V.D13+V.E13;
-  for(const c of["B","C","D","E","F"])V[c+"14"]=V[c+"11"]+V[c+"12"]+V[c+"13"];
-  for(const c of["B","C","D","E","F"])V[c+"15"]=V[c+"10"]+V[c+"14"];
-  V.D16=V.B16+V.C16;V.E16=V.H19-V.D16;V.F16=V.D16+V.E16;V.G16=V.F3+V.F12+V.F13;
-  V.I16=V.B3;V.J16=V.C3;V.K16=V.D3;V.L16=V.E3;V.M16=V.F3;
-  V.D17=V.B17+V.C17;V.F17=V.D17+V.E17;
-  V.I17=V.B12+V.B13;V.J17=V.C12+V.C13;V.K17=V.D12+V.D13;V.L17=V.E12+V.E13;V.M17=V.F12+V.F13;
-  for(const c of["B","C","D","E","F"])V[c+"18"]=V[c+"15"]-V[c+"16"]-V[c+"17"];
-  V.G18=V.F16+V.F17+V.F18;
-  for(const c of["I","J","K","L","M"])V[c+"18"]=V[c+"16"]+V[c+"17"];
-  V.N16=V.M18>0?V.N18*V.M16/V.M18:0;
-  V.N17=V.M18>0?V.N18*V.M17/V.M18:0;
-  V.F19=0;V.G19=V.F7+V.F14;
-  V.K19=V.M18>0?V.H19*V.K18/V.M18:0;
-  V.L19=V.M18>0?V.H19*V.L18/V.M18:0;
-  for(const c of["B","C","D","E"])V[c+"23"]=V[c+"12"]+V[c+"13"];
-  V.F23=V.F12+V.F13;
-  for(const c of["B","C","D","E"])V[c+"24"]=V[c+"11"]+V[c+"12"];
-  V.F24=V.D24+V.E24;
-  for(const c of["B","C","D","E","F"])V[c+"25"]=V[c+"23"]+V[c+"24"];
-  V.M26=V.K26+V.L26;
-  V.B26=V.I27;V.C26=V.J27;V.D26=V.K27;V.E26=V.L27;V.F26=V.M27;
-  V.B27=V.I28;V.C27=V.J28;V.D27=V.B27+V.C27;V.E27=V.L28;V.F27=V.D27+V.E27;V.N27=V.K27+V.L27;
-  V.B28=V.I29;V.C28=V.J29;V.D28=V.K29;V.E28=V.L29;V.F28=V.M29;
-  for(const c of["B","C","D","E","F"])V[c+"29"]=V[c+"26"]+V[c+"27"]+V[c+"28"];
-  V.B30=V.B16-V.B23-V.B26;V.C30=V.C16-V.C23-V.C26;V.D30=V.B30+V.C30;V.E30=V.E16-V.E23-V.E26;V.F30=V.D30+V.E30;
-  V.B31=V.B17-V.B27;V.C31=V.C17-V.C27;V.D31=V.B31+V.C31;V.E31=V.E17-V.E27;V.F31=V.D31+V.E31;
-  V.B32=V.B18-V.B24-V.B28;V.C32=V.C18-V.C24-V.C28;V.D32=V.B32+V.C32;V.E32=V.E18-V.E24-V.E28;V.F32=V.D32+V.E32;
-  for(const c of["B","C","D","E","F"])V[c+"33"]=V[c+"30"]+V[c+"31"]+V[c+"32"];
-  for(const c of["B","C","D","E","F"])V[c+"34"]=V[c+"25"]+V[c+"29"]+V[c+"33"];
-  V.D37=V.B37+V.C37;
-  return V;
-}
-function kkotbapCalc(m){
-  const gye=m.kkotbap.card+m.kkotbap.cash;
-  const all=gye+m.kkotbap.catchGye;
-  const somae=gye-m.kkotbap.ntsCard-m.kkotbap.ntsHyeon;
-  const gong=exVat(gye);
-  const somaeGong=gong-m.kkotbap.ntsCardGong-m.kkotbap.ntsHyeonGong;
-  return{gye,all,somae,gong,buga:gye-gong,somaeGong};
-}
-
+/* ===== 확정 앱(__cfmApp)의 최신 계산을 그대로 사용 — 계산 복제본 제거 (v30) ===== */
+function _cfm(){var a=window.__cfmApp;if(!a||!a.compute||!a.migrate)throw new Error("확정 모듈이 아직 준비되지 않았어요 — 잠시 후 다시 시도해주세요");return a;}
+function migrate(raw){return _cfm().migrate(raw);}
+function derived(m){return _cfm().derived(m);}
+function compute(m){return _cfm().compute(m);}
+function kkotbapCalc(m){return _cfm().kkotbapCalc(m);}
 function preview(raw){
   const m=migrate(raw);
   const V=compute(m), kb=kkotbapCalc(m), d=derived(m);
-  const taxinv=d.taxinvGye+V.F9; // 세금계산서 (꽃밥에피다 거래처 + 기타)
+  const taxinv=d.taxinvGye+V.F10; // 세금계산서 (꽃밥에피다 거래처 + 기타)
   const epida=kb.all+d.extraIns;
-  const market=V.F33+taxinv+V.F29+d.extraMkt; // 스마트스토어는 마켓 소속
-  const bojagi=V.F25+V.D37+d.extraBoj;
+  const market=V.F34+taxinv+V.F30+d.extraMkt; // 스마트스토어는 마켓 소속
+  const bojagi=V.F26+V.D38+d.extraBoj;
   return {
     coupangTemp: !!(m.bpos&&m.bpos.coupangTemp),
-    pos:{ insadong: kb.all, market: V.F7, online: m.ss.gwase+m.ss.myeon, bojagi: V.F14+m.bpos.coupangGye },
+    pos:{ insadong: kb.all, market: V.F8, online: m.ss.gwase+m.ss.myeon, bojagi: V.F15+m.bpos.coupangGye },
     nts:{ total: epida+market+bojagi, epida, market, bojagi },
-    mk:{ total: V.F7, internal: m.members.insadongGye+m.members.bojagiGye, hanwoo: m.market.jeongyukMyeon, pork: m.market.jeongyukGwase },
+    mk:{ total: V.F8, internal: m.members.insadongGye+m.members.bojagiGye, hanwoo: m.market.jeongyukMyeon, pork: m.market.jeongyukGwase },
     ag:{ coupang: m.bpos.coupangGye, smartstore: m.ss.gwase+m.ss.myeon }
   };
 }
@@ -6197,4 +6008,3 @@ if(typeof window.renderHome==="function"){
 
 </body>
 </html>
-
