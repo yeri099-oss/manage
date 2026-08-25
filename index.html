@@ -426,6 +426,7 @@ window.FIREBASE_CONFIG = {
     <button class="tab" data-tab="market">마켓</button>
     <button class="tab" data-tab="bojagi">보자기</button>
     <button class="tab" data-tab="agency">판매대행</button>
+    <button class="tab admin-only" data-tab="pnl">월별손익</button>
     <button class="tab admin-only" data-tab="settings">설정</button>
   </nav>
   <main id="main" class="main">
@@ -437,6 +438,7 @@ window.FIREBASE_CONFIG = {
     <section id="tab-market" class="tab-panel hidden"></section>
     <section id="tab-bojagi" class="tab-panel hidden"></section>
     <section id="tab-agency" class="tab-panel hidden"></section>
+    <section id="tab-pnl" class="tab-panel hidden"></section>
     <section id="tab-settings" class="tab-panel hidden"></section>
   </main>
 </div>
@@ -985,7 +987,7 @@ const COL_LABELS = {
   agency: "판매대행", targets: "월 목표",
 };
 /* ---------- 데이터 로드/저장 ---------- */
-const COLS = ["salesComparison", "monthly", "dailyAvg", "marketDetail", "bojagiMenu", "bojagiDrinks", "agency", "targets"];
+const COLS = ["salesComparison", "monthly", "dailyAvg", "marketDetail", "bojagiMenu", "bojagiDrinks", "agency", "targets", "pnl"];
 async function loadAllData() {
   if (IS_DEMO) {
     const seed = await fetch("seed.json").then((r) => r.json());
@@ -997,6 +999,8 @@ async function loadAllData() {
     S.data.bojagiDrinks = wrapYears(seed.bojagiDrinks, "months");
     S.data.agency = seed.agency;
     S.data.targets = seed.targets || {};
+    try { S.data.remodelCosts = JSON.parse(localStorage.getItem("kb_remodelCosts") || "null") || seed.remodelCosts || []; } catch (e) { S.data.remodelCosts = []; }
+    try { S.data.pnl = JSON.parse(localStorage.getItem("kb_pnl") || "null") || seed.pnl || {}; } catch (e) { S.data.pnl = {}; }
     S.data.menuItems = seed.bojagiMenuItems;
     S.data.drinkItems = seed.bojagiDrinkItems;
     return;
@@ -1009,6 +1013,7 @@ async function loadAllData() {
   });
   jobs.push(fsCol("config").doc("bojagiMenuItems").get().then((d) => { S.data.menuItems = d.data()?.items || []; }));
   jobs.push(fsCol("config").doc("bojagiDrinkItems").get().then((d) => { S.data.drinkItems = d.data()?.items || []; }));
+  jobs.push(fsCol("config").doc("remodelCosts").get().then((d) => { S.data.remodelCosts = d.data()?.items || []; }));
   await Promise.all(jobs);
 }
 function wrapYears(obj, key) {
@@ -2003,6 +2008,27 @@ function scGet(y, m, ent) {
   return doc[ent]?.[m];
 }
 function setCompareEntity(ent) { S.ui.compareEntity = ent; renderCompare(); }
+/* ===== 리모델링 비용 차감 (표시 전용) ===== */
+function remodelCostOf(year, m, ent) {
+  let sum = 0;
+  for (const it of (S.data.remodelCosts || [])) {
+    if (String(it.y) === String(year) && String(it.m) === String(m) && (ent === "total" || ent === (it.ent || "epida"))) sum += Number(it.amt) || 0;
+  }
+  return sum;
+}
+function remodelOn() { return localStorage.getItem("kb_remodelDeduct") === "1"; }
+window.toggleRemodel = function () { localStorage.setItem("kb_remodelDeduct", remodelOn() ? "0" : "1"); rerenderCurrent(); };
+window.toggleRemodelEdit = function () { S.ui.remodelEdit = !S.ui.remodelEdit; rerenderCurrent(); };
+window.remodelAddRow = function () { (S.data.remodelCosts = S.data.remodelCosts || []).push({ y: String(new Date().getFullYear()), m: "1", ent: "epida", amt: 0, label: "리모델링" }); S.ui.remodelEdit = true; rerenderCurrent(); };
+window.remodelDelRow = function (i) { S.data.remodelCosts.splice(i, 1); rerenderCurrent(); };
+window.remodelSetRow = function (i, k, v) { const it = (S.data.remodelCosts || [])[i]; if (!it) return; it[k] = (k === "amt") ? (Number(String(v).replace(/[^\d]/g, "")) || 0) : v; };
+window.remodelSave = async function () {
+  try {
+    localStorage.setItem("kb_remodelCosts", JSON.stringify(S.data.remodelCosts || []));
+    if (!IS_DEMO && typeof db !== "undefined" && db) await fsCol("config").doc("remodelCosts").set({ items: S.data.remodelCosts || [] });
+    S.ui.remodelEdit = false; toast("리모델링 비용 내역을 저장했어요"); rerenderCurrent();
+  } catch (e) { toast(e.message || "저장 실패", true); }
+};
 function renderCompare() {
   const el = document.getElementById("tab-compare");
   const ent = S.ui.compareEntity || "total";
@@ -2071,26 +2097,51 @@ function renderCompare() {
   if (!targetYear && edMode() && canEdit) targetYear = allYears.length ? allYears[allYears.length - 1] : thisYear();
   let targetCard = "";
   if (targetYear) {
-    let tRows = "", tSumT = 0, tSumA = 0;
+    const rmOn = remodelOn();
+    let rows1 = "", rows2 = "", tSumT = 0, tSumA = 0, rmSum = 0, mi = 0;
     for (const m of MONTHS) {
+      mi++;
       const t = targetOf(String(targetYear), m, ent);
-      const a = get(targetYear, m);
+      let a = get(targetYear, m);
+      const rc = (rmOn && a != null) ? remodelCostOf(targetYear, m, ent) : 0;
+      if (rc) { a = a - rc; rmSum += rc; }
       if (t == null && a == null && !edMode()) continue;
       if (t != null && a != null) { tSumT += t; tSumA += a; }
-      tRows += `<tr><td class="lab sticky">${m}월</td><td>${edNum(t, `data-t="tg" data-y="${targetYear}" data-m="${m}" data-e="${ent}"`)}</td><td>${a != null ? fmt(a) : ""}</td>
+      const row = `<tr><td class="lab sticky">${m}월</td><td>${edNum(t, `data-t="tg" data-y="${targetYear}" data-m="${m}" data-e="${ent}"`)}</td><td>${a != null ? fmt(a) + (rc ? '<span class="unit" title="리모델링 비용 차감됨">*</span>' : "") : ""}</td>
         <td class="c">${t && a != null ? `<b class="${a >= t ? "pct-up" : "pct-down"}">${(a / t * 100).toFixed(1)}%</b>` : ""}</td></tr>`;
+      if (mi <= 6) rows1 += row; else rows2 += row;
     }
+    const thead = `<thead><tr><th class="c sticky">월별</th><th>목표</th><th>실적</th><th class="c">달성률</th></tr></thead>`;
+    const totalRow = `<tr class="total"><td class="lab sticky">누계</td><td>${fmt(tSumT)}</td><td>${fmt(tSumA)}</td>
+            <td class="c">${tSumT ? (tSumA / tSumT * 100).toFixed(1) + "%" : ""}</td></tr>`;
+    const rmItems = S.data.remodelCosts || [];
+    const rmEditor = S.ui.remodelEdit ? `
+      <div class="check-box" style="margin-top:10px">
+        <b>🔨 리모델링 비용 내역</b> — 연도·월·금액을 넣고 저장하세요. 켜면 해당 사업장(과 전체) 화면의 실적에서 표시용으로만 차감돼요.
+        <div class="table-wrap" style="margin-top:6px"><table class="rpt">
+          <thead><tr><th>연도</th><th>월</th><th>사업장</th><th>금액</th><th>메모</th><th></th></tr></thead>
+          <tbody>${rmItems.map((it, i) => `<tr>
+            <td><input value="${it.y}" onchange="remodelSetRow(${i},'y',this.value)" style="width:64px"></td>
+            <td><input value="${it.m}" onchange="remodelSetRow(${i},'m',this.value)" style="width:44px"></td>
+            <td><select onchange="remodelSetRow(${i},'ent',this.value)">${[["epida","에피다"],["bojagi","보자기"],["market","마켓"]].map(([k,n]) => `<option value="${k}" ${(it.ent||"epida")===k?"selected":""}>${n}</option>`).join("")}</select></td>
+            <td><input value="${it.amt ? Number(it.amt).toLocaleString() : ""}" onchange="remodelSetRow(${i},'amt',this.value)" style="width:120px;text-align:right"></td>
+            <td><input value="${it.label||""}" onchange="remodelSetRow(${i},'label',this.value)" style="width:120px"></td>
+            <td><button class="btn btn-sm" onclick="remodelDelRow(${i})">삭제</button></td></tr>`).join("")}</tbody>
+        </table></div>
+        <div style="margin-top:6px;display:flex;gap:6px"><button class="btn btn-sm" onclick="remodelAddRow()">+ 줄 추가</button><button class="btn btn-sm btn-primary" onclick="remodelSave()">저장</button></div>
+      </div>` : "";
+    const rmBadge = (rmOn && rmSum) ? `<div class="check-box" style="margin-top:8px">🔨 리모델링 비용 ${fmt(rmSum)}원을 실적에서 차감해 보고 있어요 — 표시 전용이라 저장된 실적·보고 값은 그대로예요.</div>` : (rmOn && !rmSum ? `<div class="check-box warn" style="margin-top:8px">🔨 차감이 켜져 있지만 이 화면(${entInfo.short})·연도에 해당하는 리모델링 비용 내역이 없어요 — "내역 설정"에서 추가하세요.</div>` : "");
     targetCard = `
     <div class="card">
-      <div class="card-title">${entInfo.short} — ${targetYear}년 월 목표 대비 <span class="unit">국세청기준 · 단위: 원</span></div>
-      <div class="table-wrap">
-        <table class="rpt">
-          <thead><tr><th class="c sticky">월별</th><th>목표</th><th>실적</th><th class="c">달성률</th></tr></thead>
-          <tbody>${tRows}
-          <tr class="total"><td class="lab sticky">누계</td><td>${fmt(tSumT)}</td><td>${fmt(tSumA)}</td>
-            <td class="c">${tSumT ? (tSumA / tSumT * 100).toFixed(1) + "%" : ""}</td></tr>
-          </tbody>
-        </table>
+      <div class="card-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${entInfo.short} — ${targetYear}년 월 목표 대비 <span class="unit">국세청기준 · 단위: 원</span>
+        <span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-sm ${rmOn ? "btn-primary" : ""}" onclick="toggleRemodel()">🔨 리모델링 비용 차감 ${rmOn ? "ON" : "OFF"}</button>
+          <button class="btn btn-sm" onclick="toggleRemodelEdit()">내역 설정</button>
+        </span></div>
+      ${rmBadge}${rmEditor}
+      <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start;justify-content:center">
+        <div class="table-wrap" style="flex:1 1 320px;max-width:560px"><table class="rpt">${thead}<tbody>${rows1}</tbody></table></div>
+        <div class="table-wrap" style="flex:1 1 320px;max-width:560px"><table class="rpt">${thead}<tbody>${rows2}${totalRow}</tbody></table></div>
       </div>
       <div class="footnote">"표에서 바로입력" 모드를 켜면 목표 금액을 여기서 직접 입력·수정할 수 있어요 (설정 탭의 "월 목표 설정"에서도 가능). 누계는 목표와 실적이 모두 있는 달 기준이에요.</div>
     </div>`;
@@ -2753,10 +2804,315 @@ function renderAgency() {
   });
 }
 /* ============ 탭 전환 ============ */
+/* ===== 월별손익 탭 ===== */
+const PNL_ENTS=[["total","꽃밥이야기"],["insadong","꽃밥에피다"],["bukchon","북촌"],["market","꽃밥마켓"],["bojagi","보자기꽃밥"]];
+function pnlName(rawName){
+  let t=String(rawName||"").replace(/\s+/g,"");
+  t=t.replace(/^(\d+)\./,"$1. ");
+  const pretty={"판매비및일반관리비":"판매비 및 일반관리비"};
+  for(const k in pretty)t=t.replace(k,pretty[k]);
+  return t;
+}
+function parsePnl(text){
+  const lines=text.split(/\r?\n/).map(l=>l.split("\t"));
+  const num=v=>{const t=String(v==null?"":v).replace(/[,\s원]/g,"");if(!t||t==="-")return null;const n=Number(t);return isNaN(n)?null:(Math.abs(n)<10&&t.indexOf(".")>=0?null:Math.round(n));};
+  let cols=null;
+  for(const c of lines){
+    const idx={};
+    c.forEach((cell,i)=>{
+      const t=String(cell).replace(/\s+/g,"");
+      if(!t)return;
+      if(t.indexOf("꽃밥이야기")>=0)idx.total=i;
+      else if(t.indexOf("인사동")>=0||t.indexOf("에피다")>=0)idx.insadong=i;
+      else if(t.indexOf("북촌")>=0)idx.bukchon=i;
+      else if(t==="마켓"||t.indexOf("마켓")===0)idx.market=i;
+      else if(t.indexOf("보자기")>=0)idx.bojagi=i;
+    });
+    if(idx.total!=null&&Object.keys(idx).length>=2){cols=idx;break;}
+  }
+  if(!cols)throw new Error("머리글(꽃밥이야기·인사동·마켓 등 사업장 이름이 있는 줄)을 찾지 못했어요. 손익현황 표 전체를 복사해서 붙여넣어 주세요.");
+  const rows=[];
+  for(const c of lines){
+    const raw=c[0];
+    if(raw==null)continue;
+    const name=pnlName(raw);
+    if(!name||name==="계정명"||name.indexOf("손익현황")>=0)continue;
+    const lead=(String(raw).match(/^\s*/)||[""])[0].length;
+    const level=lead>=4?2:(lead>=1?1:0);
+    const v={};let has=false;
+    for(const k in cols){const n=num(c[cols[k]]);if(n!=null){v[k]=n;has=true;}}
+    if(!has)continue;
+    rows.push({n:name,lv:level,v});
+  }
+  if(!rows.length)throw new Error("계정 줄을 찾지 못했어요. 계정명 열을 포함해서 표 전체를 복사해 주세요.");
+  return rows;
+}
+async function pnlReadXlsx(file){
+  const zip=await JSZip.loadAsync(await file.arrayBuffer());
+  const shName=Object.keys(zip.files).filter(n=>/^xl\/worksheets\/sheet\d+\.xml$/.test(n)).sort()[0];
+  if(!shName)throw new Error(file.name+": 시트를 찾지 못했어요 (.xlsx 형식인지 확인)");
+  let strs=[];
+  const ssf=zip.file("xl/sharedStrings.xml");
+  if(ssf){
+    const sdoc=new DOMParser().parseFromString(await ssf.async("string"),"application/xml");
+    strs=[...sdoc.getElementsByTagName("si")].map(si=>si.textContent);
+  }
+  const doc=new DOMParser().parseFromString(await zip.file(shName).async("string"),"application/xml");
+  const rows=[];
+  for(const r of doc.getElementsByTagName("row")){
+    const arr=[];
+    for(const cel of r.getElementsByTagName("c")){
+      const ref=cel.getAttribute("r")||"";
+      const col=ref.replace(/\d+/g,"");
+      let idx=0;for(let k=0;k<col.length;k++)idx=idx*26+(col.charCodeAt(k)-64);idx--;
+      const t=cel.getAttribute("t");let v="";
+      if(t==="inlineStr")v=cel.textContent;
+      else{const vEl=cel.getElementsByTagName("v")[0];if(vEl){v=vEl.textContent;if(t==="s")v=strs[+v]!=null?strs[+v]:"";}}
+      while(arr.length<idx)arr.push("");
+      arr[idx]=v;
+    }
+    rows.push(arr);
+  }
+  return rows;
+}
+function pnlDetectEnt(a1){
+  const t=String(a1||"");
+  const part=(t.split("/")[1]||"").trim();
+  if(part.indexOf("마케팅")>=0)return "bukchon"; /* 북촌 리포트: 부문 선택 시 '마케팅'을 맨 앞에 → '마케팅 외' */
+  if(part.indexOf("에피다")>=0)return "insadong";
+  if(part.indexOf("마켓")>=0)return "market";
+  if(part.indexOf("보자기")>=0)return "bojagi";
+  return "total"; /* 부문명 없이 날짜가 바로 오면 전체 */
+}
+function pnlParseFile(name,rows){
+  const num=v=>{const t=String(v==null?"":v).replace(/[,\s원]/g,"");if(!t||t==="-")return null;const n=Number(t);return isNaN(n)?null:Math.round(n);};
+  const a1=(rows[0]||[])[0]||"";
+  /* 머리글: '계정명' + '2026년 1월' 식 열 */
+  let hi=-1,mcols=[];
+  for(let i=0;i<rows.length;i++){
+    const c=rows[i];
+    if(String(c[0]).replace(/\s+/g,"")!=="계정명")continue;
+    hi=i;
+    c.forEach((cell,j)=>{
+      const m=String(cell).match(/(\d{4})\s*년\s*(\d{1,2})\s*월/);
+      if(m)mcols.push({j,y:m[1],m:String(Number(m[2]))});
+    });
+    break;
+  }
+  if(hi<0||!mcols.length)throw new Error(name+": '계정명'과 월 머리글을 찾지 못했어요. 이카운트 월별손익분석(EBZ009E) 엑셀인지 확인해주세요.");
+  const accounts=[];
+  for(let i=hi+1;i<rows.length;i++){
+    const raw=rows[i][0];
+    const nm=pnlName(raw);
+    if(!nm)continue;
+    if(/^\d{4}\//.test(nm)||nm.indexOf("오전")>=0||nm.indexOf("오후")>=0||nm.indexOf("집계")>=0)continue;
+    const lead=(String(raw).match(/^\s*/)||[""])[0].length;
+    const lv=lead>=4?2:(lead>=1?1:0);
+    const vals=mcols.map(({j})=>num(rows[i][j]));
+    if(vals.every(v=>v==null))continue;
+    accounts.push({n:nm,lv,vals});
+  }
+  if(!accounts.length)throw new Error(name+": 계정 줄을 찾지 못했어요.");
+  return {name,ent:pnlDetectEnt(a1),period:String(a1).split("/").slice(-2).join("/").trim(),months:mcols.map(({y,m})=>({y,m})),accounts};
+}
+window.pnlFilesChange=async function(input){
+  const err=document.getElementById("pnlErr");if(err)err.style.display="none";
+  try{
+    const files=[...(input.files||[])];input.value="";
+    if(!files.length)return;
+    if(typeof JSZip==="undefined")throw new Error("파일 읽기 모듈이 아직 로드되지 않았어요 — 새로고침 후 다시 시도해주세요.");
+    S.ui.pnlFiles=S.ui.pnlFiles||[];
+    for(const f of files){
+      if(!/\.xlsx$/i.test(f.name))throw new Error(f.name+": .xlsx 파일만 읽을 수 있어요.");
+      const parsed=pnlParseFile(f.name,await pnlReadXlsx(f));
+      S.ui.pnlFiles.push(parsed);
+    }
+    rerenderCurrent();
+  }catch(e){if(err){err.style.display="block";err.textContent=e.message||"파일을 읽지 못했어요";}rerenderCurrent();}
+};
+window.pnlFileSetEnt=function(i,v){const f=(S.ui.pnlFiles||[])[i];if(f)f.ent=v;rerenderCurrent();};
+window.pnlFileDel=function(i){S.ui.pnlFiles.splice(i,1);rerenderCurrent();};
+window.pnlFilesClear=function(){S.ui.pnlFiles=[];rerenderCurrent();};
+window.pnlFilesApply=async function(){
+  const err=document.getElementById("pnlErr");if(err)err.style.display="none";
+  try{
+    const fl=S.ui.pnlFiles||[];if(!fl.length)return;
+    S.data.pnl=S.data.pnl||{};
+    const touched=new Set();
+    for(const f of fl){
+      f.months.forEach((mo,mi)=>{
+        const key=mo.y+"-"+mo.m;
+        const docm=(S.data.pnl[key]=S.data.pnl[key]||{savedAt:null,rows:[]});
+        let lastIdx=-1;
+        for(const acc of f.accounts){
+          const v=acc.vals[mi];
+          let idx=docm.rows.findIndex(r=>r.n===acc.n);
+          if(idx<0){
+            idx=lastIdx+1;
+            docm.rows.splice(idx,0,{n:acc.n,lv:acc.lv,v:{}});
+          }
+          if(v!=null)docm.rows[idx].v[f.ent]=v; else delete docm.rows[idx].v[f.ent];
+          lastIdx=idx;
+        }
+        /* 값이 하나도 없는 달은 저장하지 않음 */
+        if(docm.rows.some(r=>Object.keys(r.v).length)){docm.savedAt=new Date().toISOString();touched.add(key);}
+        else delete S.data.pnl[key];
+      });
+    }
+    pnlSaveLocal();
+    if(!IS_DEMO&&typeof db!=="undefined"&&db)for(const key of touched){try{await fsCol("pnl").doc(key).set(S.data.pnl[key]);}catch(e){console.error(e);}}
+    const n=fl.length;S.ui.pnlFiles=[];S.ui.pnlView="month";
+    const ks=[...touched].sort((a,b)=>{const[ay,am]=a.split("-").map(Number),[by,bm]=b.split("-").map(Number);return ay-by||am-bm;});
+    if(ks.length)S.ui.pnlKey=ks[ks.length-1];
+    toast(n+"개 파일에서 "+ks.length+"개 달의 손익을 반영했어요");
+    rerenderCurrent();
+  }catch(e){if(err){err.style.display="block";err.textContent=e.message||"반영 실패";}}
+};
+
+function pnlSaveLocal(){try{localStorage.setItem("kb_pnl",JSON.stringify(S.data.pnl||{}));}catch(e){}}
+window.pnlSetView=function(v){S.ui.pnlView=v;rerenderCurrent();};
+window.pnlSetKey=function(k){S.ui.pnlKey=k;rerenderCurrent();};
+window.pnlSetYear=function(y){S.ui.pnlYear=y;rerenderCurrent();};
+window.pnlSetEnt=function(e){S.ui.pnlEnt=e;rerenderCurrent();};
+window.pnlTogglePaste=function(){S.ui.pnlPaste=!S.ui.pnlPaste;rerenderCurrent();};
+window.pnlParseClick=function(){
+  const err=document.getElementById("pnlErr"),ta=document.getElementById("pnlTa");
+  if(err)err.style.display="none";
+  try{
+    S.ui.pnlParsed=parsePnl(ta.value);
+    rerenderCurrent();
+  }catch(e){if(err){err.style.display="block";err.textContent=e.message;}}
+};
+window.pnlApply=async function(){
+  const err=document.getElementById("pnlErr");
+  try{
+    const rows=S.ui.pnlParsed;if(!rows||!rows.length)return;
+    const y=document.getElementById("pnlY").value,m=document.getElementById("pnlM").value;
+    const key=y+"-"+m;
+    S.data.pnl=S.data.pnl||{};
+    S.data.pnl[key]={savedAt:new Date().toISOString(),rows};
+    pnlSaveLocal();
+    if(!IS_DEMO&&typeof db!=="undefined"&&db)await fsCol("pnl").doc(key).set(S.data.pnl[key]);
+    S.ui.pnlParsed=null;S.ui.pnlPaste=false;S.ui.pnlKey=key;S.ui.pnlView="month";
+    toast(y+"년 "+m+"월 손익을 저장했어요");
+    rerenderCurrent();
+  }catch(e){if(err){err.style.display="block";err.textContent=e.message||"저장 실패";}}
+};
+window.pnlDelete=async function(key){
+  if(!confirm(key.replace("-","년 ")+"월 손익을 삭제할까요?"))return;
+  delete S.data.pnl[key];pnlSaveLocal();
+  if(!IS_DEMO&&typeof db!=="undefined"&&db){try{await fsCol("pnl").doc(key).delete();}catch(e){console.error(e);}}
+  S.ui.pnlKey=null;rerenderCurrent();
+};
+function pnlPct(v,base){return (v!=null&&base)? '<span class="unit"> '+(v/base*100).toFixed(1)+'%</span>':"";}
+function renderPnl(){
+  const el=document.getElementById("tab-pnl");if(!el)return;
+  if(!S.user||S.user.role!=="admin"){el.innerHTML="";return;}
+  const P=S.data.pnl||{};
+  const keys=Object.keys(P).sort((a,b)=>{const[ay,am]=a.split("-").map(Number),[by,bm]=b.split("-").map(Number);return ay-by||am-bm;});
+  const view=S.ui.pnlView||"month";
+  const fmtS=v=>v==null?"":(v<0?'<span class="pct-down">'+fmt(v)+'</span>':fmt(v));
+  /* --- 붙여넣기 박스 --- */
+  const now=new Date();
+  const defY=String(now.getFullYear()),defM=String(now.getMonth()===0?12:now.getMonth());
+  let pasteBox=`<div class="card"><div class="card-head"><div class="card-title">📥 손익 데이터 넣기</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <label class="btn btn-sm" style="cursor:pointer">📂 이카운트 월별손익분석 파일 추가 (.xlsx · 여러 개 가능)<input type="file" accept=".xlsx" multiple style="display:none" onchange="pnlFilesChange(this)"></label>
+      <button class="btn btn-sm ${S.ui.pnlPaste?"btn-primary":""}" onclick="pnlTogglePaste()">${S.ui.pnlPaste?"붙여넣기 닫기":"표 붙여넣기"}</button>
+    </div></div>
+    <div class="footnote">이카운트 [월별손익분석] 화면에서 사업장(부문)별로 엑셀 다운로드한 파일들을 한꺼번에 선택하세요 — 사업장·월을 자동으로 알아채서 합쳐줘요.</div>`;
+  const fl=S.ui.pnlFiles||[];
+  if(fl.length){
+    const entCount={};fl.forEach(f=>{entCount[f.ent]=(entCount[f.ent]||0)+1;});
+    pasteBox+=`<div class="table-wrap" style="margin-top:8px"><table class="rpt">
+      <thead><tr><th>파일</th><th>사업장</th><th>기간</th><th>계정 수</th><th></th></tr></thead>
+      <tbody>${fl.map((f,i)=>`<tr>
+        <td class="lab">${f.name}${entCount[f.ent]>1?' <b class="pct-down">⚠ 사업장 중복</b>':""}</td>
+        <td><select onchange="pnlFileSetEnt(${i},this.value)">${PNL_ENTS.map(([k,n])=>`<option value="${k}" ${f.ent===k?"selected":""}>${n}</option>`).join("")}</select></td>
+        <td>${f.months[0].y}년 ${f.months[0].m}월 ~ ${f.months[f.months.length-1].m}월</td>
+        <td class="c">${f.accounts.length}</td>
+        <td><button class="btn btn-sm" onclick="pnlFileDel(${i})">빼기</button></td></tr>`).join("")}</tbody></table></div>
+      <div style="display:flex;gap:6px;margin-top:6px"><button class="btn btn-sm btn-primary" onclick="pnlFilesApply()">${fl.length}개 파일 반영하기</button><button class="btn btn-sm" onclick="pnlFilesClear()">모두 비우기</button></div>
+      ${Object.values(entCount).some(c=>c>1)?`<div class="check-box warn" style="margin-top:6px">같은 사업장으로 잡힌 파일이 2개 이상이에요 — 드롭다운에서 사업장을 바꾸거나 중복 파일을 빼주세요. 그대로 반영하면 뒤의 파일이 덮어써요.</div>`:""}`;
+  }
+  pasteBox+=`<div id="pnlErrTop"></div>`;
+  pasteBox=pasteBox.replace('<div id="pnlErrTop"></div>','');
+  if(S.ui.pnlPaste){
+    pasteBox+=`<div class="footnote" style="margin-top:6px">엑셀의 <b>손익현황(월) 시트 전체</b>(계정명 열 + 사업장 열들)를 복사해 붙여넣으세요 — 비율 열이 섞여 있어도 자동으로 걸러내요. 저장할 연·월을 확인하고 적용하세요.</div>
+    <textarea id="pnlTa" style="width:100%;min-height:120px;margin-top:6px;font:12px monospace" placeholder="여기에 손익현황 표를 붙여넣으세요"></textarea>
+    <div style="display:flex;gap:6px;margin-top:6px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-sm" onclick="pnlParseClick()">정리하기</button>
+      <span>저장할 달:</span>
+      <input id="pnlY" value="${(S.ui.pnlKey||defY+"-"+defM).split("-")[0]}" style="width:64px"> 년
+      <input id="pnlM" value="${(S.ui.pnlKey||defY+"-"+defM).split("-")[1]}" style="width:44px"> 월
+      ${S.ui.pnlParsed?`<button class="btn btn-sm btn-primary" onclick="pnlApply()">이 달로 저장</button><span class="unit">${S.ui.pnlParsed.length}개 계정 인식됨</span>`:""}
+    </div>
+`;
+    if(S.ui.pnlParsed){
+      const ents=PNL_ENTS.filter(([k])=>S.ui.pnlParsed.some(r=>r.v[k]!=null));
+      pasteBox+=`<div class="table-wrap" style="margin-top:8px;max-height:300px;overflow:auto"><table class="rpt">
+        <thead><tr><th>계정명</th>${ents.map(([k,n])=>`<th>${n}</th>`).join("")}</tr></thead>
+        <tbody>${S.ui.pnlParsed.map(r=>`<tr><td class="lab" style="padding-left:${8+r.lv*14}px">${r.n}</td>${ents.map(([k])=>`<td>${fmtS(r.v[k])}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+    }
+  }
+  pasteBox+=`<div id="pnlErr" class="check-box warn" style="display:none;margin-top:6px"></div></div>`;
+  /* --- 보기 --- */
+  let body="";
+  if(!keys.length){
+    body=`<div class="card"><div class="footnote">아직 저장된 손익 데이터가 없어요. 위의 "붙여넣기 열기"로 엑셀 손익현황을 넣어보세요.</div></div>`;
+  }else if(view==="month"){
+    const key=P[S.ui.pnlKey]?S.ui.pnlKey:keys[keys.length-1];
+    const doc=P[key];
+    const [ky,km]=key.split("-");
+    const ents=PNL_ENTS.filter(([k])=>doc.rows.some(r=>r.v[k]!=null));
+    const saleRow=doc.rows.find(r=>r.n.indexOf("매출")>=0&&r.lv===0);
+    const monthTabs=`<div class="subtabs" style="flex-wrap:wrap">`+keys.map(k=>`<button class="subtab ${k===key?"active":""}" onclick="pnlSetKey('${k}')">${k.split("-")[0].slice(2)}년 ${k.split("-")[1]}월</button>`).join("")+`</div>`;
+    body=`<div class="card">
+      <div class="card-head"><div class="card-title">${ky}년 ${km}월 손익현황 <span class="unit">매출액 대비 손익율 · 단위: 원</span></div>
+      <button class="btn btn-sm" onclick="pnlDelete('${key}')">이 달 삭제</button></div>
+      ${monthTabs}
+      <div class="table-wrap"><table class="rpt">
+        <thead><tr><th class="sticky">계정명</th>${ents.map(([k,n])=>`<th>${n}</th>`).join("")}</tr></thead>
+        <tbody>${doc.rows.map(r=>{
+          const major=r.lv===0;
+          return `<tr class="${major?"total":""}"><td class="lab sticky" style="padding-left:${8+r.lv*14}px">${r.n}</td>`+
+            ents.map(([k])=>`<td>${fmtS(r.v[k])}${major&&saleRow?pnlPct(r.v[k],saleRow.v[k]):""}</td>`).join("")+`</tr>`;
+        }).join("")}</tbody></table></div>
+      <div class="footnote">붙여넣은 원본 그대로 보여줘요. 큰 항목 옆 %는 그 사업장 매출액 대비 비율이에요.</div>
+    </div>`;
+  }else{
+    const years=[...new Set(keys.map(k=>k.split("-")[0]))];
+    const year=years.includes(S.ui.pnlYear)?S.ui.pnlYear:years[years.length-1];
+    const ent=S.ui.pnlEnt||"total";
+    const entInfo=PNL_ENTS.find(([k])=>k===ent);
+    const yKeys=keys.filter(k=>k.split("-")[0]===year);
+    const names=[];
+    for(const k of yKeys)for(const r of S.data.pnl[k].rows)if(!names.some(x=>x.n===r.n))names.push({n:r.n,lv:r.lv});
+    const entTabs=`<div class="subtabs" style="flex-wrap:wrap">`+PNL_ENTS.map(([k,n])=>`<button class="subtab ${k===ent?"active":""}" onclick="pnlSetEnt('${k}')">${n}</button>`).join("")+`</div>`
+      +(years.length>1?`<div class="subtabs" style="flex-wrap:wrap">`+years.map(y=>`<button class="subtab ${y===year?"active":""}" onclick="pnlSetYear('${y}')">${y}년</button>`).join("")+`</div>`:"");
+    const saleName=names.find(x=>x.n.indexOf("매출")>=0&&x.lv===0);
+    body=`<div class="card">
+      <div class="card-title">${entInfo[1]} — ${year}년 월별 손익 추이 <span class="unit">단위: 원 · 집계의 기초재고는 첫 달, 기말재고는 마지막 달 값</span></div>
+      ${entTabs}
+      <div class="table-wrap"><table class="rpt">
+        <thead><tr><th class="sticky">계정명</th>${yKeys.map(k=>`<th>${k.split("-")[1]}월</th>`).join("")}<th>집계</th></tr></thead>
+        <tbody>${names.map(({n,lv})=>{
+          const vals=yKeys.map(k=>{const r=S.data.pnl[k].rows.find(x=>x.n===n);return r?r.v[ent]:null;});
+          let agg=null;
+          if(n.indexOf("기초재고")>=0){agg=vals.find(v=>v!=null);}
+          else if(n.indexOf("기말재고")>=0){agg=[...vals].reverse().find(v=>v!=null);}
+          else{const has=vals.filter(v=>v!=null);agg=has.length?has.reduce((a,b)=>a+b,0):null;}
+          return `<tr class="${lv===0?"total":""}"><td class="lab sticky" style="padding-left:${8+lv*14}px">${n}</td>${vals.map(v=>`<td>${fmtS(v)}</td>`).join("")}<td><b>${fmtS(agg)}</b></td></tr>`;
+        }).join("")}</tbody></table></div>
+    </div>`;
+  }
+  const viewTabs=`<div class="subtabs"><button class="subtab ${view==="month"?"active":""}" onclick="pnlSetView('month')">월별 상세</button><button class="subtab ${view==="year"?"active":""}" onclick="pnlSetView('year')">연간 추이</button></div>`;
+  el.innerHTML=pasteBox+viewTabs+body;
+}
 const RENDERERS = {
   home: () => renderHome(),
   compare: renderCompare, monthly: renderMonthly, daily: renderDaily,
-  market: renderMarket, bojagi: renderBojagi, agency: renderAgency, settings: () => renderSettings(),
+  market: renderMarket, bojagi: renderBojagi, agency: renderAgency, pnl: renderPnl, settings: () => renderSettings(),
 };
 function switchTab(tab) {
   S.ui.tab = tab;
@@ -3493,6 +3849,7 @@ async function showApp() {
     <section id="tab-market" class="tab-panel hidden"></section>
     <section id="tab-bojagi" class="tab-panel hidden"></section>
     <section id="tab-agency" class="tab-panel hidden"></section>
+    <section id="tab-pnl" class="tab-panel hidden"></section>
     <section id="tab-settings" class="tab-panel hidden"></section>`;
   document.getElementById("tab-home").innerHTML = `<div class="loading"><span class="spin"></span><br>데이터를 불러오는 중…</div>`;
   try {
