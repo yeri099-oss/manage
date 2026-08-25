@@ -2827,7 +2827,7 @@ window.pnlExportXlsx=async function(){
     const nameS=(n,lv)=>{const fi=pnlFillIdx(n,lv);return {t:"s",v:n,s:fi===5?18:3+fi};};
     const numS=(v,n,lv)=>{const fi=pnlFillIdx(n,lv);return {t:"n",v:v==null?null:v,s:fi===5?19:8+fi};};
     const pctS=(v,n,lv)=>{const fi=pnlFillIdx(n,lv);return {t:"n",v:v,s:fi===5?20:13+fi};};
-    const sheets=[];
+    const mSheets=[],eSheets=[];let ySheet=null;
     /* ① 월별 손익현황 시트들 */
     for(const k of yKeys){
       const doc=P[k],[ky,km]=k.split("-");
@@ -2848,7 +2848,7 @@ window.pnlExportXlsx=async function(){
         }
         rows.push({cells});
       }
-      sheets.push({name:`손익현황(${km}월)`,xml:pnlSheetXml(cols,rows)});
+      mSheets.push({name:`손익현황(${km}월)`,xml:pnlSheetXml(cols,rows)});
     }
     /* ② 연간 합산 시트 */
     {
@@ -2871,7 +2871,7 @@ window.pnlExportXlsx=async function(){
         }
         rows.push({cells});
       }
-      sheets.push({name:`${year}년손익현황`,xml:pnlSheetXml(cols,rows)});
+      ySheet={name:`${year}년손익현황`,xml:pnlSheetXml(cols,rows)};
     }
     /* ③ 사업장별 월 추이 시트들 */
     for(const[e,nm]of PNL_ENTS){
@@ -2887,8 +2887,10 @@ window.pnlExportXlsx=async function(){
         if(vals.every(v=>v==null))continue;
         rows.push({cells:[nameS(n,lv)].concat(vals.map(v=>numS(v,n,lv))).concat([numS(pnlAggOf(n,vals),n,lv)])});
       }
-      sheets.push({name:nm,xml:pnlSheetXml(cols,rows)});
+      eSheets.push({name:nm,xml:pnlSheetXml(cols,rows)});
     }
+    /* 시트 순서: 최신월 → 연간 → 사업장별 → 과거월(내림차순) */
+    const sheets=[mSheets[mSheets.length-1],ySheet].concat(eSheets).concat(mSheets.slice(0,-1).reverse()).filter(Boolean);
     /* zip 조립 */
     const zip=new JSZip();
     const sList=sheets.map((sh,i)=>`<sheet name="${pnlXEsc(sh.name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join("");
