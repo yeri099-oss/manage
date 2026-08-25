@@ -2847,6 +2847,169 @@ function parsePnl(text){
   if(!rows.length)throw new Error("계정 줄을 찾지 못했어요. 계정명 열을 포함해서 표 전체를 복사해 주세요.");
   return rows;
 }
+/* 예리님 엑셀 양식 색 (테마색 tint 0.8 환산) */
+function pnlRowColor(n){
+  if(/^1\./.test(n))return "#FBE5D6";      /* 매출: 연주황 */
+  if(/^2\./.test(n)||/^7\./.test(n))return "#DEEBF7"; /* 원가·영업외비용: 연파랑 */
+  if(/^4\./.test(n))return "#FFF2CC";      /* 판관비: 연노랑 */
+  if(/^\d+\./.test(n))return "#E2EFDA";    /* 이익·수익류: 연초록 */
+  return null;
+}
+function pnlAggOf(name,vals){
+  if(name.indexOf("기초재고")>=0)return vals.find(v=>v!=null)??null;
+  if(name.indexOf("기말재고")>=0)return [...vals].reverse().find(v=>v!=null)??null;
+  const has=vals.filter(v=>v!=null);
+  return has.length?has.reduce((a,b)=>a+b,0):null;
+}
+function pnlUnionNames(yKeys){
+  const names=[];
+  for(const k of yKeys)for(const r of S.data.pnl[k].rows)if(!names.some(x=>x.n===r.n))names.push({n:r.n,lv:r.lv});
+  return names;
+}
+/* ---- 엑셀(.xlsx) 생성: 예리님 양식 그대로 ---- */
+function pnlXEsc(t){return String(t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+function pnlColL(i){let s="";i++;while(i>0){const m=(i-1)%26;s=String.fromCharCode(65+m)+s;i=Math.floor((i-1)/26);}return s;}
+function pnlFillIdx(n,lv){if(lv!==0)return 0;const c=pnlRowColor(n);return c==="#FBE5D6"?1:c==="#DEEBF7"?2:c==="#E2EFDA"?3:c==="#FFF2CC"?4:0;}
+function pnlSheetXml(cols,rows){
+  let x='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">';
+  x+='<cols>'+cols.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join("")+'</cols><sheetData>';
+  rows.forEach((row,ri)=>{
+    if(!row){x+=`<row r="${ri+1}"/>`;return;}
+    x+=`<row r="${ri+1}"${row.h?` ht="${row.h}" customHeight="1"`:""}>`;
+    row.cells.forEach((c,ci)=>{
+      if(c==null)return;
+      const ref=pnlColL(ci)+(ri+1);
+      if(c.t==="s")x+=`<c r="${ref}" s="${c.s||0}" t="inlineStr"><is><t xml:space="preserve">${pnlXEsc(c.v)}</t></is></c>`;
+      else if(c.v==null)x+=`<c r="${ref}" s="${c.s||0}"/>`;
+      else x+=`<c r="${ref}" s="${c.s||0}"><v>${c.v}</v></c>`;
+    });
+    x+='</row>';
+  });
+  x+='</sheetData><pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/></worksheet>';
+  return x;
+}
+const PNL_STYLES=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<fonts count="4"><font><sz val="11"/><name val="맑은 고딕"/></font><font><b/><sz val="12"/><name val="맑은 고딕"/></font><font><b/><sz val="11"/><name val="맑은 고딕"/></font><font><sz val="10"/><name val="맑은 고딕"/></font></fonts>
+<fills count="6"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFBE5D6"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFDEEBF7"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE2EFDA"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFF2CC"/></patternFill></fill></fills>
+<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"/><right style="thin"/><top style="thin"/><bottom style="thin"/><diagonal/></border></borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="18">
+<xf numFmtId="0" fontId="0" fillId="0" borderId="0"/>
+<xf numFmtId="0" fontId="1" fillId="0" borderId="0" applyFont="1"/>
+<xf numFmtId="0" fontId="2" fillId="0" borderId="1" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="3" fillId="0" borderId="1" applyFont="1" applyBorder="1"/>
+<xf numFmtId="0" fontId="3" fillId="2" borderId="1" applyFont="1" applyFill="1" applyBorder="1"/>
+<xf numFmtId="0" fontId="3" fillId="3" borderId="1" applyFont="1" applyFill="1" applyBorder="1"/>
+<xf numFmtId="0" fontId="3" fillId="4" borderId="1" applyFont="1" applyFill="1" applyBorder="1"/>
+<xf numFmtId="0" fontId="3" fillId="5" borderId="1" applyFont="1" applyFill="1" applyBorder="1"/>
+<xf numFmtId="3" fontId="3" fillId="0" borderId="1" applyNumberFormat="1" applyFont="1" applyBorder="1"/>
+<xf numFmtId="3" fontId="3" fillId="2" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>
+<xf numFmtId="3" fontId="3" fillId="3" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>
+<xf numFmtId="3" fontId="3" fillId="4" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>
+<xf numFmtId="3" fontId="3" fillId="5" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>
+<xf numFmtId="9" fontId="3" fillId="0" borderId="1" applyNumberFormat="1" applyFont="1" applyBorder="1"/>
+<xf numFmtId="9" fontId="3" fillId="2" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>
+<xf numFmtId="9" fontId="3" fillId="3" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>
+<xf numFmtId="9" fontId="3" fillId="4" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>
+<xf numFmtId="9" fontId="3" fillId="5" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>
+</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+window.pnlExportXlsx=async function(){
+  try{
+    if(typeof JSZip==="undefined")throw new Error("파일 모듈이 아직 로드되지 않았어요 — 새로고침 후 다시 시도해주세요.");
+    const P=S.data.pnl||{};
+    const keys=Object.keys(P).sort((a,b)=>{const[ay,am]=a.split("-").map(Number),[by,bm]=b.split("-").map(Number);return ay-by||am-bm;});
+    if(!keys.length){toast("저장된 손익 데이터가 없어요",true);return;}
+    const years=[...new Set(keys.map(k=>k.split("-")[0]))];
+    const year=years.includes(S.ui.pnlYear)?S.ui.pnlYear:years[years.length-1];
+    const yKeys=keys.filter(k=>k.split("-")[0]===year);
+    const nameS=(n,lv)=>({t:"s",v:n,s:3+pnlFillIdx(n,lv)});
+    const numS=(v,n,lv)=>({t:"n",v:v==null?null:v,s:8+pnlFillIdx(n,lv)});
+    const pctS=(v,n,lv)=>({t:"n",v:v,s:13+pnlFillIdx(n,lv)});
+    const sheets=[];
+    /* ① 월별 손익현황 시트들 */
+    for(const k of yKeys){
+      const doc=P[k],[ky,km]=k.split("-");
+      const ents=PNL_ENTS.filter(([e])=>doc.rows.some(r=>r.v[e]!=null));
+      const sale=doc.rows.find(r=>r.lv===0&&r.n.indexOf("매출")>=0);
+      const cols=[21].concat(ents.flatMap(()=>[12.2,9.5]));
+      const rows=[
+        {h:39.75,cells:[{t:"s",v:`${ky}년 ${km}월 손익현황 (매출액대비 손익율)`,s:1}]},
+        {cells:[{t:"s",v:"계정명",s:2}].concat(ents.flatMap(([e,nm])=>[{t:"s",v:nm,s:2},{t:"s",v:"",s:2}]))}
+      ];
+      for(const r of doc.rows){
+        const cells=[nameS(r.n,r.lv)];
+        for(const[e]of ents){
+          const v=r.v[e];
+          cells.push(numS(v==null?null:v,r.n,r.lv));
+          const base=sale&&sale.v[e];
+          cells.push(r.lv===0&&v!=null&&base?pctS(v/base,r.n,r.lv):{t:"n",v:null,s:13+pnlFillIdx(r.n,r.lv)});
+        }
+        rows.push({cells});
+      }
+      sheets.push({name:`손익현황(${km}월)`,xml:pnlSheetXml(cols,rows)});
+    }
+    /* ② 연간 합산 시트 */
+    {
+      const names=pnlUnionNames(yKeys);
+      const ents=PNL_ENTS.filter(([e])=>yKeys.some(k=>P[k].rows.some(r=>r.v[e]!=null)));
+      const agg=(n,e)=>pnlAggOf(n,yKeys.map(k=>{const r=P[k].rows.find(x=>x.n===n);return r?r.v[e]:null;}));
+      const saleN=names.find(x=>x.lv===0&&x.n.indexOf("매출")>=0);
+      const cols=[21].concat(ents.flatMap(()=>[12.2,9.5]));
+      const rows=[
+        {h:39.75,cells:[{t:"s",v:`${year}년 손익현황 (매출액대비 손익율)`,s:1}]},
+        {cells:[{t:"s",v:"계정명",s:2}].concat(ents.flatMap(([e,nm])=>[{t:"s",v:nm,s:2},{t:"s",v:"",s:2}]))}
+      ];
+      for(const {n,lv} of names){
+        const cells=[nameS(n,lv)];
+        for(const[e]of ents){
+          const v=agg(n,e);
+          cells.push(numS(v,n,lv));
+          const base=saleN?agg(saleN.n,e):null;
+          cells.push(lv===0&&v!=null&&base?pctS(v/base,n,lv):{t:"n",v:null,s:13+pnlFillIdx(n,lv)});
+        }
+        rows.push({cells});
+      }
+      sheets.push({name:`${year}년손익현황`,xml:pnlSheetXml(cols,rows)});
+    }
+    /* ③ 사업장별 월 추이 시트들 */
+    for(const[e,nm]of PNL_ENTS){
+      if(!yKeys.some(k=>P[k].rows.some(r=>r.v[e]!=null)))continue;
+      const names=pnlUnionNames(yKeys);
+      const cols=[22.5].concat(yKeys.map(()=>11)).concat([11.9]);
+      const rows=[
+        {h:39.75,cells:[{t:"s",v:` 월별손익분석 (${nm})`,s:1}]},
+        {cells:[{t:"s",v:"계정명",s:2}].concat(yKeys.map(k=>({t:"s",v:`${year}년 ${k.split("-")[1]}월`,s:2}))).concat([{t:"s",v:"집계",s:2}])}
+      ];
+      for(const {n,lv} of names){
+        const vals=yKeys.map(k=>{const r=P[k].rows.find(x=>x.n===n);return r?r.v[e]:null;});
+        if(vals.every(v=>v==null))continue;
+        rows.push({cells:[nameS(n,lv)].concat(vals.map(v=>numS(v,n,lv))).concat([numS(pnlAggOf(n,vals),n,lv)])});
+      }
+      sheets.push({name:nm,xml:pnlSheetXml(cols,rows)});
+    }
+    /* zip 조립 */
+    const zip=new JSZip();
+    const sList=sheets.map((sh,i)=>`<sheet name="${pnlXEsc(sh.name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join("");
+    zip.file("[Content_Types].xml",`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${sheets.map((_,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")}<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`);
+    zip.file("_rels/.rels",`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`);
+    zip.file("xl/workbook.xml",`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sList}</sheets></workbook>`);
+    zip.file("xl/_rels/workbook.xml.rels",`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((_,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join("")}<Relationship Id="rId${sheets.length+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`);
+    zip.file("xl/styles.xml",PNL_STYLES);
+    sheets.forEach((sh,i)=>zip.file(`xl/worksheets/sheet${i+1}.xml`,sh.xml));
+    const blob=await zip.generateAsync({type:"blob",compression:"DEFLATE",mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download=`월별손익현황 ${year}.xlsx`;
+    document.body.appendChild(a);a.click();
+    setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},2000);
+    toast("월별손익 엑셀을 내려받았어요 ("+sheets.length+"개 시트)");
+  }catch(e){console.error(e);toast(e.message||"엑셀 생성 실패",true);}
+};
 async function pnlReadXlsx(file){
   const zip=await JSZip.loadAsync(await file.arrayBuffer());
   const shName=Object.keys(zip.files).filter(n=>/^xl\/worksheets\/sheet\d+\.xml$/.test(n)).sort()[0];
@@ -3075,10 +3238,32 @@ function renderPnl(){
         <thead><tr><th class="sticky">계정명</th>${ents.map(([k,n])=>`<th>${n}</th>`).join("")}</tr></thead>
         <tbody>${doc.rows.map(r=>{
           const major=r.lv===0;
-          return `<tr class="${major?"total":""}"><td class="lab sticky" style="padding-left:${8+r.lv*14}px">${r.n}</td>`+
+          const bg=major?pnlRowColor(r.n):null;
+          return `<tr class="${major?"total":""}"${bg?` style="background:${bg}"`:""}><td class="lab sticky" style="padding-left:${8+r.lv*14}px${bg?";background:"+bg:""}">${r.n}</td>`+
             ents.map(([k])=>`<td>${fmtS(r.v[k])}${major&&saleRow?pnlPct(r.v[k],saleRow.v[k]):""}</td>`).join("")+`</tr>`;
         }).join("")}</tbody></table></div>
       <div class="footnote">붙여넣은 원본 그대로 보여줘요. 큰 항목 옆 %는 그 사업장 매출액 대비 비율이에요.</div>
+    </div>`;
+  }else if(view==="total"){
+    const years=[...new Set(keys.map(k=>k.split("-")[0]))];
+    const year=years.includes(S.ui.pnlYear)?S.ui.pnlYear:years[years.length-1];
+    const yKeys=keys.filter(k=>k.split("-")[0]===year);
+    const names=pnlUnionNames(yKeys);
+    const ents=PNL_ENTS.filter(([e])=>yKeys.some(k=>S.data.pnl[k].rows.some(r=>r.v[e]!=null)));
+    const agg=(n,e)=>pnlAggOf(n,yKeys.map(k=>{const r=S.data.pnl[k].rows.find(x=>x.n===n);return r?r.v[e]:null;}));
+    const saleN=names.find(x=>x.lv===0&&x.n.indexOf("매출")>=0);
+    const yearTabs=years.length>1?`<div class="subtabs" style="flex-wrap:wrap">`+years.map(y=>`<button class="subtab ${y===year?"active":""}" onclick="pnlSetYear('${y}')">${y}년</button>`).join("")+`</div>`:"";
+    body=`<div class="card">
+      <div class="card-title">${year}년 손익현황 — 전체 합산 <span class="unit">매출액 대비 손익율 · 단위: 원 · ${yKeys[0].split("-")[1]}월~${yKeys[yKeys.length-1].split("-")[1]}월 합산 (재고는 기초=첫 달·기말=마지막 달)</span></div>
+      ${yearTabs}
+      <div class="table-wrap"><table class="rpt">
+        <thead><tr><th class="sticky">계정명</th>${ents.map(([k,n])=>`<th>${n}</th>`).join("")}</tr></thead>
+        <tbody>${names.map(({n,lv})=>{
+          const bg=lv===0?pnlRowColor(n):null;
+          return `<tr class="${lv===0?"total":""}"${bg?` style="background:${bg}"`:""}><td class="lab sticky" style="padding-left:${8+lv*14}px${bg?";background:"+bg:""}">${n}</td>`+
+            ents.map(([e])=>{const v=agg(n,e);const base=saleN?agg(saleN.n,e):null;
+              return `<td>${fmtS(v)}${lv===0&&v!=null&&base?pnlPct(v,base):""}</td>`;}).join("")+`</tr>`;
+        }).join("")}</tbody></table></div>
     </div>`;
   }else{
     const years=[...new Set(keys.map(k=>k.split("-")[0]))];
@@ -3102,11 +3287,12 @@ function renderPnl(){
           if(n.indexOf("기초재고")>=0){agg=vals.find(v=>v!=null);}
           else if(n.indexOf("기말재고")>=0){agg=[...vals].reverse().find(v=>v!=null);}
           else{const has=vals.filter(v=>v!=null);agg=has.length?has.reduce((a,b)=>a+b,0):null;}
-          return `<tr class="${lv===0?"total":""}"><td class="lab sticky" style="padding-left:${8+lv*14}px">${n}</td>${vals.map(v=>`<td>${fmtS(v)}</td>`).join("")}<td><b>${fmtS(agg)}</b></td></tr>`;
+          const bg=lv===0?pnlRowColor(n):null;
+          return `<tr class="${lv===0?"total":""}"${bg?` style="background:${bg}"`:""}><td class="lab sticky" style="padding-left:${8+lv*14}px${bg?";background:"+bg:""}">${n}</td>${vals.map(v=>`<td>${fmtS(v)}</td>`).join("")}<td><b>${fmtS(agg)}</b></td></tr>`;
         }).join("")}</tbody></table></div>
     </div>`;
   }
-  const viewTabs=`<div class="subtabs"><button class="subtab ${view==="month"?"active":""}" onclick="pnlSetView('month')">월별 상세</button><button class="subtab ${view==="year"?"active":""}" onclick="pnlSetView('year')">연간 추이</button></div>`;
+  const viewTabs=`<div class="subtabs" style="align-items:center;flex-wrap:wrap"><button class="subtab ${view==="month"?"active":""}" onclick="pnlSetView('month')">월별 상세</button><button class="subtab ${view==="total"?"active":""}" onclick="pnlSetView('total')">연간 합산</button><button class="subtab ${view==="year"?"active":""}" onclick="pnlSetView('year')">사업장별 추이</button>${keys.length?`<button class="btn btn-sm" style="margin-left:auto" onclick="pnlExportXlsx()">📥 엑셀로 받기</button>`:""}</div>`;
   el.innerHTML=pasteBox+viewTabs+body;
 }
 const RENDERERS = {
