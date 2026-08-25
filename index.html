@@ -2747,7 +2747,7 @@ function parsePnl(text){
 function pnlRowColor(n){
   if(n.indexOf("당기순이익")>=0)return "#F8CBAD"; /* 당기순이익: 매출과 같은 진한 붉은색 */
   if(/^(6|7|8)\./.test(n))return null;      /* 영업외수익·영업외비용·법인세차감전: 무색 */
-  if(/^1\./.test(n))return "#F8CBAD";      /* 매출: 진한 붉은색 */
+  if(/^1\./.test(n))return "#FBE5D6";      /* 매출: 연한 붉은색 */
   if(/^2\./.test(n))return "#DEEBF7";      /* 원가: 연파랑 */
   if(/^4\./.test(n))return "#FFF2CC";      /* 판관비: 연노랑 */
   if(/^\d+\./.test(n))return "#E2EFDA";    /* 총이익·영업손익: 연초록 */
@@ -2767,7 +2767,7 @@ function pnlUnionNames(yKeys){
 /* ---- 엑셀(.xlsx) 생성: 예리님 양식 그대로 ---- */
 function pnlXEsc(t){return String(t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
 function pnlColL(i){let s="";i++;while(i>0){const m=(i-1)%26;s=String.fromCharCode(65+m)+s;i=Math.floor((i-1)/26);}return s;}
-function pnlFillIdx(n,lv){if(lv!==0)return 0;const c=pnlRowColor(n);return c==="#F8CBAD"?1:c==="#DEEBF7"?2:c==="#E2EFDA"?3:c==="#FFF2CC"?4:0;}
+function pnlFillIdx(n,lv){if(lv!==0)return 0;const c=pnlRowColor(n);return c==="#FBE5D6"?1:c==="#DEEBF7"?2:c==="#E2EFDA"?3:c==="#FFF2CC"?4:c==="#F8CBAD"?5:0;}
 function pnlSheetXml(cols,rows){
   let x='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">';
   x+='<cols>'+cols.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join("")+'</cols><sheetData>';
@@ -2808,7 +2808,7 @@ function pnlPctGroups(list){
 const PNL_STYLES=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
 <fonts count="4"><font><sz val="11"/><name val="맑은 고딕"/></font><font><b/><sz val="12"/><name val="맑은 고딕"/></font><font><b/><sz val="11"/><name val="맑은 고딕"/></font><font><sz val="10"/><name val="맑은 고딕"/></font></fonts>
-<fills count="7"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF8CBAD"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFDEEBF7"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE2EFDA"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFF2CC"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFC7CE"/></patternFill></fill></fills>
+<fills count="7"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFBE5D6"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFDEEBF7"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE2EFDA"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFF2CC"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF8CBAD"/></patternFill></fill></fills>
 <borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"/><right style="thin"/><top style="thin"/><bottom style="thin"/><diagonal/></border></borders>
 <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
 <cellXfs count="22">
