@@ -2742,10 +2742,12 @@ function parsePnl(text){
 }
 /* 예리님 엑셀 양식 색 (테마색 tint 0.8 환산) */
 function pnlRowColor(n){
+  if(n.indexOf("당기순이익")>=0)return "#FFC7CE"; /* 당기순이익: 연빨강 */
+  if(/^(6|7|8)\./.test(n))return null;      /* 영업외수익·영업외비용·법인세차감전: 무색 */
   if(/^1\./.test(n))return "#FBE5D6";      /* 매출: 연주황 */
-  if(/^2\./.test(n)||/^7\./.test(n))return "#DEEBF7"; /* 원가·영업외비용: 연파랑 */
+  if(/^2\./.test(n))return "#DEEBF7";      /* 원가: 연파랑 */
   if(/^4\./.test(n))return "#FFF2CC";      /* 판관비: 연노랑 */
-  if(/^\d+\./.test(n))return "#E2EFDA";    /* 이익·수익류: 연초록 */
+  if(/^\d+\./.test(n))return "#E2EFDA";    /* 총이익·영업손익: 연초록 */
   return null;
 }
 function pnlAggOf(name,vals){
@@ -2762,7 +2764,7 @@ function pnlUnionNames(yKeys){
 /* ---- 엑셀(.xlsx) 생성: 예리님 양식 그대로 ---- */
 function pnlXEsc(t){return String(t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
 function pnlColL(i){let s="";i++;while(i>0){const m=(i-1)%26;s=String.fromCharCode(65+m)+s;i=Math.floor((i-1)/26);}return s;}
-function pnlFillIdx(n,lv){if(lv!==0)return 0;const c=pnlRowColor(n);return c==="#FBE5D6"?1:c==="#DEEBF7"?2:c==="#E2EFDA"?3:c==="#FFF2CC"?4:0;}
+function pnlFillIdx(n,lv){if(lv!==0)return 0;const c=pnlRowColor(n);return c==="#FBE5D6"?1:c==="#DEEBF7"?2:c==="#E2EFDA"?3:c==="#FFF2CC"?4:c==="#FFC7CE"?5:0;}
 function pnlSheetXml(cols,rows){
   let x='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">';
   x+='<cols>'+cols.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join("")+'</cols><sheetData>';
@@ -2784,10 +2786,10 @@ function pnlSheetXml(cols,rows){
 const PNL_STYLES=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
 <fonts count="4"><font><sz val="11"/><name val="맑은 고딕"/></font><font><b/><sz val="12"/><name val="맑은 고딕"/></font><font><b/><sz val="11"/><name val="맑은 고딕"/></font><font><sz val="10"/><name val="맑은 고딕"/></font></fonts>
-<fills count="6"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFBE5D6"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFDEEBF7"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE2EFDA"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFF2CC"/></patternFill></fill></fills>
+<fills count="7"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFBE5D6"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFDEEBF7"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE2EFDA"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFF2CC"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFC7CE"/></patternFill></fill></fills>
 <borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"/><right style="thin"/><top style="thin"/><bottom style="thin"/><diagonal/></border></borders>
 <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-<cellXfs count="18">
+<cellXfs count="21">
 <xf numFmtId="0" fontId="0" fillId="0" borderId="0"/>
 <xf numFmtId="0" fontId="1" fillId="0" borderId="0" applyFont="1"/>
 <xf numFmtId="0" fontId="2" fillId="0" borderId="1" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
@@ -2806,6 +2808,9 @@ const PNL_STYLES=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <xf numFmtId="9" fontId="3" fillId="3" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>
 <xf numFmtId="9" fontId="3" fillId="4" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>
 <xf numFmtId="9" fontId="3" fillId="5" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>
+<xf numFmtId="0" fontId="3" fillId="6" borderId="1" applyFont="1" applyFill="1" applyBorder="1"/>
+<xf numFmtId="3" fontId="3" fillId="6" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>
+<xf numFmtId="9" fontId="3" fillId="6" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>
 </cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
 window.pnlExportXlsx=async function(){
   try{
@@ -2816,9 +2821,9 @@ window.pnlExportXlsx=async function(){
     const years=[...new Set(keys.map(k=>k.split("-")[0]))];
     const year=years.includes(S.ui.pnlYear)?S.ui.pnlYear:years[years.length-1];
     const yKeys=keys.filter(k=>k.split("-")[0]===year);
-    const nameS=(n,lv)=>({t:"s",v:n,s:3+pnlFillIdx(n,lv)});
-    const numS=(v,n,lv)=>({t:"n",v:v==null?null:v,s:8+pnlFillIdx(n,lv)});
-    const pctS=(v,n,lv)=>({t:"n",v:v,s:13+pnlFillIdx(n,lv)});
+    const nameS=(n,lv)=>{const fi=pnlFillIdx(n,lv);return {t:"s",v:n,s:fi===5?18:3+fi};};
+    const numS=(v,n,lv)=>{const fi=pnlFillIdx(n,lv);return {t:"n",v:v==null?null:v,s:fi===5?19:8+fi};};
+    const pctS=(v,n,lv)=>{const fi=pnlFillIdx(n,lv);return {t:"n",v:v,s:fi===5?20:13+fi};};
     const sheets=[];
     /* ① 월별 손익현황 시트들 */
     for(const k of yKeys){
@@ -3128,12 +3133,13 @@ function renderPnl(){
       <button class="btn btn-sm" onclick="pnlDelete('${key}')">이 달 삭제</button></div>
       ${monthTabs}
       <div class="table-wrap"><table class="rpt">
-        <thead><tr><th class="sticky">계정명</th>${ents.map(([k,n])=>`<th>${n}</th>`).join("")}</tr></thead>
+        <thead><tr><th class="sticky">계정명</th>${ents.map(([k,n])=>`<th colspan="2">${n}</th>`).join("")}</tr></thead>
         <tbody>${doc.rows.map(r=>{
           const major=r.lv===0;
           const bg=major?pnlRowColor(r.n):null;
           return `<tr class="${major?"total":""}"${bg?` style="background:${bg}"`:""}><td class="lab sticky" style="padding-left:${8+r.lv*14}px${bg?";background:"+bg:""}">${r.n}</td>`+
-            ents.map(([k])=>`<td>${fmtS(r.v[k])}${major&&saleRow?pnlPct(r.v[k],saleRow.v[k]):""}</td>`).join("")+`</tr>`;
+            ents.map(([k])=>{const v=r.v[k];const base=saleRow?saleRow.v[k]:null;
+              return `<td>${fmtS(v)}</td><td style="width:54px;text-align:right;color:var(--sub);font-size:11px;border-left:none">${major&&v!=null&&base?(v/base*100).toFixed(1)+"%":""}</td>`;}).join("")+`</tr>`;
         }).join("")}</tbody></table></div>
       <div class="footnote">붙여넣은 원본 그대로 보여줘요. 큰 항목 옆 %는 그 사업장 매출액 대비 비율이에요.</div>
     </div>`;
@@ -3150,12 +3156,12 @@ function renderPnl(){
       <div class="card-title">${year}년 손익현황 — 전체 합산 <span class="unit">매출액 대비 손익율 · 단위: 원 · ${yKeys[0].split("-")[1]}월~${yKeys[yKeys.length-1].split("-")[1]}월 합산 (재고는 기초=첫 달·기말=마지막 달)</span></div>
       ${yearTabs}
       <div class="table-wrap"><table class="rpt">
-        <thead><tr><th class="sticky">계정명</th>${ents.map(([k,n])=>`<th>${n}</th>`).join("")}</tr></thead>
+        <thead><tr><th class="sticky">계정명</th>${ents.map(([k,n])=>`<th colspan="2">${n}</th>`).join("")}</tr></thead>
         <tbody>${names.map(({n,lv})=>{
           const bg=lv===0?pnlRowColor(n):null;
           return `<tr class="${lv===0?"total":""}"${bg?` style="background:${bg}"`:""}><td class="lab sticky" style="padding-left:${8+lv*14}px${bg?";background:"+bg:""}">${n}</td>`+
             ents.map(([e])=>{const v=agg(n,e);const base=saleN?agg(saleN.n,e):null;
-              return `<td>${fmtS(v)}${lv===0&&v!=null&&base?pnlPct(v,base):""}</td>`;}).join("")+`</tr>`;
+              return `<td>${fmtS(v)}</td><td style="width:54px;text-align:right;color:var(--sub);font-size:11px;border-left:none">${lv===0&&v!=null&&base?(v/base*100).toFixed(1)+"%":""}</td>`;}).join("")+`</tr>`;
         }).join("")}</tbody></table></div>
     </div>`;
   }else{
