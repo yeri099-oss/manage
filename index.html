@@ -2072,12 +2072,13 @@ function renderCompare() {
     <div class="card-title">${entInfo.short} — 연도별 매출 합계</div>
     <div class="chart-box"><canvas id="ch-compare-total"></canvas></div>
   </div>`;
-  const lineSets = yrs.map((y, i) => ({
+  const yrsAsc = [...yrs].sort((a, b) => a - b);
+  const lineSets = yrsAsc.map((y, i) => ({
     label: String(y),
     data: MONTHS.map((m) => get(y, m) ?? null),
     borderColor: yearColor(y), backgroundColor: yearColor(y),
     borderWidth: 2, pointRadius: 3, pointHoverRadius: 5, spanGaps: false,
-    hidden: i < yrs.length - 3,
+    hidden: i < yrsAsc.length - 3,
   }));
   if (hasAny) makeChart("ch-compare-line", {
     type: "line",
@@ -2303,7 +2304,8 @@ function renderMarket() {
       <td>${edNum(c.hanwoo, ds("hanwoo"))}</td><td>${edNum(c.pork, ds("pork"))}</td><td class="cy"><b>${c.meat != null ? fmt(c.meat) : ""}</b></td></tr>`;
   }
   const subtabs = `
-  <div class="subtabs">
+  <div class="subtabs" style="align-items:center;background:rgba(0,0,0,0.035);border:1px solid rgba(0,0,0,0.08);border-radius:10px;padding:6px 10px;display:inline-flex;gap:6px;flex-wrap:wrap">
+    <span style="font-size:12px;color:var(--sub,#777);font-weight:700">마켓 ▸</span>
     <button class="subtab ${sub === "sales" ? "active" : ""}" onclick="setMarketSub('sales')">마켓매출</button>
     <button class="subtab ${sub === "meat" ? "active" : ""}" onclick="setMarketSub('meat')">정육매출</button>
   </div>`;
@@ -2394,7 +2396,8 @@ function renderBojagi() {
     ? S.ui.bojagiMonth : monthsWithData[monthsWithData.length - 1] || "1";
   S.ui.bojagiMonth = month;
   const subtabs = `
-  <div class="subtabs">
+  <div class="subtabs" style="align-items:center;background:rgba(0,0,0,0.035);border:1px solid rgba(0,0,0,0.08);border-radius:10px;padding:6px 10px;display:inline-flex;gap:6px;flex-wrap:wrap">
+    <span style="font-size:12px;color:var(--sub,#777);font-weight:700">보자기 ▸</span>
     <button class="subtab ${sub === "menu" ? "active" : ""}" onclick="setBojagiSub('menu')">메뉴별</button>
     <button class="subtab ${sub === "drinks" ? "active" : ""}" onclick="setBojagiSub('drinks')">주류별</button>
   </div>`;
