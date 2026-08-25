@@ -2783,8 +2783,27 @@ function pnlSheetXml(cols,rows){
     });
     x+='</row>';
   });
-  x+='</sheetData><pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/></worksheet>';
+  x+='</sheetData>';
+  if(arguments[2]&&arguments[2].length)x+='<mergeCells count="'+arguments[2].length+'">'+arguments[2].map(m=>`<mergeCell ref="${m}"/>`).join("")+'</mergeCells>';
+  x+='<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/></worksheet>';
   return x;
+}
+/* 판관비 세부 비율 그룹: 직원급여~복리후생비 / (지급임차료 단독) / 여비교통비~끝 */
+function pnlPctGroups(list){
+  const i4=list.findIndex(r=>r.lv===0&&/^4\./.test(r.n));
+  if(i4<0)return [];
+  let end=list.length-1;
+  for(let i=i4+1;i<list.length;i++)if(list[i].lv===0){end=i-1;break;}
+  const detail=[];for(let i=i4+1;i<=end;i++)detail.push(i);
+  if(!detail.length)return [];
+  const rent=detail.find(i=>list[i].n.replace(/\s+/g,"").indexOf("지급임차료")>=0);
+  const gs=[];
+  if(rent!=null){
+    const a=detail.filter(i=>i<rent),b=detail.filter(i=>i>rent);
+    if(a.length)gs.push({s:a[0],e:a[a.length-1]});
+    if(b.length)gs.push({s:b[0],e:b[b.length-1]});
+  }else gs.push({s:detail[0],e:detail[detail.length-1]});
+  return gs;
 }
 const PNL_STYLES=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
@@ -2792,7 +2811,7 @@ const PNL_STYLES=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <fills count="7"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFBE5D6"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFDEEBF7"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE2EFDA"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFF2CC"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFC7CE"/></patternFill></fill></fills>
 <borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"/><right style="thin"/><top style="thin"/><bottom style="thin"/><diagonal/></border></borders>
 <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-<cellXfs count="21">
+<cellXfs count="22">
 <xf numFmtId="0" fontId="0" fillId="0" borderId="0"/>
 <xf numFmtId="0" fontId="1" fillId="0" borderId="0" applyFont="1"/>
 <xf numFmtId="0" fontId="2" fillId="0" borderId="1" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
@@ -2814,6 +2833,7 @@ const PNL_STYLES=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <xf numFmtId="0" fontId="3" fillId="6" borderId="1" applyFont="1" applyFill="1" applyBorder="1"/>
 <xf numFmtId="3" fontId="3" fillId="6" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>
 <xf numFmtId="9" fontId="3" fillId="6" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>
+<xf numFmtId="9" fontId="3" fillId="0" borderId="1" applyNumberFormat="1" applyFont="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
 </cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
 window.pnlExportXlsx=async function(){
   try{
@@ -2828,52 +2848,58 @@ window.pnlExportXlsx=async function(){
     const numS=(v,n,lv)=>{const fi=pnlFillIdx(n,lv);return {t:"n",v:v==null?null:v,s:fi===5?19:8+fi};};
     const pctS=(v,n,lv)=>{const fi=pnlFillIdx(n,lv);return {t:"n",v:v,s:fi===5?20:13+fi};};
     const mSheets=[],eSheets=[];let ySheet=null;
-    /* ① 월별 손익현황 시트들 */
-    for(const k of yKeys){
-      const doc=P[k],[ky,km]=k.split("-");
-      const ents=PNL_ENTS.filter(([e])=>doc.rows.some(r=>r.v[e]!=null));
-      const sale=doc.rows.find(r=>r.lv===0&&r.n.indexOf("매출")>=0);
+    /* 월별·연간 공용: 사업장 가로 시트 (제목 병합 + 머리글 병합 + 판관비 그룹 비율 병합) */
+    const buildWide=(title,list,ents,val)=>{
+      const sale=list.find(x=>x.lv===0&&x.n.indexOf("매출")>=0);
       const cols=[21].concat(ents.flatMap(()=>[12.2,9.5]));
+      const merges=[`A1:${pnlColL(cols.length-1)}1`];
       const rows=[
-        {h:39.75,cells:[{t:"s",v:`${ky}년 ${km}월 손익현황 (매출액대비 손익율)`,s:1}]},
-        {cells:[{t:"s",v:"계정명",s:2}].concat(ents.flatMap(([e,nm])=>[{t:"s",v:nm,s:2},{t:"s",v:"",s:2}]))}
+        {h:39.75,cells:[{t:"s",v:title,s:1}]},
+        {cells:[{t:"s",v:"계정명",s:2}].concat(ents.flatMap(([e,nm],i)=>{
+          merges.push(`${pnlColL(1+2*i)}2:${pnlColL(2+2*i)}2`);
+          return [{t:"s",v:nm,s:2},{t:"s",v:"",s:2}];
+        }))}
       ];
-      for(const r of doc.rows){
+      for(const r of list){
         const cells=[nameS(r.n,r.lv)];
         for(const[e]of ents){
-          const v=r.v[e];
-          cells.push(numS(v==null?null:v,r.n,r.lv));
-          const base=sale&&sale.v[e];
+          const v=val(r.n,e);
+          cells.push(numS(v,r.n,r.lv));
+          const base=sale?val(sale.n,e):null;
           cells.push(r.lv===0&&v!=null&&base?pctS(v/base,r.n,r.lv):{t:"n",v:null,s:13+pnlFillIdx(r.n,r.lv)});
         }
         rows.push({cells});
       }
-      mSheets.push({name:`손익현황(${km}월)`,xml:pnlSheetXml(cols,rows)});
+      const groups=pnlPctGroups(list);
+      ents.forEach(([e],ei)=>{
+        const base=sale?val(sale.n,e):null;
+        const pc=2+2*ei;
+        for(const g of groups){
+          let sum=0,has=false;
+          for(let i=g.s;i<=g.e;i++){const v=val(list[i].n,e);if(v!=null){sum+=v;has=true;}}
+          if(has&&base)rows[2+g.s].cells[pc]={t:"n",v:sum/base,s:21};
+          if(g.e>g.s)merges.push(`${pnlColL(pc)}${3+g.s}:${pnlColL(pc)}${3+g.e}`);
+        }
+      });
+      return {cols,rows,merges};
+    };
+    /* ① 월별 손익현황 시트들 */
+    for(const k of yKeys){
+      const doc=P[k],[ky,km]=k.split("-");
+      const ents=PNL_ENTS.filter(([e])=>doc.rows.some(r=>r.v[e]!=null));
+      const bw=buildWide(`${ky}년 ${km}월 손익현황 (매출액대비 손익율)`,doc.rows,ents,
+        (n,e)=>{const r=doc.rows.find(x=>x.n===n);const v=r?r.v[e]:null;return v==null?null:v;});
+      mSheets.push({name:`손익현황(${km}월)`,xml:pnlSheetXml(bw.cols,bw.rows,bw.merges)});
     }
     /* ② 연간 합산 시트 */
     {
       const names=pnlUnionNames(yKeys);
       const ents=PNL_ENTS.filter(([e])=>yKeys.some(k=>P[k].rows.some(r=>r.v[e]!=null)));
       const agg=(n,e)=>pnlAggOf(n,yKeys.map(k=>{const r=P[k].rows.find(x=>x.n===n);return r?r.v[e]:null;}));
-      const saleN=names.find(x=>x.lv===0&&x.n.indexOf("매출")>=0);
-      const cols=[21].concat(ents.flatMap(()=>[12.2,9.5]));
-      const rows=[
-        {h:39.75,cells:[{t:"s",v:`${year}년 손익현황 (매출액대비 손익율)`,s:1}]},
-        {cells:[{t:"s",v:"계정명",s:2}].concat(ents.flatMap(([e,nm])=>[{t:"s",v:nm,s:2},{t:"s",v:"",s:2}]))}
-      ];
-      for(const {n,lv} of names){
-        const cells=[nameS(n,lv)];
-        for(const[e]of ents){
-          const v=agg(n,e);
-          cells.push(numS(v,n,lv));
-          const base=saleN?agg(saleN.n,e):null;
-          cells.push(lv===0&&v!=null&&base?pctS(v/base,n,lv):{t:"n",v:null,s:13+pnlFillIdx(n,lv)});
-        }
-        rows.push({cells});
-      }
-      ySheet={name:`${year}년손익현황`,xml:pnlSheetXml(cols,rows)};
+      const bw=buildWide(`${year}년 손익현황 (매출액대비 손익율)`,names,ents,agg);
+      ySheet={name:`${year}년손익현황`,xml:pnlSheetXml(bw.cols,bw.rows,bw.merges)};
     }
-    /* ③ 사업장별 월 추이 시트들 */
+    /* ③ 사업장별 월 추이 시트들 (제목 병합) */
     for(const[e,nm]of PNL_ENTS){
       if(!yKeys.some(k=>P[k].rows.some(r=>r.v[e]!=null)))continue;
       const names=pnlUnionNames(yKeys);
@@ -2887,7 +2913,7 @@ window.pnlExportXlsx=async function(){
         if(vals.every(v=>v==null))continue;
         rows.push({cells:[nameS(n,lv)].concat(vals.map(v=>numS(v,n,lv))).concat([numS(pnlAggOf(n,vals),n,lv)])});
       }
-      eSheets.push({name:nm,xml:pnlSheetXml(cols,rows)});
+      eSheets.push({name:nm,xml:pnlSheetXml(cols,rows,[`A1:${pnlColL(cols.length-1)}1`])});
     }
     /* 시트 순서: 최신월 → 연간 → 사업장별 → 과거월(내림차순) */
     const sheets=[mSheets[mSheets.length-1],ySheet].concat(eSheets).concat(mSheets.slice(0,-1).reverse()).filter(Boolean);
