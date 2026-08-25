@@ -2862,19 +2862,26 @@ window.pnlExportXlsx=async function(){
       ];
       list.forEach((r,li)=>{
         const cells=[nameS(r.n,r.lv)];
+        const noPct=r.lv===0&&/^(6|7|8)\./.test(r.n); /* 영업외수익·비용·법인세전: 비율 없음 */
         for(const[e]of ents){
           const cut=totalOnlyFrom!=null&&li>=totalOnlyFrom&&e!=="total";
-          const v=cut?null:val(r.n,e);
+          if(cut){cells.push({t:"n",v:null,s:0});cells.push({t:"n",v:null,s:0});continue;} /* 완전 빈 칸 (선·색 없음) */
+          const v=val(r.n,e);
           cells.push(numS(v,r.n,r.lv));
           const base=sale?val(sale.n,e):null;
-          cells.push(!cut&&r.lv===0&&v!=null&&base?pctS(v/base,r.n,r.lv):{t:"n",v:null,s:13+pnlFillIdx(r.n,r.lv)});
+          cells.push(!noPct&&r.lv===0&&v!=null&&base?pctS(v/base,r.n,r.lv):{t:"n",v:null,s:13+pnlFillIdx(r.n,r.lv)});
         }
         rows.push({cells});
       });
       const groups=pnlPctGroups(list);
+      const rentIdx=list.findIndex(r=>r.lv!==0&&r.n.replace(/\s+/g,"").indexOf("지급임차료")>=0);
       ents.forEach(([e],ei)=>{
         const base=sale?val(sale.n,e):null;
         const pc=2+2*ei;
+        if(rentIdx>=0&&base){
+          const rv=val(list[rentIdx].n,e);
+          if(rv!=null)rows[2+rentIdx].cells[pc]=pctS(rv/base,list[rentIdx].n,1);
+        }
         for(const g of groups){
           let sum=0,has=false;
           for(let i=g.s;i<=g.e;i++){const v=val(list[i].n,e);if(v!=null){sum+=v;has=true;}}
