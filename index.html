@@ -421,11 +421,7 @@ window.FIREBASE_CONFIG = {
   <nav class="tabbar" id="tabbar">
     <button class="tab active" data-tab="home">요약</button>
     <button class="tab" data-tab="compare">매출비교</button>
-    <button class="tab" data-tab="monthly">월별</button>
-    <button class="tab" data-tab="daily">일평균</button>
-    <button class="tab" data-tab="market">마켓</button>
-    <button class="tab" data-tab="bojagi">보자기</button>
-    <button class="tab" data-tab="agency">판매대행</button>
+    <button class="tab" data-tab="sales">매출현황</button>
     <button class="tab admin-only" data-tab="pnl">월별손익</button>
     <button class="tab admin-only" data-tab="settings">설정</button>
   </nav>
@@ -433,11 +429,14 @@ window.FIREBASE_CONFIG = {
     <div id="pw-warn" class="pw-warn hidden">🔐 admin 비밀번호가 초기값(1234) 그대로예요. <a href="#" onclick="switchTab('settings');return false;">설정</a>에서 꼭 바꿔주세요. <button onclick="this.parentElement.classList.add('hidden')">닫기</button></div>
     <section id="tab-home" class="tab-panel"></section>
     <section id="tab-compare" class="tab-panel hidden"></section>
-    <section id="tab-monthly" class="tab-panel hidden"></section>
-    <section id="tab-daily" class="tab-panel hidden"></section>
-    <section id="tab-market" class="tab-panel hidden"></section>
-    <section id="tab-bojagi" class="tab-panel hidden"></section>
-    <section id="tab-agency" class="tab-panel hidden"></section>
+    <section id="tab-sales" class="tab-panel hidden">
+      <div class="subtabs" id="salesSubtabs" style="flex-wrap:wrap;margin-bottom:10px"></div>
+      <div id="tab-monthly"></div>
+      <div id="tab-daily" class="hidden"></div>
+      <div id="tab-market" class="hidden"></div>
+      <div id="tab-bojagi" class="hidden"></div>
+      <div id="tab-agency" class="hidden"></div>
+    </section>
     <section id="tab-pnl" class="tab-panel hidden"></section>
     <section id="tab-settings" class="tab-panel hidden"></section>
   </main>
@@ -999,7 +998,6 @@ async function loadAllData() {
     S.data.bojagiDrinks = wrapYears(seed.bojagiDrinks, "months");
     S.data.agency = seed.agency;
     S.data.targets = seed.targets || {};
-    try { S.data.remodelCosts = JSON.parse(localStorage.getItem("kb_remodelCosts") || "null") || seed.remodelCosts || []; } catch (e) { S.data.remodelCosts = []; }
     try { S.data.pnl = JSON.parse(localStorage.getItem("kb_pnl") || "null") || seed.pnl || {}; } catch (e) { S.data.pnl = {}; }
     S.data.menuItems = seed.bojagiMenuItems;
     S.data.drinkItems = seed.bojagiDrinkItems;
@@ -1013,7 +1011,6 @@ async function loadAllData() {
   });
   jobs.push(fsCol("config").doc("bojagiMenuItems").get().then((d) => { S.data.menuItems = d.data()?.items || []; }));
   jobs.push(fsCol("config").doc("bojagiDrinkItems").get().then((d) => { S.data.drinkItems = d.data()?.items || []; }));
-  jobs.push(fsCol("config").doc("remodelCosts").get().then((d) => { S.data.remodelCosts = d.data()?.items || []; }));
   await Promise.all(jobs);
 }
 function wrapYears(obj, key) {
@@ -1309,29 +1306,7 @@ function renderHome() {
   const nowM = new Date().getMonth() + 1;
   const settleHtml = settleMonths[nowM]
     ? `<div class="check-box">📌 이번 달 17일경 온라인 판매 ${settleMonths[nowM]}분 국세청 정산자료가 나와요. 반영 후 월별·판매대행 탭을 업데이트해주세요.</div>` : "";
-  // 목표
-  let targetHtml = "";
-  if (hasTargets(String(year), "total")) {
-    const t = targetOf(String(year), month, "total");
-    const rate = t && nts != null ? nts / t : null;
-    let ytdT = 0, ytdA = 0;
-    for (let i = 1; i <= Number(month); i++) {
-      const tv = targetOf(String(year), String(i), "total");
-      const av = scGet(String(year), String(i), "total");
-      if (tv != null && av != null) { ytdT += tv; ytdA += av; }
-    }
-    targetHtml = `
-    <div class="stat-tile">
-      <div class="k">${month}월 목표 달성률 (국세청기준)</div>
-      <div class="v">${rate != null ? (rate * 100).toFixed(1) + "%" : "–"}</div>
-      <div class="d dim">목표 ${t != null ? fmt(t) : "미설정"}${t != null && nts != null ? " / 실적 " + fmt(nts) : ""}</div>
-    </div>
-    <div class="stat-tile">
-      <div class="k">연 누적 달성률</div>
-      <div class="v">${ytdT ? (ytdA / ytdT * 100).toFixed(1) + "%" : "–"}</div>
-      <div class="d dim">${ytdT ? "누적 목표 " + fmt(ytdT) : ""}</div>
-    </div>`;
-  }
+  const targetHtml = "";
   el.innerHTML = `
   <div class="card-head" style="margin-bottom:12px">
     <div class="card-title" style="font-size:17px">${year}년 ${month}월 요약</div>
@@ -2008,27 +1983,6 @@ function scGet(y, m, ent) {
   return doc[ent]?.[m];
 }
 function setCompareEntity(ent) { S.ui.compareEntity = ent; renderCompare(); }
-/* ===== 리모델링 비용 차감 (표시 전용) ===== */
-function remodelCostOf(year, m, ent) {
-  let sum = 0;
-  for (const it of (S.data.remodelCosts || [])) {
-    if (String(it.y) === String(year) && String(it.m) === String(m) && (ent === "total" || ent === (it.ent || "epida"))) sum += Number(it.amt) || 0;
-  }
-  return sum;
-}
-function remodelOn() { return localStorage.getItem("kb_remodelDeduct") === "1"; }
-window.toggleRemodel = function () { localStorage.setItem("kb_remodelDeduct", remodelOn() ? "0" : "1"); rerenderCurrent(); };
-window.toggleRemodelEdit = function () { S.ui.remodelEdit = !S.ui.remodelEdit; rerenderCurrent(); };
-window.remodelAddRow = function () { (S.data.remodelCosts = S.data.remodelCosts || []).push({ y: String(new Date().getFullYear()), m: "1", ent: "epida", amt: 0, label: "리모델링" }); S.ui.remodelEdit = true; rerenderCurrent(); };
-window.remodelDelRow = function (i) { S.data.remodelCosts.splice(i, 1); rerenderCurrent(); };
-window.remodelSetRow = function (i, k, v) { const it = (S.data.remodelCosts || [])[i]; if (!it) return; it[k] = (k === "amt") ? (Number(String(v).replace(/[^\d]/g, "")) || 0) : v; };
-window.remodelSave = async function () {
-  try {
-    localStorage.setItem("kb_remodelCosts", JSON.stringify(S.data.remodelCosts || []));
-    if (!IS_DEMO && typeof db !== "undefined" && db) await fsCol("config").doc("remodelCosts").set({ items: S.data.remodelCosts || [] });
-    S.ui.remodelEdit = false; toast("리모델링 비용 내역을 저장했어요"); rerenderCurrent();
-  } catch (e) { toast(e.message || "저장 실패", true); }
-};
 function renderCompare() {
   const el = document.getElementById("tab-compare");
   const ent = S.ui.compareEntity || "total";
@@ -2092,60 +2046,7 @@ function renderCompare() {
     if (negs.length)
       verifyHtml = `<div class="check-box warn">⚠️ 사업장 합계가 전체보다 큰 달이 있어요. 입력을 확인해주세요.<br>${negs.join("<br>")}</div>`;
   }
-  // 월 목표 대비 (해당 사업장에 목표가 있는 최근 연도 — 직접입력 모드에선 목표가 없어도 표시)
-  let targetYear = [...allYears].reverse().find((y) => hasTargets(String(y), ent));
-  if (!targetYear && edMode() && canEdit) targetYear = allYears.length ? allYears[allYears.length - 1] : thisYear();
-  let targetCard = "";
-  if (targetYear) {
-    const rmOn = remodelOn();
-    let rows1 = "", rows2 = "", tSumT = 0, tSumA = 0, rmSum = 0, mi = 0;
-    for (const m of MONTHS) {
-      mi++;
-      const t = targetOf(String(targetYear), m, ent);
-      let a = get(targetYear, m);
-      const rc = (rmOn && a != null) ? remodelCostOf(targetYear, m, ent) : 0;
-      if (rc) { a = a - rc; rmSum += rc; }
-      if (t == null && a == null && !edMode()) continue;
-      if (t != null && a != null) { tSumT += t; tSumA += a; }
-      const row = `<tr><td class="lab sticky">${m}월</td><td>${edNum(t, `data-t="tg" data-y="${targetYear}" data-m="${m}" data-e="${ent}"`)}</td><td>${a != null ? fmt(a) + (rc ? '<span class="unit" title="리모델링 비용 차감됨">*</span>' : "") : ""}</td>
-        <td class="c">${t && a != null ? `<b class="${a >= t ? "pct-up" : "pct-down"}">${(a / t * 100).toFixed(1)}%</b>` : ""}</td></tr>`;
-      if (mi <= 6) rows1 += row; else rows2 += row;
-    }
-    const thead = `<thead><tr><th class="c sticky">월별</th><th>목표</th><th>실적</th><th class="c">달성률</th></tr></thead>`;
-    const totalRow = `<tr class="total"><td class="lab sticky">누계</td><td>${fmt(tSumT)}</td><td>${fmt(tSumA)}</td>
-            <td class="c">${tSumT ? (tSumA / tSumT * 100).toFixed(1) + "%" : ""}</td></tr>`;
-    const rmItems = S.data.remodelCosts || [];
-    const rmEditor = S.ui.remodelEdit ? `
-      <div class="check-box" style="margin-top:10px">
-        <b>🔨 리모델링 비용 내역</b> — 연도·월·금액을 넣고 저장하세요. 켜면 해당 사업장(과 전체) 화면의 실적에서 표시용으로만 차감돼요.
-        <div class="table-wrap" style="margin-top:6px"><table class="rpt">
-          <thead><tr><th>연도</th><th>월</th><th>사업장</th><th>금액</th><th>메모</th><th></th></tr></thead>
-          <tbody>${rmItems.map((it, i) => `<tr>
-            <td><input value="${it.y}" onchange="remodelSetRow(${i},'y',this.value)" style="width:64px"></td>
-            <td><input value="${it.m}" onchange="remodelSetRow(${i},'m',this.value)" style="width:44px"></td>
-            <td><select onchange="remodelSetRow(${i},'ent',this.value)">${[["epida","에피다"],["bojagi","보자기"],["market","마켓"]].map(([k,n]) => `<option value="${k}" ${(it.ent||"epida")===k?"selected":""}>${n}</option>`).join("")}</select></td>
-            <td><input value="${it.amt ? Number(it.amt).toLocaleString() : ""}" onchange="remodelSetRow(${i},'amt',this.value)" style="width:120px;text-align:right"></td>
-            <td><input value="${it.label||""}" onchange="remodelSetRow(${i},'label',this.value)" style="width:120px"></td>
-            <td><button class="btn btn-sm" onclick="remodelDelRow(${i})">삭제</button></td></tr>`).join("")}</tbody>
-        </table></div>
-        <div style="margin-top:6px;display:flex;gap:6px"><button class="btn btn-sm" onclick="remodelAddRow()">+ 줄 추가</button><button class="btn btn-sm btn-primary" onclick="remodelSave()">저장</button></div>
-      </div>` : "";
-    const rmBadge = (rmOn && rmSum) ? `<div class="check-box" style="margin-top:8px">🔨 리모델링 비용 ${fmt(rmSum)}원을 실적에서 차감해 보고 있어요 — 표시 전용이라 저장된 실적·보고 값은 그대로예요.</div>` : (rmOn && !rmSum ? `<div class="check-box warn" style="margin-top:8px">🔨 차감이 켜져 있지만 이 화면(${entInfo.short})·연도에 해당하는 리모델링 비용 내역이 없어요 — "내역 설정"에서 추가하세요.</div>` : "");
-    targetCard = `
-    <div class="card">
-      <div class="card-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${entInfo.short} — ${targetYear}년 월 목표 대비 <span class="unit">국세청기준 · 단위: 원</span>
-        <span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
-          <button class="btn btn-sm ${rmOn ? "btn-primary" : ""}" onclick="toggleRemodel()">🔨 리모델링 비용 차감 ${rmOn ? "ON" : "OFF"}</button>
-          <button class="btn btn-sm" onclick="toggleRemodelEdit()">내역 설정</button>
-        </span></div>
-      ${rmBadge}${rmEditor}
-      <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start;justify-content:center">
-        <div class="table-wrap" style="flex:1 1 320px;max-width:560px"><table class="rpt">${thead}<tbody>${rows1}</tbody></table></div>
-        <div class="table-wrap" style="flex:1 1 320px;max-width:560px"><table class="rpt">${thead}<tbody>${rows2}${totalRow}</tbody></table></div>
-      </div>
-      <div class="footnote">"표에서 바로입력" 모드를 켜면 목표 금액을 여기서 직접 입력·수정할 수 있어요 (설정 탭의 "월 목표 설정"에서도 가능). 누계는 목표와 실적이 모두 있는 달 기준이에요.</div>
-    </div>`;
-  }
+  const targetCard = "";
   el.innerHTML = entTabs + `
   <div class="card">
     <div class="card-head">
@@ -2178,15 +2079,7 @@ function renderCompare() {
     borderWidth: 2, pointRadius: 3, pointHoverRadius: 5, spanGaps: false,
     hidden: i < yrs.length - 3,
   }));
-  if (targetYear) {
-    lineSets.push({
-      label: `${targetYear} 목표`,
-      data: MONTHS.map((m) => targetOf(String(targetYear), m, ent)),
-      borderColor: "#A5A5A5", backgroundColor: "#A5A5A5",
-      borderWidth: 1.8, borderDash: [6, 5], pointRadius: 0, spanGaps: true,
-    });
-  }
-  makeChart("ch-compare-line", {
+  if (hasAny) makeChart("ch-compare-line", {
     type: "line",
     data: {
       labels: MONTH_LABELS,
@@ -3295,12 +3188,21 @@ function renderPnl(){
   const viewTabs=`<div class="subtabs" style="align-items:center;flex-wrap:wrap"><button class="subtab ${view==="month"?"active":""}" onclick="pnlSetView('month')">월별 상세</button><button class="subtab ${view==="total"?"active":""}" onclick="pnlSetView('total')">연간 합산</button><button class="subtab ${view==="year"?"active":""}" onclick="pnlSetView('year')">사업장별 추이</button>${keys.length?`<button class="btn btn-sm" style="margin-left:auto" onclick="pnlExportXlsx()">📥 엑셀로 받기</button>`:""}</div>`;
   el.innerHTML=pasteBox+viewTabs+body;
 }
+const SALES_SUBS=[["monthly","월별"],["daily","일평균"],["market","마켓"],["bojagi","보자기"],["agency","판매대행"]];
+function renderSales(){
+  const sub=SALES_SUBS.some(([k])=>k===S.ui.salesSub)?S.ui.salesSub:"monthly";
+  const bar=document.getElementById("salesSubtabs");
+  if(bar)bar.innerHTML=SALES_SUBS.map(([k,n])=>`<button class="subtab ${k===sub?"active":""}" onclick="setSalesSub('${k}')">${n}</button>`).join("");
+  for(const[k]of SALES_SUBS){const p=document.getElementById("tab-"+k);if(p)p.classList.toggle("hidden",k!==sub);}
+  ({monthly:renderMonthly,daily:renderDaily,market:renderMarket,bojagi:renderBojagi,agency:renderAgency})[sub]?.();
+}
+window.setSalesSub=function(k){S.ui.salesSub=k;renderSales();};
 const RENDERERS = {
   home: () => renderHome(),
-  compare: renderCompare, monthly: renderMonthly, daily: renderDaily,
-  market: renderMarket, bojagi: renderBojagi, agency: renderAgency, pnl: renderPnl, settings: () => renderSettings(),
+  compare: renderCompare, sales: renderSales, pnl: renderPnl, settings: () => renderSettings(),
 };
 function switchTab(tab) {
+  if(["monthly","daily","market","bojagi","agency"].includes(tab)){S.ui.salesSub=tab;tab="sales";}
   S.ui.tab = tab;
   document.querySelectorAll(".tabbar .tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
   document.querySelectorAll(".tab-panel").forEach((p) => p.classList.toggle("hidden", p.id !== "tab-" + tab));
@@ -3728,28 +3630,6 @@ async function renderSettings() {
     <div class="footnote">채널은 연도별로 관리돼요. 위에서 연도를 선택한 뒤 추가·삭제하세요.</div>
   </div>
   <div class="card">
-    <div class="card-head">
-      <div class="card-title">월 목표 설정 <span class="unit">국세청기준 · 단위: 원</span></div>
-      <div class="card-actions">${segButtons(tgYears, tgYear, "setTgYear")}</div>
-    </div>
-    <div class="table-wrap">
-      <table class="rpt">
-        <thead><tr><th class="c">월</th>${SC_ENTITIES.filter((e) => !e.computed).map((e) => `<th class="c">${e.short}</th>`).join("")}</tr></thead>
-        <tbody>
-        ${MONTHS.map((m) => `<tr><td class="lab">${m}월</td>${SC_ENTITIES.filter((e) => !e.computed).map((e) => {
-          const v = targetOf(String(tgYear), m, e.key);
-          return `<td class="c"><input class="cell-in tg-in" inputmode="numeric" data-m="${m}" data-e="${e.key}" value="${v != null ? fmt(v) : ""}"></td>`;
-        }).join("")}</tr>`).join("")}
-        </tbody>
-      </table>
-    </div>
-    <div class="inline-form" style="justify-content:flex-end">
-      <button class="btn" onclick="suggestTargets()">✨ 자동 제안 채우기</button>
-      <button class="btn btn-primary" onclick="saveTargets()">목표 저장</button>
-    </div>
-    <div class="footnote">"자동 제안 채우기"는 빈 칸을 전년 같은 달 실적 +5%(백만 원 단위 반올림)로 채워줘요. 숫자를 고친 뒤 저장하면 돼요. 목표를 넣으면 요약 탭에 달성률, 매출비교 탭에 "목표 대비" 표와 그래프 점선이 생겨요.</div>
-  </div>
-  <div class="card">
     <div class="card-head"><div class="card-title">데이터 관리</div></div>
     <div class="inline-form" style="margin-top:0">
       <button class="btn" onclick="exportExcel()">📥 엑셀로 백업 다운로드</button>
@@ -4030,11 +3910,14 @@ async function showApp() {
     <div id="pw-warn" class="pw-warn hidden">🔐 admin 비밀번호가 초기값(1234) 그대로예요. <a href="#" onclick="switchTab('settings');return false;">설정</a>에서 꼭 바꿔주세요. <button onclick="this.parentElement.classList.add('hidden')">닫기</button></div>
     <section id="tab-home" class="tab-panel"></section>
     <section id="tab-compare" class="tab-panel hidden"></section>
-    <section id="tab-monthly" class="tab-panel hidden"></section>
-    <section id="tab-daily" class="tab-panel hidden"></section>
-    <section id="tab-market" class="tab-panel hidden"></section>
-    <section id="tab-bojagi" class="tab-panel hidden"></section>
-    <section id="tab-agency" class="tab-panel hidden"></section>
+    <section id="tab-sales" class="tab-panel hidden">
+      <div class="subtabs" id="salesSubtabs" style="flex-wrap:wrap;margin-bottom:10px"></div>
+      <div id="tab-monthly"></div>
+      <div id="tab-daily" class="hidden"></div>
+      <div id="tab-market" class="hidden"></div>
+      <div id="tab-bojagi" class="hidden"></div>
+      <div id="tab-agency" class="hidden"></div>
+    </section>
     <section id="tab-pnl" class="tab-panel hidden"></section>
     <section id="tab-settings" class="tab-panel hidden"></section>`;
   document.getElementById("tab-home").innerHTML = `<div class="loading"><span class="spin"></span><br>데이터를 불러오는 중…</div>`;
@@ -6270,7 +6153,8 @@ window.__cfmApp={get MONTHS(){return MONTHS},get CUR(){return CUR},compute,deriv
     b.className='tab admin-only';b.dataset.tab='confirmapp';b.id='cfmTabBtn';
     b.textContent='매출확정';b.style.display='none';
     b.addEventListener('click',function(){if(typeof switchTab==='function')switchTab('confirmapp');});
-    bar.appendChild(b);
+    var st=bar.querySelector('[data-tab="settings"]');
+    bar.insertBefore(b,st||null);
   }
   function isAdmin(){try{return !!(S&&S.user&&S.user.role==='admin');}catch(e){return false;}}
   function sync(){
