@@ -3287,6 +3287,25 @@ function aiEnt(q){const c=aiCompact(q);
   for(const[k,als]of AI_ENT_DEFS)for(const a of als)if(c.indexOf(aiCompact(a))>=0)return k;
   return "total";}
 function aiEntInfo(k){return (AI_ENT_DEFS.find(([kk])=>kk===k)||AI_ENT_DEFS[AI_ENT_DEFS.length-1])[2];}
+function aiBigrams(t){const x=aiCompact(t);const o=new Set();for(let i=0;i<x.length-1;i++)o.add(x.slice(i,i+2));return o;}
+function aiScoreIn(name,q){const nb=aiBigrams(name);if(!nb.size)return 0;const qs=aiCompact(q);let hit=0;for(const g of nb)if(qs.indexOf(g)>=0)hit++;return hit/nb.size;}
+window.aiAsk=function(q){const inp=document.getElementById("aiInput");inp.value=q;aiSend();};
+function aiChips(list){return list.length?`<div style="margin-top:6px;display:flex;gap:5px;flex-wrap:wrap">${list.map(c=>`<button class="btn btn-sm" style="font-size:12px" onclick="aiAsk('${String(c.q).replace(/'/g,"")}')">${c.label}</button>`).join("")}</div>`:"";}
+function aiSuggest(q){
+  const years=aiYears(q);const y=years.length?years[0]:"올해";
+  const cands=[];
+  for(const it of (S.data.menuItems||[]))cands.push({label:it.name,q:`${y}년 ${it.name} 판매량`,score:aiScoreIn(it.name,q)});
+  for(const it of (S.data.drinkItems||[]))cands.push({label:it.name,q:`${y}년 ${it.name} 판매량`,score:aiScoreIn(it.name,q)});
+  const P=S.data.pnl||{};
+  const seen=new Set();
+  for(const k of Object.keys(P))for(const r of P[k].rows){
+    const nm=r.n.replace(/^\d+\.\s*/,"");
+    if(seen.has(nm))continue;seen.add(nm);
+    cands.push({label:nm,q:`${y}년 ${nm}`,score:aiScoreIn(nm,q)});
+  }
+  for(const[k,als,info]of AI_ENT_DEFS)cands.push({label:info.name+" 매출",q:`${y}년 ${info.name} 매출`,score:aiScoreIn(info.name,q)*0.9});
+  return cands.filter(c=>c.score>=0.4).sort((a,b)=>b.score-a.score).slice(0,3);
+}
 function aiFindItem(q){
   const c=aiCompact(q);let best=null;
   for(const[list,kind]of[[S.data.menuItems||[],"menu"],[S.data.drinkItems||[],"drink"]])
@@ -3299,7 +3318,12 @@ function aiMenuAnswer(best,years,months){
   const single=months&&months.length===1;
   const out=[];let lastTable=null;
   for(const y of yrs){
-    const doc=S.data[col][y];if(!doc){out.push(`${y}년 ${best.it.name} 데이터가 없어요.`);continue;}
+    const doc=S.data[col][y];
+    if(!doc){
+      const have=Object.keys(S.data[col]||{}).filter(yy=>Object.values(S.data[col][yy].months||{}).some(mm=>mm[best.it.id])).sort();
+      out.push(`${y}년 ${best.it.name} 데이터가 없어요.`+(have.length?` 데이터가 있는 해: ${have.join(", ")}년`+aiChips(have.map(yy=>({label:yy+"년 보기",q:`${yy}년 ${best.it.name} 판매량`}))):""));
+      continue;
+    }
     const ms=months||MONTHS;
     let tot={k:0,p:0,d:0},rows=[],any=false;
     for(const m of ms){
@@ -3310,7 +3334,11 @@ function aiMenuAnswer(best,years,months){
       tot.k+=k;tot.p+=p;tot.d+=d;
     }
     const sum=tot.k+tot.p+tot.d;
-    if(!any){out.push(`${y}년 ${best.it.name} 데이터가 없어요.`);continue;}
+    if(!any){
+      const have=Object.keys(S.data[col]||{}).filter(yy=>Object.values(S.data[col][yy].months||{}).some(mm=>mm[best.it.id])).sort();
+      out.push(`${y}년${months?` ${ms[0]}~${ms[ms.length-1]}월`:""} ${best.it.name} 데이터가 없어요.`+(have.length?` 데이터가 있는 해: ${have.join(", ")}년`+aiChips(have.map(yy=>({label:yy+"년 보기",q:`${yy}년 ${best.it.name} 판매량`}))):""));
+      continue;
+    }
     const rangeTxt=months?` ${ms[0]}~${ms[ms.length-1]}월`:"";
     if(single)out.push(`${y}년 ${ms[0]}월 <b>${best.it.name}</b> 판매량은 <b>${fmt(sum)}개</b>예요 (키오스크 ${fmt(tot.k)} · 포스 ${fmt(tot.p)} · 배달 ${fmt(tot.d)}).`);
     else{
@@ -3346,7 +3374,11 @@ function aiSalesAnswer(q,years,months){
       const ms=months||MONTHS;
       let sum=0,rows=[],any=false;
       for(const m of ms){const v=aiScVal(y,m,ek);if(v!=null){sum+=v;any=true;rows.push([`${m}월`,v]);}}
-      if(!any){out.push(`${y}년 ${entName} 매출 데이터가 없어요.`);continue;}
+      if(!any){
+        const have=yearsOf("salesComparison").map(String).filter(yy=>MONTHS.some(m=>aiScVal(yy,m,ek)!=null)).sort();
+        out.push(`${y}년 ${entName} 매출 데이터가 없어요.`+(have.length?` 데이터가 있는 해: ${have.join(", ")}년`+aiChips(have.slice(-3).map(yy=>({label:yy+"년 보기",q:`${yy}년 ${entName} 매출`}))):""));
+        continue;
+      }
       rows.push(["합계",sum]);
       out.push(`${y}년${months?` ${ms[0]}~${ms[ms.length-1]}월`:""} <b>${entName}</b> 매출(국세청기준)은 <b>${fmt(sum)}원</b>이에요.${ek==="bukchon"?" (북촌 = 꽃밥마켓+보자기꽃밥)":""}`);
       lastTable={title:`${y}년 ${entName} 매출`,header:["월","매출(원)"],rows};
@@ -3375,7 +3407,11 @@ function aiPnlAnswer(q,years,months){
   for(const y of yrs){
     let yk=keys.filter(k=>k.split("-")[0]===y).sort((a,b)=>Number(a.split("-")[1])-Number(b.split("-")[1]));
     if(months)yk=yk.filter(k=>months.includes(k.split("-")[1]));
-    if(!yk.length){out.push(`${y}년 해당 기간의 손익 데이터가 없어요.`);continue;}
+    if(!yk.length){
+      const have=[...new Set(keys.map(k=>k.split("-")[0]))].sort();
+      out.push(`${y}년 해당 기간의 손익 데이터가 없어요.`+(have.length?` 데이터가 있는 해: ${have.join(", ")}년`+aiChips(have.slice(-3).map(yy=>({label:yy+"년 보기",q:`${yy}년 ${entName} ${best.n.replace(/^\d+\.\s*/,"")}`}))):""));
+      continue;
+    }
     const valOf=k=>{const r=P[k].rows.find(x=>x.n===best.n);return r?(r.v[ent]??null):null;};
     if(single){
       const v=valOf(yk[0]);
@@ -3401,6 +3437,8 @@ function aiAnswer(q){
   const pnlTry=(c.indexOf("매출")<0||/손익|이익|판관비|원가|급여|비용/.test(c))?aiPnlAnswer(q,years,months):null;
   if(pnlTry)return pnlTry;
   if(c.indexOf("매출")>=0)return aiSalesAnswer(q,years,months);
+  const sug=aiSuggest(q);
+  if(sug.length)return {html:"딱 맞는 걸 못 찾았어요. 혹시 이런 걸 물으신 건가요?"+aiChips(sug)};
   return {html:"질문을 못 알아들었어요 🙏<br>"+AI_HELP};
 }
 const AI_TABLES=[];
