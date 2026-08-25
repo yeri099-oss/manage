@@ -3072,6 +3072,38 @@ window.pnlFilesApply=async function(){
   }catch(e){if(err){err.style.display="block";err.textContent=e.message||"반영 실패";}}
 };
 
+function pnlHtmlTable(list,ents,val,totalOnlyFrom){
+  const sale=list.find(x=>x.lv===0&&x.n.indexOf("매출")>=0);
+  const groups=pnlPctGroups(list);
+  const gStart={},gIn={};
+  groups.forEach(g=>{gStart[g.s]=g;for(let i=g.s+1;i<=g.e;i++)gIn[i]=true;});
+  const rentIdx=list.findIndex(r=>r.lv!==0&&r.n.replace(/\s+/g,"").indexOf("지급임차료")>=0);
+  const fS=v=>v==null?"":(v<0?'<span class="pct-down">'+fmt(v)+'</span>':fmt(v));
+  const pctTd=v=>`<td style="width:56px;text-align:center;color:var(--sub);font-size:11px">${v==null?"":(v*100).toFixed(1)+"%"}</td>`;
+  let h=`<thead><tr><th class="sticky">계정명</th>${ents.map(([k,n])=>`<th colspan="2">${n}</th>`).join("")}</tr></thead><tbody>`;
+  list.forEach((r,li)=>{
+    const bg=r.lv===0?pnlRowColor(r.n):null;
+    const noPct=r.lv===0&&/^(6|7|8)\./.test(r.n);
+    h+=`<tr class="${r.lv===0?"total":""}"${bg?` style="background:${bg}"`:""}><td class="lab sticky" style="padding-left:${8+r.lv*14}px${bg?";background:"+bg:""}">${r.n}</td>`;
+    for(const[e]of ents){
+      const cutCell=totalOnlyFrom!=null&&li>=totalOnlyFrom&&e!=="total";
+      if(cutCell){h+=`<td colspan="2" style="border:none;background:transparent"></td>`;continue;}
+      const v=val(r.n,e);
+      const base=sale?val(sale.n,e):null;
+      h+=`<td>${fS(v)}</td>`;
+      if(gStart[li]!=null&&gStart[li]!==undefined&&gStart[li].s===li){
+        const g=gStart[li];let sum=0,has=false;
+        for(let i=g.s;i<=g.e;i++){const vv=val(list[i].n,e);if(vv!=null){sum+=vv;has=true;}}
+        h+=`<td rowspan="${g.e-g.s+1}" style="width:56px;text-align:center;vertical-align:middle;color:var(--sub);font-size:11px;background:rgba(0,0,0,0.02)">${has&&base?(sum/base*100).toFixed(1)+"%":""}</td>`;
+      }else if(gIn[li]){/* 위 rowspan이 덮음 */}
+      else if(li===rentIdx)h+=pctTd(base&&v!=null?v/base:null);
+      else if(r.lv===0&&!noPct&&v!=null&&base)h+=pctTd(v/base);
+      else h+=pctTd(null);
+    }
+    h+=`</tr>`;
+  });
+  return h+`</tbody>`;
+}
 function pnlSaveLocal(){try{localStorage.setItem("kb_pnl",JSON.stringify(S.data.pnl||{}));}catch(e){}}
 window.pnlSetView=function(v){S.ui.pnlView=v;rerenderCurrent();};
 window.pnlSetKey=function(k){S.ui.pnlKey=k;rerenderCurrent();};
@@ -3175,14 +3207,10 @@ function renderPnl(){
       <button class="btn btn-sm" onclick="pnlDelete('${key}')">이 달 삭제</button></div>
       ${monthTabs}
       <div class="table-wrap"><table class="rpt">
-        <thead><tr><th class="sticky">계정명</th>${ents.map(([k,n])=>`<th colspan="2">${n}</th>`).join("")}</tr></thead>
-        <tbody>${doc.rows.map(r=>{
-          const major=r.lv===0;
-          const bg=major?pnlRowColor(r.n):null;
-          return `<tr class="${major?"total":""}"${bg?` style="background:${bg}"`:""}><td class="lab sticky" style="padding-left:${8+r.lv*14}px${bg?";background:"+bg:""}">${r.n}</td>`+
-            ents.map(([k])=>{const v=r.v[k];const base=saleRow?saleRow.v[k]:null;
-              return `<td>${fmtS(v)}</td><td style="width:54px;text-align:right;color:var(--sub);font-size:11px;border-left:none">${major&&v!=null&&base?(v/base*100).toFixed(1)+"%":""}</td>`;}).join("")+`</tr>`;
-        }).join("")}</tbody></table></div>
+        ${(()=>{const i6=doc.rows.findIndex(r=>r.lv===0&&/^6\./.test(r.n));
+          const listM=i6>=0?doc.rows.slice(0,i6):doc.rows;
+          return pnlHtmlTable(listM,ents,(n,e)=>{const rr=doc.rows.find(x=>x.n===n);const v=rr?rr.v[e]:null;return v==null?null:v;},null);})()}
+      </table></div>
       <div class="footnote">붙여넣은 원본 그대로 보여줘요. 큰 항목 옆 %는 그 사업장 매출액 대비 비율이에요.</div>
     </div>`;
   }else if(view==="total"){
@@ -3198,13 +3226,9 @@ function renderPnl(){
       <div class="card-title">${year}년 손익현황 — 전체 합산 <span class="unit">매출액 대비 손익율 · 단위: 원 · ${yKeys[0].split("-")[1]}월~${yKeys[yKeys.length-1].split("-")[1]}월 합산 (재고는 기초=첫 달·기말=마지막 달)</span></div>
       ${yearTabs}
       <div class="table-wrap"><table class="rpt">
-        <thead><tr><th class="sticky">계정명</th>${ents.map(([k,n])=>`<th colspan="2">${n}</th>`).join("")}</tr></thead>
-        <tbody>${names.map(({n,lv})=>{
-          const bg=lv===0?pnlRowColor(n):null;
-          return `<tr class="${lv===0?"total":""}"${bg?` style="background:${bg}"`:""}><td class="lab sticky" style="padding-left:${8+lv*14}px${bg?";background:"+bg:""}">${n}</td>`+
-            ents.map(([e])=>{const v=agg(n,e);const base=saleN?agg(saleN.n,e):null;
-              return `<td>${fmtS(v)}</td><td style="width:54px;text-align:right;color:var(--sub);font-size:11px;border-left:none">${lv===0&&v!=null&&base?(v/base*100).toFixed(1)+"%":""}</td>`;}).join("")+`</tr>`;
-        }).join("")}</tbody></table></div>
+        ${(()=>{const i6=names.findIndex(x=>x.lv===0&&/^6\./.test(x.n));
+          return pnlHtmlTable(names,ents,agg,i6>=0?i6:null);})()}
+      </table></div>
     </div>`;
   }else{
     const years=[...new Set(keys.map(k=>k.split("-")[0]))];
