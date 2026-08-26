@@ -3946,7 +3946,7 @@ function aiMenuAnswer(best,years,months){
       lastTable={title:`${y}년 ${best.it.name} 판매량`,header:["월","키오스크","포스","배달","합계"],rows};
     }
   }
-  return {html:out.join("<br>"),table:lastTable};
+  return {html:out.join("<br>"),table:lastTable,goto:["bojagi",yrs[yrs.length-1],best.kind==="menu"?"menu":"drinks",(months&&months.length===1)?String(months[0]):"all"]};
 }
 function aiScVal(y,m,entKey){
   if(entKey==="bukchon"){
@@ -3983,7 +3983,7 @@ function aiSalesAnswer(q,years,months){
       lastTable={title:`${y}년 ${entName} 매출`,header:["월","매출(원)"],rows};
     }
   }
-  return {html:out.join("<br>"),table:lastTable};
+  return {html:out.join("<br>"),table:lastTable,goto:["compare",yrs[yrs.length-1],["total","epida","market","bojagi","common"].includes(ek)?ek:"total",""]};
 }
 function aiPnlAnswer(q,years,months){
   const hasPnlWord=/손익|이익|판관비|원가|급여|비용|수수료|재고/.test(aiCompact(q));
@@ -4025,7 +4025,7 @@ function aiPnlAnswer(q,years,months){
       lastTable={title:`${y}년 ${entName} ${best.n}`,header:["월","금액(원)"],rows};
     }
   }
-  return {html:out.join("<br>"),table:lastTable};
+  return {html:out.join("<br>"),table:lastTable,goto:["pnl",yrs[yrs.length-1],(months&&months.length===1)?`${yrs[yrs.length-1]}-${String(months[0]).padStart(2,"0")}`:"",""]};
 }
 const AI_HELP=`이런 걸 물어볼 수 있어요:<br>· "2025년 보자기비빔밥 판매량" (메뉴·주류)<br>· "올해 가장 많이 팔린 메뉴" / "주류 톱3" / "3월에 제일 많이 팔린 메뉴"<br>· "올해 마켓 매출" / "2026년 3월 전체 매출"<br>· "2026년 에피다 영업손익" / "7월 판관비" (관리자)<br>연도·월·사업장을 함께 적으면 더 정확해요.<br>답 다음에 "그래프로 보여줘"라고 하면 방금 결과를 그래프로 그려줘요.`;
 function aiJosa(w,a,b){const ch=String(w).charCodeAt(String(w).length-1);return(ch>=0xAC00&&ch<=0xD7A3&&(ch-0xAC00)%28>0)?a:b;}
@@ -4054,6 +4054,7 @@ function aiRankAnswer(q,years,months){
     const top=[...per].sort((a,b)=>asc?a.v-b.v:b.v-a.v)[0];
     const rows=per.sort((a,b)=>Number(a.m)-Number(b.m)).map(x=>[x.m+"월",x.v]);
     return {html:`${y}년 <b>${best.it.name}</b>${aiJosa(best.it.name,"이","가")} 가장 ${asc?"적게":"많이"} 팔린 달은 <b>${top.m}월</b> — <b>${fmt(top.v)}개</b>예요.`,
+      goto:["bojagi",y,kind==="menu"?"menu":"drinks","all"],
       table:{title:`${y}년 ${best.it.name} 월별 판매량`,header:["월","판매량"],rows}};
   }
   /* 품목별 합산 순위 */
@@ -4073,6 +4074,7 @@ function aiRankAnswer(q,years,months){
   if(topN&&topN>1){
     const rows=ranked.slice(0,topN).map((x,i)=>[(i+1)+"위",x.name,x.v]);
     return {html:menuAmtNote+`${y}년${period} ${asc?(byAmt?"매출이 낮은":"적게 팔린"):vword} ${label} 상위 ${topN}개예요.`,
+      goto:["bojagi",y,kind==="menu"?"menu":"drinks",(months&&ms.length===1)?ms[0]:"all"],
       rankCtx:{kind,y,ids:ranked.slice(0,topN).map(x=>x.id),names:ranked.slice(0,topN).map(x=>x.name),priceOf,label},
       table:{title:`${y}년${period} ${label} ${byAmt?"매출":"판매"} 순위`,header:["순위",label,byAmt?"매출(원)":"판매량"],rows}};
   }
@@ -4080,6 +4082,7 @@ function aiRankAnswer(q,years,months){
   if(ms.length===1){
     const rows=ranked.slice(0,5).map((x,i)=>[(i+1)+"위",x.name,x.v]);
     return {html:menuAmtNote+`${y}년 ${ms[0]}월 가장 ${asc?(byAmt?"매출이 낮은":"적게 팔린"):vword} ${label}는 <b>${top.name}</b> — <b>${fmt(top.v)}${unit}</b>${aiJosa(unit,"이에요","예요")}.`,
+      goto:["bojagi",y,kind==="menu"?"menu":"drinks",ms[0]],
       rankCtx:{kind,y,ids:ranked.slice(0,5).map(x=>x.id),names:ranked.slice(0,5).map(x=>x.name),priceOf,label},
       table:{title:`${y}년 ${ms[0]}월 ${label} ${byAmt?"매출":"판매"} 순위`,header:["순위",label,byAmt?"매출(원)":"판매량"],rows}};
   }
@@ -4087,8 +4090,23 @@ function aiRankAnswer(q,years,months){
   const peak=[...per].sort((a,b)=>b.v-a.v)[0];
   const rows=per.map(x=>[x.m+"월",x.v]);
   return {html:menuAmtNote+`${y}년${period} 보자기에서 가장 ${asc?(byAmt?"매출이 낮은":"적게 팔린"):vword} ${label}는 <b>${top.name}</b> — 총 <b>${fmt(top.v)}${unit}</b>${aiJosa(unit,"이에요","예요")}. 제일 ${byAmt?"매출이 컸던":"많이 나간"} 달은 <b>${peak.m}월(${fmt(peak.v)}${unit})</b>! 월별은 아래 표를 봐주세요.`,
+    goto:["bojagi",y,kind==="menu"?"menu":"drinks","all"],
     rankCtx:{kind,y,ids:ranked.slice(0,3).map(x=>x.id),names:ranked.slice(0,3).map(x=>x.name),priceOf,label},
     table:{title:`${y}년 ${top.name} 월별 ${byAmt?"매출(원)":"판매량"}`,header:["월",byAmt?"매출(원)":"판매량"],rows}};
+}
+window.aiGoto=function(kind,y,a,b){
+  try{
+    if(kind==="compare"){switchTab("compare");if(a)setCompareEntity(a);}
+    else if(kind==="monthly"){switchTab("sales");setSalesSub("monthly");if(y)setMonthlyYear(Number(y));}
+    else if(kind==="market"){switchTab("sales");setSalesSub("market");if(y)setMarketYear(Number(y));}
+    else if(kind==="agency"){switchTab("sales");setSalesSub("agency");if(y)setAgencyYear(Number(y));}
+    else if(kind==="bojagi"){switchTab("sales");setSalesSub("bojagi");if(a)setBojagiSub(a);if(y)S.ui.bojagiYear=Number(y);S.ui.bojagiMonth=b||"all";renderBojagi();}
+    else if(kind==="pnl"){switchTab("pnl");if(a){S.ui.pnlView="month";S.ui.pnlKey=a;}else{S.ui.pnlView="total";S.ui.pnlYear=String(y);}rerenderCurrent();}
+  }catch(e){console.error(e);}
+};
+function aiGotoBtn(kind,y,a,b){
+  const arg=[kind,y,a,b].map(x=>x==null?"":String(x)).map(x=>`'${x.replace(/'/g,"")}'`).join(",");
+  return `<div style="margin-top:5px"><button class="btn btn-sm" onclick="aiGoto(${arg})">📍 앱에서 바로 보기</button></div>`;
 }
 function aiFollowRank(q){
   const R=AI_CTX.rank;if(!R)return null;
@@ -4106,6 +4124,7 @@ function aiFollowRank(q){
   rows.push(tot);
   const unit=wantAmt?"매출":"판매량";
   return {html:`${R.y}년 <b>${names.join(", ")}</b>의 월별 ${unit}이에요.`,
+    goto:["bojagi",R.y,R.kind==="menu"?"menu":"drinks","all"],
     table:{title:`${R.y}년 ${R.label} 톱${ids.length} 월별 ${unit}${wantAmt?"(원)":""}`,header:["월",...names],rows}};
 }
 function aiAnswer(q){
@@ -4115,6 +4134,11 @@ function aiAnswer(q){
   if(!years.length&&AI_CTX.years&&AI_CTX.years.length)years=AI_CTX.years; /* 직전 연도 이어받기 */
   const months=aiMonths(q);
   let item=aiFindItem(q);
+  if(item&&/매출|손익|이익/.test(c)){
+    /* '보자기꽃밥 매출'처럼 사업장 이름 안에 메뉴명이 포함된 경우엔 사업장 질문으로 */
+    const inEnt=AI_ENT_DEFS.some(([k,als])=>als.some(al=>{const ac=aiCompact(al);return ac.indexOf(aiCompact(item.it.name))>=0&&c.indexOf(ac)>=0;}));
+    if(inEnt)item=null;
+  }
   if(!item&&AI_CTX.item&&/판매량|몇개|수량/.test(c))item=AI_CTX.item; /* 직전 메뉴 이어받기 */
   let a=aiFollowRank(q);
   if(!a)a=aiRankAnswer(q,years,months);
@@ -4137,6 +4161,7 @@ function aiAnswer(q){
   if(aiFindItem(q))AI_CTX.item=aiFindItem(q);
   if(a.table)AI_CTX.lastTable=a.table;
   if(a.rankCtx)AI_CTX.rank=a.rankCtx;
+  if(a.goto)a.html+=aiGotoBtn(a.goto[0],a.goto[1],a.goto[2],a.goto[3]);
   if(wantGraph&&a.table)a.graph=true;
   return a;
 }
