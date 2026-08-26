@@ -1579,6 +1579,8 @@ function xc(v, o = {}) {
     const key = { l: "left", r: "right", t: "top", b: "bottom" }[ch];
     if (key) cell.s.border[key] = { style: "medium", color: { rgb: "000000" } };
   }
+  if (o.f) { cell.f = o.f; cell.t = "n"; delete cell.v; }
+  if (o.z) cell.z = o.z;
   return cell;
 }
 const xh = (v, fill) => xc(v, { bold: true, align: "center", fill });
@@ -1925,6 +1927,55 @@ async function exportSalesAll(){
 }
 window.exportSalesAll=exportSalesAll;
 /* ---- 탭별 내보내기 ---- */
+async function expCompareAll(){
+  try{
+    toast("엑셀 파일 만드는 중…");
+    const ENTS=[["total","꽃밥이야기"],["epida","꽃밥에피다"],["market","꽃밥마켓"],["bojagi","보자기꽃밥"]];
+    const colL=n=>{let t="";n++;while(n>0){const m2=(n-1)%26;t=String.fromCharCode(65+m2)+t;n=Math.floor((n-1)/26);}return t;};
+    const PM='[Color10]+0.0%;[Red]-0.0%;0.0%';
+    const yrsAll=Object.keys(S.data.salesComparison||{}).sort((a,b)=>Number(b)-Number(a));
+    const sheets=[];
+    for(const[ek,en]of ENTS){
+      const yrs=yrsAll.filter(y=>MONTHS.some(m=>scGet(y,m,ek)!=null));
+      if(!yrs.length)continue;
+      const head=[xh("월별",XF.GRAY)];
+      yrs.forEach(y=>{head.push(xh(String(y),XF.GRAY));head.push(xh("증감",XF.GRAY));});
+      const rows=[[xc(`${en} — 국세청기준 월별매출 (부가세포함/단위: 원)`,{bold:true,sz:12,align:"left"})],head];
+      MONTHS.forEach((m,mi)=>{
+        const R=[xh(m+"월")];const rr=3+mi;
+        yrs.forEach((y,yi)=>{
+          const v=scGet(y,m,ek);
+          R.push(xc(v==null?"":v,{fmt:"n"}));
+          if(yi<yrs.length-1){
+            const a2=colL(1+yi*2)+rr,b2=colL(1+yi*2+2)+rr;
+            R.push(xc("",{f:`IF(OR(N(${a2})=0,N(${b2})=0),"",(${a2}-${b2})/${b2})`,z:PM,align:"center"}));
+          }else R.push(xc(""));
+        });
+        rows.push(R);
+      });
+      const TR=[xh("합계",XF.GRAY)];
+      yrs.forEach((y,yi)=>{
+        const cv=colL(1+yi*2);
+        TR.push(xc("",{f:`SUM(${cv}3:${cv}14)`,fmt:"n",bold:true}));
+        if(yi<yrs.length-1){
+          const cp=colL(1+yi*2+2);
+          const B=`${cv}3:${cv}14`,D=`${cp}3:${cp}14`;
+          const sp=X=>`SUMPRODUCT((${B}>0)*(${D}>0)*${X})`;
+          TR.push(xc("",{f:`IF(${sp(D)}=0,"",(${sp(B)}-${sp(D)})/${sp(D)})`,z:PM,bold:true,align:"center"}));
+        }else TR.push(xc(""));
+      });
+      rows.push(TR);
+      const widths=[8];yrs.forEach(()=>{widths.push(17.5);widths.push(7.1);});
+      const vSplit=[0];yrs.forEach((y,yi)=>vSplit.push(2+yi*2));
+      sheets.push(applyFrame({name:en,rows,widths},
+        {headerEnd:1,totalRows:[rows.length-1],vSplit,titleSz:12,titleH:25.5,headerH:24.8,dataH:25.1}));
+    }
+    if(!sheets.length){toast("매출비교 데이터가 없어요",true);return;}
+    await makeWorkbook(sheets,"매출비교_전체.xlsx");
+    toast("매출비교 전체 엑셀을 내려받았어요 (증감률은 수식이라 숫자를 고치면 자동 재계산돼요)");
+  }catch(e){console.error(e);toast(e.message||"엑셀 생성 실패",true);}
+}
+window.expCompareAll=expCompareAll;
 async function exportTab(tab) {
   try {
     toast("엑셀 파일 만드는 중…");
@@ -2413,7 +2464,7 @@ function renderCompare() {
   <div class="card">
     <div class="card-head">
       <div class="card-title">${entInfo.label} — 국세청기준 월별매출 <span class="unit">부가세포함 · 단위: 원</span></div>
-      <div class="card-actions">${canEdit ? editBtn() : ""} ${canEdit ? adminBtn(`openCompareForm(null,null,'${ent}')`) : ""}</div>
+      <div class="card-actions"><button class="btn btn-sm" onclick="expCompareAll()">📥 엑셀 전체 받기</button> ${canEdit ? editBtn() : ""} ${canEdit ? adminBtn(`openCompareForm(null,null,'${ent}')`) : ""}</div>
     </div>
     <div class="table-wrap">
       <table class="rpt"><thead>${head1}</thead><tbody>${rows}<tr class="total">${trT}</tr></tbody></table>
@@ -3851,30 +3902,35 @@ function aiRankAnswer(q,years,months){
       table:{title:`${y}년 ${best.it.name} 월별 판매량`,header:["월","판매량"],rows}};
   }
   /* 품목별 합산 순위 */
-  const nameOf={};items.forEach(it=>nameOf[it.id]=it.name);
+  const wantAmt=/(매출|금액|매출액)/.test(c);
+  const nameOf={},priceOf={};items.forEach(it=>{nameOf[it.id]=it.name;priceOf[it.id]=it.price||0;});
   const sums={};
   for(const m of ms){const md=ydoc.months[m]||{};for(const id in md)sums[id]=(sums[id]||0)+itemSum(md[id]);}
-  const ranked=Object.keys(sums).filter(id=>sums[id]>0).map(id=>({id,name:nameOf[id]||"(삭제된 메뉴)",v:sums[id]})).sort((a,b)=>asc?a.v-b.v:b.v-a.v);
+  const byAmt=wantAmt&&kind==="drink";
+  const ranked=Object.keys(sums).filter(id=>sums[id]>0).map(id=>({id,name:nameOf[id]||"(삭제된 메뉴)",v:byAmt?sums[id]*(priceOf[id]||0):sums[id],qty:sums[id]})).sort((a,b)=>asc?a.v-b.v:b.v-a.v);
+  const unit=byAmt?"원":"개";
+  const menuAmtNote=(wantAmt&&kind==="menu")?"메뉴는 단가가 등록돼 있지 않아 <b>판매량 기준</b>으로 보여드려요.<br>":"";
   if(!ranked.length)return {html:`${y}년${months?` ${ms.join(",")}월`:""} ${label} 판매 데이터가 없어요.`};
   const period=months&&months.length?(ms.length===1?` ${ms[0]}월`:` ${ms[0]}~${ms[ms.length-1]}월`):"";
   const nM=c.match(/(?:톱|top|상위)(\d+)/)||c.match(/(\d+)(?:위|가지|개만)/);
   const topN=nM?Math.min(Number(nM[1]),ranked.length):null;
+  const vword=byAmt?"매출이 높은":"많이 팔린";
   if(topN&&topN>1){
     const rows=ranked.slice(0,topN).map((x,i)=>[(i+1)+"위",x.name,x.v]);
-    return {html:`${y}년${period} ${asc?"적게":"많이"} 팔린 ${label} 상위 ${topN}개예요.`,
-      table:{title:`${y}년${period} ${label} 판매 순위`,header:["순위",label,"판매량"],rows}};
+    return {html:menuAmtNote+`${y}년${period} ${asc?(byAmt?"매출이 낮은":"적게 팔린"):vword} ${label} 상위 ${topN}개예요.`,
+      table:{title:`${y}년${period} ${label} ${byAmt?"매출":"판매"} 순위`,header:["순위",label,byAmt?"매출(원)":"판매량"],rows}};
   }
   const top=ranked[0];
   if(ms.length===1){
     const rows=ranked.slice(0,5).map((x,i)=>[(i+1)+"위",x.name,x.v]);
-    return {html:`${y}년 ${ms[0]}월 가장 ${asc?"적게":"많이"} 팔린 ${label}는 <b>${top.name}</b> — <b>${fmt(top.v)}개</b>예요.`,
-      table:{title:`${y}년 ${ms[0]}월 ${label} 판매 순위`,header:["순위",label,"판매량"],rows}};
+    return {html:menuAmtNote+`${y}년 ${ms[0]}월 가장 ${asc?(byAmt?"매출이 낮은":"적게 팔린"):vword} ${label}는 <b>${top.name}</b> — <b>${fmt(top.v)}${unit}</b>${aiJosa(unit,"이에요","예요")}.`,
+      table:{title:`${y}년 ${ms[0]}월 ${label} ${byAmt?"매출":"판매"} 순위`,header:["순위",label,byAmt?"매출(원)":"판매량"],rows}};
   }
-  const per=ms.map(m=>({m,v:itemSum((ydoc.months[m]||{})[top.id])})).filter(x=>x.v>0).sort((a,b)=>Number(a.m)-Number(b.m));
+  const per=ms.map(m=>({m,q:itemSum((ydoc.months[m]||{})[top.id])})).filter(x=>x.q>0).map(x=>({m:x.m,v:byAmt?x.q*(priceOf[top.id]||0):x.q})).sort((a,b)=>Number(a.m)-Number(b.m));
   const peak=[...per].sort((a,b)=>b.v-a.v)[0];
   const rows=per.map(x=>[x.m+"월",x.v]);
-  return {html:`${y}년${period} 보자기에서 가장 ${asc?"적게":"많이"} 팔린 ${label}는 <b>${top.name}</b> — 총 <b>${fmt(top.v)}개</b>예요. 제일 많이 나간 달은 <b>${peak.m}월(${fmt(peak.v)}개)</b>! 월별은 아래 표를 봐주세요.`,
-    table:{title:`${y}년 ${top.name} 월별 판매량`,header:["월","판매량"],rows}};
+  return {html:menuAmtNote+`${y}년${period} 보자기에서 가장 ${asc?(byAmt?"매출이 낮은":"적게 팔린"):vword} ${label}는 <b>${top.name}</b> — 총 <b>${fmt(top.v)}${unit}</b>${aiJosa(unit,"이에요","예요")}. 제일 ${byAmt?"매출이 컸던":"많이 나간"} 달은 <b>${peak.m}월(${fmt(peak.v)}${unit})</b>! 월별은 아래 표를 봐주세요.`,
+    table:{title:`${y}년 ${top.name} 월별 ${byAmt?"매출(원)":"판매량"}`,header:["월",byAmt?"매출(원)":"판매량"],rows}};
 }
 function aiAnswer(q){
   const wantGraph=/그래프|차트/.test(q);
@@ -3886,8 +3942,8 @@ function aiAnswer(q){
   if(!item&&AI_CTX.item&&/판매량|몇개|수량/.test(c))item=AI_CTX.item; /* 직전 메뉴 이어받기 */
   let a=aiRankAnswer(q,years,months);
   if(!a&&item)a=aiMenuAnswer(item,years,months);
-  else if(/도움|사용법|뭐할|뭘할|help/.test(c))a={html:AI_HELP};
-  else{
+  if(!a&&/도움|사용법|뭐할|뭘할|help/.test(c))a={html:AI_HELP};
+  if(!a){
     const pnlTry=(c.indexOf("매출")<0||/손익|이익|판관비|원가|급여|비용/.test(c))?aiPnlAnswer(q,years,months):null;
     if(pnlTry)a=pnlTry;
     else if(c.indexOf("매출")>=0)a=aiSalesAnswer(q,years,months);
@@ -3973,7 +4029,7 @@ window.aiToggle=function(){
   document.body.appendChild(fab);
   const panel=document.createElement("div");
   panel.id="aiPanel";
-  panel.style.cssText="position:fixed;right:18px;bottom:70px;z-index:9999;width:min(360px,92vw);height:min(560px,72vh);background:#fff;border:1px solid rgba(0,0,0,0.15);border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,0.25);display:none;flex-direction:column;overflow:hidden";
+  panel.style.cssText="position:fixed;right:18px;top:16px;bottom:70px;z-index:9999;width:min(380px,92vw);background:#fff;border:1px solid rgba(0,0,0,0.15);border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,0.25);display:none;flex-direction:column;overflow:hidden";
   panel.innerHTML=`
     <div style="background:#2f6b3f;color:#fff;padding:10px 14px;font-weight:700;display:flex;justify-content:space-between;align-items:center">💬 데이터 도우미 <button onclick="aiToggle()" style="background:none;border:none;color:#fff;font-size:16px;cursor:pointer">✕</button></div>
     <div id="aiMsgs" style="flex:1;overflow-y:auto;padding:10px"></div>
