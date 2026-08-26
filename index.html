@@ -2948,9 +2948,15 @@ function renderBojagiMenu(year, month, yearSel, monthSel) {
         <td>${q && tot.sum ? (sum / tot.sum * 100).toFixed(1) + "%" : ""}</td></tr>`;
       }
     }
-    return `<div style="flex:1;min-width:330px"><div class="table-wrap"><table class="rpt">
+    const st = { k: 0, p: 0, d: 0 };
+    for (const it of sideItems) { const q = md[it.id]; if (q) { st.k += q.k || 0; st.p += q.p || 0; st.d += q.d || 0; } }
+    const sSum = st.k + st.p + st.d;
+    const cg = edMode() ? "" : `<colgroup><col style="width:26%"><col style="width:15%"><col style="width:13%"><col style="width:13%"><col style="width:16%"><col style="width:17%"></colgroup>`;
+    return `<div style="flex:1;min-width:330px"><div class="table-wrap"><table class="rpt"${edMode() ? "" : ` style="table-layout:fixed;width:100%"`}>${cg}
       <thead><tr><th class="l sticky">메뉴</th><th>키오스크</th><th>포스</th><th>배달</th><th>소계</th><th>점유율</th></tr></thead>
-      <tbody>${rows}</tbody></table></div></div>`;
+      <tbody>${rows}
+      <tr class="total"><td class="l sticky">소계</td><td>${fmt(st.k)}</td><td>${fmt(st.p)}</td><td>${fmt(st.d)}</td><td><b>${fmt(sSum)}</b></td><td>${tot.sum ? (sSum / tot.sum * 100).toFixed(1) + "%" : ""}</td></tr>
+      </tbody></table></div></div>`;
   };
   const mTot = {}; let grand = 0;
   MONTHS.forEach((m) => { const t = bojagiMonthTotal(year, m); mTot[m] = t.sum || 0; grand += t.sum || 0; });
@@ -2980,9 +2986,7 @@ function renderBojagiMenu(year, month, yearSel, monthSel) {
   <div class="card">
     <div class="card-title">보자기 메뉴별 판매현황 — ${year}년 ${month}월 <span class="unit">단위: 개</span></div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start">${sideTable(leftCats)}${sideTable(rightCats)}</div>
-    <div class="table-wrap" style="margin-top:8px"><table class="rpt"><tbody>
-      <tr class="total trp"><td class="l sticky">합계</td><td>키오스크 ${fmt(tot.k)}</td><td>포스 ${fmt(tot.p)}</td><td>배달 ${fmt(tot.d)}</td><td><b>소계 ${fmt(tot.sum)}</b></td><td>100%</td></tr>
-    </tbody></table></div>
+    <div style="margin-top:10px;text-align:right;font-size:13.5px;background:#FBE5D6;border:1px solid #e0c4ad;border-radius:8px;padding:8px 14px"><b>전체 합계</b> &nbsp;키오스크 ${fmt(tot.k)} · 포스 ${fmt(tot.p)} · 배달 ${fmt(tot.d)} · <b>소계 ${fmt(tot.sum)}개</b></div>
   </div>
   <div class="card">
     <div class="card-title">${year}년 ${month}월 메뉴별 판매량</div>
@@ -3046,9 +3050,15 @@ function renderBojagiDrinks(year, month, yearSel, monthSel) {
       <td>${edMode() ? edNum(q?.k, ds("k")) : (q ? fmt(q.k) : "")}</td><td>${edMode() ? edNum(q?.p, ds("p")) : (q ? fmt(q.p) : "")}</td><td>${edMode() ? edNum(q?.d, ds("d")) : (q ? fmt(q.d) : "")}</td>
       <td><b>${q ? fmt(sum) : ""}</b></td><td>${q && tot.sum ? (sum / tot.sum * 100).toFixed(1) + "%" : ""}</td></tr>`;
     });
-    return `<div style="flex:1;min-width:330px"><div class="table-wrap"><table class="rpt">
+    const st = { k: 0, p: 0, d: 0 };
+    for (const it of sideItems) { const q = md[it.id]; if (q) { st.k += q.k || 0; st.p += q.p || 0; st.d += q.d || 0; } }
+    const sSum = st.k + st.p + st.d;
+    const cg = edMode() ? "" : `<colgroup><col style="width:26%"><col style="width:15%"><col style="width:13%"><col style="width:13%"><col style="width:16%"><col style="width:17%"></colgroup>`;
+    return `<div style="flex:1;min-width:330px"><div class="table-wrap"><table class="rpt"${edMode() ? "" : ` style="table-layout:fixed;width:100%"`}>${cg}
       <thead><tr>${edMode() ? "<th>단가</th>" : ""}<th class="l">품목</th><th>키오스크</th><th>포스</th><th>배달</th><th>소계</th><th>점유율</th></tr></thead>
-      <tbody>${rows}</tbody></table></div></div>`;
+      <tbody>${rows}
+      <tr class="total">${edMode() ? "<td></td>" : ""}<td class="l">소계</td><td>${fmt(st.k)}</td><td>${fmt(st.p)}</td><td>${fmt(st.d)}</td><td><b>${fmt(sSum)}</b></td><td>${tot.sum ? (sSum / tot.sum * 100).toFixed(1) + "%" : ""}</td></tr>
+      </tbody></table></div></div>`;
   };
   const mTot = {}; let grand = 0;
   MONTHS.forEach((m) => { const t = drinksMonthTotal(year, m); mTot[m] = t.sum || 0; grand += t.sum || 0; });
@@ -3071,9 +3081,7 @@ function renderBojagiDrinks(year, month, yearSel, monthSel) {
       <div class="card-actions">${yearSel} ${monthSel} ${editBtn()} ${adminBtn(`openBojagiDrinksForm(${year},'${month}')`)}</div>
     </div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start">${sideTable(sides[0])}${sideTable(sides[1])}</div>
-    <div class="table-wrap" style="margin-top:8px"><table class="rpt"><tbody>
-      <tr class="total"><td class="l sticky">합계</td><td>키오스크 ${fmt(tot.k)}</td><td>포스 ${fmt(tot.p)}</td><td>배달 ${fmt(tot.d)}</td><td><b>소계 ${fmt(tot.sum)}</b></td><td>100%</td></tr>
-    </tbody></table></div>
+    <div style="margin-top:10px;text-align:right;font-size:13.5px;background:#FBE5D6;border:1px solid #e0c4ad;border-radius:8px;padding:8px 14px"><b>전체 합계</b> &nbsp;키오스크 ${fmt(tot.k)} · 포스 ${fmt(tot.p)} · 배달 ${fmt(tot.d)} · <b>소계 ${fmt(tot.sum)}개</b></div>
     <div class="footnote">단가는 "표에서 바로입력" 모드를 켜면 표에 나타나 직접 고칠 수 있어요 (설정 탭의 품목 관리에서도 가능).</div>
   </div>
   <div class="card">
