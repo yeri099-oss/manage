@@ -1323,12 +1323,13 @@ window.jsonRestore=async function(inp){
 /* ── 이달의 할 일 (요약탭) ── */
 function homeChecklist(){
   try{
+    if(S.user?.role!=="admin")return "";
     const now=new Date();const Y=now.getFullYear(),M=now.getMonth()+1;
     let ly=Y,lm=M-1;if(lm===0){ly=Y-1;lm=12;}
     const pad=n=>String(n).padStart(2,"0");
     const items=[];
     const cfmM=(window.__cfmApp&&window.__cfmApp.MONTHS)||{};
-    items.push({name:`${lm}월 매출확정`,ok:!!cfmM[`${ly}-${pad(lm)}`],go:`(function(){var b=document.getElementById('cfmTabBtn');if(b)b.click();else toast('매출확정은 관리자 계정에서 보여요',true);})()`});
+    items.push({name:`${lm}월 매출확정`,ok:!!(cfmM[`${String(ly).slice(2)}${pad(lm)}`]||cfmM[`${ly}-${pad(lm)}`]||cfmM[`${ly}${pad(lm)}`]),go:`(function(){var b=document.getElementById('cfmTabBtn');if(b)b.click();else toast('매출확정은 관리자 계정에서 보여요',true);})()`});
     items.push({name:`${lm}월 국세청 매출 반영`,ok:scGet(String(ly),String(lm),"total")!=null,go:`switchTab('compare')`});
     items.push({name:`${lm}월 매출현황 입력`,ok:!!(S.data.monthly[ly]&&S.data.monthly[ly].months&&S.data.monthly[ly].months[lm]),go:`switchTab('sales');setSalesSub('monthly')`});
     items.push({name:`${lm}월 손익 업로드`,ok:!!(S.data.pnl&&S.data.pnl[`${ly}-${pad(lm)}`]),go:`switchTab('pnl')`});
