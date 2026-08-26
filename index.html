@@ -1275,6 +1275,83 @@ function setHomeYM(v) {
   S.ui.homeMonth = m;
   renderHome();
 }
+window.jsonBackup=function(){
+  try{
+    const cfmMonths=(window.__cfmApp&&window.__cfmApp.MONTHS)?window.__cfmApp.MONTHS:{};
+    const payload={app:"kkotbap-sales",v:1,savedAt:new Date().toISOString(),data:S.data,cfmMonths};
+    const blob=new Blob([JSON.stringify(payload)],{type:"application/json"});
+    const a=document.createElement("a");
+    const d=new Date();
+    a.href=URL.createObjectURL(blob);
+    a.download=`꽃밥데이터_${String(d.getFullYear()).slice(2)}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}.json`;
+    document.body.appendChild(a);a.click();
+    setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1500);
+    try{localStorage.setItem("kb_lastBackup",`${d.getFullYear()}-${d.getMonth()+1}`);}catch(e){}
+    toast("백업 파일을 내려받았어요 — 컴퓨터에 안전하게 보관해주세요");
+  }catch(e){console.error(e);toast(e.message||"백업 실패",true);}
+};
+window.jsonRestore=async function(inp){
+  const f=inp.files&&inp.files[0];inp.value="";
+  if(!f)return;
+  try{
+    const p=JSON.parse(await f.text());
+    if(!p||p.app!=="kkotbap-sales"||!p.data)throw new Error("이 앱의 백업 파일이 아니에요");
+    const when=p.savedAt?p.savedAt.slice(0,10):"?";
+    if(!confirm(`${when} 백업으로 복원할까요?\n지금 앱의 모든 데이터가 백업 시점 내용으로 바뀌어요.`))return;
+    toast("복원 중… 창을 닫지 말고 잠시만 기다려주세요");
+    for(const col of COLS){S.data[col]=p.data[col]||{};for(const y in S.data[col])queueSave(col,y);}
+    S.data.menuItems=p.data.menuItems||[];S.data.drinkItems=p.data.drinkItems||[];
+    await flushSaves();
+    try{await saveConfig("bojagiMenuItems",S.data.menuItems);await saveConfig("bojagiDrinkItems",S.data.drinkItems);}catch(e){console.warn(e);}
+    if(p.cfmMonths&&Object.keys(p.cfmMonths).length){
+      try{localStorage.setItem("ssv2_months",JSON.stringify(p.cfmMonths));}catch(e){}
+      if(window.__cfmApp&&window.__cfmApp.MONTHS){
+        const M=window.__cfmApp.MONTHS;
+        for(const k in M)delete M[k];
+        Object.assign(M,p.cfmMonths);
+      }
+      if(typeof db!=="undefined"&&db&&!IS_DEMO){
+        for(const ym in p.cfmMonths){
+          try{await db.collection("salesStatus_months").doc(ym).set({v:1,savedAt:new Date().toISOString(),data:JSON.parse(JSON.stringify(p.cfmMonths[ym]))});}catch(e){console.warn("확정 복원",ym,e.message);}
+        }
+      }
+    }
+    toast("복원 완료! 화면을 새로 불러와요");
+    setTimeout(()=>location.reload(),900);
+  }catch(e){console.error(e);toast(e.message||"복원 실패",true);}
+};
+/* ── 이달의 할 일 (요약탭) ── */
+function homeChecklist(){
+  try{
+    const now=new Date();const Y=now.getFullYear(),M=now.getMonth()+1;
+    let ly=Y,lm=M-1;if(lm===0){ly=Y-1;lm=12;}
+    const pad=n=>String(n).padStart(2,"0");
+    const items=[];
+    const cfmM=(window.__cfmApp&&window.__cfmApp.MONTHS)||{};
+    items.push({name:`${lm}월 매출확정`,ok:!!cfmM[`${ly}-${pad(lm)}`],go:`(function(){var b=document.getElementById('cfmTabBtn');if(b)b.click();else toast('매출확정은 관리자 계정에서 보여요',true);})()`});
+    items.push({name:`${lm}월 국세청 매출 반영`,ok:scGet(String(ly),String(lm),"total")!=null,go:`switchTab('compare')`});
+    items.push({name:`${lm}월 매출현황 입력`,ok:!!(S.data.monthly[ly]&&S.data.monthly[ly].months&&S.data.monthly[ly].months[lm]),go:`switchTab('sales');setSalesSub('monthly')`});
+    items.push({name:`${lm}월 손익 업로드`,ok:!!(S.data.pnl&&S.data.pnl[`${ly}-${pad(lm)}`]),go:`switchTab('pnl')`});
+    const cand=[];
+    for(const yy of[Y-1,Y])for(const qm of[3,6,9,12]){
+      const due=new Date(qm===12?yy+1:yy,qm===12?0:qm,17);
+      if(due<=now)cand.push({yy,qm,due});
+    }
+    if(cand.length){
+      cand.sort((a,b)=>a.due-b.due);
+      const q=cand[cand.length-1];
+      const ms=[q.qm-2,q.qm-1,q.qm];
+      const ver=(S.data.agency[q.yy]||{}).verified||{};
+      items.push({name:`판매대행 ${q.yy}년 ${ms[0]}~${ms[2]}월 국세청 검증`,ok:ms.every(m=>!!ver[m]),go:`switchTab('sales');setSalesSub('agency');setAgencyYear(${q.yy})`});
+    }
+    let bk=false;try{bk=localStorage.getItem("kb_lastBackup")===`${Y}-${M}`;}catch(e){}
+    items.push({name:"이달 데이터 백업",ok:bk,go:`switchTab('settings')`});
+    const done=items.filter(x=>x.ok).length;
+    return `<div class="card"><div class="card-title">이달의 할 일 <span class="unit">${done}/${items.length} 완료 · 데이터에서 자동 감지</span></div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;padding:6px 2px 2px">${items.map(x=>
+        `<button class="btn btn-sm" style="border-radius:20px;${x.ok?"background:#E2EFDA;border-color:#b5cba7":"background:#FFF7E6;border-color:#e8d49a"}" onclick="${x.go.replace(/"/g,"&quot;")}">${x.ok?"✅":"⏳"} ${x.name}</button>`).join("")}</div></div>`;
+  }catch(e){console.error(e);return "";}
+}
 function renderHome() {
   const el = document.getElementById("tab-home");
   const ref = summaryRef();
@@ -1334,7 +1411,7 @@ function renderHome() {
   const settleHtml = settleMonths[nowM]
     ? `<div class="check-box">📌 이번 달 17일경 온라인 판매 ${settleMonths[nowM]}분 국세청 정산자료가 나와요. 반영 후 월별·판매대행 탭을 업데이트해주세요.</div>` : "";
   const targetHtml = "";
-  el.innerHTML = `
+  el.innerHTML = homeChecklist() + `
   <div class="card-head" style="margin-bottom:12px">
     <div class="card-title" style="font-size:17px">${year}년 ${month}월 요약</div>
     <div class="card-actions">
@@ -3650,6 +3727,42 @@ window.pnlFilesApply=async function(){
   }catch(e){if(err){err.style.display="block";err.textContent=e.message||"반영 실패";}}
 };
 
+function pnlHighlights(key,keys){
+  try{
+    const P=S.data.pnl||{};
+    const idx=keys.indexOf(key);
+    if(idx<=0)return "";
+    const pk=keys[idx-1];
+    const cur=P[key],prv=P[pk];
+    if(!cur||!prv)return "";
+    const find=(doc,re)=>{const r=doc.rows.find(x=>x.lv===0&&re.test(x.n));return r?r.v.total:null;};
+    const line=(nm,c,p)=>{
+      if(c==null||p==null)return "";
+      const d=c-p,pct=p?(d/Math.abs(p)*100):null;
+      const cls=d>=0?"#1c6b2f":"#C00000";
+      return `<span style="margin-right:16px">${nm} <b>${fmt(c)}</b> <span style="color:${cls};font-weight:700">(${d>=0?"+":""}${fmt(d)}${pct!=null?` · ${d>=0?"+":""}${pct.toFixed(1)}%`:""})</span></span>`;
+    };
+    const sc=find(cur,/^1\./),sp=find(prv,/^1\./);
+    const oc=find(cur,/영업손익|영업이익/),op=find(prv,/영업손익|영업이익/);
+    const alerts=[];
+    for(const r of cur.rows){
+      if(r.lv===0)continue;
+      if(/재고/.test(r.n))continue;
+      const c=r.v.total;const pr=prv.rows.find(x=>x.n===r.n);const p=pr?pr.v.total:null;
+      if(c==null||p==null||!p)continue;
+      const d=c-p,pct=d/Math.abs(p)*100;
+      if(Math.abs(d)>=300000&&Math.abs(pct)>=30)alerts.push({n:r.n.trim(),c,p,d,pct});
+    }
+    alerts.sort((a,b)=>Math.abs(b.d)-Math.abs(a.d));
+    const al=alerts.slice(0,3).map(x=>`<div style="font-size:12.5px;margin-top:3px">· <b>${x.n}</b> ${fmt(x.p)} → ${fmt(x.c)} <span style="color:${x.d>0?"#C00000":"#1c6b2f"};font-weight:700">(${x.d>0?"+":""}${x.pct.toFixed(0)}%)</span></div>`).join("");
+    const top=line("매출",sc,sp)+line("영업손익",oc,op);
+    if(!top&&!al)return "";
+    return `<div class="card"><div class="card-title">전월(${pk.split("-")[0]}년 ${Number(pk.split("-")[1])}월) 대비 <span class="unit">꽃밥이야기 전체 기준</span></div>
+      <div style="padding:4px 2px;font-size:13.5px">${top}</div>
+      ${al?`<div style="margin-top:6px;padding:8px 10px;background:#FFF7E6;border:1px solid #e8d49a;border-radius:8px"><b style="font-size:12.5px">전월보다 크게 변한 항목 (±30% & ±30만원 이상)</b>${al}</div>`:""}
+    </div>`;
+  }catch(e){console.error(e);return "";}
+}
 function pnlHtmlTable(list,ents,val,totalOnlyFrom){
   const sale=list.find(x=>x.lv===0&&x.n.indexOf("매출")>=0);
   const groups=pnlPctGroups(list);
@@ -3782,7 +3895,7 @@ function renderPnl(){
     const ents=PNL_ENTS.filter(([k])=>doc.rows.some(r=>r.v[k]!=null));
     const saleRow=doc.rows.find(r=>r.n.indexOf("매출")>=0&&r.lv===0);
     const monthTabs=`<div class="subtabs"><select class="ctl" onchange="pnlSetKey(this.value)">${[...keys].reverse().map(k=>`<option value="${k}" ${k===key?"selected":""}>${k.split("-")[0]}년 ${k.split("-")[1]}월</option>`).join("")}</select></div>`;
-    body=`<div class="card">
+    body=pnlHighlights(key,keys)+`<div class="card">
       <div class="card-head"><div class="card-title">${ky}년 ${km}월 손익현황 <span class="unit">매출액 대비 손익율 · 단위: 원</span></div>
       ${canEdit?`<button class="btn btn-sm" onclick="pnlDelete('${key}')">이 달 삭제</button>`:""}</div>
       ${monthTabs}
@@ -4722,6 +4835,9 @@ async function renderSettings() {
     <div class="card-head"><div class="card-title">데이터 관리</div></div>
     <div class="inline-form" style="margin-top:0">
       <button class="btn" onclick="exportExcel()">📥 엑셀로 백업 다운로드</button>
+      <button class="btn" onclick="jsonBackup()">💾 백업 파일 받기 (복원용)</button>
+      <button class="btn" onclick="document.getElementById('jsonRestoreFile').click()">♻️ 백업에서 복원</button>
+      <input type="file" id="jsonRestoreFile" accept=".json,application/json" style="display:none" onchange="jsonRestore(this)">
     </div>
     <div class="footnote">앱의 모든 데이터(매출비교·월별·일평균·마켓·보자기·판매대행·목표)를 엑셀 파일로 내려받아요. 정기적으로 백업해두면 안전해요.</div>
   </div>
@@ -6530,6 +6646,25 @@ function cfmVerifyHtml(m){
     +'③ 전체 합계 <b>'+fmt(V.F16)+'</b> = 마켓포스매출 계 '+fmt(V.F11)+' + 보자기포스 소계 '+fmt(V.F15)+'<br>'
     +'④ 소매 <b>'+fmt(V.F19)+'</b> = 전체 '+fmt(V.F16)+' − 국세청 카드 '+fmt(V.F17)+' − 현금영수증 '+fmt(V.F18)+'<br>'
     +'⑤ 사업부로 다시 나누면: 보자기 '+fmt(V.F26)+' + 온라인 '+fmt(V.F30)+' + 마켓 '+fmt(V.F34)+' = <b>'+fmt(V.F35)+'</b> (③과 같아야 해요)</div>';
+  /* 월별 검증 추이: 저장된 모든 달을 같은 기준으로 재계산 */
+  const yms=Object.keys(MONTHS).sort();
+  if(yms.length>1){
+    h+='<h2 style="margin-top:14px">📈 월별 검증 추이 <small>저장된 달을 전부 같은 기준으로 다시 계산한 값</small></h2>';
+    h+='<table class="g" style="margin-top:6px"><tr><th>월</th><th>외상 면세 차이</th><th>소매 (면세)</th><th>마켓 소매</th><th style="width:50px">판정</th></tr>';
+    for(const ym of yms){
+      try{
+        const mm=MONTHS[ym],VV=compute(mm),II=deriveInputs(mm);
+        const osGap=(VV.E5+VV.E6+VV.E7)-II.kb.m;
+        const ok=osGap>=-2&&VV.F19>=0&&VV.E19>=-2&&VV.F33>=-2;
+        h+='<tr'+(ym===CUR?' style="background:#FFF7E6"':'')+'><td class="lb">'+ymLabel(ym)+(ym===CUR?' (이번)':'')+'</td>'
+          +'<td class="au"'+(osGap<-2?' style="color:#b91c1c;font-weight:700"':'')+'>'+fmt(osGap)+'</td>'
+          +'<td class="au">'+fmt(VV.F19)+' ('+fmt(VV.E19)+')</td>'
+          +'<td class="au">'+fmt(VV.F33)+'</td>'
+          +'<td class="au" style="font-size:15px">'+(ok?'✓':'⚠')+'</td></tr>';
+      }catch(e){h+='<tr><td class="lb">'+ymLabel(ym)+'</td><td colspan="4" class="au">계산 불가 ('+esc(e.message||'')+')</td></tr>';}
+    }
+    h+='</table><div class="hint" style="margin-top:6px">외상 면세 차이 = 외상·포인트·기타수단에 배분된 면세 − 세금계산서 면세. <b>음수</b>면 포스가 외상 면세를 그만큼 덜 잡은 거예요(할인 처리 의심 — OKPOS 문의 건). 매달 이 표에서 차이가 줄어드는지 지켜보세요.</div>';
+  }
   h+='</div>';
   return h;
 }
