@@ -1582,6 +1582,36 @@ function xc(v, o = {}) {
   return cell;
 }
 const xh = (v, fill) => xc(v, { bold: true, align: "center", fill });
+function xMed(cell, side) { if (cell && cell.s) cell.s.border[side] = { style: "medium", color: { rgb: "000000" } }; }
+/* 시트 마감: 제목 병합·가운데·높이 + 외곽/머리글/합계 굵은선 */
+function applyFrame(sh, o) {
+  o = o || {};
+  const rows = sh.rows;
+  const width = o.width || Math.max(...rows.map((r) => r.length));
+  if (rows[0] && rows[0][0] && rows[0][0].s) {
+    rows[0][0].s.alignment = { horizontal: "center", vertical: "center" };
+    rows[0][0].s.font.sz = o.titleSz || 14;
+    sh.merges = sh.merges || [];
+    if (!sh.merges.some((m) => m[0] === 0 && m[2] === 0)) sh.merges.push([0, 0, 0, width - 1]);
+    sh.rowH = sh.rowH || rows.map(() => null);
+    sh.rowH[0] = o.titleH || 32;
+  }
+  rows.forEach((r, ri) => {
+    const last = rows.length - 1;
+    r.forEach((c, ci) => {
+      if (!c || !c.s) return;
+      if (ci === 0) xMed(c, "left");
+      if (ci === width - 1) xMed(c, "right");
+      if (ri === 0) { xMed(c, "top"); xMed(c, "bottom"); }
+      if (ri === last) xMed(c, "bottom");
+      if (o.headerEnd != null && ri === o.headerEnd) xMed(c, "bottom");
+      if ((o.totalRows || []).includes(ri)) { xMed(c, "top"); xMed(c, "bottom"); }
+      if ((o.vSplit || []).includes(ci)) xMed(c, "right");
+    });
+    if (ri === 0 && r.length < width) { /* 제목 행 병합폭 오른쪽 굵은선 */ xMed(r[0], "right"); }
+  });
+  return sh;
+}
 async function makeWorkbook(sheets, filename) {
   await loadScript(XLS_URL);
   const wb = XLSX.utils.book_new();
@@ -1598,15 +1628,17 @@ async function makeWorkbook(sheets, filename) {
 const M = (r1, c1, r2, c2) => [r1, c1, r2, c2];
 /* ===== 매출현황 통합 엑셀 (한 파일에 탭 전체) ===== */
 function xlsStack(blocks,name,gap){
-  const rows=[],merges=[];let widths=[];
+  const rows=[],merges=[],rowH=[];let widths=[];
   blocks.forEach((b,i)=>{
     const off=rows.length;
     rows.push(...b.rows);
+    const bh=b.rowH||b.rows.map(()=>null);
+    rowH.push(...b.rows.map((_,ri)=>bh[ri]||null));
     for(const m of (b.merges||[]))merges.push([m[0]+off,m[1],m[2]+off,m[3]]);
     if((b.widths||[]).length>widths.length)widths=b.widths;
-    if(i<blocks.length-1)for(let g=0;g<=gap;g++)rows.push([]);
+    if(i<blocks.length-1)for(let g=0;g<=gap;g++){rows.push([]);rowH.push(null);}
   });
-  return {name,rows,merges,widths};
+  return {name,rows,merges,widths,rowH};
 }
 function xlsSideBySide(a,b,name,gapCols){
   if(!a)return b?{...b,name}:null;
@@ -1623,7 +1655,9 @@ function xlsSideBySide(a,b,name,gapCols){
   const merges=[...(a.merges||[])];
   for(const m of (b.merges||[]))merges.push([m[0],m[1]+off,m[2],m[3]+off]);
   const widths=(a.widths||[]).concat(Array(gapCols).fill(3)).concat(b.widths||[]);
-  return {name,rows,merges,widths};
+  const ah=a.rowH||[],bh=b.rowH||[];
+  const rowH=rows.map((_,ri)=>Math.max(ah[ri]||0,bh[ri]||0)||null);
+  return {name,rows,merges,widths,rowH};
 }
 async function exportSalesAll(){
   const real=makeWorkbook;
@@ -1734,7 +1768,8 @@ async function expCompare() {
     }
   });
   rows.push(tr);
-  await makeWorkbook([{ name: "매출비교", rows, widths: [8, ...Array(head.length - 1).fill(14)] }],
+  await makeWorkbook([applyFrame({ name: "매출비교", rows, widths: [8, ...Array(head.length - 1).fill(14)] },
+    { headerEnd: 1, totalRows: [rows.length - 1], vSplit: [0], titleSz: 12, titleH: 26 })],
     `매출비교_${entInfo.short}.xlsx`);
 }
 async function expMonthly() {
@@ -1755,11 +1790,11 @@ async function expMonthly() {
   rows.push([xh("합계", XF.GRAY), xc(sum.i, { fmt: "n", bold: true, fill: XF.G }), xc(sum.m, { fmt: "n", bold: true, fill: XF.Y }),
     xc(sum.o, { fmt: "n", bold: true }), xc(sum.b, { fmt: "n", bold: true, fill: XF.P }), xc(sum.bk, { fmt: "n", bold: true }),
     xc(sum.t, { fmt: "n", bold: true, fill: XF.B }), xc("")]);
-  await makeWorkbook([{
+  await makeWorkbook([applyFrame({
     name: `${year}년 월별`, rows,
     merges: [M(1, 0, 2, 0), M(1, 1, 2, 1), M(1, 2, 1, 5), M(1, 6, 2, 6), M(1, 7, 2, 7)],
-    widths: [8, 14, 13, 12, 15, 14, 15, 16],
-  }], `월별매출_${year}.xlsx`);
+    widths: [10.2, 17.6, 13.6, 13.6, 13.6, 14.9, 17.5, 20.5],
+  }, { headerEnd: 2, totalRows: [rows.length - 1], vSplit: [0, 1, 5, 6], titleSz: 16, titleH: 36 })], `월별매출_${year}.xlsx`);
 }
 async function expDaily() {
   const year = S.ui.dailyYear || latestYearOf("dailyAvg");
@@ -1782,11 +1817,11 @@ async function expDaily() {
     r.push(xc(note, { align: "left" }), xc(days.market ?? ""), xc(days.insadong ?? ""));
     rows.push(r);
   }
-  await makeWorkbook([{
+  await makeWorkbook([applyFrame({
     name: "일평균", rows,
     merges: [M(1, 0, 2, 0), M(1, 1, 1, 2), M(1, 3, 1, 4), M(1, 5, 1, 6), M(1, 7, 1, 8), M(1, 9, 2, 9), M(1, 10, 1, 11)],
-    widths: [8, 11, 11, 11, 11, 11, 11, 11, 11, 14, 7, 7],
-  }], `일평균_${py}vs${year}.xlsx`);
+    widths: [10.2, 10.2, 8.4, 8.4, 8.4, 8.4, 8.4, 11.6, 8.4, 13.9, 7.9, 8.4],
+  }, { headerEnd: 2, totalRows: [rows.length - 1], vSplit: [0, 2, 4, 6, 8, 9], titleSz: 16, titleH: 36 })], `일평균_${py}vs${year}.xlsx`);
 }
 async function expMarket() {
   const year = S.ui.marketYear || latestYearOf("marketDetail");
@@ -1804,7 +1839,7 @@ async function expMarket() {
   rows.push([xh("합계", XF.GRAY), xc(t.total, { fmt: "n", bold: true }), xc(t.internal, { fmt: "n", bold: true }), xc(t.other, { fmt: "n", bold: true }),
     xc(t.net, { fmt: "n", bold: true, fill: XF.Y }), xc(t.days ? Math.round(t.net / t.days) : "", { fmt: "n", bold: true, fill: XF.G }), xc("")]);
   rows.push([xc("* 사내: 인사동·보자기 매입  ** 기타: 명절음식 판매", { align: "left", sz: 9 })]);
-  await makeWorkbook([{ name: `마켓매출`, rows, widths: [8, 13, 13, 12, 13, 12, 16] }], `마켓매출_${year}.xlsx`);
+  await makeWorkbook([applyFrame({ name: `마켓매출`, rows, widths: [9, 12.9, 11.9, 8.4, 13, 8.4, 13.4] }, { headerEnd: 1, totalRows: [rows.length - 1], vSplit: [0], titleSz: 16, titleH: 36 })], `마켓매출_${year}.xlsx`);
 }
 async function expMeat() {
   const year = S.ui.marketYear || latestYearOf("marketDetail");
@@ -1819,7 +1854,7 @@ async function expMeat() {
     rows.push([xh(m + "월"), xc(c.hanwoo, { fmt: "n" }), xc(c.pork, { fmt: "n" }), xc(c.meat, { fmt: "n", fill: XF.Y }), xc("")]);
   }
   rows.push([xh("계", XF.GRAY), xc(mt.h, { fmt: "n", bold: true }), xc(mt.p, { fmt: "n", bold: true }), xc(mt.h + mt.p, { fmt: "n", bold: true, fill: XF.Y }), xc("")]);
-  await makeWorkbook([{ name: "정육매출", rows, widths: [8, 13, 14, 13, 12] }], `정육매출_${year}.xlsx`);
+  await makeWorkbook([applyFrame({ name: "정육매출", rows, widths: [9, 12.9, 12.9, 12.9, 11.8] }, { headerEnd: 1, totalRows: [rows.length - 1], vSplit: [0], titleSz: 16, titleH: 36 })], `정육매출_${year}.xlsx`);
 }
 function buildBojagiSheet(kind){
   const col=kind==="menu"?"bojagiMenu":"bojagiDrinks";
@@ -1939,7 +1974,8 @@ async function expAgency() {
   if (dCh.length) { merges.push(M(1, col, 1, col + dCh.length)); col += dCh.length + 1; }
   if (oCh.length) { merges.push(M(1, col, 1, col + oCh.length)); col += oCh.length + 1; }
   merges.push(M(1, col, 2, col));
-  await makeWorkbook([{ name: `판매대행 ${year}`, rows, merges, widths: [8, ...Array(col).fill(12)] }],
+  await makeWorkbook([applyFrame({ name: `판매대행 ${year}`, rows, merges, widths: [8.4, ...Array(col).fill(10.6)] },
+    { headerEnd: 2, totalRows: [rows.length - 1], vSplit: [0], titleSz: 12, titleH: 27 })],
     `판매대행_${year}.xlsx`);
 }
 </script>
