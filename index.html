@@ -2805,8 +2805,9 @@ function renderBojagi() {
   const year = S.ui.bojagiYear || latestYearOf(col);
   S.ui.bojagiYear = year;
   const monthsWithData = MONTHS.filter((m) => Object.keys(S.data[col][year]?.months?.[m] || {}).length);
-  const month = S.ui.bojagiMonth && monthsWithData.includes(S.ui.bojagiMonth)
-    ? S.ui.bojagiMonth : monthsWithData[monthsWithData.length - 1] || "1";
+  const month = S.ui.bojagiMonth === "all" ? "all"
+    : (S.ui.bojagiMonth && monthsWithData.includes(S.ui.bojagiMonth)
+      ? S.ui.bojagiMonth : monthsWithData[monthsWithData.length - 1] || "1");
   S.ui.bojagiMonth = month;
   const subtabs = `
   <div class="subtabs" style="align-items:center;background:rgba(0,0,0,0.035);border:1px solid rgba(0,0,0,0.08);border-radius:10px;padding:6px 10px;display:inline-flex;gap:6px;flex-wrap:wrap">
@@ -2815,8 +2816,10 @@ function renderBojagi() {
     <button class="subtab ${sub === "drinks" ? "active" : ""}" onclick="setBojagiSub('drinks')">주류별</button>
   </div>`;
   const monthSel = `<select class="ctl" onchange="setBojagiMonth(this.value)">` +
+    `<option value="all" ${month === "all" ? "selected" : ""}>종합(연간)</option>` +
     MONTHS.map((m) => `<option value="${m}" ${m === month ? "selected" : ""}>${m}월</option>`).join("") + `</select>`;
   const yearSel = yrs.length > 1 ? segButtons(yrs, year, "setBojagiYear") : "";
+  if (month === "all") { el.innerHTML = subtabs + renderBojagiAll(sub, year, yearSel, monthSel); return; }
   if (sub === "menu") el.innerHTML = subtabs + renderBojagiMenu(year, month, yearSel, monthSel);
   else el.innerHTML = subtabs + renderBojagiDrinks(year, month, yearSel, monthSel);
   if (sub === "menu") chartsBojagiMenu(year, month); else chartsBojagiDrinks(year, month);
@@ -2832,6 +2835,46 @@ function bojagiBandColor(items){
     pos++;
   }
   return out;
+}
+function renderBojagiAll(kind, year, yearSel, monthSel) {
+  const col = kind === "menu" ? "bojagiMenu" : "bojagiDrinks";
+  const base = kind === "menu" ? S.data.menuItems : S.data.drinkItems;
+  const label = kind === "menu" ? "메뉴" : "품목";
+  const mAll = S.data[col][year]?.months || {};
+  const ms = MONTHS.filter((m) => Object.keys(mAll[m] || {}).length);
+  const items = [...base];
+  for (const m of ms) for (const id in mAll[m]) if (!items.some((x) => x.id === id)) items.push({ id, cat: "기타", name: "(삭제된 품목)" });
+  const cats = [...new Set(items.map((i) => i.cat))];
+  const ordered = cats.flatMap((c) => items.filter((i) => i.cat === c));
+  const bands = bojagiBandColor(ordered);
+  const mt = {}; let grand = 0;
+  ms.forEach((m) => { let t = 0; for (const id in mAll[m]) t += itemSum(mAll[m][id]); mt[m] = t; grand += t; });
+  let rows = ""; let bi = 0;
+  for (const cat of cats) {
+    const ci = items.filter((i) => i.cat === cat);
+    if (!ci.length) continue;
+    rows += `<tr class="subhead"><td colspan="${ms.length + 3}">${esc(cat)}</td></tr>`;
+    for (const it of ci) {
+      const bg = bands[bi++] ? "#E2EFDA" : null;
+      const st = bg ? ` style="background:${bg}"` : "";
+      let sum = 0;
+      const tds = ms.map((m) => { const q = mAll[m]?.[it.id]; const v = q ? itemSum(q) : null; if (v) sum += v; return `<td${st}>${v ? fmt(v) : ""}</td>`; }).join("");
+      rows += `<tr${st}><td class="l sticky"${st}>${esc(it.name)}</td>${tds}<td${st}><b>${sum ? fmt(sum) : ""}</b></td><td${st}>${sum && grand ? (sum / grand * 100).toFixed(1) + "%" : ""}</td></tr>`;
+    }
+  }
+  const totRow = `<tr class="total trp"><td class="l sticky">합계</td>${ms.map((m) => `<td>${fmt(mt[m])}</td>`).join("")}<td>${fmt(grand)}</td><td>${grand ? "100%" : ""}</td></tr>`;
+  const body = ms.length ? `<div class="table-wrap"><table class="rpt">
+        <thead><tr><th class="l sticky">${label}</th>${ms.map((m) => `<th>${m}월</th>`).join("")}<th>합계</th><th>점유율</th></tr></thead>
+        <tbody>${rows}${totRow}</tbody>
+      </table></div>` : `<div class="hint" style="padding:14px">${year}년에는 아직 입력된 달이 없어요.</div>`;
+  return `
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title">보자기 ${kind === "menu" ? "메뉴별" : "주류·음료별"} 판매현황 — ${year}년 종합 <span class="unit">월별 소계 · 단위: 개</span></div>
+      <div class="card-actions">${yearSel} ${monthSel}</div>
+    </div>
+    ${body}
+  </div>`;
 }
 function menuItemsPlus(year, month) {
   // 설정된 품목 + 데이터에만 남아있는 품목(삭제됨 표기)
