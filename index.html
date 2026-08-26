@@ -1595,6 +1595,11 @@ function applyFrame(sh, o) {
     if (!sh.merges.some((m) => m[0] === 0 && m[2] === 0)) sh.merges.push([0, 0, 0, width - 1]);
     sh.rowH = sh.rowH || rows.map(() => null);
     sh.rowH[0] = o.titleH || 32;
+    if (o.dataH) rows.forEach((_, ri) => {
+      if (ri === 0) return;
+      if (sh.rowH[ri]) return;
+      sh.rowH[ri] = (o.headerEnd != null && ri <= o.headerEnd) ? (o.headerH || o.dataH) : o.dataH;
+    });
   }
   rows.forEach((r, ri) => {
     const last = rows.length - 1;
@@ -1768,8 +1773,9 @@ async function expCompare() {
     }
   });
   rows.push(tr);
-  await makeWorkbook([applyFrame({ name: "매출비교", rows, widths: [8, ...Array(head.length - 1).fill(14)] },
-    { headerEnd: 1, totalRows: [rows.length - 1], vSplit: [0], titleSz: 12, titleH: 26 })],
+  const cw=[5.8];yrs.forEach((y,i)=>{cw.push(17.5);if(i>0)cw.push(7.1);});
+  await makeWorkbook([applyFrame({ name: "매출비교", rows, widths: cw },
+    { headerEnd: 1, totalRows: [rows.length - 1], vSplit: [0], titleSz: 12, titleH: 25.5, headerH: 24.8, dataH: 25.1 })],
     `매출비교_${entInfo.short}.xlsx`);
 }
 async function expMonthly() {
@@ -1794,7 +1800,7 @@ async function expMonthly() {
     name: `${year}년 월별`, rows,
     merges: [M(1, 0, 2, 0), M(1, 1, 2, 1), M(1, 2, 1, 5), M(1, 6, 2, 6), M(1, 7, 2, 7)],
     widths: [10.2, 17.6, 13.6, 13.6, 13.6, 14.9, 17.5, 20.5],
-  }, { headerEnd: 2, totalRows: [rows.length - 1], vSplit: [0, 1, 5, 6], titleSz: 16, titleH: 36 })], `월별매출_${year}.xlsx`);
+  }, { headerEnd: 2, totalRows: [rows.length - 1], vSplit: [0, 1, 5, 6], titleSz: 16, titleH: 36, headerH: 25.5, dataH: 25.1 })], `월별매출_${year}.xlsx`);
 }
 async function expDaily() {
   const year = S.ui.dailyYear || latestYearOf("dailyAvg");
@@ -1821,7 +1827,7 @@ async function expDaily() {
     name: "일평균", rows,
     merges: [M(1, 0, 2, 0), M(1, 1, 1, 2), M(1, 3, 1, 4), M(1, 5, 1, 6), M(1, 7, 1, 8), M(1, 9, 2, 9), M(1, 10, 1, 11)],
     widths: [10.2, 10.2, 8.4, 8.4, 8.4, 8.4, 8.4, 11.6, 8.4, 13.9, 7.9, 8.4],
-  }, { headerEnd: 2, totalRows: [rows.length - 1], vSplit: [0, 2, 4, 6, 8, 9], titleSz: 16, titleH: 36 })], `일평균_${py}vs${year}.xlsx`);
+  }, { headerEnd: 2, totalRows: [rows.length - 1], vSplit: [0, 2, 4, 6, 8, 9], titleSz: 16, titleH: 36, headerH: 23.2, dataH: 25.1 })], `일평균_${py}vs${year}.xlsx`);
 }
 async function expMarket() {
   const year = S.ui.marketYear || latestYearOf("marketDetail");
@@ -1839,7 +1845,7 @@ async function expMarket() {
   rows.push([xh("합계", XF.GRAY), xc(t.total, { fmt: "n", bold: true }), xc(t.internal, { fmt: "n", bold: true }), xc(t.other, { fmt: "n", bold: true }),
     xc(t.net, { fmt: "n", bold: true, fill: XF.Y }), xc(t.days ? Math.round(t.net / t.days) : "", { fmt: "n", bold: true, fill: XF.G }), xc("")]);
   rows.push([xc("* 사내: 인사동·보자기 매입  ** 기타: 명절음식 판매", { align: "left", sz: 9 })]);
-  await makeWorkbook([applyFrame({ name: `마켓매출`, rows, widths: [9, 12.9, 11.9, 8.4, 13, 8.4, 13.4] }, { headerEnd: 1, totalRows: [rows.length - 1], vSplit: [0], titleSz: 16, titleH: 36 })], `마켓매출_${year}.xlsx`);
+  await makeWorkbook([applyFrame({ name: `마켓매출`, rows, widths: [9, 12.9, 11.9, 8.4, 13, 8.4, 13.4] }, { headerEnd: 1, totalRows: [rows.length - 1], vSplit: [0], titleSz: 16, titleH: 36, headerH: 23.2, dataH: 25.1 })], `마켓매출_${year}.xlsx`);
 }
 async function expMeat() {
   const year = S.ui.marketYear || latestYearOf("marketDetail");
@@ -1854,7 +1860,7 @@ async function expMeat() {
     rows.push([xh(m + "월"), xc(c.hanwoo, { fmt: "n" }), xc(c.pork, { fmt: "n" }), xc(c.meat, { fmt: "n", fill: XF.Y }), xc("")]);
   }
   rows.push([xh("계", XF.GRAY), xc(mt.h, { fmt: "n", bold: true }), xc(mt.p, { fmt: "n", bold: true }), xc(mt.h + mt.p, { fmt: "n", bold: true, fill: XF.Y }), xc("")]);
-  await makeWorkbook([applyFrame({ name: "정육매출", rows, widths: [9, 12.9, 12.9, 12.9, 11.8] }, { headerEnd: 1, totalRows: [rows.length - 1], vSplit: [0], titleSz: 16, titleH: 36 })], `정육매출_${year}.xlsx`);
+  await makeWorkbook([applyFrame({ name: "정육매출", rows, widths: [9, 12.9, 12.9, 12.9, 11.8] }, { headerEnd: 1, totalRows: [rows.length - 1], vSplit: [0], titleSz: 16, titleH: 36, headerH: 23.2, dataH: 25.1 })], `정육매출_${year}.xlsx`);
 }
 function buildBojagiSheet(kind){
   const col=kind==="menu"?"bojagiMenu":"bojagiDrinks";
@@ -1869,7 +1875,7 @@ function buildBojagiSheet(kind){
   const W=5,lastC=2+monthsD.length*W-1;
   const tot={};
   for(const m of monthsD){let t={k:0,p:0,d:0,sum:0};for(const id in (mdAll[m]||{})){const q=mdAll[m][id];t.k+=q.k||0;t.p+=q.p||0;t.d+=q.d||0;}t.sum=t.k+t.p+t.d;tot[m]=t;}
-  const rows=[],merges=[],rowH=[45];
+  const rows=[],merges=[],rowH=[45];const DH=16.5;
   const title=`${year}년 보자기 ${kind==="menu"?"메뉴별":"주류·음료별"} 판매현황 (단위: 개)`;
   rows.push([xc(title,{bold:true,sz:14,align:"center",mb:"lrtb"})]);
   merges.push(M(0,0,0,lastC));
@@ -1883,7 +1889,7 @@ function buildBojagiSheet(kind){
     }
     merges.push(M(1,2+bi*W,1,2+bi*W+W-1));
   });
-  rows.push(r1,r2);rowH.push(null,null);
+  rows.push(r1,r2);rowH.push(DH,DH);
   merges.push(M(1,0,2,1));
   /* 데이터 행 (카테고리별) */
   let ri=3;
@@ -1909,7 +1915,7 @@ function buildBojagiSheet(kind){
         row.push(xc(sum!=null?sum:"",{fmt:"n",bold:true,fill,mb:top}));
         row.push(xc(sum!=null&&tot[m].sum?sum/tot[m].sum:"",{fmt:"p0",fill,mb:"r"+top}));
       });
-      rows.push(row);rowH.push(null);ri++;
+      rows.push(row);rowH.push(DH);ri++;
     });
     merges.push(M(catStart,0,ri-1,0));
   }
@@ -1923,7 +1929,7 @@ function buildBojagiSheet(kind){
     trow.push(xc(tot[m].sum,{fmt:"n",bold:true,fill:F,mb:"tb"}));
     trow.push(xc(1,{fmt:"p0",bold:true,fill:F,mb:"rtb"}));
   });
-  rows.push(trow);rowH.push(null);
+  rows.push(trow);rowH.push(DH);
   merges.push(M(ri,0,ri,1));
   const widths=[7.2,17.5];
   monthsD.forEach(()=>widths.push(6.2,6.2,6.2,6.8,6.8));
@@ -1974,8 +1980,8 @@ async function expAgency() {
   if (dCh.length) { merges.push(M(1, col, 1, col + dCh.length)); col += dCh.length + 1; }
   if (oCh.length) { merges.push(M(1, col, 1, col + oCh.length)); col += oCh.length + 1; }
   merges.push(M(1, col, 2, col));
-  await makeWorkbook([applyFrame({ name: `판매대행 ${year}`, rows, merges, widths: [8.4, ...Array(col).fill(10.6)] },
-    { headerEnd: 2, totalRows: [rows.length - 1], vSplit: [0], titleSz: 12, titleH: 27 })],
+  await makeWorkbook([applyFrame({ name: `판매대행 ${year}`, rows, merges, widths: [8.4, ...Array(col).fill(10.9)] },
+    { headerEnd: 2, totalRows: [rows.length - 1], vSplit: [0], titleSz: 12, titleH: 27, headerH: 17.2, dataH: 16.5 })],
     `판매대행_${year}.xlsx`);
 }
 </script>
