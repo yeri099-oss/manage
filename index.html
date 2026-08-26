@@ -1590,6 +1590,90 @@ async function makeWorkbook(sheets, filename) {
   logAction(`엑셀 내보내기: ${filename}`);
 }
 const M = (r1, c1, r2, c2) => [r1, c1, r2, c2];
+/* ===== 매출현황 통합 엑셀 (한 파일에 탭 전체) ===== */
+function xlsStack(blocks,name,gap){
+  const rows=[],merges=[];let widths=[];
+  blocks.forEach((b,i)=>{
+    const off=rows.length;
+    rows.push(...b.rows);
+    for(const m of (b.merges||[]))merges.push([m[0]+off,m[1],m[2]+off,m[3]]);
+    if((b.widths||[]).length>widths.length)widths=b.widths;
+    if(i<blocks.length-1)for(let g=0;g<=gap;g++)rows.push([]);
+  });
+  return {name,rows,merges,widths};
+}
+function xlsSideBySide(a,b,name,gapCols){
+  if(!a)return b?{...b,name}:null;
+  if(!b)return {...a,name};
+  const aw=(a.widths||[]).length||Math.max(...a.rows.map(r=>r.length));
+  const off=aw+gapCols;
+  const rows=[];
+  const n=Math.max(a.rows.length,b.rows.length);
+  for(let i=0;i<n;i++){
+    const ra=(a.rows[i]||[]).slice();
+    while(ra.length<off)ra.push(null);
+    rows.push(ra.concat(b.rows[i]||[]));
+  }
+  const merges=[...(a.merges||[])];
+  for(const m of (b.merges||[]))merges.push([m[0],m[1]+off,m[2],m[3]+off]);
+  const widths=(a.widths||[]).concat(Array(gapCols).fill(3)).concat(b.widths||[]);
+  return {name,rows,merges,widths};
+}
+async function exportSalesAll(){
+  const real=makeWorkbook;
+  const uiBackup={ce:S.ui.compareEntity,ay:S.ui.agencyYear};
+  try{
+    toast("엑셀 파일 만드는 중… (시트 7개)");
+    await loadScript(XLS_URL);
+    const grabbed=[];
+    makeWorkbook=async(sheets)=>{grabbed.push(...sheets);};
+    /* ① 매출비교: 사업장별 블록 세로 스택 */
+    const cmpBlocks=[];
+    for(const e of SC_ENTITIES.filter(x=>!x.computed)){
+      grabbed.length=0;
+      S.ui.compareEntity=e.key;
+      try{await expCompare();}catch(err){console.warn(err);}
+      if(grabbed[0]&&grabbed[0].rows.length>2)cmpBlocks.push(grabbed[0]);
+    }
+    const cmp=cmpBlocks.length?xlsStack(cmpBlocks,"매출비교",1):null;
+    /* ② 월별 */
+    grabbed.length=0;try{await expMonthly();}catch(e){console.warn(e);}
+    const monthly=grabbed[0]?{...grabbed[0],name:"월별"}:null;
+    /* ③ 일평균 */
+    grabbed.length=0;try{await expDaily();}catch(e){console.warn(e);}
+    const daily=grabbed[0]?{...grabbed[0],name:"일평균"}:null;
+    /* ④ 마켓 + 정육 (한 시트에 나란히 — 원본 양식) */
+    grabbed.length=0;try{await expMarket();}catch(e){console.warn(e);}
+    const mk=grabbed[0];
+    grabbed.length=0;try{await expMeat();}catch(e){console.warn(e);}
+    const mt=grabbed[0];
+    const market=xlsSideBySide(mk,mt,"마켓",1);
+    /* ⑤⑥ 보자기 (현재 선택된 달 기준) */
+    grabbed.length=0;try{await expBojagiMenu();}catch(e){console.warn(e);}
+    const bm=grabbed[0]?{...grabbed[0],name:"보자기메뉴별"}:null;
+    grabbed.length=0;try{await expBojagiDrinks();}catch(e){console.warn(e);}
+    const bd=grabbed[0]?{...grabbed[0],name:"보자기주류별"}:null;
+    /* ⑦ 판매대행: 연도 스택 (최신이 위) */
+    const agBlocks=[];
+    for(const y of yearsOf("agency").map(String).sort((a,b)=>b-a)){
+      grabbed.length=0;
+      S.ui.agencyYear=y;
+      try{await expAgency();}catch(err){console.warn(err);}
+      if(grabbed[0]&&grabbed[0].rows.length>2)agBlocks.push(grabbed[0]);
+    }
+    const agency=agBlocks.length?xlsStack(agBlocks,"판매대행",1):null;
+    makeWorkbook=real;
+    const sheets=[cmp,monthly,daily,market,bm,bd,agency].filter(Boolean);
+    if(!sheets.length){toast("내보낼 데이터가 없어요",true);return;}
+    const y=S.ui.monthlyYear||latestYearOf("monthly")||new Date().getFullYear();
+    await makeWorkbook(sheets,`매출현황 ${String(y).slice(2)}${String(new Date().getMonth()+1).padStart(2,"0")}.xlsx`);
+  }catch(e){console.error(e);toast(e.message||"엑셀 생성 실패",true);
+  }finally{
+    makeWorkbook=real;
+    S.ui.compareEntity=uiBackup.ce;S.ui.agencyYear=uiBackup.ay;
+  }
+}
+window.exportSalesAll=exportSalesAll;
 /* ---- 탭별 내보내기 ---- */
 async function exportTab(tab) {
   try {
@@ -2095,11 +2179,11 @@ function renderCompare() {
   makeChart("ch-compare-total", {
     type: "bar",
     data: {
-      labels: yrs.map(String),
+      labels: yrsAsc.map(String),
       datasets: [{
         label: "연매출",
-        data: yrs.map((y) => MONTHS.reduce((a, m) => a + (get(y, m) || 0), 0)),
-        backgroundColor: yrs.map(yearColor), borderRadius: 4, maxBarThickness: 46,
+        data: yrsAsc.map((y) => MONTHS.reduce((a, m) => a + (get(y, m) || 0), 0)),
+        backgroundColor: yrsAsc.map(yearColor), borderRadius: 4, maxBarThickness: 46,
       }],
     },
     options: {
@@ -3554,7 +3638,7 @@ const SALES_SUBS=[["monthly","월별"],["daily","일평균"],["market","마켓"]
 function renderSales(){
   const sub=SALES_SUBS.some(([k])=>k===S.ui.salesSub)?S.ui.salesSub:"monthly";
   const bar=document.getElementById("salesSubtabs");
-  if(bar)bar.innerHTML=SALES_SUBS.map(([k,n])=>`<button class="subtab ${k===sub?"active":""}" onclick="setSalesSub('${k}')">${n}</button>`).join("");
+  if(bar)bar.innerHTML=SALES_SUBS.map(([k,n])=>`<button class="subtab ${k===sub?"active":""}" onclick="setSalesSub('${k}')">${n}</button>`).join("")+`<button class="btn btn-sm" style="margin-left:auto" onclick="exportSalesAll()">📥 엑셀 전체 받기</button>`;
   for(const[k]of SALES_SUBS){const p=document.getElementById("tab-"+k);if(p)p.classList.toggle("hidden",k!==sub);}
   ({monthly:renderMonthly,daily:renderDaily,market:renderMarket,bojagi:renderBojagi,agency:renderAgency})[sub]?.();
 }
