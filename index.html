@@ -2413,7 +2413,7 @@ function renderCompare() {
   <div class="card">
     <div class="card-head">
       <div class="card-title">${entInfo.label} — 국세청기준 월별매출 <span class="unit">부가세포함 · 단위: 원</span></div>
-      <div class="card-actions">${xlBtn("compare")} ${canEdit ? editBtn() : ""} ${canEdit ? adminBtn(`openCompareForm(null,null,'${ent}')`) : ""}</div>
+      <div class="card-actions">${canEdit ? editBtn() : ""} ${canEdit ? adminBtn(`openCompareForm(null,null,'${ent}')`) : ""}</div>
     </div>
     <div class="table-wrap">
       <table class="rpt"><thead>${head1}</thead><tbody>${rows}<tr class="total">${trT}</tr></tbody></table>
@@ -2495,7 +2495,7 @@ function renderMonthly() {
   <div class="card">
     <div class="card-head">
       <div class="card-title">${year}년 월별 매출현황 <span class="unit">부가세포함/포스기준 · 단위: 원</span></div>
-      <div class="card-actions">${segButtons(yrs, year, "setMonthlyYear")} ${xlBtn("monthly")} ${editBtn()} ${adminBtn(`openMonthlyForm(${year})`)}</div>
+      <div class="card-actions">${segButtons(yrs, year, "setMonthlyYear")} ${editBtn()} ${adminBtn(`openMonthlyForm(${year})`)}</div>
     </div>
     <div class="table-wrap">
       <table class="rpt">
@@ -2585,7 +2585,7 @@ function renderDaily() {
   <div class="card">
     <div class="card-head">
       <div class="card-title">월별 일평균 매출 <span class="unit">부가세포함 · 단위: 원</span></div>
-      <div class="card-actions">${segButtons(yrs, year, "setDailyYear")} ${xlBtn("daily")} ${editBtn()} ${adminBtn(`openDailyForm(${year})`, "영업일수 입력")}</div>
+      <div class="card-actions">${segButtons(yrs, year, "setDailyYear")} ${editBtn()} ${adminBtn(`openDailyForm(${year})`, "영업일수 입력")}</div>
     </div>
     <div class="table-wrap">
       <table class="rpt">
@@ -2675,7 +2675,7 @@ function renderMarket() {
   <div class="card">
     <div class="card-head">
       <div class="card-title">${year}년 마켓 매출 분류 <span class="unit">부가세포함 · 단위: 원</span></div>
-      <div class="card-actions">${segButtons(yrs, year, "setMarketYear")} ${xlBtn("market")} ${editBtn()} ${adminBtn(`openMarketForm(${year})`)}</div>
+      <div class="card-actions">${segButtons(yrs, year, "setMarketYear")} ${editBtn()} ${adminBtn(`openMarketForm(${year})`)}</div>
     </div>
     <div class="table-wrap">
       <table class="rpt">
@@ -2695,7 +2695,7 @@ function renderMarket() {
   <div class="card">
     <div class="card-head">
       <div class="card-title">${year}년 정육 매출현황 <span class="unit">단위: 원</span></div>
-      <div class="card-actions">${segButtons(yrs, year, "setMarketYear")} ${xlBtn("meat")} ${editBtn()} ${adminBtn(`openMarketForm(${year})`)}</div>
+      <div class="card-actions">${segButtons(yrs, year, "setMarketYear")} ${editBtn()} ${adminBtn(`openMarketForm(${year})`)}</div>
     </div>
     <div class="table-wrap">
       <table class="rpt">
@@ -2833,7 +2833,7 @@ function renderBojagiMenu(year, month, yearSel, monthSel) {
   <div class="card">
     <div class="card-head">
       <div class="card-title">보자기 메뉴별 판매현황 — ${year}년 ${month}월 <span class="unit">단위: 개</span></div>
-      <div class="card-actions">${yearSel} ${monthSel} ${xlBtn("bojagiMenu")} ${editBtn()} ${adminBtn(`openBojagiMenuForm(${year},'${month}')`)}</div>
+      <div class="card-actions">${yearSel} ${monthSel} ${editBtn()} ${adminBtn(`openBojagiMenuForm(${year},'${month}')`)}</div>
     </div>
     <div class="table-wrap">
       <table class="rpt">
@@ -2927,7 +2927,7 @@ function renderBojagiDrinks(year, month, yearSel, monthSel) {
   <div class="card">
     <div class="card-head">
       <div class="card-title">보자기 주류·음료별 판매현황 — ${year}년 ${month}월 <span class="unit">단위: 개 / 원</span></div>
-      <div class="card-actions">${yearSel} ${monthSel} ${xlBtn("bojagiDrinks")} ${editBtn()} ${adminBtn(`openBojagiDrinksForm(${year},'${month}')`)}</div>
+      <div class="card-actions">${yearSel} ${monthSel} ${editBtn()} ${adminBtn(`openBojagiDrinksForm(${year},'${month}')`)}</div>
     </div>
     <div class="table-wrap">
       <table class="rpt">
@@ -3027,7 +3027,7 @@ function renderAgency() {
   <div class="card">
     <div class="card-head">
       <div class="card-title">${year}년 판매대행 매출 현황 <span class="unit">국세청기준 · 부가세포함 · 단위: 원</span></div>
-      <div class="card-actions">${segButtons(yrs, year, "setAgencyYear")} ${xlBtn("agency")} ${editBtn()} ${adminBtn(`openAgencyForm(${year})`)}</div>
+      <div class="card-actions">${segButtons(yrs, year, "setAgencyYear")} ${editBtn()} ${adminBtn(`openAgencyForm(${year})`)}</div>
     </div>
     <div class="table-wrap">
       <table class="rpt"><thead>${head1}${head2}</thead><tbody>${rows}<tr class="total trg">${trT}</tr></tbody></table>
