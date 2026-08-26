@@ -1574,6 +1574,11 @@ function xc(v, o = {}) {
     border: { top: border, bottom: border, left: border, right: border },
   };
   if (o.fill) cell.s.fill = { fgColor: { rgb: o.fill }, patternType: "solid" };
+  if (o.fmt === "p0" && typeof v === "number") { cell.t = "n"; cell.z = "0%"; }
+  if (o.mb) for (const ch of o.mb) {
+    const key = { l: "left", r: "right", t: "top", b: "bottom" }[ch];
+    if (key) cell.s.border[key] = { style: "medium", color: { rgb: "000000" } };
+  }
   return cell;
 }
 const xh = (v, fill) => xc(v, { bold: true, align: "center", fill });
@@ -1584,6 +1589,7 @@ async function makeWorkbook(sheets, filename) {
     const ws = XLSX.utils.aoa_to_sheet(sh.rows);
     if (sh.merges) ws["!merges"] = sh.merges.map(([r1, c1, r2, c2]) => ({ s: { r: r1, c: c1 }, e: { r: r2, c: c2 } }));
     ws["!cols"] = (sh.widths || sh.rows[sh.rows.length - 1].map(() => 12)).map((w) => ({ wch: w }));
+    if (sh.rowH) ws["!rows"] = sh.rowH.map((h) => (h ? { hpt: h } : {}));
     XLSX.utils.book_append_sheet(wb, ws, sh.name.slice(0, 31));
   }
   XLSX.writeFile(wb, filename);
@@ -1815,61 +1821,86 @@ async function expMeat() {
   rows.push([xh("계", XF.GRAY), xc(mt.h, { fmt: "n", bold: true }), xc(mt.p, { fmt: "n", bold: true }), xc(mt.h + mt.p, { fmt: "n", bold: true, fill: XF.Y }), xc("")]);
   await makeWorkbook([{ name: "정육매출", rows, widths: [8, 13, 14, 13, 12] }], `정육매출_${year}.xlsx`);
 }
-async function expBojagiMenu() {
-  const year = S.ui.bojagiYear || latestYearOf("bojagiMenu");
-  const month = S.ui.bojagiMonth || "7";
-  const md = S.data.bojagiMenu[year]?.months?.[month] || {};
-  const tot = bojagiMonthTotal(year, month);
-  const rows = [
-    [xc(`보자기 메뉴별 판매현황 — ${year}년 ${month}월 (단위: 개)`, { bold: true, sz: 12, align: "left" })],
-    [xh("분류", XF.GRAY), xh("메뉴", XF.GRAY), xh("키오스크", XF.GRAY), xh("포스", XF.GRAY), xh("배달", XF.GRAY), xh("소계", XF.GRAY), xh("점유율", XF.GRAY)],
-  ];
-  const items = menuItemsPlus(year, month);
-  const cats = [...new Set(items.map((i) => i.cat))];
-  let zebra = 0;
-  const catSpans = [];
-  for (const cat of cats) {
-    const catItems = items.filter((i) => i.cat === cat);
-    if (!catItems.length) continue;
-    const start = rows.length;
-    for (const it of catItems) {
-      const q = md[it.id];
-      const sum = itemSum(q);
-      const fill = zebra++ % 2 === 0 ? XF.Y : undefined;
-      rows.push([xc(cat, { align: "center" }), xc(it.name, { align: "left", fill }),
-        xc(q ? q.k : "", { fmt: "n" }), xc(q ? q.p : "", { fmt: "n" }), xc(q ? q.d : "", { fmt: "n" }),
-        xc(q ? sum : "", { fmt: "n", bold: true }),
-        xc(q && tot.sum ? sum / tot.sum : "", { fmt: "p" })]);
+function buildBojagiSheet(kind){
+  const col=kind==="menu"?"bojagiMenu":"bojagiDrinks";
+  const year=S.ui.bojagiYear||latestYearOf(col);
+  const base=kind==="menu"?S.data.menuItems:S.data.drinkItems;
+  const items=[...base];
+  const mdAll=S.data[col][year]?.months||{};
+  for(const m in mdAll)for(const id in mdAll[m])if(!items.some(x=>x.id===id))items.push({id,cat:"기타",name:"(삭제된 메뉴)"});
+  const monthsD=MONTHS.filter(m=>Object.keys(mdAll[m]||{}).length).sort((x,y)=>Number(y)-Number(x));
+  if(!monthsD.length)throw new Error("내보낼 데이터가 없어요 — "+year+"년에 입력된 달이 없어요");
+  const bands=bojagiBandColor(items);
+  const W=5,lastC=2+monthsD.length*W-1;
+  const tot={};
+  for(const m of monthsD){let t={k:0,p:0,d:0,sum:0};for(const id in (mdAll[m]||{})){const q=mdAll[m][id];t.k+=q.k||0;t.p+=q.p||0;t.d+=q.d||0;}t.sum=t.k+t.p+t.d;tot[m]=t;}
+  const rows=[],merges=[],rowH=[45];
+  const title=`${year}년 보자기 ${kind==="menu"?"메뉴별":"주류·음료별"} 판매현황 (단위: 개)`;
+  rows.push([xc(title,{bold:true,sz:14,align:"center",mb:"lrtb"})]);
+  merges.push(M(0,0,0,lastC));
+  /* 월 헤더 2줄 */
+  const r1=[xc("",{fill:XF.GRAY,mb:"lt"}),xc("",{fill:XF.GRAY,mb:"rt"})];
+  const r2=[xc("",{fill:XF.GRAY,mb:"lb"}),xc("",{fill:XF.GRAY,mb:"rb"})];
+  monthsD.forEach((m,bi)=>{
+    for(let i=0;i<W;i++){
+      r1.push(xc(i===0?m+"월":"",{bold:true,align:"center",fill:XF.GRAY,mb:"t"+(i===W-1?"r":"")}));
+      r2.push(xc(["키오스크","포스","배달","소계","점유율"][i],{bold:true,align:"center",fill:XF.GRAY,mb:i===W-1?"r":""}));
     }
-    if (rows.length - 1 > start) catSpans.push(M(start, 0, rows.length - 1, 0));
-  }
-  rows.push([xc("합계", { bold: true, fill: XF.P }), xc("", { fill: XF.P }), xc(tot.k, { fmt: "n", bold: true, fill: XF.P }),
-    xc(tot.p, { fmt: "n", bold: true, fill: XF.P }), xc(tot.d, { fmt: "n", bold: true, fill: XF.P }),
-    xc(tot.sum, { fmt: "n", bold: true, fill: XF.P }), xc(tot.sum ? 1 : "", { fmt: "p", bold: true, fill: XF.P })]);
-  await makeWorkbook([{ name: `메뉴별 ${month}월`, rows, merges: catSpans, widths: [9, 20, 9, 7, 7, 8, 8] }],
-    `보자기메뉴별_${year}년${month}월.xlsx`);
-}
-async function expBojagiDrinks() {
-  const year = S.ui.bojagiYear || latestYearOf("bojagiDrinks");
-  const month = S.ui.bojagiMonth || "7";
-  const md = S.data.bojagiDrinks[year]?.months?.[month] || {};
-  const tot = drinksMonthTotal(year, month);
-  const rows = [
-    [xc(`보자기 주류·음료별 판매현황 — ${year}년 ${month}월`, { bold: true, sz: 12, align: "left" })],
-    [xh("단가", XF.GRAY), xh("주류", XF.GRAY), xh("키오스크", XF.GRAY), xh("포스", XF.GRAY), xh("배달", XF.GRAY), xh("소계", XF.GRAY), xh("매출", XF.Y)],
-  ];
-  drinkItemsPlus(year, month).forEach((it, i) => {
-    const q = md[it.id];
-    const sum = itemSum(q);
-    const fill = i % 2 === 0 ? XF.Y : undefined;
-    rows.push([xc(it.price, { fmt: "n", color: "1C5CAB" }), xc(it.name, { align: "left", fill }),
-      xc(q ? q.k : "", { fmt: "n" }), xc(q ? q.p : "", { fmt: "n" }), xc(q ? q.d : "", { fmt: "n" }),
-      xc(q ? sum : "", { fmt: "n", bold: true }), xc(q ? sum * it.price : "", { fmt: "n", fill: XF.Y })]);
+    merges.push(M(1,2+bi*W,1,2+bi*W+W-1));
   });
-  rows.push([xc(""), xc("합계", { bold: true }), xc(tot.k, { fmt: "n", bold: true }), xc(tot.p, { fmt: "n", bold: true }),
-    xc(tot.d, { fmt: "n", bold: true }), xc(tot.sum, { fmt: "n", bold: true }), xc(tot.sales, { fmt: "n", bold: true, fill: XF.Y })]);
-  await makeWorkbook([{ name: `주류별 ${month}월`, rows, widths: [8, 16, 9, 7, 7, 8, 12] }],
-    `보자기주류별_${year}년${month}월.xlsx`);
+  rows.push(r1,r2);rowH.push(null,null);
+  merges.push(M(1,0,2,1));
+  /* 데이터 행 (카테고리별) */
+  let ri=3;
+  const cats=[...new Set(items.map(i=>i.cat))];
+  let gi=0;
+  for(const cat of cats){
+    const catItems=items.filter(i=>i.cat===cat);
+    if(!catItems.length)continue;
+    const catStart=ri;
+    catItems.forEach((it,ci)=>{
+      const fill=bands[gi]||undefined;gi++;
+      const top=ci===0?"t":"";
+      const row=[
+        xc(ci===0?cat:"",{align:"center",mb:"lr"+top}),
+        xc(it.name,{align:"left",fill,mb:"lr"+top})
+      ];
+      monthsD.forEach(m=>{
+        const q=(mdAll[m]||{})[it.id];
+        const sum=q?(q.k||0)+(q.p||0)+(q.d||0):null;
+        row.push(xc(q?q.k:"",{fmt:"n",fill,mb:top}));
+        row.push(xc(q?q.p:"",{fmt:"n",fill,mb:top}));
+        row.push(xc(q?q.d:"",{fmt:"n",fill,mb:top}));
+        row.push(xc(sum!=null?sum:"",{fmt:"n",bold:true,fill,mb:top}));
+        row.push(xc(sum!=null&&tot[m].sum?sum/tot[m].sum:"",{fmt:"p0",fill,mb:"r"+top}));
+      });
+      rows.push(row);rowH.push(null);ri++;
+    });
+    merges.push(M(catStart,0,ri-1,0));
+  }
+  /* 합계 */
+  const F="FBE5D6";
+  const trow=[xc("합계",{bold:true,align:"center",fill:F,mb:"ltb"}),xc("",{fill:F,mb:"rtb"})];
+  monthsD.forEach(m=>{
+    trow.push(xc(tot[m].k,{fmt:"n",bold:true,fill:F,mb:"tb"}));
+    trow.push(xc(tot[m].p,{fmt:"n",bold:true,fill:F,mb:"tb"}));
+    trow.push(xc(tot[m].d,{fmt:"n",bold:true,fill:F,mb:"tb"}));
+    trow.push(xc(tot[m].sum,{fmt:"n",bold:true,fill:F,mb:"tb"}));
+    trow.push(xc(1,{fmt:"p0",bold:true,fill:F,mb:"rtb"}));
+  });
+  rows.push(trow);rowH.push(null);
+  merges.push(M(ri,0,ri,1));
+  const widths=[7.2,17.5];
+  monthsD.forEach(()=>widths.push(6.2,6.2,6.2,6.8,6.8));
+  return {name:kind==="menu"?"보자기메뉴별":"보자기주류별",rows,merges,widths,rowH};
+}
+async function expBojagiMenu(){
+  const sh=buildBojagiSheet("menu");
+  await makeWorkbook([sh],`보자기메뉴별_${S.ui.bojagiYear||latestYearOf("bojagiMenu")}.xlsx`);
+}
+async function expBojagiDrinks(){
+  const sh=buildBojagiSheet("drinks");
+  await makeWorkbook([sh],`보자기주류별_${S.ui.bojagiYear||latestYearOf("bojagiDrinks")}.xlsx`);
 }
 async function expAgency() {
   const year = S.ui.agencyYear || latestYearOf("agency");
@@ -2492,6 +2523,18 @@ function renderBojagi() {
   else el.innerHTML = subtabs + renderBojagiDrinks(year, month, yearSel, monthSel);
   if (sub === "menu") chartsBojagiMenu(year, month); else chartsBojagiDrinks(year, month);
 }
+function bojagiBandColor(items){
+  /* 한상메뉴: 2개씩(세트) 한 색, 그 외: 1개씩 — 초록(E2EFDA)/흰색 번갈아 */
+  const out=[];let lastCat=null,band=0,pos=0;
+  for(const it of items){
+    if(it.cat!==lastCat){lastCat=it.cat;band=0;pos=0;}
+    const size=String(it.cat||"").indexOf("한상")>=0?2:1;
+    if(pos>=size){band++;pos=0;}
+    out.push(band%2===0?"E2EFDA":null);
+    pos++;
+  }
+  return out;
+}
 function menuItemsPlus(year, month) {
   // 설정된 품목 + 데이터에만 남아있는 품목(삭제됨 표기)
   const md = S.data.bojagiMenu[year]?.months?.[month] || {};
@@ -2505,7 +2548,9 @@ function renderBojagiMenu(year, month, yearSel, monthSel) {
   const items = menuItemsPlus(year, month);
   const cats = [...new Set(items.map((i) => i.cat))];
   let rows = "";
-  let zebra = 0;
+  const ordered = cats.flatMap((c) => items.filter((i) => i.cat === c));
+  const bands = bojagiBandColor(ordered);
+  let bi = 0;
   for (const cat of cats) {
     const catItems = items.filter((i) => i.cat === cat);
     if (!catItems.length) continue;
@@ -2513,9 +2558,10 @@ function renderBojagiMenu(year, month, yearSel, monthSel) {
     for (const it of catItems) {
       const q = md[it.id];
       const sum = itemSum(q);
-      const rowCls = zebra++ % 2 === 0 ? "zr" : "";
+      const bg = bands[bi++] ? "#E2EFDA" : null;
+      const rowCls = "";
       const ds = (f) => `data-t="bm" data-y="${year}" data-m="${month}" data-id="${it.id}" data-f="${f}"`;
-      rows += `<tr class="${rowCls}"><td class="l sticky">${esc(it.name)}</td>
+      rows += `<tr${bg ? ` style="background:${bg}"` : ""}><td class="l sticky"${bg ? ` style="background:${bg}"` : ""}>${esc(it.name)}</td>
         <td>${edMode() ? edNum(q?.k, ds("k")) : (q ? fmt(q.k) : "")}</td><td>${edMode() ? edNum(q?.p, ds("p")) : (q ? fmt(q.p) : "")}</td><td>${edMode() ? edNum(q?.d, ds("d")) : (q ? fmt(q.d) : "")}</td>
         <td><b>${q ? fmt(sum) : ""}</b></td>
         <td>${q && tot.sum ? (sum / tot.sum * 100).toFixed(1) + "%" : ""}</td></tr>`;
@@ -2603,17 +2649,18 @@ function renderBojagiDrinks(year, month, yearSel, monthSel) {
   const tot = drinksMonthTotal(year, month);
   const items = drinkItemsPlus(year, month);
   let rows = "";
+  const bands = bojagiBandColor(items.map((x) => ({ ...x, cat: "주류" })));
   items.forEach((it, i) => {
     const q = md[it.id];
     const sum = itemSum(q);
-    const rowCls = i % 2 === 0 ? "zr" : "";
+    const bg = bands[i] ? "#E2EFDA" : null;
     const ds = (f) => `data-t="bd" data-y="${year}" data-m="${month}" data-id="${it.id}" data-f="${f}"`;
     const priceCell = edMode() && !it.name.includes("삭제된")
-      ? `<input class="cell-in" inputmode="numeric" value="${fmt(it.price)}" data-t="dp" data-id="${it.id}">`
-      : fmt(it.price);
-    rows += `<tr class="${rowCls}"><td class="price">${priceCell}</td><td class="l">${esc(it.name)}</td>
+      ? `<td class="price"><input class="cell-in" inputmode="numeric" value="${fmt(it.price)}" data-t="dp" data-id="${it.id}"></td>`
+      : "";
+    rows += `<tr${bg ? ` style="background:${bg}"` : ""}>${priceCell}<td class="l"${bg ? ` style="background:${bg}"` : ""}>${esc(it.name)}</td>
       <td>${edMode() ? edNum(q?.k, ds("k")) : (q ? fmt(q.k) : "")}</td><td>${edMode() ? edNum(q?.p, ds("p")) : (q ? fmt(q.p) : "")}</td><td>${edMode() ? edNum(q?.d, ds("d")) : (q ? fmt(q.d) : "")}</td>
-      <td><b>${q ? fmt(sum) : ""}</b></td><td>${q ? fmt(sum * it.price) : ""}</td></tr>`;
+      <td><b>${q ? fmt(sum) : ""}</b></td><td>${q && tot.sum ? (sum / tot.sum * 100).toFixed(1) + "%" : ""}</td></tr>`;
   });
   let pivotHead = `<tr><th class="l sticky">품목</th>` + MONTHS.map((m) => `<th>${m}월</th>`).join("") + `</tr>`;
   let pivotRows = "";
@@ -2621,13 +2668,13 @@ function renderBojagiDrinks(year, month, yearSel, monthSel) {
     let tr = `<td class="l sticky">${esc(it.name)}</td>`;
     for (const m of MONTHS) {
       const q = S.data.bojagiDrinks[year]?.months?.[m]?.[it.id];
-      tr += `<td>${q ? fmt(itemSum(q) * it.price) : ""}</td>`;
+      tr += `<td>${q ? fmt(itemSum(q)) : ""}</td>`;
     }
     pivotRows += `<tr class="${zi % 2 === 0 ? "zr" : ""}">${tr}</tr>`;
   });
   let pivotTotal = `<td class="l sticky">합계</td>` + MONTHS.map((m) => {
     const t = drinksMonthTotal(year, m);
-    return `<td>${t.sales ? fmt(t.sales) : ""}</td>`;
+    return `<td>${t.sum ? fmt(t.sum) : ""}</td>`;
   }).join("");
   return `
   <div class="card">
@@ -2637,20 +2684,20 @@ function renderBojagiDrinks(year, month, yearSel, monthSel) {
     </div>
     <div class="table-wrap">
       <table class="rpt">
-        <thead><tr><th>단가</th><th class="l">품목</th><th>키오스크</th><th>포스</th><th>배달</th><th>소계</th><th>매출</th></tr></thead>
+        <thead><tr>${edMode() ? "<th>단가</th>" : ""}<th class="l">품목</th><th>키오스크</th><th>포스</th><th>배달</th><th>소계</th><th>점유율</th></tr></thead>
         <tbody>${rows}
-        <tr class="total"><td></td><td class="l">합계</td><td>${fmt(tot.k)}</td><td>${fmt(tot.p)}</td><td>${fmt(tot.d)}</td><td>${fmt(tot.sum)}</td><td>${fmt(tot.sales)}</td></tr>
+        <tr class="total">${edMode() ? "<td></td>" : ""}<td class="l">합계</td><td>${fmt(tot.k)}</td><td>${fmt(tot.p)}</td><td>${fmt(tot.d)}</td><td>${fmt(tot.sum)}</td><td>100%</td></tr>
         </tbody>
       </table>
     </div>
-    <div class="footnote">매출 = 단가 × 소계. 단가는 "표에서 바로입력" 모드에서 직접 고치거나, 설정 탭의 품목 관리에서 바꿀 수 있어요.</div>
+    <div class="footnote">단가는 "표에서 바로입력" 모드를 켜면 표에 나타나 직접 고칠 수 있어요 (설정 탭의 품목 관리에서도 가능).</div>
   </div>
   <div class="card">
     <div class="card-title">${year}년 ${month}월 품목별 매출</div>
     <div class="chart-box tall"><canvas id="ch-bdrink-bar"></canvas></div>
   </div>
   <div class="card">
-    <div class="card-title">${year}년 월별 주류·음료 매출</div>
+    <div class="card-title">${year}년 월별 주류·음료 판매수량</div>
     <div class="table-wrap">
       <table class="rpt"><thead>${pivotHead}</thead><tbody>${pivotRows}<tr class="total">${pivotTotal}</tr></tbody></table>
     </div>
