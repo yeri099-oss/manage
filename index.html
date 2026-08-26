@@ -3821,7 +3821,61 @@ function aiPnlAnswer(q,years,months){
   }
   return {html:out.join("<br>"),table:lastTable};
 }
-const AI_HELP=`이런 걸 물어볼 수 있어요:<br>· "2025년 보자기비빔밥 판매량" (메뉴·주류)<br>· "올해 마켓 매출" / "2026년 3월 전체 매출"<br>· "2026년 에피다 영업손익" / "7월 판관비" (관리자)<br>연도·월·사업장을 함께 적으면 더 정확해요.<br>답 다음에 "그래프로 보여줘"라고 하면 방금 결과를 그래프로 그려줘요.`;
+const AI_HELP=`이런 걸 물어볼 수 있어요:<br>· "2025년 보자기비빔밥 판매량" (메뉴·주류)<br>· "올해 가장 많이 팔린 메뉴" / "주류 톱3" / "3월에 제일 많이 팔린 메뉴"<br>· "올해 마켓 매출" / "2026년 3월 전체 매출"<br>· "2026년 에피다 영업손익" / "7월 판관비" (관리자)<br>연도·월·사업장을 함께 적으면 더 정확해요.<br>답 다음에 "그래프로 보여줘"라고 하면 방금 결과를 그래프로 그려줘요.`;
+function aiJosa(w,a,b){const ch=String(w).charCodeAt(String(w).length-1);return(ch>=0xAC00&&ch<=0xD7A3&&(ch-0xAC00)%28>0)?a:b;}
+function aiRankAnswer(q,years,months){
+  const c=aiCompact(q);
+  if(!/(가장|제일|젤|최고|베스트|인기|많이팔|잘팔|잘나가|톱|top|상위|순위)/.test(c))return null;
+  if(!/(메뉴|판매|팔린|팔렸|팔리|주류|음료|술)/.test(c))return null;
+  const asc=/(적게|안팔|덜팔|꼴찌|최저)/.test(c);
+  const kind=/(주류|음료|술)/.test(c)?"drink":"menu";
+  const col=kind==="menu"?"bojagiMenu":"bojagiDrinks";
+  const items=kind==="menu"?(S.data.menuItems||[]):(S.data.drinkItems||[]);
+  const label=kind==="menu"?"메뉴":"주류·음료";
+  const yrsAll=Object.keys(S.data[col]||{}).filter(y=>Object.keys(S.data[col][y]?.months||{}).length).sort();
+  if(!yrsAll.length)return {html:`보자기 ${label} 판매 데이터가 아직 없어요.`};
+  const y=(years&&years.length?years[0]:yrsAll[yrsAll.length-1]);
+  const ydoc=S.data[col][y];
+  if(!ydoc||!Object.keys(ydoc.months||{}).length)
+    return {html:`${y}년 ${label} 데이터가 없어요. 데이터가 있는 해: ${yrsAll.join(", ")}년`+aiChips(yrsAll.map(yy=>({label:yy+"년 보기",q:`${yy}년 가장 많이 팔린 ${label}`})))};
+  const ms=(months&&months.length?months:Object.keys(ydoc.months)).filter(m=>ydoc.months[m]&&Object.keys(ydoc.months[m]).length);
+  if(!ms.length)return {html:`${y}년${months?` ${months.join(",")}월`:""} ${label} 데이터가 없어요.`};
+  /* 특정 메뉴 + 순위어 → 그 메뉴가 가장 잘/안 팔린 달 */
+  const best=aiFindItem(q);
+  if(best&&((kind==="menu")===(best.kind==="menu"))){
+    const per=ms.map(m=>({m,v:itemSum((ydoc.months[m]||{})[best.it.id])})).filter(x=>x.v>0);
+    if(!per.length)return {html:`${y}년 ${best.it.name} 판매 데이터가 없어요.`};
+    const top=[...per].sort((a,b)=>asc?a.v-b.v:b.v-a.v)[0];
+    const rows=per.sort((a,b)=>Number(a.m)-Number(b.m)).map(x=>[x.m+"월",x.v]);
+    return {html:`${y}년 <b>${best.it.name}</b>${aiJosa(best.it.name,"이","가")} 가장 ${asc?"적게":"많이"} 팔린 달은 <b>${top.m}월</b> — <b>${fmt(top.v)}개</b>예요.`,
+      table:{title:`${y}년 ${best.it.name} 월별 판매량`,header:["월","판매량"],rows}};
+  }
+  /* 품목별 합산 순위 */
+  const nameOf={};items.forEach(it=>nameOf[it.id]=it.name);
+  const sums={};
+  for(const m of ms){const md=ydoc.months[m]||{};for(const id in md)sums[id]=(sums[id]||0)+itemSum(md[id]);}
+  const ranked=Object.keys(sums).filter(id=>sums[id]>0).map(id=>({id,name:nameOf[id]||"(삭제된 메뉴)",v:sums[id]})).sort((a,b)=>asc?a.v-b.v:b.v-a.v);
+  if(!ranked.length)return {html:`${y}년${months?` ${ms.join(",")}월`:""} ${label} 판매 데이터가 없어요.`};
+  const period=months&&months.length?(ms.length===1?` ${ms[0]}월`:` ${ms[0]}~${ms[ms.length-1]}월`):"";
+  const nM=c.match(/(?:톱|top|상위)(\d+)/)||c.match(/(\d+)(?:위|가지|개만)/);
+  const topN=nM?Math.min(Number(nM[1]),ranked.length):null;
+  if(topN&&topN>1){
+    const rows=ranked.slice(0,topN).map((x,i)=>[(i+1)+"위",x.name,x.v]);
+    return {html:`${y}년${period} ${asc?"적게":"많이"} 팔린 ${label} 상위 ${topN}개예요.`,
+      table:{title:`${y}년${period} ${label} 판매 순위`,header:["순위",label,"판매량"],rows}};
+  }
+  const top=ranked[0];
+  if(ms.length===1){
+    const rows=ranked.slice(0,5).map((x,i)=>[(i+1)+"위",x.name,x.v]);
+    return {html:`${y}년 ${ms[0]}월 가장 ${asc?"적게":"많이"} 팔린 ${label}는 <b>${top.name}</b> — <b>${fmt(top.v)}개</b>예요.`,
+      table:{title:`${y}년 ${ms[0]}월 ${label} 판매 순위`,header:["순위",label,"판매량"],rows}};
+  }
+  const per=ms.map(m=>({m,v:itemSum((ydoc.months[m]||{})[top.id])})).filter(x=>x.v>0).sort((a,b)=>Number(a.m)-Number(b.m));
+  const peak=[...per].sort((a,b)=>b.v-a.v)[0];
+  const rows=per.map(x=>[x.m+"월",x.v]);
+  return {html:`${y}년${period} 보자기에서 가장 ${asc?"적게":"많이"} 팔린 ${label}는 <b>${top.name}</b> — 총 <b>${fmt(top.v)}개</b>예요. 제일 많이 나간 달은 <b>${peak.m}월(${fmt(peak.v)}개)</b>! 월별은 아래 표를 봐주세요.`,
+    table:{title:`${y}년 ${top.name} 월별 판매량`,header:["월","판매량"],rows}};
+}
 function aiAnswer(q){
   const wantGraph=/그래프|차트/.test(q);
   const c=aiCompact(q);
@@ -3830,8 +3884,8 @@ function aiAnswer(q){
   const months=aiMonths(q);
   let item=aiFindItem(q);
   if(!item&&AI_CTX.item&&/판매량|몇개|수량/.test(c))item=AI_CTX.item; /* 직전 메뉴 이어받기 */
-  let a=null;
-  if(item)a=aiMenuAnswer(item,years,months);
+  let a=aiRankAnswer(q,years,months);
+  if(!a&&item)a=aiMenuAnswer(item,years,months);
   else if(/도움|사용법|뭐할|뭘할|help/.test(c))a={html:AI_HELP};
   else{
     const pnlTry=(c.indexOf("매출")<0||/손익|이익|판관비|원가|급여|비용/.test(c))?aiPnlAnswer(q,years,months):null;
