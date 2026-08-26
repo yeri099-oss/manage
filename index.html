@@ -3750,7 +3750,7 @@ function aiYears(q){const ys=(q.match(/20\d{2}/g)||[]).map(String);const now=new
   if(q.indexOf("올해")>=0||q.indexOf("금년")>=0)ys.push(String(now));
   return [...new Set(ys)];}
 function aiMonths(q){
-  const t=q.replace(/20\d{2}\s*년?/g,"");
+  const t=q.replace(/20\d{2}\s*년?/g,"").replace(/(톱|top|상위)\s*\d+/gi,"").replace(/\d+\s*위/g,"");
   const r=t.match(/(\d{1,2})\s*월?\s*(?:~|-|부터|에서)\s*(\d{1,2})\s*월/);
   if(r){const a=Number(r[1]),b=Number(r[2]);const out=[];for(let m=Math.min(a,b);m<=Math.max(a,b);m++)out.push(String(m));return out;}
   const m=t.match(/(\d{1,2})\s*월/);
@@ -3760,8 +3760,14 @@ const AI_CTX={};
 function aiEntExplicit(q){const c=aiCompact(q);for(const[k,als]of AI_ENT_DEFS)for(const a of als)if(c.indexOf(aiCompact(a))>=0)return k;return null;}
 function aiEnt(q){return aiEntExplicit(q)||AI_CTX.ent||"total";}
 function aiChartHtml(t){
-  const vi=t.header.length-1;
   const data=t.rows.filter(r=>!/합계|집계/.test(String(r[0])));
+  if(t.header.length>2){
+    const COLS=["#2f6b3f","#c9a227","#4a7fb5","#b5651d","#7d5ba6","#c0392b"];
+    const max=Math.max(1,...data.flatMap(r=>r.slice(1).map(v=>Math.abs(Number(v)||0))));
+    const legend=`<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:11px;margin:4px 0">${t.header.slice(1).map((h,i)=>`<span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${COLS[i%6]};margin-right:3px"></span>${h}</span>`).join("")}</div>`;
+    return `<div style="margin-top:6px"><div style="font-size:12px;font-weight:700;margin-bottom:3px">${t.title}</div>${legend}${data.map(r=>`<div style="display:flex;align-items:flex-start;gap:6px;margin:4px 0;font-size:11px"><span style="width:32px;text-align:right;color:var(--sub);padding-top:1px">${r[0]}</span><div style="flex:1;display:flex;flex-direction:column;gap:1px">${r.slice(1).map((v,i)=>{const n=Number(v)||0;const w=Math.max(1,Math.round(Math.abs(n)/max*100));return `<div style="display:flex;align-items:center;gap:4px"><div style="flex:1;background:rgba(0,0,0,0.04);border-radius:3px;height:9px"><div style="width:${w}%;height:100%;border-radius:3px;background:${COLS[i%6]}"></div></div><span style="width:70px;text-align:right">${fmt(n)}</span></div>`;}).join("")}</div></div>`).join("")}</div>`;
+  }
+  const vi=t.header.length-1;
   const nums=data.map(r=>Number(r[vi])||0);
   const max=Math.max.apply(null,nums.map(Math.abs).concat([1]));
   const total=t.rows.find(r=>/합계|집계/.test(String(r[0])));
@@ -3961,19 +3967,40 @@ function aiRankAnswer(q,years,months){
   if(topN&&topN>1){
     const rows=ranked.slice(0,topN).map((x,i)=>[(i+1)+"위",x.name,x.v]);
     return {html:menuAmtNote+`${y}년${period} ${asc?(byAmt?"매출이 낮은":"적게 팔린"):vword} ${label} 상위 ${topN}개예요.`,
+      rankCtx:{kind,y,ids:ranked.slice(0,topN).map(x=>x.id),names:ranked.slice(0,topN).map(x=>x.name),priceOf,label},
       table:{title:`${y}년${period} ${label} ${byAmt?"매출":"판매"} 순위`,header:["순위",label,byAmt?"매출(원)":"판매량"],rows}};
   }
   const top=ranked[0];
   if(ms.length===1){
     const rows=ranked.slice(0,5).map((x,i)=>[(i+1)+"위",x.name,x.v]);
     return {html:menuAmtNote+`${y}년 ${ms[0]}월 가장 ${asc?(byAmt?"매출이 낮은":"적게 팔린"):vword} ${label}는 <b>${top.name}</b> — <b>${fmt(top.v)}${unit}</b>${aiJosa(unit,"이에요","예요")}.`,
+      rankCtx:{kind,y,ids:ranked.slice(0,5).map(x=>x.id),names:ranked.slice(0,5).map(x=>x.name),priceOf,label},
       table:{title:`${y}년 ${ms[0]}월 ${label} ${byAmt?"매출":"판매"} 순위`,header:["순위",label,byAmt?"매출(원)":"판매량"],rows}};
   }
   const per=ms.map(m=>({m,q:itemSum((ydoc.months[m]||{})[top.id])})).filter(x=>x.q>0).map(x=>({m:x.m,v:byAmt?x.q*(priceOf[top.id]||0):x.q})).sort((a,b)=>Number(a.m)-Number(b.m));
   const peak=[...per].sort((a,b)=>b.v-a.v)[0];
   const rows=per.map(x=>[x.m+"월",x.v]);
   return {html:menuAmtNote+`${y}년${period} 보자기에서 가장 ${asc?(byAmt?"매출이 낮은":"적게 팔린"):vword} ${label}는 <b>${top.name}</b> — 총 <b>${fmt(top.v)}${unit}</b>${aiJosa(unit,"이에요","예요")}. 제일 ${byAmt?"매출이 컸던":"많이 나간"} 달은 <b>${peak.m}월(${fmt(peak.v)}${unit})</b>! 월별은 아래 표를 봐주세요.`,
+    rankCtx:{kind,y,ids:ranked.slice(0,3).map(x=>x.id),names:ranked.slice(0,3).map(x=>x.name),priceOf,label},
     table:{title:`${y}년 ${top.name} 월별 ${byAmt?"매출(원)":"판매량"}`,header:["월",byAmt?"매출(원)":"판매량"],rows}};
+}
+function aiFollowRank(q){
+  const R=AI_CTX.rank;if(!R)return null;
+  const c=aiCompact(q);
+  if(!/(월별|달별|추이|매달|월마다)/.test(c))return null;
+  if(!/(톱|top|상위|순위|위|이|그|얘|방금|아까)/.test(c))return null;
+  const col=R.kind==="menu"?"bojagiMenu":"bojagiDrinks";
+  const ydoc=(S.data[col]||{})[R.y];if(!ydoc)return null;
+  const wantAmt=/(매출|금액)/.test(c)&&R.kind==="drink";
+  const ms=MONTHS.filter(m=>Object.keys(ydoc.months?.[m]||{}).length);
+  if(!ms.length)return null;
+  const ids=R.ids.slice(0,5),names=R.names.slice(0,5);
+  const rows=ms.map(m=>{const md=ydoc.months[m]||{};return [m+"월",...ids.map(id=>{const v=itemSum(md[id]);return wantAmt?v*((R.priceOf||{})[id]||0):v;})];});
+  const tot=["합계",...ids.map((id,i)=>rows.reduce((a2,r)=>a2+(Number(r[i+1])||0),0))];
+  rows.push(tot);
+  const unit=wantAmt?"매출":"판매량";
+  return {html:`${R.y}년 <b>${names.join(", ")}</b>의 월별 ${unit}이에요.`,
+    table:{title:`${R.y}년 ${R.label} 톱${ids.length} 월별 ${unit}${wantAmt?"(원)":""}`,header:["월",...names],rows}};
 }
 function aiAnswer(q){
   const wantGraph=/그래프|차트/.test(q);
@@ -3983,7 +4010,8 @@ function aiAnswer(q){
   const months=aiMonths(q);
   let item=aiFindItem(q);
   if(!item&&AI_CTX.item&&/판매량|몇개|수량/.test(c))item=AI_CTX.item; /* 직전 메뉴 이어받기 */
-  let a=aiRankAnswer(q,years,months);
+  let a=aiFollowRank(q);
+  if(!a)a=aiRankAnswer(q,years,months);
   if(!a&&item)a=aiMenuAnswer(item,years,months);
   if(!a&&/도움|사용법|뭐할|뭘할|help/.test(c))a={html:AI_HELP};
   if(!a){
@@ -4002,6 +4030,7 @@ function aiAnswer(q){
   if(aiYears(q).length)AI_CTX.years=aiYears(q);
   if(aiFindItem(q))AI_CTX.item=aiFindItem(q);
   if(a.table)AI_CTX.lastTable=a.table;
+  if(a.rankCtx)AI_CTX.rank=a.rankCtx;
   if(wantGraph&&a.table)a.graph=true;
   return a;
 }
