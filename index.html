@@ -1028,6 +1028,7 @@ async function loadAllData() {
     try { S.data.pnl = JSON.parse(localStorage.getItem("kb_pnl") || "null") || seed.pnl || {}; } catch (e) { S.data.pnl = {}; }
     S.data.menuItems = seed.bojagiMenuItems;
     S.data.drinkItems = seed.bojagiDrinkItems;
+    pnlNormalizeKeys();
     return;
   }
   const jobs = COLS.map(async (col) => {
@@ -1038,7 +1039,26 @@ async function loadAllData() {
   });
   jobs.push(fsCol("config").doc("bojagiMenuItems").get().then((d) => { S.data.menuItems = d.data()?.items || []; }));
   jobs.push(fsCol("config").doc("bojagiDrinkItems").get().then((d) => { S.data.drinkItems = d.data()?.items || []; }));
+  jobs.push(db.collection("salesStatus_months").get().then((snap) => { S.cfmYms = []; snap.forEach((d) => S.cfmYms.push(d.id)); }).catch(() => {}));
   await Promise.all(jobs);
+  pnlNormalizeKeys();
+}
+function pnlNormalizeKeys(){
+  try{
+    const P=S.data.pnl||{};
+    const ren=[];
+    for(const k of Object.keys(P)){
+      const m=k.match(/^(\d{4})-(\d)$/);
+      if(!m)continue;
+      const nk=`${m[1]}-0${m[2]}`;
+      if(!P[nk])P[nk]=P[k];
+      delete P[k];
+      ren.push([k,nk]);
+    }
+    if(ren.length&&!IS_DEMO&&typeof db!=="undefined"&&db){
+      (async()=>{for(const[ok2,nk]of ren){try{await fsCol("pnl").doc(nk).set(S.data.pnl[nk]);await fsCol("pnl").doc(ok2).delete();}catch(e){console.warn("pnl 키 정리",ok2,e.message);}}})();
+    }
+  }catch(e){console.error(e);}
 }
 function wrapYears(obj, key) {
   const out = {};
@@ -1329,7 +1349,10 @@ function homeChecklist(){
     const pad=n=>String(n).padStart(2,"0");
     const items=[];
     const cfmM=(window.__cfmApp&&window.__cfmApp.MONTHS)||{};
-    items.push({name:`${lm}월 매출확정`,ok:!!(cfmM[`${String(ly).slice(2)}${pad(lm)}`]||cfmM[`${ly}-${pad(lm)}`]||cfmM[`${ly}${pad(lm)}`]),go:`(function(){var b=document.getElementById('cfmTabBtn');if(b)b.click();else toast('매출확정은 관리자 계정에서 보여요',true);})()`});
+    let cfmLoc={};try{cfmLoc=JSON.parse(localStorage.getItem("ssv2_months")||"{}");}catch(e){}
+    const wantK=[`${String(ly).slice(2)}${pad(lm)}`,`${ly}-${pad(lm)}`,`${ly}${pad(lm)}`];
+    const cfmOk=wantK.some(k=>cfmM[k]||cfmLoc[k]||(S.cfmYms||[]).indexOf(k)>=0);
+    items.push({name:`${lm}월 매출확정`,ok:cfmOk,go:`(function(){var b=document.getElementById('cfmTabBtn');if(b)b.click();else toast('매출확정은 관리자 계정에서 보여요',true);})()`});
     items.push({name:`${lm}월 국세청 매출 반영`,ok:scGet(String(ly),String(lm),"total")!=null,go:`switchTab('compare')`});
     items.push({name:`${lm}월 매출현황 입력`,ok:!!(S.data.monthly[ly]&&S.data.monthly[ly].months&&S.data.monthly[ly].months[lm]),go:`switchTab('sales');setSalesSub('monthly')`});
     items.push({name:`${lm}월 손익 업로드`,ok:!!(S.data.pnl&&S.data.pnl[`${ly}-${pad(lm)}`]),go:`switchTab('pnl')`});
@@ -3700,7 +3723,7 @@ window.pnlFilesApply=async function(){
     const touched=new Set();
     for(const f of fl){
       f.months.forEach((mo,mi)=>{
-        const key=mo.y+"-"+mo.m;
+        const key=mo.y+"-"+String(mo.m).padStart(2,"0");
         const docm=(S.data.pnl[key]=S.data.pnl[key]||{savedAt:null,rows:[]});
         let lastIdx=-1;
         for(const acc of f.accounts){
@@ -3728,6 +3751,13 @@ window.pnlFilesApply=async function(){
   }catch(e){if(err){err.style.display="block";err.textContent=e.message||"반영 실패";}}
 };
 
+window.pnlHlNote=function(key,encN,v){
+  const d=(S.data.pnl||{})[key];if(!d)return;
+  const n=decodeURIComponent(encN);
+  d.hlNotes=d.hlNotes||{};
+  if(v&&v.trim())d.hlNotes[n]=v.trim();else delete d.hlNotes[n];
+  queueSave("pnl",key);
+};
 function pnlHighlights(key,keys){
   try{
     const P=S.data.pnl||{};
@@ -3755,7 +3785,15 @@ function pnlHighlights(key,keys){
       if(Math.abs(d)>=300000&&Math.abs(pct)>=30)alerts.push({n:r.n.trim(),c,p,d,pct});
     }
     alerts.sort((a,b)=>Math.abs(b.d)-Math.abs(a.d));
-    const al=alerts.slice(0,3).map(x=>`<div style="font-size:12.5px;margin-top:3px">· <b>${x.n}</b> ${fmt(x.p)} → ${fmt(x.c)} <span style="color:${x.d>0?"#C00000":"#1c6b2f"};font-weight:700">(${x.d>0?"+":""}${x.pct.toFixed(0)}%)</span></div>`).join("");
+    const notes=(cur.hlNotes||{});
+    const isAd=S.user?.role==="admin";
+    const al=alerts.slice(0,3).map(x=>{
+      const nt=notes[x.n]||"";
+      const noteHtml=isAd
+        ?`<input class="cell-in" style="margin-left:8px;width:min(260px,50vw);font-size:12px;padding:2px 8px" placeholder="비고 — 급증·급감 사유 메모" value="${esc(nt)}" onchange="pnlHlNote('${key}','${encodeURIComponent(x.n)}',this.value)">`
+        :(nt?` <span style="color:var(--sub)">— ${esc(nt)}</span>`:"");
+      return `<div style="font-size:12.5px;margin-top:4px;display:flex;align-items:center;flex-wrap:wrap">· <b style="margin:0 4px">${x.n}</b> ${fmt(x.p)} → ${fmt(x.c)} <span style="color:${x.d>0?"#C00000":"#1c6b2f"};font-weight:700;margin-left:4px">(${x.d>0?"+":""}${x.pct.toFixed(0)}%)</span>${noteHtml}</div>`;
+    }).join("");
     const top=line("매출",sc,sp)+line("영업손익",oc,op);
     if(!top&&!al)return "";
     return `<div class="card"><div class="card-title">전월(${pk.split("-")[0]}년 ${Number(pk.split("-")[1])}월) 대비 <span class="unit">꽃밥이야기 전체 기준</span></div>
