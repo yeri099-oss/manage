@@ -364,7 +364,7 @@ table.rpt {
 .rpt td.cb, .rpt th.cb, .rpt tr.total td.cb { background: #D6DCE4; }
 .rpt td.cy2, .rpt th.cy2, .rpt tr.total td.cy2 { background: #FFE699; }
 .rpt tr.trp td, .rpt tr.total.trp td { background: #FCE4D6; }
-.rpt tr.trg td, .rpt tr.total.trg td { background: #E2EFDA; }
+.rpt tr.trg td, .rpt tr.total.trg td { background: #FBE5D6; }
 .rpt td.price { color: #1c5cab; }
 .drag-handle { cursor: grab; color: var(--ink-muted); padding: 0 6px 0 0; user-select: none; }
 li.dragging { opacity: .4; }
@@ -3208,14 +3208,14 @@ function renderAgency() {
       colTot["d:" + ch] = (colTot["d:" + ch] || 0) + (v || 0);
       tr += `<td${vb}>${edNum(v, ds("delivery", ch))}</td>`;
     }
-    if (dCh.length) { if (!dSingle) tr += `<td class="cy"${vb}><b>${c && c.dSub != null ? fmt(c.dSub) : ""}</b></td>`; tDSub += c?.dSub || 0; }
+    if (dCh.length) { if (!dSingle) tr += `<td class="cy"><b>${c && c.dSub != null ? fmt(c.dSub) : ""}</b></td>`; tDSub += c?.dSub || 0; }
     for (const ch of oCh) {
       const v = c?.online?.[ch];
       colTot["o:" + ch] = (colTot["o:" + ch] || 0) + (v || 0);
       tr += `<td${vb}>${edNum(v, ds("online", ch))}</td>`;
     }
-    if (oCh.length) { tr += `<td class="cy"${vb}><b>${c && c.oSub != null ? fmt(c.oSub) : ""}</b></td>`; tOSub += c?.oSub || 0; }
-    tr += `<td class="cy2"${vb}><b>${c && c.total != null ? fmt(c.total) : ""}</b></td>`;
+    if (oCh.length) { tr += `<td class="cy"><b>${c && c.oSub != null ? fmt(c.oSub) : ""}</b></td>`; tOSub += c?.oSub || 0; }
+    tr += `<td class="cy2"><b>${c && c.total != null ? fmt(c.total) : ""}</b></td>`;
     if (edMode()) tr += `<td style="text-align:center"><input type="checkbox" ${ver ? "checked" : ""} onchange="agToggleVerified('${year}','${m}',this.checked)"></td>`;
     rows += `<tr>${tr}</tr>`;
   }
@@ -3956,6 +3956,40 @@ function aiScVal(y,m,entKey){
   const v=scGet(y,m,aiEntInfo(entKey).sc);
   return v==null?null:v;
 }
+function aiPosAnswer(q,years,months){
+  const ek=aiEnt(q);
+  const MAP={epida:["insadong","꽃밥에피다(인사동)"],market:["market","꽃밥마켓"],bojagi:["bojagi","보자기꽃밥"],bukchon:["bukchon","북촌"],total:["total","꽃밥이야기 전체"]};
+  const mp=MAP[ek]||MAP.total;
+  const yrsAll=Object.keys(S.data.monthly||{}).sort();
+  if(!yrsAll.length)return {html:"매출현황(포스기준) 데이터가 아직 없어요."};
+  const yrs=years.length?years:[yrsAll[yrsAll.length-1]];
+  const out=[];let lastTable=null;let lastY=yrs[yrs.length-1];
+  for(const y of yrs){
+    const doc=S.data.monthly[y];
+    if(!doc||!Object.keys(doc.months||{}).length){
+      out.push(`${y}년 포스기준 매출 데이터가 없어요. 데이터가 있는 해: ${yrsAll.join(", ")}년`);continue;
+    }
+    let ms=MONTHS.filter(m=>monthlyCalc(y,m).has);
+    if(months)ms=ms.filter(m=>months.includes(m));
+    if(!ms.length){out.push(`${y}년${months?` ${months.join(",")}월`:""} 포스기준 데이터가 없어요.`);continue;}
+    const rows=[];let sum=0;
+    for(const m of ms){
+      const cc=monthlyCalc(y,m);
+      const v=mp[0]==="total"?cc.total:mp[0]==="bukchon"?cc.bukchon:cc[mp[0]];
+      if(v!=null){rows.push([m+"월",v]);sum+=v;}
+    }
+    if(!rows.length){out.push(`${y}년 ${mp[1]} 포스기준 데이터가 없어요.`);continue;}
+    if(months&&months.length===1)
+      out.push(`${y}년 ${ms[0]}월 <b>${mp[1]}</b> 매출(포스기준·부가세포함)은 <b>${fmt(sum)}원</b>이에요.`);
+    else{
+      rows.push(["합계",sum]);
+      out.push(`${y}년${months?` ${ms[0]}~${ms[ms.length-1]}월`:""} <b>${mp[1]}</b> 매출(포스기준·부가세포함)은 <b>${fmt(sum)}원</b>이에요.`);
+      lastTable={title:`${y}년 ${mp[1]} 매출 (포스기준)`,header:["월","매출(원)"],rows};
+    }
+    lastY=y;
+  }
+  return {html:out.join("<br>"),table:lastTable,goto:["monthly",lastY,"",""]};
+}
 function aiSalesAnswer(q,years,months){
   const ek=aiEnt(q);
   const entName=aiEntInfo(ek).name;
@@ -4027,7 +4061,7 @@ function aiPnlAnswer(q,years,months){
   }
   return {html:out.join("<br>"),table:lastTable,goto:["pnl",yrs[yrs.length-1],(months&&months.length===1)?`${yrs[yrs.length-1]}-${String(months[0]).padStart(2,"0")}`:"",""]};
 }
-const AI_HELP=`이런 걸 물어볼 수 있어요:<br>· "2025년 보자기비빔밥 판매량" (메뉴·주류)<br>· "올해 가장 많이 팔린 메뉴" / "주류 톱3" / "3월에 제일 많이 팔린 메뉴"<br>· "올해 마켓 매출" / "2026년 3월 전체 매출"<br>· "2026년 에피다 영업손익" / "7월 판관비" (관리자)<br>연도·월·사업장을 함께 적으면 더 정확해요.<br>답 다음에 "그래프로 보여줘"라고 하면 방금 결과를 그래프로 그려줘요.`;
+const AI_HELP=`이런 걸 물어볼 수 있어요:<br>· "2025년 보자기비빔밥 판매량" (메뉴·주류)<br>· "올해 가장 많이 팔린 메뉴" / "주류 톱3" / "3월에 제일 많이 팔린 메뉴"<br>· "올해 마켓 매출" / "2026년 3월 전체 매출" — 그냥 물으면 국세청기준(매출비교), "포스기준"을 붙이면 매출현황(포스) 금액으로 답해요<br>· "2026년 에피다 영업손익" / "7월 판관비" (관리자)<br>연도·월·사업장을 함께 적으면 더 정확해요.<br>답 다음에 "그래프로 보여줘"라고 하면 방금 결과를 그래프로 그려줘요.`;
 function aiJosa(w,a,b){const ch=String(w).charCodeAt(String(w).length-1);return(ch>=0xAC00&&ch<=0xD7A3&&(ch-0xAC00)%28>0)?a:b;}
 function aiRankAnswer(q,years,months){
   const c=aiCompact(q);
@@ -4144,6 +4178,7 @@ function aiAnswer(q){
   if(!a)a=aiRankAnswer(q,years,months);
   if(!a&&item)a=aiMenuAnswer(item,years,months);
   if(!a&&/도움|사용법|뭐할|뭘할|help/.test(c))a={html:AI_HELP};
+  if(!a&&c.indexOf("포스")>=0&&c.indexOf("매출")>=0)a=aiPosAnswer(q,years,months);
   if(!a){
     const pnlTry=(c.indexOf("매출")<0||/손익|이익|판관비|원가|급여|비용/.test(c))?aiPnlAnswer(q,years,months):null;
     if(pnlTry)a=pnlTry;
