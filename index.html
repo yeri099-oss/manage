@@ -4040,7 +4040,7 @@ function aiPnlAnswer(q,years,months){
   const out=[];let lastTable=null;
   for(const y of yrs){
     let yk=keys.filter(k=>k.split("-")[0]===y).sort((a,b)=>Number(a.split("-")[1])-Number(b.split("-")[1]));
-    if(months)yk=yk.filter(k=>months.includes(k.split("-")[1]));
+    if(months)yk=yk.filter(k=>months.map(Number).includes(Number(k.split("-")[1])));
     if(!yk.length){
       const have=[...new Set(keys.map(k=>k.split("-")[0]))].sort();
       out.push(`${y}년 해당 기간의 손익 데이터가 없어요.`+(have.length?` 데이터가 있는 해: ${have.join(", ")}년`+aiChips(have.slice(-3).map(yy=>({label:yy+"년 보기",q:`${yy}년 ${entName} ${best.n.replace(/^\d+\.\s*/,"")}`}))):""));
@@ -4049,13 +4049,13 @@ function aiPnlAnswer(q,years,months){
     const valOf=k=>{const r=P[k].rows.find(x=>x.n===best.n);return r?(r.v[ent]??null):null;};
     if(single){
       const v=valOf(yk[0]);
-      out.push(v==null?`${y}년 ${months[0]}월 ${entName} ${best.n} 데이터가 없어요.`:`${y}년 ${months[0]}월 <b>${entName}</b>의 <b>${best.n}</b>은(는) <b>${fmt(v)}원</b>이에요.`);
+      out.push(v==null?`${y}년 ${months[0]}월 ${entName} ${best.n.trim()} 데이터가 없어요.`:`${y}년 ${months[0]}월 <b>${entName}</b>의 <b>${best.n.trim()}</b>${aiJosa(best.n.trim(),"은","는")} <b>${fmt(v)}원</b>이에요.`);
     }else{
       const vals=yk.map(valOf);
       const agg=pnlAggOf(best.n,vals);
       if(agg==null){out.push(`${y}년 ${entName} ${best.n} 데이터가 없어요.`);continue;}
       const rows=yk.map((k,i)=>[k.split("-")[1]+"월",vals[i]??""]);rows.push(["집계",agg]);
-      out.push(`${y}년 <b>${entName}</b>의 <b>${best.n}</b>은(는) 집계 <b>${fmt(agg)}원</b>이에요 (${yk[0].split("-")[1]}~${yk[yk.length-1].split("-")[1]}월).`);
+      out.push(`${y}년 <b>${entName}</b>의 <b>${best.n.trim()}</b>${aiJosa(best.n.trim(),"은","는")} 집계 <b>${fmt(agg)}원</b>이에요 (${yk[0].split("-")[1]}~${yk[yk.length-1].split("-")[1]}월).`);
       lastTable={title:`${y}년 ${entName} ${best.n}`,header:["월","금액(원)"],rows};
     }
   }
