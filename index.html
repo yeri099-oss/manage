@@ -1885,6 +1885,44 @@ async function exportSalesAll(){
         });
         push(tr,16.5);
         MG.push([ri,0,ri,1]);
+        /* 메뉴별: 월별 판매수량(소계) 피벗 추가 */
+        if(kind==="menu"){
+          const monthsAsc=[...monthsD].sort((x,y2)=>Number(x)-Number(y2));
+          const pw=2+monthsAsc.length+2;
+          const mT={};let grand2=0;
+          monthsAsc.forEach(m=>{let t2=0;for(const id in (mdAll[m]||{}))t2+=itemSum(mdAll[m][id]);mT[m]=t2;grand2+=t2;});
+          const orderedItems=cats.flatMap(cc=>items.filter(i=>i.cat===cc));
+          const bands2=bojagiBandColor(orderedItems);
+          push([],10);
+          let r0=R.length;
+          push([cell(`${year}년 월별 판매수량 (소계) · 단위: 개`,XF2(F.head,L.gray,bIdx("lrtb"),0,"c"),true)],20);
+          MG.push([r0,0,r0,pw-1]);
+          r0=R.length;
+          const hd=[cell("메뉴",XF2(F.head,L.gray,bIdx("ltb"),0,"c"),true),cell("",XF2(F.head,L.gray,bIdx("tb"),0,"c"),true)];
+          monthsAsc.forEach(m=>hd.push(cell(m+"월",XF2(F.head,L.gray,bIdx("tb"),0,"c"),true)));
+          hd.push(cell("합계",XF2(F.head,L.gray,bIdx("tb"),0,"c"),true));
+          hd.push(cell("점유율",XF2(F.head,L.gray,bIdx("rtb"),0,"c"),true));
+          push(hd,16.5);MG.push([r0,0,r0,1]);
+          orderedItems.forEach((it,ii)=>{
+            const fl2=bands2[ii]?L.green:L.none;
+            let sum2=0;
+            const row2=[cell(it.name,XF2(F.data,fl2,bIdx("l"),0,"l"),true),cell("",XF2(F.data,fl2,bIdx(""),0,"l"),true)];
+            monthsAsc.forEach(m=>{
+              const q2=(mdAll[m]||{})[it.id];const v2=q2?itemSum(q2):0;sum2+=v2;
+              row2.push(cell(v2||null,XF2(F.data,fl2,bIdx(""),3,"r")));
+            });
+            row2.push(cell(sum2||null,XF2(F.head,fl2,bIdx(""),3,"r")));
+            row2.push(cell(sum2&&grand2?sum2/grand2:null,XF2(F.data,fl2,bIdx("r"),9,"c")));
+            const rr2=R.length;
+            push(row2,16.5);MG.push([rr2,0,rr2,1]);
+          });
+          const r3=R.length;
+          const tr2=[cell("합계",XF2(F.head,L.orange,bIdx("ltb"),0,"c"),true),cell("",XF2(F.head,L.orange,bIdx("tb"),0,"c"),true)];
+          monthsAsc.forEach(m=>tr2.push(cell(mT[m]||null,XF2(F.head,L.orange,bIdx("tb"),3,"r"))));
+          tr2.push(cell(grand2||null,XF2(F.head,L.orange,bIdx("tb"),3,"r")));
+          tr2.push(cell(grand2?1:null,XF2(F.head,L.orange,bIdx("rtb"),9,"c")));
+          push(tr2,16.5);MG.push([r3,0,r3,1]);
+        }
         /* XML */
         const widths=[7.2,17.5];monthsD.forEach(()=>widths.push(6.2,6.2,6.2,6.8,6.8));
         let x='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols>'
@@ -2888,66 +2926,67 @@ function renderBojagiMenu(year, month, yearSel, monthSel) {
   const tot = bojagiMonthTotal(year, month);
   const items = menuItemsPlus(year, month);
   const cats = [...new Set(items.map((i) => i.cat))];
-  let rows = "";
-  const ordered = cats.flatMap((c) => items.filter((i) => i.cat === c));
-  const bands = bojagiBandColor(ordered);
-  let bi = 0;
-  for (const cat of cats) {
-    const catItems = items.filter((i) => i.cat === cat);
-    if (!catItems.length) continue;
-    rows += `<tr class="subhead"><td colspan="6">${esc(cat)}</td></tr>`;
-    for (const it of catItems) {
-      const q = md[it.id];
-      const sum = itemSum(q);
-      const bg = bands[bi++] ? "#E2EFDA" : null;
-      const rowCls = "";
-      const ds = (f) => `data-t="bm" data-y="${year}" data-m="${month}" data-id="${it.id}" data-f="${f}"`;
-      rows += `<tr${bg ? ` style="background:${bg}"` : ""}><td class="l sticky"${bg ? ` style="background:${bg}"` : ""}>${esc(it.name)}</td>
+  const leftCats = cats.filter((c) => String(c || "").indexOf("한상") >= 0);
+  const rightCats = cats.filter((c) => String(c || "").indexOf("한상") < 0);
+  const sideTable = (sideCats) => {
+    const sideItems = sideCats.flatMap((c) => items.filter((i) => i.cat === c));
+    if (!sideItems.length) return "";
+    const bands = bojagiBandColor(sideItems);
+    let rows = ""; let bi = 0;
+    for (const cat of sideCats) {
+      const catItems = items.filter((i) => i.cat === cat);
+      if (!catItems.length) continue;
+      rows += `<tr class="subhead"><td colspan="6">${esc(cat)}</td></tr>`;
+      for (const it of catItems) {
+        const q = md[it.id];
+        const sum = itemSum(q);
+        const bg = bands[bi++] ? "#E2EFDA" : null;
+        const ds = (f) => `data-t="bm" data-y="${year}" data-m="${month}" data-id="${it.id}" data-f="${f}"`;
+        rows += `<tr${bg ? ` style="background:${bg}"` : ""}><td class="l sticky"${bg ? ` style="background:${bg}"` : ""}>${esc(it.name)}</td>
         <td>${edMode() ? edNum(q?.k, ds("k")) : (q ? fmt(q.k) : "")}</td><td>${edMode() ? edNum(q?.p, ds("p")) : (q ? fmt(q.p) : "")}</td><td>${edMode() ? edNum(q?.d, ds("d")) : (q ? fmt(q.d) : "")}</td>
         <td><b>${q ? fmt(sum) : ""}</b></td>
         <td>${q && tot.sum ? (sum / tot.sum * 100).toFixed(1) + "%" : ""}</td></tr>`;
+      }
     }
-  }
-  // 월별 소계 피벗
-  let pivotHead = `<tr><th class="l sticky">메뉴</th>` + MONTHS.map((m) => `<th>${m}월</th>`).join("") + `</tr>`;
+    return `<div style="flex:1;min-width:330px"><div class="table-wrap"><table class="rpt">
+      <thead><tr><th class="l sticky">메뉴</th><th>키오스크</th><th>포스</th><th>배달</th><th>소계</th><th>점유율</th></tr></thead>
+      <tbody>${rows}</tbody></table></div></div>`;
+  };
+  const mTot = {}; let grand = 0;
+  MONTHS.forEach((m) => { const t = bojagiMonthTotal(year, m); mTot[m] = t.sum || 0; grand += t.sum || 0; });
+  let pivotHead = `<tr><th class="l sticky">메뉴</th>` + MONTHS.map((m) => `<th>${m}월</th>`).join("") + `<th>합계</th><th>점유율</th></tr>`;
   let pivotRows = "";
   S.data.menuItems.forEach((it, zi) => {
-    let tr = `<td class="l sticky">${esc(it.name)}</td>`;
+    let sum = 0, tds = "";
     for (const m of MONTHS) {
       const q = S.data.bojagiMenu[year]?.months?.[m]?.[it.id];
-      tr += `<td>${q ? fmt(itemSum(q)) : ""}</td>`;
+      const v = q ? itemSum(q) : 0; sum += v;
+      tds += `<td>${v ? fmt(v) : ""}</td>`;
     }
-    pivotRows += `<tr class="${zi % 2 === 0 ? "zr" : ""}">${tr}</tr>`;
+    pivotRows += `<tr class="${zi % 2 === 0 ? "zr" : ""}"><td class="l sticky">${esc(it.name)}</td>${tds}<td><b>${sum ? fmt(sum) : ""}</b></td><td>${sum && grand ? (sum / grand * 100).toFixed(1) + "%" : ""}</td></tr>`;
   });
-  let pivotTotal = `<td class="l sticky">합계</td>` + MONTHS.map((m) => {
-    const t = bojagiMonthTotal(year, m);
-    return `<td>${t.sum ? fmt(t.sum) : ""}</td>`;
-  }).join("");
+  const pivotTotal = `<td class="l sticky">합계</td>` + MONTHS.map((m) => `<td>${mTot[m] ? fmt(mTot[m]) : ""}</td>`).join("") + `<td>${grand ? fmt(grand) : ""}</td><td>${grand ? "100%" : ""}</td>`;
   return `
   <div class="card">
     <div class="card-head">
-      <div class="card-title">보자기 메뉴별 판매현황 — ${year}년 ${month}월 <span class="unit">단위: 개</span></div>
+      <div class="card-title">${year}년 월별 판매수량 (소계) <span class="unit">단위: 개</span></div>
       <div class="card-actions">${yearSel} ${monthSel} ${editBtn()} ${adminBtn(`openBojagiMenuForm(${year},'${month}')`)}</div>
     </div>
-    <div class="table-wrap">
-      <table class="rpt">
-        <thead><tr><th class="l sticky">메뉴</th><th>키오스크</th><th>포스</th><th>배달</th><th>소계</th><th>점유율</th></tr></thead>
-        <tbody>${rows}
-        <tr class="total trp"><td class="l sticky">합계</td><td>${fmt(tot.k)}</td><td>${fmt(tot.p)}</td><td>${fmt(tot.d)}</td><td>${fmt(tot.sum)}</td><td>${tot.sum ? "100%" : ""}</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-  <div class="card">
-    <div class="card-title">${year}년 ${month}월 메뉴별 판매량</div>
-    <div class="chart-box tall"><canvas id="ch-bmenu-bar"></canvas></div>
-  </div>
-  <div class="card">
-    <div class="card-title">${year}년 월별 판매수량 (소계)</div>
     <div class="table-wrap">
       <table class="rpt"><thead>${pivotHead}</thead><tbody>${pivotRows}<tr class="total">${pivotTotal}</tr></tbody></table>
     </div>
     <div class="chart-box"><canvas id="ch-bmenu-trend"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="card-title">보자기 메뉴별 판매현황 — ${year}년 ${month}월 <span class="unit">단위: 개</span></div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start">${sideTable(leftCats)}${sideTable(rightCats)}</div>
+    <div class="table-wrap" style="margin-top:8px"><table class="rpt"><tbody>
+      <tr class="total trp"><td class="l sticky">합계</td><td>키오스크 ${fmt(tot.k)}</td><td>포스 ${fmt(tot.p)}</td><td>배달 ${fmt(tot.d)}</td><td><b>소계 ${fmt(tot.sum)}</b></td><td>100%</td></tr>
+    </tbody></table></div>
+  </div>
+  <div class="card">
+    <div class="card-title">${year}년 ${month}월 메뉴별 판매량</div>
+    <div class="chart-box tall"><canvas id="ch-bmenu-bar"></canvas></div>
   </div>`;
 }
 function chartsBojagiMenu(year, month) {
@@ -2989,48 +3028,52 @@ function renderBojagiDrinks(year, month, yearSel, monthSel) {
   const md = S.data.bojagiDrinks[year]?.months?.[month] || {};
   const tot = drinksMonthTotal(year, month);
   const items = drinkItemsPlus(year, month);
-  let rows = "";
-  const bands = bojagiBandColor(items.map((x) => ({ ...x, cat: "주류" })));
-  items.forEach((it, i) => {
-    const q = md[it.id];
-    const sum = itemSum(q);
-    const bg = bands[i] ? "#E2EFDA" : null;
-    const ds = (f) => `data-t="bd" data-y="${year}" data-m="${month}" data-id="${it.id}" data-f="${f}"`;
-    const priceCell = edMode() && !it.name.includes("삭제된")
-      ? `<td class="price"><input class="cell-in" inputmode="numeric" value="${fmt(it.price)}" data-t="dp" data-id="${it.id}"></td>`
-      : "";
-    rows += `<tr${bg ? ` style="background:${bg}"` : ""}>${priceCell}<td class="l"${bg ? ` style="background:${bg}"` : ""}>${esc(it.name)}</td>
+  const half = Math.ceil(items.length / 2);
+  const sides = [items.slice(0, half), items.slice(half)];
+  const sideTable = (sideItems) => {
+    if (!sideItems.length) return "";
+    const bands = bojagiBandColor(sideItems.map((x) => ({ ...x, cat: "주류" })));
+    let rows = "";
+    sideItems.forEach((it, i) => {
+      const q = md[it.id];
+      const sum = itemSum(q);
+      const bg = bands[i] ? "#E2EFDA" : null;
+      const ds = (f) => `data-t="bd" data-y="${year}" data-m="${month}" data-id="${it.id}" data-f="${f}"`;
+      const priceCell = edMode() && !it.name.includes("삭제된")
+        ? `<td class="price"><input class="cell-in" inputmode="numeric" value="${fmt(it.price)}" data-t="dp" data-id="${it.id}"></td>`
+        : (edMode() ? "<td></td>" : "");
+      rows += `<tr${bg ? ` style="background:${bg}"` : ""}>${priceCell}<td class="l"${bg ? ` style="background:${bg}"` : ""}>${esc(it.name)}</td>
       <td>${edMode() ? edNum(q?.k, ds("k")) : (q ? fmt(q.k) : "")}</td><td>${edMode() ? edNum(q?.p, ds("p")) : (q ? fmt(q.p) : "")}</td><td>${edMode() ? edNum(q?.d, ds("d")) : (q ? fmt(q.d) : "")}</td>
       <td><b>${q ? fmt(sum) : ""}</b></td><td>${q && tot.sum ? (sum / tot.sum * 100).toFixed(1) + "%" : ""}</td></tr>`;
-  });
-  let pivotHead = `<tr><th class="l sticky">품목</th>` + MONTHS.map((m) => `<th>${m}월</th>`).join("") + `</tr>`;
+    });
+    return `<div style="flex:1;min-width:330px"><div class="table-wrap"><table class="rpt">
+      <thead><tr>${edMode() ? "<th>단가</th>" : ""}<th class="l">품목</th><th>키오스크</th><th>포스</th><th>배달</th><th>소계</th><th>점유율</th></tr></thead>
+      <tbody>${rows}</tbody></table></div></div>`;
+  };
+  const mTot = {}; let grand = 0;
+  MONTHS.forEach((m) => { const t = drinksMonthTotal(year, m); mTot[m] = t.sum || 0; grand += t.sum || 0; });
+  let pivotHead = `<tr><th class="l sticky">품목</th>` + MONTHS.map((m) => `<th>${m}월</th>`).join("") + `<th>합계</th><th>점유율</th></tr>`;
   let pivotRows = "";
   S.data.drinkItems.forEach((it, zi) => {
-    let tr = `<td class="l sticky">${esc(it.name)}</td>`;
+    let sum = 0, tds = "";
     for (const m of MONTHS) {
       const q = S.data.bojagiDrinks[year]?.months?.[m]?.[it.id];
-      tr += `<td>${q ? fmt(itemSum(q)) : ""}</td>`;
+      const v = q ? itemSum(q) : 0; sum += v;
+      tds += `<td>${v ? fmt(v) : ""}</td>`;
     }
-    pivotRows += `<tr class="${zi % 2 === 0 ? "zr" : ""}">${tr}</tr>`;
+    pivotRows += `<tr class="${zi % 2 === 0 ? "zr" : ""}"><td class="l sticky">${esc(it.name)}</td>${tds}<td><b>${sum ? fmt(sum) : ""}</b></td><td>${sum && grand ? (sum / grand * 100).toFixed(1) + "%" : ""}</td></tr>`;
   });
-  let pivotTotal = `<td class="l sticky">합계</td>` + MONTHS.map((m) => {
-    const t = drinksMonthTotal(year, m);
-    return `<td>${t.sum ? fmt(t.sum) : ""}</td>`;
-  }).join("");
+  const pivotTotal = `<td class="l sticky">합계</td>` + MONTHS.map((m) => `<td>${mTot[m] ? fmt(mTot[m]) : ""}</td>`).join("") + `<td>${grand ? fmt(grand) : ""}</td><td>${grand ? "100%" : ""}</td>`;
   return `
   <div class="card">
     <div class="card-head">
       <div class="card-title">보자기 주류·음료별 판매현황 — ${year}년 ${month}월 <span class="unit">단위: 개 / 원</span></div>
       <div class="card-actions">${yearSel} ${monthSel} ${editBtn()} ${adminBtn(`openBojagiDrinksForm(${year},'${month}')`)}</div>
     </div>
-    <div class="table-wrap">
-      <table class="rpt">
-        <thead><tr>${edMode() ? "<th>단가</th>" : ""}<th class="l">품목</th><th>키오스크</th><th>포스</th><th>배달</th><th>소계</th><th>점유율</th></tr></thead>
-        <tbody>${rows}
-        <tr class="total">${edMode() ? "<td></td>" : ""}<td class="l">합계</td><td>${fmt(tot.k)}</td><td>${fmt(tot.p)}</td><td>${fmt(tot.d)}</td><td>${fmt(tot.sum)}</td><td>100%</td></tr>
-        </tbody>
-      </table>
-    </div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start">${sideTable(sides[0])}${sideTable(sides[1])}</div>
+    <div class="table-wrap" style="margin-top:8px"><table class="rpt"><tbody>
+      <tr class="total"><td class="l sticky">합계</td><td>키오스크 ${fmt(tot.k)}</td><td>포스 ${fmt(tot.p)}</td><td>배달 ${fmt(tot.d)}</td><td><b>소계 ${fmt(tot.sum)}</b></td><td>100%</td></tr>
+    </tbody></table></div>
     <div class="footnote">단가는 "표에서 바로입력" 모드를 켜면 표에 나타나 직접 고칠 수 있어요 (설정 탭의 품목 관리에서도 가능).</div>
   </div>
   <div class="card">
@@ -3084,7 +3127,10 @@ function renderAgency() {
   const year = S.ui.agencyYear || latestYearOf("agency");
   S.ui.agencyYear = year;
   const Y = S.data.agency[year] || { deliveryChannels: [], onlineChannels: [], months: {} };
-  const dCh = Y.deliveryChannels || [], oCh = Y.onlineChannels || [];
+  const chHas = (kind, ch) => MONTHS.some((m) => { const mo = (Y.months || {})[m]; const v = mo && mo[kind] ? mo[kind][ch] : null; return v != null && v !== ""; });
+  const hideEmpty = !edMode();
+  const dCh = (Y.deliveryChannels || []).filter((c) => !hideEmpty || chHas("delivery", c));
+  const oCh = (Y.onlineChannels || []).filter((c) => !hideEmpty || chHas("online", c));
   let head1 = `<tr><th class="c sticky" rowspan="2">월별</th>`;
   if (dCh.length) head1 += `<th colspan="${dCh.length + 1}" class="c">배달</th>`;
   if (oCh.length) head1 += `<th colspan="${oCh.length + 1}" class="c">온라인</th>`;
@@ -3675,7 +3721,7 @@ function renderPnl(){
     const [ky,km]=key.split("-");
     const ents=PNL_ENTS.filter(([k])=>doc.rows.some(r=>r.v[k]!=null));
     const saleRow=doc.rows.find(r=>r.n.indexOf("매출")>=0&&r.lv===0);
-    const monthTabs=`<div class="subtabs" style="flex-wrap:wrap">`+keys.map(k=>`<button class="subtab ${k===key?"active":""}" onclick="pnlSetKey('${k}')">${k.split("-")[0].slice(2)}년 ${k.split("-")[1]}월</button>`).join("")+`</div>`;
+    const monthTabs=`<div class="subtabs"><select class="ctl" onchange="pnlSetKey(this.value)">${[...keys].reverse().map(k=>`<option value="${k}" ${k===key?"selected":""}>${k.split("-")[0]}년 ${k.split("-")[1]}월</option>`).join("")}</select></div>`;
     body=`<div class="card">
       <div class="card-head"><div class="card-title">${ky}년 ${km}월 손익현황 <span class="unit">매출액 대비 손익율 · 단위: 원</span></div>
       ${canEdit?`<button class="btn btn-sm" onclick="pnlDelete('${key}')">이 달 삭제</button>`:""}</div>
@@ -3719,7 +3765,7 @@ function renderPnl(){
       <div class="card-title">${entInfo[1]} — ${year}년 월별 손익 추이 <span class="unit">단위: 원 · 집계의 기초재고는 첫 달, 기말재고는 마지막 달 값</span></div>
       ${entTabs}
       <div class="table-wrap"><table class="rpt">
-        <thead><tr><th class="sticky">계정명</th>${yKeys.map(k=>`<th>${k.split("-")[1]}월</th>`).join("")}<th>집계</th></tr></thead>
+        <thead><tr><th class="sticky">계정명</th>${[...yKeys].reverse().map(k=>`<th>${k.split("-")[1]}월</th>`).join("")}<th>집계</th></tr></thead>
         <tbody>${names.map(({n,lv})=>{
           const vals=yKeys.map(k=>{const r=S.data.pnl[k].rows.find(x=>x.n===n);return r?r.v[ent]:null;});
           let agg=null;
@@ -3728,7 +3774,7 @@ function renderPnl(){
           else{const has=vals.filter(v=>v!=null);agg=has.length?has.reduce((a,b)=>a+b,0):null;}
           const bg=lv===0?pnlRowColor(n):null;
           const tdBg=bg?` style="background:${bg}"`:"";
-          return `<tr class="${lv===0?"total":""}"${bg?` style="background:${bg}"`:""}><td class="lab sticky" style="padding-left:${8+lv*14}px${bg?";background:"+bg:""}">${n}</td>${vals.map(v=>`<td${tdBg}>${fmtS(v)}</td>`).join("")}<td${tdBg}><b>${fmtS(agg)}</b></td></tr>`;
+          return `<tr class="${lv===0?"total":""}"${bg?` style="background:${bg}"`:""}><td class="lab sticky" style="padding-left:${8+lv*14}px${bg?";background:"+bg:""}">${n}</td>${[...vals].reverse().map(v=>`<td${tdBg}>${fmtS(v)}</td>`).join("")}<td${tdBg}><b>${fmtS(agg)}</b></td></tr>`;
         }).join("")}</tbody></table></div>
     </div>`;
   }
