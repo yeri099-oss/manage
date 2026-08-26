@@ -3283,9 +3283,23 @@ function aiMonths(q){
   const m=t.match(/(\d{1,2})\s*월/);
   return m?[String(Number(m[1]))]:null;
 }
-function aiEnt(q){const c=aiCompact(q);
-  for(const[k,als]of AI_ENT_DEFS)for(const a of als)if(c.indexOf(aiCompact(a))>=0)return k;
-  return "total";}
+const AI_CTX={};
+function aiEntExplicit(q){const c=aiCompact(q);for(const[k,als]of AI_ENT_DEFS)for(const a of als)if(c.indexOf(aiCompact(a))>=0)return k;return null;}
+function aiEnt(q){return aiEntExplicit(q)||AI_CTX.ent||"total";}
+function aiChartHtml(t){
+  const vi=t.header.length-1;
+  const data=t.rows.filter(r=>!/합계|집계/.test(String(r[0])));
+  const nums=data.map(r=>Number(r[vi])||0);
+  const max=Math.max.apply(null,nums.map(Math.abs).concat([1]));
+  const total=t.rows.find(r=>/합계|집계/.test(String(r[0])));
+  return `<div style="margin-top:6px"><div style="font-size:12px;font-weight:700;margin-bottom:3px">${t.title}</div>${data.map((r,i)=>{
+    const v=nums[i],w=Math.max(2,Math.round(Math.abs(v)/max*100));
+    return `<div style="display:flex;align-items:center;gap:6px;margin:2px 0;font-size:11px">
+      <span style="width:32px;text-align:right;color:var(--sub)">${r[0]}</span>
+      <div style="flex:1;background:rgba(0,0,0,0.05);border-radius:4px;height:14px"><div style="width:${w}%;height:100%;border-radius:4px;background:${v<0?"#c0392b":"#2f6b3f"}"></div></div>
+      <span style="width:88px;text-align:right">${fmt(v)}</span></div>`;
+  }).join("")}${total?`<div style="text-align:right;font-size:12px;margin-top:3px"><b>${total[0]} ${fmt(Number(total[vi]))}</b></div>`:""}</div>`;
+}
 function aiEntInfo(k){return (AI_ENT_DEFS.find(([kk])=>kk===k)||AI_ENT_DEFS[AI_ENT_DEFS.length-1])[2];}
 function aiBigrams(t){const x=aiCompact(t);const o=new Set();for(let i=0;i<x.length-1;i++)o.add(x.slice(i,i+2));return o;}
 function aiScoreIn(name,q){const nb=aiBigrams(name);if(!nb.size)return 0;const qs=aiCompact(q);let hit=0;for(const g of nb)if(qs.indexOf(g)>=0)hit++;return hit/nb.size;}
@@ -3387,9 +3401,10 @@ function aiSalesAnswer(q,years,months){
   return {html:out.join("<br>"),table:lastTable};
 }
 function aiPnlAnswer(q,years,months){
-  if(!S.user)return {html:"로그인 후에 볼 수 있어요."};
+  const hasPnlWord=/손익|이익|판관비|원가|급여|비용|수수료|재고/.test(aiCompact(q));
+  if(!S.user)return hasPnlWord?{html:"로그인 후에 볼 수 있어요."}:null;
   const P=S.data.pnl||{};const keys=Object.keys(P);
-  if(!keys.length)return {html:"저장된 손익 데이터가 없어요 — 월별손익 탭에서 이카운트 파일을 올려주세요."};
+  if(!keys.length)return hasPnlWord?{html:"저장된 손익 데이터가 없어요 — 월별손익 탭에서 이카운트 파일을 올려주세요."}:null;
   const c=aiCompact(q);
   const nameSet=[];for(const k of keys)for(const r of P[k].rows)if(!nameSet.some(x=>x.n===r.n))nameSet.push({n:r.n,c:aiCompact(r.n.replace(/^\d+\.\s*/,""))});
   const alias={"영업이익":"영업손익","순이익":"당기순이익","판관비":"판매비및일반관리비","인건비":"직원급여"};
@@ -3427,19 +3442,36 @@ function aiPnlAnswer(q,years,months){
   }
   return {html:out.join("<br>"),table:lastTable};
 }
-const AI_HELP=`이런 걸 물어볼 수 있어요:<br>· "2025년 보자기비빔밥 판매량" (메뉴·주류)<br>· "올해 마켓 매출" / "2026년 3월 전체 매출"<br>· "2026년 에피다 영업손익" / "7월 판관비" (관리자)<br>연도·월·사업장을 함께 적으면 더 정확해요.`;
+const AI_HELP=`이런 걸 물어볼 수 있어요:<br>· "2025년 보자기비빔밥 판매량" (메뉴·주류)<br>· "올해 마켓 매출" / "2026년 3월 전체 매출"<br>· "2026년 에피다 영업손익" / "7월 판관비" (관리자)<br>연도·월·사업장을 함께 적으면 더 정확해요.<br>답 다음에 "그래프로 보여줘"라고 하면 방금 결과를 그래프로 그려줘요.`;
 function aiAnswer(q){
-  const years=aiYears(q),months=aiMonths(q);
-  const item=aiFindItem(q);
-  if(item)return aiMenuAnswer(item,years,months);
+  const wantGraph=/그래프|차트/.test(q);
   const c=aiCompact(q);
-  if(/도움|사용법|뭐할|뭘할|help/.test(c))return {html:AI_HELP};
-  const pnlTry=(c.indexOf("매출")<0||/손익|이익|판관비|원가|급여|비용/.test(c))?aiPnlAnswer(q,years,months):null;
-  if(pnlTry)return pnlTry;
-  if(c.indexOf("매출")>=0)return aiSalesAnswer(q,years,months);
-  const sug=aiSuggest(q);
-  if(sug.length)return {html:"딱 맞는 걸 못 찾았어요. 혹시 이런 걸 물으신 건가요?"+aiChips(sug)};
-  return {html:"질문을 못 알아들었어요 🙏<br>"+AI_HELP};
+  let years=aiYears(q);
+  if(!years.length&&AI_CTX.years&&AI_CTX.years.length)years=AI_CTX.years; /* 직전 연도 이어받기 */
+  const months=aiMonths(q);
+  let item=aiFindItem(q);
+  if(!item&&AI_CTX.item&&/판매량|몇개|수량/.test(c))item=AI_CTX.item; /* 직전 메뉴 이어받기 */
+  let a=null;
+  if(item)a=aiMenuAnswer(item,years,months);
+  else if(/도움|사용법|뭐할|뭘할|help/.test(c))a={html:AI_HELP};
+  else{
+    const pnlTry=(c.indexOf("매출")<0||/손익|이익|판관비|원가|급여|비용/.test(c))?aiPnlAnswer(q,years,months):null;
+    if(pnlTry)a=pnlTry;
+    else if(c.indexOf("매출")>=0)a=aiSalesAnswer(q,years,months);
+  }
+  if(!a&&wantGraph&&AI_CTX.lastTable)a={html:"바로 전 결과를 그래프로 보여드릴게요.",table:AI_CTX.lastTable};
+  if(!a){
+    const sug=aiSuggest(q);
+    if(sug.length)a={html:"딱 맞는 걸 못 찾았어요. 혹시 이런 걸 물으신 건가요?"+aiChips(sug)};
+    else a={html:"질문을 못 알아들었어요 🙏<br>"+AI_HELP};
+  }
+  /* 맥락 저장 */
+  const ee=aiEntExplicit(q);if(ee)AI_CTX.ent=ee;
+  if(aiYears(q).length)AI_CTX.years=aiYears(q);
+  if(aiFindItem(q))AI_CTX.item=aiFindItem(q);
+  if(a.table)AI_CTX.lastTable=a.table;
+  if(wantGraph&&a.table)a.graph=true;
+  return a;
 }
 const AI_TABLES=[];
 window.aiSend=function(){
@@ -3454,8 +3486,9 @@ window.aiSend=function(){
   if(a.table){
     AI_TABLES.push(a.table);
     const ti=AI_TABLES.length-1;
-    html+=`<div style="margin-top:6px;max-height:180px;overflow:auto"><table class="rpt" style="font-size:12px"><thead><tr>${a.table.header.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>${a.table.rows.map(r=>`<tr>${r.map((v,i)=>`<td style="${i?"text-align:right":""}">${typeof v==="number"?fmt(v):v}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
-    <div style="margin-top:4px"><button class="btn btn-sm" onclick="aiExcel(${ti})">📥 이 표 엑셀로 받기</button></div>`;
+    if(a.graph)html+=aiChartHtml(a.table);
+    else html+=`<div style="margin-top:6px;max-height:180px;overflow:auto"><table class="rpt" style="font-size:12px"><thead><tr>${a.table.header.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>${a.table.rows.map(r=>`<tr>${r.map((v,i)=>`<td style="${i?"text-align:right":""}">${typeof v==="number"?fmt(v):v}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+    html+=`<div style="margin-top:4px"><button class="btn btn-sm" onclick="aiExcel(${ti})">📥 이 표 엑셀로 받기</button>${a.graph?"":`<button class="btn btn-sm" onclick="aiAsk('그래프로 보여줘')">📊 그래프로 보기</button>`}</div>`;
   }
   list.insertAdjacentHTML("beforeend",`<div style="margin:6px 0"><span style="display:inline-block;background:rgba(0,0,0,0.05);border-radius:12px 12px 12px 2px;padding:7px 11px;max-width:92%;font-size:13px;line-height:1.5">${html}</span></div>`);
   list.scrollTop=list.scrollHeight;
