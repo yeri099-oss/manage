@@ -602,7 +602,9 @@ window.FIREBASE_CONFIG = {
       const labels = this.cfg.data.labels;
       const n = labels.length;
       const sets = this.visibleSets();
-      const max = this.maxValue();
+      const capMax = this.cfg.options?.scales?.y?.capMax || null;
+      let max = this.maxValue();
+      if (capMax && capMax < max) max = capMax;
       let minV = 0;
       if (this.cfg.type === "line") {
         let dmin = Infinity;
@@ -644,13 +646,38 @@ window.FIREBASE_CONFIG = {
             for (let i = 0; i < n; i++) {
               const v = Number(d.data[i]) || 0;
               if (!v) continue;
-              const y0 = yOf(acc[i]), y1 = yOf(acc[i] + v);
+              let y0 = yOf(acc[i]), y1 = yOf(acc[i] + v);
+              if (capMax) { y0 = Math.max(y0, top); y1 = Math.max(y1, top); }
+              acc[i] += v;
+              if (y0 - y1 < 0.5) continue;
               ctx.fillStyle = Array.isArray(d.backgroundColor) ? (d.backgroundColor[i] || d.backgroundColor[0]) : d.backgroundColor;
               ctx.fillRect(xOf(i) - bw / 2, y1, bw, y0 - y1);
               ctx.strokeStyle = d.borderColor || "#fcfcfb"; ctx.lineWidth = 1;
               ctx.strokeRect(xOf(i) - bw / 2, y1, bw, y0 - y1);
-              acc[i] += v;
             }
+          }
+          if (capMax) for (let i = 0; i < n; i++) {
+            if (acc[i] <= tN) continue;
+            const x = xOf(i);
+            /* 절단 표시: 흰 물결 두 줄 */
+            ctx.strokeStyle = "#fcfcfb"; ctx.lineWidth = 2.5;
+            for (const dy of [16, 21]) {
+              ctx.beginPath();
+              ctx.moveTo(x - bw / 2 - 2, top + dy + 3);
+              ctx.lineTo(x - bw / 6, top + dy - 2);
+              ctx.lineTo(x + bw / 6, top + dy + 3);
+              ctx.lineTo(x + bw / 2 + 2, top + dy - 2);
+              ctx.stroke();
+            }
+            /* 실제 총액 라벨 */
+            ctx.font = "700 11px 'Noto Sans KR', sans-serif";
+            ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+            ctx.strokeStyle = "#fcfcfb"; ctx.lineWidth = 3;
+            const lbl = this.yFmt(acc[i]);
+            ctx.strokeText(lbl, x, top + 12);
+            ctx.fillStyle = "#C00000";
+            ctx.fillText(lbl, x, top + 12);
+            ctx.font = FONT;
           }
         } else {
           const m = sets.length;
@@ -3133,11 +3160,31 @@ function renderAgency() {
   const hideEmpty = !edMode();
   const dCh = (Y.deliveryChannels || []).filter((c) => !hideEmpty || chHas("delivery", c));
   const oCh = (Y.onlineChannels || []).filter((c) => !hideEmpty || chHas("online", c));
+  const agLabel = (ch) => ch === "쿠팡" ? "쿠팡이츠" : ch;
+  const dSingle = dCh.length === 1;
+  const dName = dSingle ? agLabel(dCh[0]) : "배달";
+  const onVals = {};
+  oCh.forEach((ch) => { onVals[ch] = MONTHS.map((m) => agencyCalc(year, m)?.online?.[ch] || 0); });
+  let bigCh = null;
+  if (oCh.length > 1) {
+    const maxOf = (arr) => Math.max(0, ...arr);
+    const cand = [...oCh].sort((a, b) => maxOf(onVals[b]) - maxOf(onVals[a]))[0];
+    const restMax = maxOf(MONTHS.map((m, i) => oCh.filter((c) => c !== cand).reduce((a, c) => a + onVals[c][i], 0)));
+    if (restMax > 0 && maxOf(onVals[cand]) >= restMax * 3) bigCh = cand;
+  }
+  const barCh = oCh.filter((c) => c !== bigCh);
+  const stackCh = bigCh ? [...barCh, bigCh] : oCh; /* 큰 채널을 맨 위 칸으로 */
+  const onTotals = MONTHS.map((m, i) => oCh.reduce((a, c) => a + onVals[c][i], 0));
+  let onCap = null;
+  if (bigCh) {
+    const sorted = [...onTotals].sort((a, b) => b - a);
+    if (sorted[1] > 0 && sorted[0] >= sorted[1] * 3) onCap = Math.round(sorted[1] * 1.2);
+  }
   let head1 = `<tr><th class="c sticky" rowspan="2">월별</th>`;
-  if (dCh.length) head1 += `<th colspan="${dCh.length + 1}" class="c">배달</th>`;
+  if (dCh.length) head1 += dSingle ? `<th rowspan="2">${esc(dName)}</th>` : `<th colspan="${dCh.length + 1}" class="c">배달</th>`;
   if (oCh.length) head1 += `<th colspan="${oCh.length + 1}" class="c">온라인</th>`;
   head1 += `<th rowspan="2" class="cy2">계</th></tr>`;
-  let head2 = `<tr>` + dCh.map((c) => `<th>${esc(c)}</th>`).join("") + (dCh.length ? `<th class="cy">소계</th>` : "") +
+  let head2 = `<tr>` + (dSingle ? "" : dCh.map((c) => `<th>${esc(agLabel(c))}</th>`).join("") + (dCh.length ? `<th class="cy">소계</th>` : "")) +
     oCh.map((c) => `<th>${esc(c)}</th>`).join("") + (oCh.length ? `<th class="cy">소계</th>` : "") + `</tr>`;
   let rows = "";
   const colTot = {};
@@ -3151,7 +3198,7 @@ function renderAgency() {
       colTot["d:" + ch] = (colTot["d:" + ch] || 0) + (v || 0);
       tr += `<td>${edNum(v, ds("delivery", ch))}</td>`;
     }
-    if (dCh.length) { tr += `<td class="cy"><b>${c && c.dSub != null ? fmt(c.dSub) : ""}</b></td>`; tDSub += c?.dSub || 0; }
+    if (dCh.length) { if (!dSingle) tr += `<td class="cy"><b>${c && c.dSub != null ? fmt(c.dSub) : ""}</b></td>`; tDSub += c?.dSub || 0; }
     for (const ch of oCh) {
       const v = c?.online?.[ch];
       colTot["o:" + ch] = (colTot["o:" + ch] || 0) + (v || 0);
@@ -3162,7 +3209,7 @@ function renderAgency() {
     rows += `<tr>${tr}</tr>`;
   }
   let trT = `<td class="lab sticky">계</td>` +
-    dCh.map((ch) => `<td>${fmt(colTot["d:" + ch])}</td>`).join("") + (dCh.length ? `<td>${fmt(tDSub)}</td>` : "") +
+    dCh.map((ch) => `<td>${fmt(colTot["d:" + ch])}</td>`).join("") + (dCh.length && !dSingle ? `<td>${fmt(tDSub)}</td>` : "") +
     oCh.map((ch) => `<td>${fmt(colTot["o:" + ch])}</td>`).join("") + (oCh.length ? `<td>${fmt(tOSub)}</td>` : "") +
     `<td>${fmt(tDSub + tOSub)}</td>`;
   el.innerHTML = `
@@ -3177,25 +3224,23 @@ function renderAgency() {
     <div class="footnote">온라인 판매는 매 분기 국세청 자료로 정산해요. 1~3월분 4월 17일경 · 4~6월분 7월 17일경 · 7~9월분 10월 17일경 · 10~12월분 이듬해 1월 17일경 반영. 채널은 설정 탭에서 추가·삭제할 수 있어요.</div>
   </div>
   <div class="card">
-    <div class="card-title">${year}년 배달 매출</div>
+    <div class="card-title">${year}년 ${dName} 매출</div>
     <div class="chart-box"><canvas id="ch-agency-deliv"></canvas></div>
   </div>
   <div class="card">
     <div class="card-title">${year}년 온라인 매출 — 채널별 누적 막대</div>
     <div class="chart-box"><canvas id="ch-agency-online"></canvas></div>
+    ${onCap ? `<div class="footnote">유난히 큰 달은 막대를 위에서 잘라 그리고 실제 금액을 빨간 글씨로 표기했어요 (막대에 마우스를 올리면 채널별 금액이 보여요).</div>` : ``}
   </div>
-  <div class="card">
-    <div class="card-title">연도별 판매대행 매출 비교 (월별 계)</div>
-    <div class="chart-box"><canvas id="ch-agency-years"></canvas></div>
-  </div>`;
+`;
   makeChart("ch-agency-deliv", {
-    type: "bar",
+    type: "line",
     data: {
       labels: MONTH_LABELS,
-      datasets: [{ label: "배달", data: MONTHS.map((m) => agencyCalc(year, m)?.dSub || 0), backgroundColor: "#D6DCE4", borderColor: "#44546A", borderWidth: 1, borderRadius: 3, maxBarThickness: 40 }],
+      datasets: [{ label: dName, data: MONTHS.map((m) => { const c = agencyCalc(year, m); return c && c.dSub != null ? c.dSub : null; }), borderColor: "#44546A", backgroundColor: "#44546A", borderWidth: 2.5, pointRadius: 3.5 }],
     },
     options: {
-      maintainAspectRatio: false,
+      maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
       plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => fmt(c.parsed.y) + "원" } } },
       scales: { y: moneyScaleY, x: catScaleX },
     },
@@ -3205,10 +3250,9 @@ function renderAgency() {
     type: "bar",
     data: {
       labels: MONTH_LABELS,
-      datasets: oCh.map((ch, i) => ({
-        label: ch,
-        data: MONTHS.map((m) => agencyCalc(year, m)?.online?.[ch] || 0),
-        backgroundColor: ON_COLS[i % ON_COLS.length], borderColor: "#8a7a3a",
+      datasets: stackCh.map((ch, i) => ({
+        label: ch, data: onVals[ch],
+        backgroundColor: ch === bigCh ? "#E7A6A1" : ON_COLS[i % ON_COLS.length], borderColor: "#8a7a3a",
         stack: "o", borderWidth: 1, borderRadius: 2, maxBarThickness: 40,
       })),
     },
@@ -3218,23 +3262,7 @@ function renderAgency() {
         label: (c) => `${c.dataset.label}: ${fmt(c.parsed.y)}원`,
         footer: (items) => "온라인 계: " + fmt(items.reduce((a, i) => a + i.parsed.y, 0)) + "원",
       } } },
-      scales: { y: { ...moneyScaleY, stacked: true }, x: { ...catScaleX, stacked: true } },
-    },
-  });
-  makeChart("ch-agency-years", {
-    type: "line",
-    data: {
-      labels: MONTH_LABELS,
-      datasets: yrs.map((y, i) => ({
-        label: String(y),
-        data: MONTHS.map((m) => { const c = agencyCalc(y, m); return c && c.total != null ? c.total : null; }),
-        borderColor: yearColor(y), backgroundColor: yearColor(y),
-        borderWidth: 2, pointRadius: 3, hidden: i < yrs.length - 3,
-      })),
-    },
-    options: {
-      maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
-      plugins: { tooltip: moneyTip }, scales: { y: moneyScaleY, x: catScaleX },
+      scales: { y: { ...moneyScaleY, stacked: true, ...(onCap ? { capMax: onCap } : {}) }, x: { ...catScaleX, stacked: true } },
     },
   });
 }
