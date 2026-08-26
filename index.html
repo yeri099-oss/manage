@@ -3457,7 +3457,7 @@ function pnlHtmlTable(list,ents,val,totalOnlyFrom){
   groups.forEach(g=>{gStart[g.s]=g;for(let i=g.s+1;i<=g.e;i++)gIn[i]=true;});
   const rentIdx=list.findIndex(r=>r.lv!==0&&r.n.replace(/\s+/g,"").indexOf("지급임차료")>=0);
   const fS=v=>v==null?"":(v<0?'<span class="pct-down">'+fmt(v)+'</span>':fmt(v));
-  const pctTd=v=>`<td style="width:56px;text-align:center;color:var(--sub);font-size:11px">${v==null?"":(v*100).toFixed(1)+"%"}</td>`;
+  const pctTd=(v,bg)=>`<td style="width:56px;text-align:center;color:var(--sub);font-size:11px${bg?";background:"+bg:""}">${v==null?"":(v*100).toFixed(1)+"%"}</td>`;
   let h=`<thead><tr><th class="sticky">계정명</th>${ents.map(([k,n])=>`<th colspan="2">${n}</th>`).join("")}</tr></thead><tbody>`;
   list.forEach((r,li)=>{
     const bg=r.lv===0?pnlRowColor(r.n):null;
@@ -3468,15 +3468,15 @@ function pnlHtmlTable(list,ents,val,totalOnlyFrom){
       if(cutCell){h+=`<td colspan="2" style="border:none;background:transparent"></td>`;continue;}
       const v=val(r.n,e);
       const base=sale?val(sale.n,e):null;
-      h+=`<td>${fS(v)}</td>`;
+      h+=`<td${bg?` style="background:${bg}"`:""}>${fS(v)}</td>`;
       if(gStart[li]!=null&&gStart[li]!==undefined&&gStart[li].s===li){
         const g=gStart[li];let sum=0,has=false;
         for(let i=g.s;i<=g.e;i++){const vv=val(list[i].n,e);if(vv!=null){sum+=vv;has=true;}}
         h+=`<td rowspan="${g.e-g.s+1}" style="width:56px;text-align:center;vertical-align:middle;color:var(--sub);font-size:11px;background:rgba(0,0,0,0.02)">${has&&base?(sum/base*100).toFixed(1)+"%":""}</td>`;
       }else if(gIn[li]){/* 위 rowspan이 덮음 */}
-      else if(li===rentIdx)h+=pctTd(base&&v!=null?v/base:null);
-      else if(r.lv===0&&!noPct&&v!=null&&base)h+=pctTd(v/base);
-      else h+=pctTd(null);
+      else if(li===rentIdx)h+=pctTd(base&&v!=null?v/base:null,bg);
+      else if(r.lv===0&&!noPct&&v!=null&&base)h+=pctTd(v/base,bg);
+      else h+=pctTd(null,bg);
     }
     h+=`</tr>`;
   });
@@ -3633,7 +3633,8 @@ function renderPnl(){
           else if(n.indexOf("기말재고")>=0){agg=[...vals].reverse().find(v=>v!=null);}
           else{const has=vals.filter(v=>v!=null);agg=has.length?has.reduce((a,b)=>a+b,0):null;}
           const bg=lv===0?pnlRowColor(n):null;
-          return `<tr class="${lv===0?"total":""}"${bg?` style="background:${bg}"`:""}><td class="lab sticky" style="padding-left:${8+lv*14}px${bg?";background:"+bg:""}">${n}</td>${vals.map(v=>`<td>${fmtS(v)}</td>`).join("")}<td><b>${fmtS(agg)}</b></td></tr>`;
+          const tdBg=bg?` style="background:${bg}"`:"";
+          return `<tr class="${lv===0?"total":""}"${bg?` style="background:${bg}"`:""}><td class="lab sticky" style="padding-left:${8+lv*14}px${bg?";background:"+bg:""}">${n}</td>${vals.map(v=>`<td${tdBg}>${fmtS(v)}</td>`).join("")}<td${tdBg}><b>${fmtS(agg)}</b></td></tr>`;
         }).join("")}</tbody></table></div>
     </div>`;
   }
