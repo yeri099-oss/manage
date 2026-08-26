@@ -3150,6 +3150,13 @@ function chartsBojagiDrinks(year, month) {
 }
 /* ============ 6. 판매대행 ============ */
 function setAgencyYear(y) { S.ui.agencyYear = Number(y); renderAgency(); }
+window.agToggleVerified = function (year, m, on) {
+  const doc = (S.data.agency[year] = S.data.agency[year] || { deliveryChannels: [], onlineChannels: [], months: {} });
+  doc.verified = doc.verified || {};
+  if (on) doc.verified[m] = true; else delete doc.verified[m];
+  queueSave("agency", year);
+  renderAgency();
+};
 function renderAgency() {
   const el = document.getElementById("tab-agency");
   const yrs = yearsOf("agency");
@@ -3183,35 +3190,39 @@ function renderAgency() {
   let head1 = `<tr><th class="c sticky" rowspan="2">월별</th>`;
   if (dCh.length) head1 += dSingle ? `<th rowspan="2">${esc(dName)}</th>` : `<th colspan="${dCh.length + 1}" class="c">배달</th>`;
   if (oCh.length) head1 += `<th colspan="${oCh.length + 1}" class="c">온라인</th>`;
-  head1 += `<th rowspan="2" class="cy2">계</th></tr>`;
+  head1 += `<th rowspan="2" class="cy2">계</th>${edMode() ? `<th rowspan="2">국세청<br>검증</th>` : ""}</tr>`;
   let head2 = `<tr>` + (dSingle ? "" : dCh.map((c) => `<th>${esc(agLabel(c))}</th>`).join("") + (dCh.length ? `<th class="cy">소계</th>` : "")) +
     oCh.map((c) => `<th>${esc(c)}</th>`).join("") + (oCh.length ? `<th class="cy">소계</th>` : "") + `</tr>`;
   let rows = "";
   const colTot = {};
   let tDSub = 0, tOSub = 0;
+  const VG=' style="background:#E2EFDA"';
   for (const m of MONTHS) {
     const c = agencyCalc(year, m);
+    const ver = !!(Y.verified || {})[m];
+    const vb = ver ? VG : "";
     let tr = `<td class="lab sticky">${m}월</td>`;
     const ds = (kind, ch) => `data-t="ag" data-y="${year}" data-m="${m}" data-kind="${kind}" data-ch="${esc(ch)}"`;
     for (const ch of dCh) {
       const v = c?.delivery?.[ch];
       colTot["d:" + ch] = (colTot["d:" + ch] || 0) + (v || 0);
-      tr += `<td>${edNum(v, ds("delivery", ch))}</td>`;
+      tr += `<td${vb}>${edNum(v, ds("delivery", ch))}</td>`;
     }
-    if (dCh.length) { if (!dSingle) tr += `<td class="cy"><b>${c && c.dSub != null ? fmt(c.dSub) : ""}</b></td>`; tDSub += c?.dSub || 0; }
+    if (dCh.length) { if (!dSingle) tr += `<td class="cy"${vb}><b>${c && c.dSub != null ? fmt(c.dSub) : ""}</b></td>`; tDSub += c?.dSub || 0; }
     for (const ch of oCh) {
       const v = c?.online?.[ch];
       colTot["o:" + ch] = (colTot["o:" + ch] || 0) + (v || 0);
-      tr += `<td>${edNum(v, ds("online", ch))}</td>`;
+      tr += `<td${vb}>${edNum(v, ds("online", ch))}</td>`;
     }
-    if (oCh.length) { tr += `<td class="cy"><b>${c && c.oSub != null ? fmt(c.oSub) : ""}</b></td>`; tOSub += c?.oSub || 0; }
-    tr += `<td class="cy2"><b>${c && c.total != null ? fmt(c.total) : ""}</b></td>`;
+    if (oCh.length) { tr += `<td class="cy"${vb}><b>${c && c.oSub != null ? fmt(c.oSub) : ""}</b></td>`; tOSub += c?.oSub || 0; }
+    tr += `<td class="cy2"${vb}><b>${c && c.total != null ? fmt(c.total) : ""}</b></td>`;
+    if (edMode()) tr += `<td style="text-align:center"><input type="checkbox" ${ver ? "checked" : ""} onchange="agToggleVerified('${year}','${m}',this.checked)"></td>`;
     rows += `<tr>${tr}</tr>`;
   }
   let trT = `<td class="lab sticky">계</td>` +
     dCh.map((ch) => `<td>${fmt(colTot["d:" + ch])}</td>`).join("") + (dCh.length && !dSingle ? `<td>${fmt(tDSub)}</td>` : "") +
     oCh.map((ch) => `<td>${fmt(colTot["o:" + ch])}</td>`).join("") + (oCh.length ? `<td>${fmt(tOSub)}</td>` : "") +
-    `<td>${fmt(tDSub + tOSub)}</td>`;
+    `<td>${fmt(tDSub + tOSub)}</td>` + (edMode() ? `<td></td>` : "");
   el.innerHTML = `
   <div class="card">
     <div class="card-head">
@@ -3221,7 +3232,7 @@ function renderAgency() {
     <div class="table-wrap">
       <table class="rpt"><thead>${head1}${head2}</thead><tbody>${rows}<tr class="total trg">${trT}</tr></tbody></table>
     </div>
-    <div class="footnote">온라인 판매는 매 분기 국세청 자료로 정산해요. 1~3월분 4월 17일경 · 4~6월분 7월 17일경 · 7~9월분 10월 17일경 · 10~12월분 이듬해 1월 17일경 반영. 채널은 설정 탭에서 추가·삭제할 수 있어요.</div>
+    <div class="footnote"><span style="display:inline-block;width:11px;height:11px;background:#E2EFDA;border:1px solid #b5cba7;border-radius:2px;vertical-align:-1px"></span> 초록 칠 = 국세청(홈택스) 자료로 검증된 달 · 흰색 = 각 홈페이지에서 확인한 임시 금액. "표에서 바로입력"을 켜면 달마다 검증 체크를 켜고 끌 수 있어요.<br>온라인 판매는 매 분기 국세청 자료로 정산해요. 1~3월분 4월 17일경 · 4~6월분 7월 17일경 · 7~9월분 10월 17일경 · 10~12월분 이듬해 1월 17일경 반영. 채널은 설정 탭에서 추가·삭제할 수 있어요.</div>
   </div>
   <div class="card">
     <div class="card-title">${year}년 ${dName} 매출</div>
