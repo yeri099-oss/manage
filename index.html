@@ -3322,6 +3322,7 @@ window.epidaFilesPick=async function(inp){
   }catch(e){console.error(e);toast(e.message||"파일을 읽지 못했어요",true);renderEpida();}
 };
 function setEpidaYear(y){S.ui.epidaYear=String(y);renderEpida();}
+function setEpidaSub(k){S.ui.epidaSub=k;renderEpida();}
 window.epidaMoveDrink=async function(selId,toDrink){
   const sel=document.getElementById(selId);
   const n=sel&&sel.value;
@@ -3386,7 +3387,7 @@ function renderEpida(){
       body+=`<tr class="${ki%2===0?"zr":""}"><td class="l sticky">${esc(nm)}</td>${tds}<td><b>${fmt(Math.round(allKeys[k].q))}</b></td><td>${grand?(allKeys[k].q/grand*100).toFixed(1)+"%":""}</td></tr>`;
     });
     const mt=ms.map(m=>keys.reduce((a2,k)=>a2+(((Ms[m].items||{})[k]||{}).q||0),0));
-    return `<div class="card"><div class="card-title">${year}년 ${title} <span class="unit">${unitTxt}</span></div>
+    return `<div class="card"><div class="card-head"><div class="card-title">${year}년 ${title} <span class="unit">${unitTxt}</span></div><div class="card-actions">${yearSel}</div></div>
       <div class="table-wrap"><table class="rpt">
         <thead><tr><th class="l sticky">품명</th>${ms.map(m=>`<th>${m}월</th>`).join("")}<th>합계</th><th>점유율</th></tr></thead>
         <tbody>${body}
@@ -3406,10 +3407,20 @@ function renderEpida(){
       <select id="epMv2" class="ctl" style="max-width:260px">${sortByQ(drinkKeys).map(k=>`<option value="${esc(allKeys[k].n)}">${esc(allKeys[k].n)}</option>`).join("")}</select>
       <button class="btn btn-sm" onclick="epidaMoveDrink('epMv2',false)">🍚 메뉴로 되돌리기</button>
     </div></div>`:"";
-  el.innerHTML=upBox+t1
-    +pivot(menuKeys,"메뉴별 판매수량","월별 수량 · 판매량 많은 순")
-    +moveBox
-    +pivot(drinkKeys,"주류·음료 판매수량","자동 분류 + 직접 옮긴 품목");
+  const sub=["sales","menu","drinks"].includes(S.ui.epidaSub)?S.ui.epidaSub:"sales";
+  S.ui.epidaSub=sub;
+  const subtabs=`
+  <div class="subtabs" style="align-items:center;background:rgba(0,0,0,0.035);border:1px solid rgba(0,0,0,0.08);border-radius:10px;padding:6px 10px;display:inline-flex;gap:6px;flex-wrap:wrap">
+    <span style="font-size:12px;color:var(--sub,#777);font-weight:700">피다 ▸</span>
+    <button class="subtab ${sub==="sales"?"active":""}" onclick="setEpidaSub('sales')">피다매출</button>
+    <button class="subtab ${sub==="menu"?"active":""}" onclick="setEpidaSub('menu')">메뉴별</button>
+    <button class="subtab ${sub==="drinks"?"active":""}" onclick="setEpidaSub('drinks')">주류별</button>
+  </div>`;
+  let body="";
+  if(sub==="sales")body=upBox+t1;
+  else if(sub==="menu")body=pivot(menuKeys,"메뉴별 판매수량","월별 수량 · 판매량 많은 순")+moveBox;
+  else body=pivot(drinkKeys,"주류·음료 판매수량","자동 분류 + 직접 옮긴 품목")+moveBox;
+  el.innerHTML=subtabs+body;
 }
 function renderAgency() {
   const el = document.getElementById("tab-agency");
