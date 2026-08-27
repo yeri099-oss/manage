@@ -861,6 +861,7 @@ const S = {
     bojagiDrinks: {},
     agency: {},          // {year:{deliveryChannels,onlineChannels,months}}
     epidaDetail: {},     // {year:{months:{m:{total,disc,net,days,items:{key:{n,q,a}}}}}}
+    epidaDrink: { add: [], remove: [] }, // 피다 주류·음료 수동 분류
     targets: {},         // {year:{total:{m:amt},epida,market,bojagi}}
     menuItems: [],       // [{id,cat,name}]
     drinkItems: [],      // [{id,name,price}]
@@ -1042,6 +1043,7 @@ async function loadAllData() {
   jobs.push(fsCol("config").doc("bojagiMenuItems").get().then((d) => { S.data.menuItems = d.data()?.items || []; }));
   jobs.push(fsCol("config").doc("bojagiDrinkItems").get().then((d) => { S.data.drinkItems = d.data()?.items || []; }));
   jobs.push(db.collection("salesStatus_months").get().then((snap) => { S.cfmYms = []; snap.forEach((d) => S.cfmYms.push(d.id)); }).catch(() => {}));
+  jobs.push(fsCol("config").doc("epidaDrink").get().then((d) => { S.data.epidaDrink = d.data() || { add: [], remove: [] }; }).catch(() => {}));
   await Promise.all(jobs);
   pnlNormalizeKeys();
 }
@@ -3320,6 +3322,18 @@ window.epidaFilesPick=async function(inp){
   }catch(e){console.error(e);toast(e.message||"파일을 읽지 못했어요",true);renderEpida();}
 };
 function setEpidaYear(y){S.ui.epidaYear=String(y);renderEpida();}
+window.epidaMoveDrink=async function(selId,toDrink){
+  const sel=document.getElementById(selId);
+  const n=sel&&sel.value;
+  if(!n){toast("옮길 품목을 먼저 골라주세요",true);return;}
+  const D=(S.data.epidaDrink=S.data.epidaDrink||{add:[],remove:[]});
+  D.add=D.add||[];D.remove=D.remove||[];
+  if(toDrink){ if(!D.add.includes(n))D.add.push(n); D.remove=D.remove.filter(x=>x!==n); }
+  else{ if(!D.remove.includes(n))D.remove.push(n); D.add=D.add.filter(x=>x!==n); }
+  try{ if(!IS_DEMO&&typeof db!=="undefined"&&db)await fsCol("config").doc("epidaDrink").set({add:D.add,remove:D.remove}); }catch(e){console.error(e);toast("저장 실패: "+(e.message||""),true);}
+  toast(`'${n}'을(를) ${toDrink?"주류·음료로":"메뉴로"} 옮겼어요`);
+  renderEpida();
+};
 function renderEpida(){
   const el=document.getElementById("tab-epida");
   const D=S.data.epidaDetail||{};
@@ -3379,11 +3393,23 @@ function renderEpida(){
         <tr class="total"><td class="l sticky">합계</td>${mt.map(v=>`<td>${fmt(Math.round(v))}</td>`).join("")}<td>${fmt(Math.round(grand))}</td><td>${grand?"100%":""}</td></tr>
         </tbody></table></div></div>`;
   };
-  const drinkKeys=Object.keys(allKeys).filter(k=>EP_DRINK_RE.test(allKeys[k].n));
-  const menuKeys=Object.keys(allKeys).filter(k=>!EP_DRINK_RE.test(allKeys[k].n));
+  const ovD=S.data.epidaDrink||{add:[],remove:[]};
+  const isDrink=(k)=>{const n=allKeys[k].n;return ((EP_DRINK_RE.test(n)&&!(ovD.remove||[]).includes(n))||(ovD.add||[]).includes(n));};
+  const drinkKeys=Object.keys(allKeys).filter(isDrink);
+  const menuKeys=Object.keys(allKeys).filter(k=>!isDrink(k));
+  const sortByQ=arr=>[...arr].sort((x,y2)=>allKeys[y2].q-allKeys[x].q);
+  const moveBox=isAd?`<div class="card"><div class="card-title">분류 옮기기 <span class="unit">옮긴 내용은 저장돼서 모든 연도·다음 업로드에도 그대로 적용돼요</span></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:6px 2px">
+      <select id="epMv1" class="ctl" style="max-width:260px">${sortByQ(menuKeys).map(k=>`<option value="${esc(allKeys[k].n)}">${esc(allKeys[k].n)}</option>`).join("")}</select>
+      <button class="btn btn-sm" onclick="epidaMoveDrink('epMv1',true)">🍶 주류·음료로 옮기기</button>
+      <span style="width:14px"></span>
+      <select id="epMv2" class="ctl" style="max-width:260px">${sortByQ(drinkKeys).map(k=>`<option value="${esc(allKeys[k].n)}">${esc(allKeys[k].n)}</option>`).join("")}</select>
+      <button class="btn btn-sm" onclick="epidaMoveDrink('epMv2',false)">🍚 메뉴로 되돌리기</button>
+    </div></div>`:"";
   el.innerHTML=upBox+t1
     +pivot(menuKeys,"메뉴별 판매수량","월별 수량 · 판매량 많은 순")
-    +pivot(drinkKeys,"주류·음료 판매수량","이름으로 자동 분류 — 잘못 분류된 품목이 있으면 알려주세요");
+    +moveBox
+    +pivot(drinkKeys,"주류·음료 판매수량","자동 분류 + 직접 옮긴 품목");
 }
 function renderAgency() {
   const el = document.getElementById("tab-agency");
