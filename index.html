@@ -435,6 +435,7 @@ window.FIREBASE_CONFIG = {
       <div id="tab-daily" class="hidden"></div>
       <div id="tab-market" class="hidden"></div>
       <div id="tab-bojagi" class="hidden"></div>
+      <div id="tab-epida" class="hidden"></div>
       <div id="tab-agency" class="hidden"></div>
     </section>
     <section id="tab-pnl" class="tab-panel hidden"></section>
@@ -859,6 +860,7 @@ const S = {
     bojagiMenu: {},      // {year:{months:{m:{itemId:{k,p,d}}}}}
     bojagiDrinks: {},
     agency: {},          // {year:{deliveryChannels,onlineChannels,months}}
+    epidaDetail: {},     // {year:{months:{m:{total,disc,net,days,items:{key:{n,q,a}}}}}}
     targets: {},         // {year:{total:{m:amt},epida,market,bojagi}}
     menuItems: [],       // [{id,cat,name}]
     drinkItems: [],      // [{id,name,price}]
@@ -1013,7 +1015,7 @@ const COL_LABELS = {
   agency: "판매대행", targets: "월 목표",
 };
 /* ---------- 데이터 로드/저장 ---------- */
-const COLS = ["salesComparison", "monthly", "dailyAvg", "marketDetail", "bojagiMenu", "bojagiDrinks", "agency", "targets", "pnl"];
+const COLS = ["salesComparison", "monthly", "dailyAvg", "marketDetail", "bojagiMenu", "bojagiDrinks", "agency", "targets", "pnl", "epidaDetail"];
 async function loadAllData() {
   if (IS_DEMO) {
     const seed = await fetch("seed.json").then((r) => r.json());
@@ -3258,6 +3260,131 @@ window.agToggleVerified = function (year, m, on) {
   queueSave("agency", year);
   renderAgency();
 };
+const EP_DRINK_RE=/막걸리|맥주|소주|와인|하이볼|사케|청주|약주|스파클링|샴페인|음료|식혜|수정과|에이드|주스|쥬스|콜라|사이다|커피|아메리카노|라떼|우롱|둥굴레|매실|오미자|온차|냉차|티\b/;
+function epidaSan(n){return String(n).replace(/[.$#\[\]\/]/g,"·");}
+function epidaParse(text,fname){
+  const doc=new DOMParser().parseFromString(text,"text/html");
+  const trs=[...doc.querySelectorAll("tr")].map(tr=>[...tr.children].map(td=>td.textContent.trim()));
+  let hdr=null;
+  for(const r of trs){if(r.includes("거래일시")){hdr=r;break;}}
+  if(!hdr)throw new Error((fname||"파일")+": '거래일시' 머리글을 찾지 못했어요. 포스 일일매출상세내역 파일인지 확인해주세요.");
+  const C={};hdr.forEach((n,j)=>C[n]=j);
+  for(const need of["품명","수량","금액","매출금액","할인금액","봉사금액","정산총금액"])
+    if(C[need]==null)throw new Error((fname||"파일")+`: '${need}' 열이 없어요.`);
+  const num=v=>{const t=String(v==null?"":v).replace(/[,\s]/g,"");if(!t||t==="-")return 0;const n=Number(t);return isNaN(n)?0:n;};
+  const dre=/^\d{4}-\d{2}-\d{2}/;
+  let sale=0,disc=0,net=0;const days=new Set(),items={};let ym=null;
+  const addItem=(nm,q,a)=>{
+    nm=String(nm||"").trim();
+    if(!nm||nm==="품명"||nm[0]==="[")return;
+    const k=epidaSan(nm);
+    const it=items[k]=items[k]||{n:nm,q:0,a:0};
+    it.q+=q;it.a+=a;
+  };
+  for(const r of trs){
+    if(r.length&&dre.test(r[0])&&r.length>=hdr.length-4){
+      sale+=num(r[C["매출금액"]])+num(r[C["할인금액"]])+num(r[C["봉사금액"]]);
+      disc+=num(r[C["할인금액"]])+num(r[C["봉사금액"]]);
+      net+=num(r[C["정산총금액"]]);
+      days.add(r[0].slice(0,10));
+      if(!ym)ym={y:r[0].slice(0,4),m:String(Number(r[0].slice(5,7)))};
+      addItem(r[C["품명"]],num(r[C["수량"]]),num(r[C["금액"]]));
+    }else if(r.length>=5&&r[0]&&!dre.test(r[0])&&!/^\d+$/.test(r[0])&&!r.includes("거래일시")){
+      addItem(r[0],num(r[2]),num(r[4]));
+    }
+  }
+  if(!ym)throw new Error((fname||"파일")+": 거래 내역을 찾지 못했어요.");
+  return {y:ym.y,m:ym.m,data:{total:Math.round(sale),disc:Math.round(disc),net:Math.round(net),days:days.size,items}};
+}
+window.epidaFilesPick=async function(inp){
+  const files=[...(inp.files||[])];inp.value="";
+  if(!files.length)return;
+  try{
+    toast(`파일 ${files.length}개 읽는 중…`);
+    const done=[];
+    for(const f of files){
+      const buf=await f.arrayBuffer();
+      let text;
+      try{text=new TextDecoder("euc-kr").decode(buf);}catch(e){text=new TextDecoder("utf-8").decode(buf);}
+      if(text.indexOf("거래일시")<0)text=new TextDecoder("utf-8").decode(buf);
+      const r=epidaParse(text,f.name);
+      const ydoc=(S.data.epidaDetail[r.y]=S.data.epidaDetail[r.y]||{months:{}});
+      ydoc.months=ydoc.months||{};
+      ydoc.months[r.m]=r.data;
+      queueSave("epidaDetail",r.y);
+      done.push(`${r.y}.${r.m}`);
+    }
+    S.ui.epidaYear=null;
+    toast(`반영했어요: ${done.join(", ")} (${done.length}개월)`);
+    renderEpida();
+  }catch(e){console.error(e);toast(e.message||"파일을 읽지 못했어요",true);renderEpida();}
+};
+function setEpidaYear(y){S.ui.epidaYear=String(y);renderEpida();}
+function renderEpida(){
+  const el=document.getElementById("tab-epida");
+  const D=S.data.epidaDetail||{};
+  const yrs=Object.keys(D).filter(y=>Object.keys(D[y]?.months||{}).length).sort();
+  const isAd=S.user?.role==="admin";
+  const upBox=isAd?`<div class="card"><div class="card-title">📂 포스 매출상세 파일 넣기 <span class="unit">.xls · 여러 달 한꺼번에 가능 · 같은 달은 새 파일로 덮어써요</span></div>
+    <div style="padding:6px 2px"><input type="file" multiple accept=".xls,.xlsx,.html" onchange="epidaFilesPick(this)"></div>
+    <div class="footnote">포스에서 내려받은 '일일매출상세내역' 파일(꽃밥에피다매출상세_YYMM.xls)을 그대로 선택하면 달을 자동으로 알아채서 집계해요.</div></div>`:"";
+  if(!yrs.length){el.innerHTML=upBox+`<div class="card"><div class="hint" style="padding:14px">아직 피다 매출상세 데이터가 없어요.${isAd?" 위에서 파일을 올려주세요.":""}</div></div>`;return;}
+  const year=yrs.includes(S.ui.epidaYear)?S.ui.epidaYear:yrs[yrs.length-1];
+  S.ui.epidaYear=year;
+  const Ms=D[year].months||{};
+  const yearSel=`<select class="ctl" onchange="setEpidaYear(this.value)">${[...yrs].reverse().map(y=>`<option value="${y}" ${y===year?"selected":""}>${y}년</option>`).join("")}</select>`;
+  /* ── 표1: 매출 (마켓 스타일) ── */
+  let rows="",t={total:0,disc:0,net:0,days:0};
+  for(const m of MONTHS){
+    const d=Ms[m];
+    const days=(S.data.dailyAvg[year]?.days?.[m]?.insadong)||d?.days||null;
+    const daily=d&&days?d.net/days:null;
+    if(d){t.total+=d.total;t.disc+=d.disc;t.net+=d.net;if(days)t.days+=days;}
+    rows+=`<tr><td class="lab sticky">${m}월</td>
+      <td>${d?fmt(d.total):""}</td><td>${d?fmt(d.disc):""}</td>
+      <td class="cy"><b>${d?fmt(d.net):""}</b></td><td class="cg">${daily!=null?fmt(Math.round(daily)):""}</td></tr>`;
+  }
+  const t1=`<div class="card">
+    <div class="card-head">
+      <div class="card-title">${year}년 피다(인사동) 매출 <span class="unit">포스 매출상세 기준 · 부가세포함 · 단위: 원</span></div>
+      <div class="card-actions">${yearSel}</div>
+    </div>
+    <div class="table-wrap"><table class="rpt">
+      <thead><tr><th class="c sticky">월별</th><th>총매출</th><th>할인</th><th class="cy">순매출</th><th class="cg">일평균</th></tr></thead>
+      <tbody>${rows}
+      <tr class="total"><td class="lab sticky">합계</td><td>${fmt(t.total)}</td><td>${fmt(t.disc)}</td><td class="cy">${fmt(t.net)}</td><td class="cg">${t.days?fmt(Math.round(t.net/t.days)):""}</td></tr>
+      </tbody></table></div>
+    <div class="footnote">총매출 = 할인 전 금액, 순매출 = 정산 총금액(할인·봉사 반영). 일평균 = 순매출 ÷ 인사동 영업일수(일평균 탭 입력값, 없으면 파일의 영업일수 사용).</div>
+  </div>`;
+  /* ── 표2·3: 메뉴별 / 주류·음료별 피벗 ── */
+  const ms=MONTHS.filter(m=>Ms[m]);
+  const allKeys={};
+  for(const m of ms)for(const k in (Ms[m].items||{})){const it=Ms[m].items[k];const o=allKeys[k]=allKeys[k]||{n:it.n,q:0,a:0};o.q+=it.q;o.a+=it.a;}
+  const pivot=(keys,title,unitTxt)=>{
+    if(!keys.length)return "";
+    keys.sort((x,y2)=>allKeys[y2].q-allKeys[x].q);
+    const grand=keys.reduce((a2,k)=>a2+allKeys[k].q,0);
+    let body="";
+    keys.forEach((k,ki)=>{
+      const nm=allKeys[k].n;
+      let tds="";
+      for(const m of ms){const it=(Ms[m].items||{})[k];tds+=`<td>${it&&it.q?fmt(Math.round(it.q)):""}</td>`;}
+      body+=`<tr class="${ki%2===0?"zr":""}"><td class="l sticky">${esc(nm)}</td>${tds}<td><b>${fmt(Math.round(allKeys[k].q))}</b></td><td>${grand?(allKeys[k].q/grand*100).toFixed(1)+"%":""}</td></tr>`;
+    });
+    const mt=ms.map(m=>keys.reduce((a2,k)=>a2+(((Ms[m].items||{})[k]||{}).q||0),0));
+    return `<div class="card"><div class="card-title">${year}년 ${title} <span class="unit">${unitTxt}</span></div>
+      <div class="table-wrap"><table class="rpt">
+        <thead><tr><th class="l sticky">품명</th>${ms.map(m=>`<th>${m}월</th>`).join("")}<th>합계</th><th>점유율</th></tr></thead>
+        <tbody>${body}
+        <tr class="total"><td class="l sticky">합계</td>${mt.map(v=>`<td>${fmt(Math.round(v))}</td>`).join("")}<td>${fmt(Math.round(grand))}</td><td>${grand?"100%":""}</td></tr>
+        </tbody></table></div></div>`;
+  };
+  const drinkKeys=Object.keys(allKeys).filter(k=>EP_DRINK_RE.test(allKeys[k].n));
+  const menuKeys=Object.keys(allKeys).filter(k=>!EP_DRINK_RE.test(allKeys[k].n));
+  el.innerHTML=upBox+t1
+    +pivot(menuKeys,"메뉴별 판매수량","월별 수량 · 판매량 많은 순")
+    +pivot(drinkKeys,"주류·음료 판매수량","이름으로 자동 분류 — 잘못 분류된 품목이 있으면 알려주세요");
+}
 function renderAgency() {
   const el = document.getElementById("tab-agency");
   const yrs = yearsOf("agency");
@@ -4429,13 +4556,13 @@ window.aiToggle=function(){
     </div>`;
   document.body.appendChild(panel);
 })();
-const SALES_SUBS=[["monthly","월별"],["daily","일평균"],["market","마켓"],["bojagi","보자기"],["agency","판매대행"]];
+const SALES_SUBS=[["monthly","월별"],["daily","일평균"],["market","마켓"],["bojagi","보자기"],["epida","피다"],["agency","판매대행"]];
 function renderSales(){
   const sub=SALES_SUBS.some(([k])=>k===S.ui.salesSub)?S.ui.salesSub:"monthly";
   const bar=document.getElementById("salesSubtabs");
   if(bar)bar.innerHTML=SALES_SUBS.map(([k,n])=>`<button class="subtab ${k===sub?"active":""}" onclick="setSalesSub('${k}')">${n}</button>`).join("")+`<button class="btn btn-sm" style="margin-left:auto" onclick="exportSalesAll()">📥 엑셀 전체 받기</button>`;
   for(const[k]of SALES_SUBS){const p=document.getElementById("tab-"+k);if(p)p.classList.toggle("hidden",k!==sub);}
-  ({monthly:renderMonthly,daily:renderDaily,market:renderMarket,bojagi:renderBojagi,agency:renderAgency})[sub]?.();
+  ({monthly:renderMonthly,daily:renderDaily,market:renderMarket,bojagi:renderBojagi,epida:renderEpida,agency:renderAgency})[sub]?.();
 }
 window.setSalesSub=function(k){S.ui.salesSub=k;renderSales();};
 const RENDERERS = {
@@ -5160,6 +5287,7 @@ async function showApp() {
       <div id="tab-daily" class="hidden"></div>
       <div id="tab-market" class="hidden"></div>
       <div id="tab-bojagi" class="hidden"></div>
+      <div id="tab-epida" class="hidden"></div>
       <div id="tab-agency" class="hidden"></div>
     </section>
     <section id="tab-pnl" class="tab-panel hidden"></section>
