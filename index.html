@@ -4857,9 +4857,12 @@ function jgFormHtml(full){
   h+=row("현금",inp("jg-cash",p.cash,prev?.cash));
   JG_ACC.forEach((a,i)=>h+=row(a,inp("jg-acc"+i,p.acc?.[i],prev?.acc?.[i])));
   JG_DEP.forEach((a,i)=>h+=row("정기예적금 · "+a,inp("jg-dep"+i,p.dep?.[i],prev?.dep?.[i])));
-  h+=`</div><div style="font-weight:700;font-size:13px;margin:12px 0 4px">월말 항목 <span class="unit">월말(말일) 보고 때만 입력 — 반월 중간엔 비워두세요</span></div><div style="display:flex;flex-wrap:wrap;gap:8px 24px">`;
-  h+=row("퇴직급여충당금(B)",inp("jg-tc",p.toechung,null));
-  h+=row("유동부채(C)",inp("jg-yd",p.yudong,null));
+  const isEnd=Number(full.slice(8))!==15;
+  let pvT=null,pvY=null;
+  if(isEnd)for(const f of [...jgPeriods()].reverse()){if(f<full){const q=jgGet(f);if(q&&(q.toechung!=null||q.yudong!=null)){pvT=q.toechung;pvY=q.yudong;break;}}}
+  h+=`</div><div style="font-weight:700;font-size:13px;margin:12px 0 4px">월말 항목 <span class="unit">${isEnd?"직전 월말 값을 미리 채워뒀어요 — 바뀌었으면 고쳐주세요":"월말(말일) 보고 때만 입력 — 반월 중간엔 비워두세요"}</span></div><div style="display:flex;flex-wrap:wrap;gap:8px 24px">`;
+  h+=row("퇴직급여충당금(B)",inp("jg-tc",p.toechung,pvT));
+  h+=row("유동부채(C)",inp("jg-yd",p.yudong,pvY));
   h+=`</div><div style="background:rgba(0,0,0,0.03);border:1px dashed rgba(0,0,0,0.2);border-radius:10px;padding:10px;margin:12px 0 6px">
     <div style="font-weight:700;font-size:12.5px;margin-bottom:4px">📋 붙여넣기로 증감 채우기 <span class="unit">현금흐름 입출금내역 표(구분/계정명/금액)를 붙이면 증가·감소 칸을 채우고 기말잔액까지 검산해요</span></div>
     <textarea id="jgFlowTa" style="width:100%;height:70px;font-size:11px;border:1px solid rgba(0,0,0,0.15);border-radius:6px;padding:6px" placeholder="구분&#9;계정명&#9;2026/08/16 ~ 2026/08/31&#10;기초잔액&#9;…"></textarea>
@@ -4940,7 +4943,6 @@ function jgKpiCards(A,B){
       ${b2&&b2.net!=null?`<div style="font-size:12.5px;color:var(--sub);margin-top:2px">비교 달: ${b2.net>=0?"+":""}${fmt(b2.net)}</div>`:""}</div>`;
   })();
   return `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
-    ${card("가용자금 (A−B−C)",a2.av,b2?.av,a2.avLab||"월말 기준")}
     ${card("자금 합계 (A)",a2.tA,b2?.tA,a2.label)}
     ${netCard}
   </div>`;
