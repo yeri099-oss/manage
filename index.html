@@ -4643,6 +4643,7 @@ function jgBase(full){ /* 기초잔액: 수동값 우선, 없으면 직전 반�
   if(p&&p.base!=null&&p.base!=="")return Number(p.base);
   const all=jgPeriods();const i=all.indexOf(full);
   if(i>0)return jgEnding(all[i-1]);
+  if(i<0){const before=all.filter(x=>x<full);if(before.length)return jgEnding(before[before.length-1]);}
   return null;
 }
 function jgEnding(full){const p=jgGet(full);if(!p)return null;const b=jgBase(full);return (b||0)+jgIncSum(p)-jgDecSum(p);}
@@ -4683,6 +4684,149 @@ window.jgDelete=function(){
   if(S.data.jagum[y]?.periods){delete S.data.jagum[y].periods[k];queueSave("jagum",y);}
   S.ui.jagumEdit=null;renderJagum();
 };
+window.jgPasteFill=function(){
+  try{
+    const ta=document.getElementById("jgPasteTa");
+    const msg=document.getElementById("jgPasteMsg");
+    const txt=(ta&&ta.value||"").trim();
+    if(!txt){toast("먼저 표를 붙여넣어주세요",true);return;}
+    const core=x=>String(x||"").replace(/^\d+/,"").replace(/[\s.]/g,"");
+    const accUsed=new Set(),depUsed=new Set();
+    const findSlot=(list,used,name)=>{
+      const c=core(name);
+      for(let i=0;i<list.length;i++)if(!used.has(i)&&core(list[i])===c)return i;
+      for(let i=0;i<list.length;i++)if(!used.has(i)&&(core(list[i]).indexOf(c)>=0||c.indexOf(core(list[i]))>=0))return i;
+      return -1;
+    };
+    let cash=null;const acc={},dep={};const skipped=[];let section=null;let filled=0;
+    for(const line of txt.split(/\r?\n/)){
+      const cs=line.split("\t").map(x=>x.trim());
+      if(cs.length<2)continue;
+      if(/계정명|이월잔액/.test(line))continue;
+      const nums=cs.map(v=>{const t=v.replace(/[,\s]/g,"");return /^-?\d+$/.test(t)?Number(t):null;});
+      let lastIdx=-1;for(let i=cs.length-1;i>=0;i--)if(nums[i]!=null){lastIdx=i;break;}
+      if(lastIdx<0)continue;
+      const val=nums[lastIdx];
+      const labels=cs.filter((v,i)=>nums[i]==null&&v!==""&&i<lastIdx);
+      const joined=labels.join(" ").replace(/\s+/g," ").trim();
+      const lab0=labels[0]||"";
+      if(/합계$/.test(joined.replace(/\s/g,"")))break;
+      if(/계$/.test(joined.replace(/\s/g,"")))continue;
+      if(lab0==="현금"){cash=val;filled++;continue;}
+      if(lab0==="보통예금")section="acc";
+      else if(/^정기예/.test(lab0))section="dep";
+      else if(labels.length>1&&lab0!=="보통예금"&&!/^정기예/.test(lab0))section="skip:"+lab0;
+      const biz=labels[labels.length-1];
+      if(!biz)continue;
+      if(section==="acc"){
+        const i=findSlot(JG_ACC,accUsed,biz);
+        if(i>=0){acc[i]=val;accUsed.add(i);filled++;}
+        else skipped.push(biz);
+      }else if(section==="dep"){
+        const i=findSlot(JG_DEP,depUsed,biz);
+        if(i>=0){dep[i]=val;depUsed.add(i);filled++;}
+        else skipped.push(biz);
+      }else if(section&&section.indexOf("skip:")===0){
+        skipped.push(section.slice(5)+" · "+biz);
+      }
+    }
+    const set=(id,v)=>{const el=document.getElementById(id);if(el&&v!=null)el.value=fmt(v);};
+    set("jg-cash",cash);
+    for(const i in acc)set("jg-acc"+i,acc[i]);
+    for(const i in dep)set("jg-dep"+i,dep[i]);
+    if(msg)msg.innerHTML=`✅ ${filled}칸 채움 (금일잔액 기준)`+(skipped.length?`<br>⚠ 양식에 없어 건너뜀: ${skipped.map(esc).join(", ")}`:"");
+    toast(`잔액 ${filled}칸을 채웠어요 — 확인 후 저장을 눌러주세요`);
+  }catch(e){console.error(e);toast(e.message||"붙여넣기 해석 실패",true);}
+};
+function jgFlowMsgRender(){
+  const msg=document.getElementById("jgFlowMsg");
+  const F=window.__jgFlow;
+  if(!msg||!F)return;
+  const pendHtml=F.pending.map((x,i)=>{
+    if(x.done)return `<div>✅ <b>${esc(x.name)}</b> ${fmt(x.v)} → ${x.kind==="inc"?"증가":"감소"} '${esc(x.done)}'에 추가됨</div>`;
+    const list=x.kind==="inc"?JG_INC:JG_DEC;
+    return `<div style="margin:3px 0">⚠ 양식에 없는 계정 <b>${esc(x.name)}</b> ${fmt(x.v)} (${x.kind==="inc"?"증가":"감소"}) →
+      <select id="jgPd${i}" class="ctl" style="font-size:12px">${list.map((n,j)=>`<option value="${j}" ${j===list.length-1?"selected":""}>${esc(n)}</option>`).join("")}</select>
+      <button class="btn btn-sm" onclick="jgAssignPending(${i})">여기에 추가</button></div>`;
+  }).join("");
+  msg.innerHTML=F.warn+`✅ 증감 ${F.filled}칸 채움<br>`+F.baseNote+pendHtml+F.endNote;
+}
+window.jgAssignPending=function(i){
+  const F=window.__jgFlow;if(!F)return;
+  const x=F.pending[i];if(!x||x.done)return;
+  const sel=document.getElementById("jgPd"+i);
+  const slot=Number(sel.value);
+  const list=x.kind==="inc"?JG_INC:JG_DEC;
+  const el=document.getElementById(`jg-${x.kind}${slot}`);
+  if(!el){toast("입력 칸을 찾지 못했어요",true);return;}
+  const cur=Number(String(el.value||"").replace(/[,\s]/g,""))||0;
+  el.value=fmt(cur+x.v);
+  x.done=list[slot];
+  jgFlowMsgRender();
+  toast(`'${x.name}' ${fmt(x.v)}원을 ${x.kind==="inc"?"증가":"감소"} '${list[slot]}'에 추가했어요`);
+};
+window.jgPasteFlow=function(){
+  try{
+    const ta=document.getElementById("jgFlowTa");
+    const msg=document.getElementById("jgFlowMsg");
+    const txt=(ta&&ta.value||"").trim();
+    if(!txt){toast("먼저 입출금내역 표를 붙여넣어주세요",true);return;}
+    const core=x=>String(x||"").replace(/\(판\)/g,"").replace(/[\s.\-]/g,"");
+    const findSlot=(list,name)=>{
+      const c=core(name);
+      for(let i=0;i<list.length;i++)if(core(list[i])===c)return i;
+      for(let i=0;i<list.length;i++)if(core(list[i]).indexOf(c)>=0||c.indexOf(core(list[i]))>=0)return i;
+      return -1;
+    };
+    const num=v=>{const t=String(v||"").replace(/[,\s]/g,"");return /^-?\d+$/.test(t)?Number(t):null;};
+    const inc={},dec={};const pending=[];let base=null,endPasted=null,range=null;
+    for(const line of txt.split(/\r?\n/)){
+      const cs=line.split("\t").map(x=>x.trim()).filter(x=>x!=="");
+      if(!cs.length)continue;
+      const rm=line.match(/(\d{4})[\/\.-](\d{1,2})[\/\.-](\d{1,2})\s*~\s*(\d{4})[\/\.-](\d{1,2})[\/\.-](\d{1,2})/);
+      if(rm){range=`${rm[4]}-${String(Number(rm[5])).padStart(2,"0")}-${String(Number(rm[6])).padStart(2,"0")}`;continue;}
+      if(/^구분|계정명/.test(cs[0]))continue;
+      if(cs[0]==="기초잔액"){base=num(cs[1]);continue;}
+      if(cs[0]==="기말잔액"){endPasted=num(cs[1]);continue;}
+      if(cs[0]==="소계")continue;
+      if(cs[0]==="증가"||cs[0]==="감소"){
+        const name=cs[1],v=num(cs[2]);
+        if(v==null)continue;
+        const list=cs[0]==="증가"?JG_INC:JG_DEC;
+        const box=cs[0]==="증가"?inc:dec;
+        const i=findSlot(list,name);
+        if(i<0){pending.push({kind:cs[0]==="증가"?"inc":"dec",name,v,done:null});continue;}
+        box[i]=(box[i]||0)+v;
+      }
+    }
+    /* 기간 확인 */
+    let warn="";
+    if(range&&S.ui.jagumEdit&&range!==S.ui.jagumEdit)warn=`⚠ 붙여넣은 기간(${range})과 지금 입력 중인 반월(${S.ui.jagumEdit})이 달라요!<br>`;
+    const set=(id,v)=>{const el=document.getElementById(id);if(el&&v!=null)el.value=fmt(v);};
+    let filled=0;
+    for(const i in inc){set("jg-inc"+i,inc[i]);filled++;}
+    for(const i in dec){set("jg-dec"+i,dec[i]);filled++;}
+    /* 기초잔액: 자동값과 다르면 수동칸 채움 */
+    const auto=jgBase(S.ui.jagumEdit);
+    let baseNote="";
+    if(base!=null){
+      if(auto==null||Math.abs(auto-base)>2){set("jg-base-manual",base);baseNote=`기초잔액 ${fmt(base)} 입력됨${auto!=null?` (자동 연결값 ${fmt(auto)}과 달라 직접 지정)`:""}<br>`;}
+      else baseNote=`기초잔액은 자동 연결값(${fmt(auto)})과 일치 — 비워둠<br>`;
+    }
+    /* 기말 검산 (미배정분 포함: 어디에 넣든 합계는 같음) */
+    let endNote="";
+    if(endPasted!=null&&base!=null){
+      const pSum=k=>pending.filter(x=>x.kind===k).reduce((a,x)=>a+x.v,0);
+      const incSum=Object.values(inc).reduce((a,b)=>a+b,0)+pSum("inc");
+      const decSum=Object.values(dec).reduce((a,b)=>a+b,0)+pSum("dec");
+      const calc=base+incSum-decSum;
+      endNote=Math.abs(calc-endPasted)<=2?`✅ 기말잔액 검산 일치 (${fmt(endPasted)})`:`⚠ 기말잔액 불일치: 계산 ${fmt(calc)} vs 표 ${fmt(endPasted)}`;
+    }
+    window.__jgFlow={warn,filled,baseNote,endNote,pending};
+    jgFlowMsgRender();
+    toast(`증감 내역 ${filled}칸을 채웠어요${pending.length?` — 미배정 ${pending.length}건은 계정을 골라 추가해주세요`:" — 확인 후 저장을 눌러주세요"}`);
+  }catch(e){console.error(e);toast(e.message||"붙여넣기 해석 실패",true);}
+};
 function jgFormHtml(full){
   const p=jgGet(full)||{cash:null,acc:{},dep:{},toechung:null,yudong:null,base:null,inc:{},dec:{}};
   /* 잔액 미리 채우기: 기존 입력 없으면 직전 반월 값 */
@@ -4696,14 +4840,23 @@ function jgFormHtml(full){
   const autoBase=jgBase(full);
   let h=`<div class="card"><div class="card-head"><div class="card-title">✏️ ${jgLabel(full)} (${jgRange(full)}) 입력</div>
     <div class="card-actions"><button class="btn btn-sm" onclick="jgCloseForm()">닫기</button>${exists?`<button class="btn btn-sm" onclick="jgDelete()" style="color:#C00000">삭제</button>`:""}<button class="btn btn-sm btn-primary" onclick="jgSave()">저장</button></div></div>`;
-  h+=`<div style="font-weight:700;font-size:13px;margin:6px 0 4px">1. 자금 현황 (잔액)</div><div style="display:flex;flex-wrap:wrap;gap:8px 24px">`;
+  h+=`<div style="background:rgba(0,0,0,0.03);border:1px dashed rgba(0,0,0,0.2);border-radius:10px;padding:10px;margin:6px 0">
+    <div style="font-weight:700;font-size:12.5px;margin-bottom:4px">📋 붙여넣기로 잔액 채우기 <span class="unit">이카운트 '계정별 잔액' 표(계정명~금일잔액)를 복사해 붙이면 금일잔액으로 아래 칸들을 채워요</span></div>
+    <textarea id="jgPasteTa" style="width:100%;height:70px;font-size:11px;border:1px solid rgba(0,0,0,0.15);border-radius:6px;padding:6px" placeholder="계정명&#9;거래처명&#9;이월잔액&#9;증가&#9;감소&#9;금일잔액 …"></textarea>
+    <div style="margin-top:4px"><button class="btn btn-sm" onclick="jgPasteFill()">잔액 채우기</button> <span id="jgPasteMsg" style="font-size:12px"></span></div>
+  </div><div style="font-weight:700;font-size:13px;margin:6px 0 4px">1. 자금 현황 (잔액)</div><div style="display:flex;flex-wrap:wrap;gap:8px 24px">`;
   h+=row("현금",inp("jg-cash",p.cash,prev?.cash));
   JG_ACC.forEach((a,i)=>h+=row(a,inp("jg-acc"+i,p.acc?.[i],prev?.acc?.[i])));
   JG_DEP.forEach((a,i)=>h+=row("정기예적금 · "+a,inp("jg-dep"+i,p.dep?.[i],prev?.dep?.[i])));
   h+=`</div><div style="font-weight:700;font-size:13px;margin:12px 0 4px">월말 항목 <span class="unit">월말(말일) 보고 때만 입력 — 반월 중간엔 비워두세요</span></div><div style="display:flex;flex-wrap:wrap;gap:8px 24px">`;
   h+=row("퇴직급여충당금(B)",inp("jg-tc",p.toechung,null));
   h+=row("유동부채(C)",inp("jg-yd",p.yudong,null));
-  h+=`</div><div style="font-weight:700;font-size:13px;margin:12px 0 4px">2. 증감 내역 — 증가</div><div style="display:flex;flex-wrap:wrap;gap:8px 24px">`;
+  h+=`</div><div style="background:rgba(0,0,0,0.03);border:1px dashed rgba(0,0,0,0.2);border-radius:10px;padding:10px;margin:12px 0 6px">
+    <div style="font-weight:700;font-size:12.5px;margin-bottom:4px">📋 붙여넣기로 증감 채우기 <span class="unit">현금흐름 입출금내역 표(구분/계정명/금액)를 붙이면 증가·감소 칸을 채우고 기말잔액까지 검산해요</span></div>
+    <textarea id="jgFlowTa" style="width:100%;height:70px;font-size:11px;border:1px solid rgba(0,0,0,0.15);border-radius:6px;padding:6px" placeholder="구분&#9;계정명&#9;2026/08/16 ~ 2026/08/31&#10;기초잔액&#9;…"></textarea>
+    <div style="margin-top:4px"><button class="btn btn-sm" onclick="jgPasteFlow()">증감 채우기</button></div>
+    <div id="jgFlowMsg" style="font-size:12px;margin-top:4px;line-height:1.6"></div>
+  </div><div style="font-weight:700;font-size:13px;margin:6px 0 4px">2. 증감 내역 — 증가</div><div style="display:flex;flex-wrap:wrap;gap:8px 24px">`;
   JG_INC.forEach((a,i)=>h+=row(a,inp("jg-inc"+i,p.inc?.[i],null)));
   h+=`</div><div style="font-weight:700;font-size:13px;margin:12px 0 4px">증감 내역 — 감소</div><div style="display:flex;flex-wrap:wrap;gap:8px 24px">`;
   JG_DEC.forEach((a,i)=>h+=row(a,inp("jg-dec"+i,p.dec?.[i],null)));
@@ -4789,7 +4942,23 @@ function jgCmpHtml(){
   const halves=[...ha,...hb];
   const ctl2=`<div class="card"><div class="card-title">두 달 비교 <span class="unit">각 달의 반월(전반·후반)이 그대로 나란히 보여요</span></div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:4px 2px">기준 ${sel("a",A)} <span style="color:var(--sub)">vs</span> 비교 ${sel("b",B||"")}</div></div>`;
-  return ctl2+jgHalvesTables(halves,[ha.length]);
+  let bsHtml="";
+  const bA=jgBsGet(A),bB=B?jgBsGet(B):null;
+  if(bA||bB){
+    const vc=v=>`<td style="text-align:right">${v==null?"":fmt(v)}</td>`;
+    let rows="";
+    for(const[k,l]of JG_BS_FIELDS){
+      const va=bA?bA[k]:null,vb=bB?bB[k]:null;
+      if((va==null||va===0)&&(vb==null||vb===0))continue;
+      rows+=`<tr><td class="l sticky">${esc(l)}</td>${vc(va)}${vc(vb)}</tr>`;
+    }
+    const tA=bA?jgBsTotals(bA):null,tB=bB?jgBsTotals(bB):null;
+    const tr2=(l,k)=>`<tr class="total"><td class="l sticky">${l}</td>${vc(tA?tA[k]:null)}${vc(tB?tB[k]:null)}</tr>`;
+    bsHtml=`<div class="card"><div class="card-title">재무상태표(월말) — 비교 <span class="unit">단위: 원 · 부채총계는 유동부채 직접 입력값</span></div>
+      <div class="table-wrap"><table class="rpt"><thead><tr><th class="l sticky">항목</th><th>${A.replace("-",".")}월</th><th>${B?B.replace("-",".")+"월":"-"}</th></tr></thead>
+      <tbody>${rows}${tr2("자산총계","assets")}${tr2("부채총계","debt")}${tr2("자본총계","capT")}${tr2("부채와자본총계","both")}</tbody></table></div></div>`;
+  }
+  return ctl2+jgHalvesTables(halves,[ha.length])+bsHtml;
 }
 function renderJagum(){
   const el=document.getElementById("tab-jagum");
@@ -4805,119 +4974,251 @@ function renderJagum(){
       <select id="jgH" class="ctl"><option value="15" ${now.getDate()>16?"":"selected"}>전반 (1~15일)</option><option value="end" ${now.getDate()>16?"selected":""}>후반 (16~말일)</option></select>
       <button class="btn btn-sm btn-primary" onclick="jgOpenForm()">✏️ 입력 · 수정</button>
       ${Object.keys(JG_SEED).some(k=>!jgGet(k))?`<button class="btn btn-sm" onclick="jgImportSeed()">📚 엑셀 과거 자료 불러오기</button>`:""}
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:4px 2px;border-top:1px dashed rgba(0,0,0,0.1);margin-top:6px">
+      <span style="font-size:12.5px;font-weight:700">재무상태표(월말)</span>
+      <select id="jgBsY" class="ctl">${yrsOpt.map(y=>`<option ${y===now.getFullYear()?"selected":""}>${y}</option>`).join("")}</select>년
+      <select id="jgBsM" class="ctl">${MONTHS.map(m=>`<option value="${m}" ${Number(m)===(now.getMonth()||12)?"selected":""}>${m}</option>`).join("")}</select>월
+      <button class="btn btn-sm btn-primary" onclick="jgBsOpen()">🏦 입력 · 수정</button>
       <span style="flex:1"></span>
       ${all.length?`<button class="btn btn-sm" onclick="jgExportXlsx()">📥 엑셀 받기 (전체 기간·5개 시트)</button>`:""}
     </div></div>`:(all.length?`<div style="text-align:right;margin-bottom:8px"><button class="btn btn-sm" onclick="jgExportXlsx()">📥 엑셀 받기</button></div>`:"");
-  const form=S.ui.jagumEdit&&isAd?jgFormHtml(S.ui.jagumEdit):"";
+  const form=(S.ui.jagumEdit&&isAd?jgFormHtml(S.ui.jagumEdit):"")+(S.ui.jgBsEdit&&isAd?jgBsFormHtml(S.ui.jgBsEdit):"");
   if(!all.length){el.innerHTML=ctl+form+`<div class="card"><div class="hint" style="padding:14px">아직 입력된 반월이 없어요.${isAd?" 위에서 반월을 골라 입력해주세요.":""}</div></div>`;return;}
-  const view=S.ui.jagumView==="cmp"?"cmp":"month";
-  const viewTabs=`<div class="subtabs"><button class="subtab ${view==="month"?"active":""}" onclick="jgSetView('month')">한 달 보기</button><button class="subtab ${view==="cmp"?"active":""}" onclick="jgSetView('cmp')">두 달 비교</button></div>`;
-  if(view==="cmp"){el.innerHTML=ctl+form+viewTabs+jgCmpHtml();return;}
-  {
-    const mos=jgMonths();
-    const M=mos.includes(S.ui.jgMonth)?S.ui.jgMonth:mos[mos.length-1];
-    S.ui.jgMonth=M;
-    const mSel=`<div class="card"><div class="card-title">한 달 보기</div>
-      <div style="display:flex;gap:8px;align-items:center;padding:4px 2px"><select class="ctl" onchange="jgSetMonth(this.value)">${[...mos].reverse().map(k=>`<option value="${k}" ${k===M?"selected":""}>${k.replace("-",".")}월</option>`).join("")}</select></div></div>`;
-    el.innerHTML=ctl+form+viewTabs+mSel+jgHalvesTables(jgMonthHalves(M),null);
-    return;
-  }
+  el.innerHTML=ctl+form+jgCmpHtml();
+  return;
+}
+window.JG_SKEL={"fmtpr": "<sheetFormatPr defaultColWidth=\"9\" defaultRowHeight=\"16.5\"/>", "merges": "<mergeCells count=\"8\"><mergeCell ref=\"A25:A32\"/><mergeCell ref=\"A33:A63\"/><mergeCell ref=\"A64:B64\"/><mergeCell ref=\"A17:B17\"/><mergeCell ref=\"A19:B19\"/><mergeCell ref=\"A20:B20\"/><mergeCell ref=\"A18:B18\"/><mergeCell ref=\"A24:B24\"/></mergeCells>", "rows": {"1": {"a": "ht=\"17.25\" thickBot=\"1\"", "ab": "<c r=\"A1\" s=\"43\" t=\"s\"><v>46</v></c><c r=\"B1\" s=\"291\" t=\"s\"><v>246</v></c>", "s": null}, "2": {"a": "ht=\"17.25\" thickBot=\"1\"", "ab": "<c r=\"A2\" s=\"51\" t=\"s\"><v>89</v></c><c r=\"B2\" s=\"52\" t=\"s\"><v>5</v></c>", "s": 131}, "3": {"a": "", "ab": "<c r=\"A3\" s=\"155\" t=\"s\"><v>90</v></c><c r=\"B3\" s=\"48\"/>", "s": 132}, "4": {"a": "", "ab": "<c r=\"A4\" s=\"46\" t=\"s\"><v>13</v></c><c r=\"B4\" s=\"47\"/>", "s": 133}, "5": {"a": "", "ab": "<c r=\"A5\" s=\"156\" t=\"s\"><v>6</v></c><c r=\"B5\" s=\"45\" t=\"s\"><v>51</v></c>", "s": 105}, "6": {"a": "", "ab": "<c r=\"A6\" s=\"44\"/><c r=\"B6\" s=\"45\" t=\"s\"><v>48</v></c>", "s": 105}, "7": {"a": "", "ab": "<c r=\"A7\" s=\"44\"/><c r=\"B7\" s=\"45\" t=\"s\"><v>49</v></c>", "s": 105}, "8": {"a": "", "ab": "<c r=\"A8\" s=\"44\"/><c r=\"B8\" s=\"45\" t=\"s\"><v>50</v></c>", "s": 105}, "9": {"a": "", "ab": "<c r=\"A9\" s=\"44\"/><c r=\"B9\" s=\"45\" t=\"s\"><v>47</v></c>", "s": 105}, "10": {"a": "", "ab": "<c r=\"A10\" s=\"44\"/><c r=\"B10\" s=\"45\" t=\"s\"><v>44</v></c>", "s": 105}, "11": {"a": "", "ab": "<c r=\"A11\" s=\"44\"/><c r=\"B11\" s=\"45\" t=\"s\"><v>45</v></c>", "s": 105}, "12": {"a": "", "ab": "<c r=\"A12\" s=\"44\"/><c r=\"B12\" s=\"210\" t=\"s\"><v>222</v></c>", "s": 105}, "13": {"a": "", "ab": "<c r=\"A13\" s=\"46\" t=\"s\"><v>8</v></c><c r=\"B13\" s=\"47\"/>", "s": 133}, "14": {"a": "", "ab": "<c r=\"A14\" s=\"156\" t=\"s\"><v>9</v></c><c r=\"B14\" s=\"158\" t=\"s\"><v>136</v></c>", "s": 105}, "15": {"a": "", "ab": "<c r=\"A15\" s=\"44\"/><c r=\"B15\" s=\"157\" t=\"s\"><v>94</v></c>", "s": 176}, "16": {"a": "ht=\"17.25\" thickBot=\"1\"", "ab": "<c r=\"A16\" s=\"55\" t=\"s\"><v>56</v></c><c r=\"B16\" s=\"56\"/>", "s": 134}, "17": {"a": "ht=\"17.25\" thickBot=\"1\"", "ab": "<c r=\"A17\" s=\"342\" t=\"s\"><v>35</v></c><c r=\"B17\" s=\"341\"/>", "s": 135}, "18": {"a": "ht=\"17.25\" thickBot=\"1\"", "ab": "<c r=\"A18\" s=\"347\" t=\"s\"><v>228</v></c><c r=\"B18\" s=\"344\"/>", "s": 159}, "19": {"a": "", "ab": "<c r=\"A19\" s=\"343\" t=\"s\"><v>229</v></c><c r=\"B19\" s=\"344\"/>", "s": 269}, "20": {"a": "ht=\"17.25\" thickBot=\"1\"", "ab": "<c r=\"A20\" s=\"345\" t=\"s\"><v>230</v></c><c r=\"B20\" s=\"346\"/>", "s": 160}, "21": {"a": "", "ab": "<c r=\"A21\" s=\"3\"/><c r=\"B21\" s=\"4\"/>", "s": 5}, "22": {"a": "ht=\"17.25\" thickBot=\"1\"", "ab": "<c r=\"A22\" s=\"3\" t=\"s\"><v>95</v></c>", "s": null}, "23": {"a": "ht=\"17.25\" thickBot=\"1\"", "ab": "<c r=\"A23\" s=\"51\" t=\"s\"><v>86</v></c><c r=\"B23\" s=\"52\" t=\"s\"><v>89</v></c>", "s": 150}, "24": {"a": "", "ab": "<c r=\"A24\" s=\"348\" t=\"s\"><v>15</v></c><c r=\"B24\" s=\"349\"/>", "s": 209}, "25": {"a": "", "ab": "<c r=\"A25\" s=\"337\" t=\"s\"><v>87</v></c><c r=\"B25\" s=\"45\" t=\"s\"><v>10</v></c>", "s": 102}, "26": {"a": "", "ab": "<c r=\"A26\" s=\"338\"/><c r=\"B26\" s=\"45\" t=\"s\"><v>12</v></c>", "s": 102}, "27": {"a": "", "ab": "<c r=\"A27\" s=\"337\"/><c r=\"B27\" s=\"210\" t=\"s\"><v>227</v></c>", "s": 183}, "28": {"a": "", "ab": "<c r=\"A28\" s=\"338\"/><c r=\"B28\" s=\"45\" t=\"s\"><v>17</v></c>", "s": 103}, "29": {"a": "", "ab": "<c r=\"A29\" s=\"338\"/><c r=\"B29\" s=\"336\" t=\"s\"><v>248</v></c>", "s": 307}, "30": {"a": "", "ab": "<c r=\"A30\" s=\"338\"/><c r=\"B30\" s=\"116\" t=\"s\"><v>120</v></c>", "s": 307}, "31": {"a": "", "ab": "<c r=\"A31\" s=\"338\"/><c r=\"B31\" s=\"86\" t=\"s\"><v>190</v></c>", "s": 103}, "32": {"a": "", "ab": "<c r=\"A32\" s=\"339\"/><c r=\"B32\" s=\"87\" t=\"s\"><v>58</v></c>", "s": 104}, "33": {"a": "", "ab": "<c r=\"A33\" s=\"337\" t=\"s\"><v>93</v></c><c r=\"B33\" s=\"170\" t=\"s\"><v>153</v></c>", "s": 105}, "34": {"a": "", "ab": "<c r=\"A34\" s=\"338\"/><c r=\"B34\" s=\"45\" t=\"s\"><v>12</v></c>", "s": 106}, "35": {"a": "", "ab": "<c r=\"A35\" s=\"338\"/><c r=\"B35\" s=\"86\" t=\"s\"><v>32</v></c>", "s": 107}, "36": {"a": "", "ab": "<c r=\"A36\" s=\"338\"/><c r=\"B36\" s=\"88\" t=\"s\"><v>34</v></c>", "s": 103}, "37": {"a": "", "ab": "<c r=\"A37\" s=\"338\"/><c r=\"B37\" s=\"88\" t=\"s\"><v>84</v></c>", "s": 102}, "38": {"a": "", "ab": "<c r=\"A38\" s=\"338\"/><c r=\"B38\" s=\"88\" t=\"s\"><v>11</v></c>", "s": 103}, "39": {"a": "", "ab": "<c r=\"A39\" s=\"338\"/><c r=\"B39\" s=\"88\" t=\"s\"><v>14</v></c>", "s": 102}, "40": {"a": "", "ab": "<c r=\"A40\" s=\"338\"/><c r=\"B40\" s=\"88\" t=\"s\"><v>16</v></c>", "s": 113}, "41": {"a": "", "ab": "<c r=\"A41\" s=\"338\"/><c r=\"B41\" s=\"310\" t=\"s\"><v>19</v></c>", "s": 311}, "42": {"a": "", "ab": "<c r=\"A42\" s=\"338\"/><c r=\"B42\" s=\"310\" t=\"s\"><v>0</v></c>", "s": 335}, "43": {"a": "", "ab": "<c r=\"A43\" s=\"338\"/><c r=\"B43\" s=\"88\" t=\"s\"><v>52</v></c>", "s": 102}, "44": {"a": "", "ab": "<c r=\"A44\" s=\"338\"/><c r=\"B44\" s=\"88\" t=\"s\"><v>53</v></c>", "s": 102}, "45": {"a": "", "ab": "<c r=\"A45\" s=\"338\"/><c r=\"B45\" s=\"88\" t=\"s\"><v>2</v></c>", "s": 102}, "46": {"a": "", "ab": "<c r=\"A46\" s=\"338\"/><c r=\"B46\" s=\"88\" t=\"s\"><v>18</v></c>", "s": 113}, "47": {"a": "", "ab": "<c r=\"A47\" s=\"338\"/><c r=\"B47\" s=\"88\" t=\"s\"><v>30</v></c>", "s": 102}, "48": {"a": "", "ab": "<c r=\"A48\" s=\"338\"/><c r=\"B48\" s=\"89\" t=\"s\"><v>33</v></c>", "s": 102}, "49": {"a": "", "ab": "<c r=\"A49\" s=\"338\"/><c r=\"B49\" s=\"88\" t=\"s\"><v>54</v></c>", "s": 103}, "50": {"a": "", "ab": "<c r=\"A50\" s=\"338\"/><c r=\"B50\" s=\"88\" t=\"s\"><v>3</v></c>", "s": 102}, "51": {"a": "", "ab": "<c r=\"A51\" s=\"338\"/><c r=\"B51\" s=\"88\" t=\"s\"><v>31</v></c>", "s": 108}, "52": {"a": "", "ab": "<c r=\"A52\" s=\"338\"/><c r=\"B52\" s=\"89\" t=\"s\"><v>61</v></c>", "s": 108}, "53": {"a": "", "ab": "<c r=\"A53\" s=\"338\"/><c r=\"B53\" s=\"90\" t=\"s\"><v>85</v></c>", "s": 108}, "54": {"a": "", "ab": "<c r=\"A54\" s=\"338\"/><c r=\"B54\" s=\"88\" t=\"s\"><v>4</v></c>", "s": 171}, "55": {"a": "", "ab": "<c r=\"A55\" s=\"338\"/><c r=\"B55\" s=\"88\" t=\"s\"><v>38</v></c>", "s": 102}, "56": {"a": "", "ab": "<c r=\"A56\" s=\"338\"/><c r=\"B56\" s=\"88\" t=\"s\"><v>40</v></c>", "s": 103}, "57": {"a": "", "ab": "<c r=\"A57\" s=\"338\"/><c r=\"B57\" s=\"154\" t=\"s\"><v>133</v></c>", "s": 151}, "58": {"a": "", "ab": "<c r=\"A58\" s=\"338\"/><c r=\"B58\" s=\"88\" t=\"s\"><v>39</v></c>", "s": 102}, "59": {"a": "", "ab": "<c r=\"A59\" s=\"338\"/><c r=\"B59\" s=\"312\" t=\"s\"><v>254</v></c>", "s": 102}, "60": {"a": "", "ab": "<c r=\"A60\" s=\"338\"/><c r=\"B60\" s=\"88\" t=\"s\"><v>36</v></c>", "s": 102}, "61": {"a": "", "ab": "<c r=\"A61\" s=\"338\"/><c r=\"B61\" s=\"161\" t=\"s\"><v>138</v></c>", "s": 103}, "62": {"a": "", "ab": "<c r=\"A62\" s=\"338\"/><c r=\"B62\" s=\"89\" t=\"s\"><v>119</v></c>", "s": 103}, "63": {"a": "ht=\"17.25\" thickBot=\"1\"", "ab": "<c r=\"A63\" s=\"338\"/><c r=\"B63\" s=\"98\" t=\"s\"><v>58</v></c>", "s": 109}, "64": {"a": "ht=\"17.25\" thickBot=\"1\"", "ab": "<c r=\"A64\" s=\"340\" t=\"s\"><v>92</v></c><c r=\"B64\" s=\"341\"/>", "s": 110}, "65": {"a": "", "ab": "<c r=\"B65\" s=\"175\" t=\"s\"><v>184</v></c>", "s": null}}};
+const JG_BS_SKEL={"fmtpr": "<sheetFormatPr defaultColWidth=\"9\" defaultRowHeight=\"16.5\"/>", "rows": {"1": {"a": "ht=\"33.75\" customHeight=\"1\"", "A": "<c r=\"A1\" s=\"309\" t=\"s\"><v>261</v></c>", "d": 28, "s": 28}, "2": {"a": "s=\"303\" customFormat=\"1\"", "A": "<c r=\"A2\" s=\"302\" t=\"s\"><v>22</v></c>", "d": 402, "s": 403}, "3": {"a": "", "A": "<c r=\"A3\" s=\"8\" t=\"s\"><v>107</v></c>", "d": 34, "s": 34}, "4": {"a": "s=\"12\" customFormat=\"1\"", "A": "<c r=\"A4\" s=\"13\" t=\"s\"><v>110</v></c>", "d": 34, "s": 35}, "5": {"a": "s=\"12\" customFormat=\"1\"", "A": "<c r=\"A5\" s=\"13\" t=\"s\"><v>97</v></c>", "d": 34, "s": 35}, "6": {"a": "", "A": "<c r=\"A6\" s=\"8\" t=\"s\"><v>63</v></c>", "d": 34, "s": 34}, "7": {"a": "", "A": "<c r=\"A7\" s=\"8\" t=\"s\"><v>67</v></c>", "d": 34, "s": 34}, "8": {"a": "", "A": "<c r=\"A8\" s=\"8\" t=\"s\"><v>96</v></c>", "d": 34, "s": 34}, "9": {"a": "", "A": "<c r=\"A9\" s=\"8\" t=\"s\"><v>100</v></c>", "d": 34, "s": 34}, "10": {"a": "s=\"12\" customFormat=\"1\"", "A": "<c r=\"A10\" s=\"13\" t=\"s\"><v>104</v></c>", "d": 34, "s": 35}, "11": {"a": "", "A": "<c r=\"A11\" s=\"8\" t=\"s\"><v>98</v></c>", "d": 34, "s": 35}, "12": {"a": "s=\"12\" customFormat=\"1\"", "A": "<c r=\"A12\" s=\"13\" t=\"s\"><v>65</v></c>", "d": 34, "s": 35}, "13": {"a": "s=\"12\" customFormat=\"1\"", "A": "<c r=\"A13\" s=\"13\" t=\"s\"><v>157</v></c>", "d": 34, "s": 35}, "14": {"a": "s=\"12\" customFormat=\"1\"", "A": "<c r=\"A14\" s=\"8\" t=\"s\"><v>158</v></c>", "d": 34, "s": 35}, "15": {"a": "s=\"12\" customFormat=\"1\"", "A": "<c r=\"A15\" s=\"13\" t=\"s\"><v>109</v></c>", "d": 34, "s": 35}, "16": {"a": "", "A": "<c r=\"A16\" s=\"8\" t=\"s\"><v>99</v></c>", "d": 34, "s": 35}, "17": {"a": "", "A": "<c r=\"A17\" s=\"8\" t=\"s\"><v>66</v></c>", "d": 34, "s": 35}, "18": {"a": "", "A": "<c r=\"A18\" s=\"8\" t=\"s\"><v>115</v></c>", "d": 34, "s": 35}, "19": {"a": "", "A": "<c r=\"A19\" s=\"8\" t=\"s\"><v>101</v></c>", "d": 34, "s": 35}, "20": {"a": "s=\"12\" customFormat=\"1\"", "A": "<c r=\"A20\" s=\"13\" t=\"s\"><v>102</v></c>", "d": 34, "s": 35}, "21": {"a": "", "A": "<c r=\"A21\" s=\"8\" t=\"s\"><v>114</v></c>", "d": 34, "s": 35}, "22": {"a": "", "A": "<c r=\"A22\" s=\"208\" t=\"s\"><v>220</v></c>", "d": 34, "s": 35}, "23": {"a": "", "A": "<c r=\"A23\" s=\"208\" t=\"s\"><v>243</v></c>", "d": 34, "s": 35}, "24": {"a": "s=\"12\" customFormat=\"1\"", "A": "<c r=\"A24\" s=\"13\" t=\"s\"><v>68</v></c>", "d": 34, "s": 35}, "25": {"a": "", "A": "<c r=\"A25\" s=\"208\" t=\"s\"><v>219</v></c>", "d": 34, "s": 35}, "26": {"a": "", "A": "<c r=\"A26\" s=\"208\" t=\"s\"><v>119</v></c>", "d": 34, "s": 35}, "27": {"a": "s=\"12\" customFormat=\"1\"", "A": "<c r=\"A27\" s=\"10\" t=\"s\"><v>29</v></c>", "d": 34, "s": 35}, "28": {"a": "", "A": "<c r=\"A28\" s=\"8\" t=\"s\"><v>103</v></c>", "d": 34, "s": 35}, "29": {"a": "s=\"296\" customFormat=\"1\"", "A": "<c r=\"A29\" s=\"292\" t=\"s\"><v>111</v></c>", "d": 293, "s": 294}, "30": {"a": "s=\"299\" customFormat=\"1\"", "A": "<c r=\"A30\" s=\"297\" t=\"s\"><v>112</v></c>", "d": 293, "s": 294}, "31": {"a": "s=\"299\" customFormat=\"1\"", "A": "<c r=\"A31\" s=\"297\" t=\"s\"><v>108</v></c>", "d": 293, "s": 294}, "32": {"a": "s=\"299\" customFormat=\"1\"", "A": "<c r=\"A32\" s=\"297\" t=\"s\"><v>62</v></c>", "d": 293, "s": 294}, "33": {"a": "s=\"299\" customFormat=\"1\"", "A": "<c r=\"A33\" s=\"297\" t=\"s\"><v>64</v></c>", "d": 293, "s": 294}, "34": {"a": "s=\"299\" customFormat=\"1\"", "A": "<c r=\"A34\" s=\"300\" t=\"s\"><v>127</v></c>", "d": 293, "s": 294}, "35": {"a": "", "A": "<c r=\"A35\" s=\"8\" t=\"s\"><v>69</v></c>", "d": 34, "s": 35}, "36": {"a": "", "A": "<c r=\"A36\" s=\"8\" t=\"s\"><v>70</v></c>", "d": 34, "s": 35}, "37": {"a": "s=\"12\" customFormat=\"1\"", "A": "<c r=\"A37\" s=\"10\" t=\"s\"><v>25</v></c>", "d": 34, "s": 35}, "38": {"a": "", "A": "<c r=\"A38\" s=\"8\" t=\"s\"><v>59</v></c>", "d": 34, "s": 34}, "39": {"a": "", "A": "<c r=\"A39\" s=\"8\" t=\"s\"><v>113</v></c>", "d": 34, "s": 35}, "40": {"a": "", "A": "<c r=\"A40\" s=\"8\" t=\"s\"><v>71</v></c>", "d": 34, "s": 35}, "41": {"a": "", "A": "<c r=\"A41\" s=\"8\" t=\"s\"><v>105</v></c>", "d": 34, "s": 35}, "42": {"a": "", "A": "<c r=\"A42\" s=\"8\" t=\"s\"><v>72</v></c>", "d": 149, "s": 34}, "43": {"a": "", "A": "<c r=\"A43\" s=\"8\" t=\"s\"><v>106</v></c>", "d": 34, "s": 34}, "44": {"a": "s=\"12\" customFormat=\"1\"", "A": "<c r=\"A44\" s=\"10\" t=\"s\"><v>26</v></c>", "d": 34, "s": 35}, "45": {"a": "s=\"12\" customFormat=\"1\"", "A": "<c r=\"A45\" s=\"10\" t=\"s\"><v>23</v></c>", "d": 34, "s": 35}, "46": {"a": "", "A": "<c r=\"A46\" t=\"s\"><v>57</v></c>", "d": null, "s": null}, "48": {"a": "", "A": "", "d": null, "s": null}}};
+const JG_BS_FIELDS=[
+ ["cash","현금 및 현금성자산"],["sti","단기투자자산"],["ar","매출채권"],["etc1","기타(당좌)"],
+ ["goods","상품(재고)"],["ltl","장기대여금"],["bld","건물"],["car","차량운반구"],["fix","비품"],["fac","시설장치"],
+ ["gw","영업권"],["ip","산업재산권(상표권 외)"],["etc2","기타(무형)"],["lease","임차보증금"],["etc3","기타(기타비유동)"],
+ ["ap","매입채무"],["mip","미지급금"],["vat","부가세예수금"],["mib","미지급비용"],["mtax","미지급세금"],["ydb","유동부채 총계(직접)"],
+ ["cap","자본금"],["ret","미처분이익잉여금"],["ni","(당기순이익)"]];
+function jgBsMonths(){const out=[];for(const y in (S.data.jagum||{}))for(const m in (S.data.jagum[y].bs||{}))out.push(`${y}-${m}`);return out.sort();}
+function jgBsGet(ym){const[y,m]=ym.split("-");return S.data.jagum[y]?.bs?.[m]||null;}
+function jgBsTotals(b){
+  const n=k=>Number(b[k])||0;
+  const assets=n("cash")+n("sti")+n("ar")+n("etc1")+n("goods")+n("ltl")+n("bld")+n("car")+n("fix")+n("fac")+n("gw")+n("ip")+n("etc2")+n("lease")+n("etc3");
+  const debt=n("ydb");
+  const capT=n("cap")+n("ret");
+  return {assets,debt,capT,both:debt+capT};
+}
+window.jgBsOpen=function(){
+  const y=document.getElementById("jgBsY").value,m=document.getElementById("jgBsM").value;
+  S.ui.jgBsEdit=`${y}-${String(m).padStart(2,"0")}`;
+  renderJagum();
+};
+window.jgBsClose=function(){S.ui.jgBsEdit=null;renderJagum();};
+window.jgBsParseFill=function(){
+  try{
+    const txt=(document.getElementById("jgBsTa")?.value||"").trim();
+    if(!txt){toast("먼저 재무상태표를 붙여넣어주세요",true);return;}
+    const num=v=>{const t=String(v||"").replace(/[,\s]/g,"");return /^-?\d+$/.test(t)?Number(t):null;};
+    const out={};let sec=null;const checks={};
+    for(const line of txt.split(/\r?\n/)){
+      const cs=line.split("\t").map(x=>x.trim());
+      const nm=(cs[0]||"").replace(/\s+/g,"");
+      if(!nm)continue;
+      if(/^\[P\.|^회사명|^\d{4}\//.test(nm)||nm==="재무제표표시명")continue;
+      let val=null;for(let i=1;i<cs.length;i++){const v=num(cs[i]);if(v!=null){val=v;break;}}
+      if(/^\d\.(자산|부채|자본)$/.test(nm))continue;
+      if(nm.indexOf("(1)당좌자산")>=0){sec="dj";continue;}
+      if(nm.indexOf("(2)재고자산")>=0){sec="jg";continue;}
+      if(nm.indexOf("(1)투자자산")>=0){sec="tu";continue;}
+      if(nm.indexOf("(2)유형자산")>=0){sec="yu";continue;}
+      if(nm.indexOf("(3)무형자산")>=0){sec="mu";continue;}
+      if(nm.indexOf("(4)기타비유동자산")>=0){sec="gita";continue;}
+      if(nm.indexOf("유동부채")>=0&&nm.indexOf("비유동")<0){sec="ydb";if(val!=null)out.ydb=val;continue;}
+      if(/^1\)자본금/.test(nm)){if(val!=null)out.cap=val;continue;}
+      if(nm.indexOf("이익잉여금")>=0&&nm.indexOf("미처분")<0){sec="cap2";continue;}
+      if(/유동자산|비유동자산/.test(nm))continue;
+      if(nm==="자산총계"){checks.assets=val;continue;}
+      if(nm==="부채총계"){checks.debt=val;continue;}
+      if(nm==="자본총계"){checks.capT=val;continue;}
+      if(nm==="부채와자본총계"){checks.both=val;continue;}
+      if(val==null)continue;
+      const M={"현금및현금성자산":"cash","단기투자자산":"sti","매출채권":"ar","상품":"goods","장기대여금":"ltl","건물":"bld","차량운반구":"car","비품":"fix","시설장치":"fac","영업권":"gw","산업재산권":"ip","상표권외":"ip","임차보증금":"lease","매입채무":"ap","미지급금":"mip","부가세예수금":"vat","미지급비용":"mib","미지급세금":"mtax","보통주자본금":null,"미처분이익잉여금":"ret","(당기순이익)":"ni"};
+      if(nm in M){if(M[nm])out[M[nm]]=val;continue;}
+      if(nm==="기타"){
+        if(sec==="dj")out.etc1=val;else if(sec==="mu")out.etc2=val;else if(sec==="gita")out.etc3=val;
+        continue;
+      }
+    }
+    let filled=0;
+    for(const[k]of JG_BS_FIELDS){const el=document.getElementById("jgbs-"+k);if(el&&out[k]!=null){el.value=fmt(out[k]);filled++;}}
+    const t=jgBsTotals(out);
+    const chk=(name,mine,theirs)=>theirs==null?"":(Math.abs(mine-theirs)<=2?`✅ ${name} 일치 (${fmt(theirs)})`:`⚠ ${name} 불일치: 계산 ${fmt(mine)} vs 표 ${fmt(theirs)}`);
+    document.getElementById("jgBsMsg").innerHTML=`✅ ${filled}칸 채움<br>`+[chk("자산총계",t.assets,checks.assets),chk("부채총계",t.debt,checks.debt),chk("자본총계",t.capT,checks.capT),chk("부채와자본총계",t.both,checks.both)].filter(Boolean).join("<br>");
+    toast(`재무상태표 ${filled}칸을 채웠어요 — 확인 후 저장을 눌러주세요`);
+  }catch(e){console.error(e);toast(e.message||"해석 실패",true);}
+};
+window.jgBsSave=function(){
+  try{
+    const ym=S.ui.jgBsEdit;if(!ym)return;
+    const nv=id=>{const el=document.getElementById(id);if(!el)return null;const t=String(el.value||"").replace(/[,\s원]/g,"");if(t==="")return null;const n=Number(t);return isNaN(n)?null:Math.round(n);};
+    const b={};for(const[k]of JG_BS_FIELDS){const v=nv("jgbs-"+k);if(v!=null)b[k]=v;}
+    const[y,m]=ym.split("-");
+    const doc=(S.data.jagum[y]=S.data.jagum[y]||{periods:{}});
+    doc.bs=doc.bs||{};
+    doc.bs[m]=b;
+    queueSave("jagum",y);
+    S.ui.jgBsEdit=null;
+    toast(`${y}년 ${Number(m)}월 재무상태표를 저장했어요`);
+    renderJagum();
+  }catch(e){console.error(e);toast(e.message||"저장 실패",true);}
+};
+window.jgBsDelete=function(){
+  const ym=S.ui.jgBsEdit;if(!ym)return;
+  if(!confirm(`${ym} 재무상태표 입력을 삭제할까요?`))return;
+  const[y,m]=ym.split("-");
+  if(S.data.jagum[y]?.bs){delete S.data.jagum[y].bs[m];queueSave("jagum",y);}
+  S.ui.jgBsEdit=null;renderJagum();
+};
+function jgBsFormHtml(ym){
+  const b=jgBsGet(ym)||{};
+  const row=(k,lab)=>`<div style="display:flex;align-items:center;gap:8px;min-width:290px"><span style="width:170px;font-size:12.5px;color:var(--ink-2)">${esc(lab)}</span><input class="cell-in" id="jgbs-${k}" inputmode="numeric" value="${b[k]!=null?fmt(b[k]):""}" style="width:130px;text-align:right"></div>`;
+  return `<div class="card"><div class="card-head"><div class="card-title">🏦 ${ym.replace("-",".")} 재무상태표(월말) 입력</div>
+    <div class="card-actions"><button class="btn btn-sm" onclick="jgBsClose()">닫기</button>${jgBsGet(ym)?`<button class="btn btn-sm" onclick="jgBsDelete()" style="color:#C00000">삭제</button>`:""}<button class="btn btn-sm btn-primary" onclick="jgBsSave()">저장</button></div></div>
+    <div style="background:rgba(0,0,0,0.03);border:1px dashed rgba(0,0,0,0.2);border-radius:10px;padding:10px;margin:6px 0">
+      <div style="font-weight:700;font-size:12.5px;margin-bottom:4px">📋 이카운트 재무상태표 붙여넣기 <span class="unit">부채는 세부항목이 다 안 나오므로 '유동부채' 소계가 부채총계로 쓰여요</span></div>
+      <textarea id="jgBsTa" style="width:100%;height:70px;font-size:11px;border:1px solid rgba(0,0,0,0.15);border-radius:6px;padding:6px"></textarea>
+      <div style="margin-top:4px"><button class="btn btn-sm" onclick="jgBsParseFill()">해석해서 채우기</button></div>
+      <div id="jgBsMsg" style="font-size:12px;margin-top:4px;line-height:1.6"></div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px 24px">${JG_BS_FIELDS.map(([k,l])=>row(k,l)).join("")}</div>
+  </div>`;
 }
 window.jgExportXlsx=async function(){
   try{
-    toast("엑셀 파일 만드는 중…");
+    toast("엑셀 파일 만드는 중… (원본 서식 그대로)");
     if(typeof JSZip==="undefined")throw new Error("파일 모듈이 아직 로드되지 않았어요");
     const zip=await JSZip.loadAsync(tplB64U8(JAGUM_TPL_B64));
-    /* 스타일 병합 */
-    let st=await zip.file("xl/styles.xml").async("string");
-    const cnt=(tag)=>{const m=st.match(new RegExp('<'+tag+' count="(\\d+)"'));return m?+m[1]:0;};
-    const baseF=cnt("fonts"),baseL=cnt("fills"),baseB=cnt("borders"),baseX=cnt("cellXfs");
-    st=st.replace(/(<fonts count=")(\d+)(")/,(m,a,n,b2)=>a+(+n+3)+b2)
-         .replace(/<\/fonts>/,'<font><sz val="10"/><name val="맑은 고딕"/></font><font><b/><sz val="10"/><name val="맑은 고딕"/></font><font><b/><sz val="12"/><name val="맑은 고딕"/></font></fonts>')
-         .replace(/(<fills count=")(\d+)(")/,(m,a,n,b2)=>a+(+n+3)+b2)
-         .replace(/<\/fills>/,'<fill><patternFill patternType="solid"><fgColor rgb="FFE2F0D9"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFC6E0B3"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFF2CC"/></patternFill></fill></fills>');
-    const F={d:baseF,b:baseF+1,t:baseF+2};
-    const L={none:0,g:baseL,dg:baseL+1,y:baseL+2};
-    const comboList=["","l","r","t","b","lr","lt","rt","lb","rb","tb","lrt","ltb","rtb","lrtb","tr"];
-    const bXml=comboList.map(cb=>{
-      const side=(k,ch)=>cb.indexOf(ch)>=0?`<${k} style="medium"><color rgb="FF000000"/></${k}>`:`<${k} style="thin"><color rgb="FFBFBFBF"/></${k}>`;
-      return `<border>${side("left","l")}${side("right","r")}${side("top","t")}${side("bottom","b")}<diagonal/></border>`;
-    }).join("");
-    st=st.replace(/(<borders count=")(\d+)(")/,(m,a,n,b2)=>a+(+n+comboList.length)+b2).replace(/<\/borders>/,bXml+"</borders>");
-    const bIdx=cb=>{const i=comboList.indexOf(cb);return baseB+(i<0?0:i);};
-    const xfMap={},xfList=[];
-    function XF2(font,fill,border,fmt,align){
-      const key=[font,fill,border,fmt,align].join("|");
-      if(xfMap[key]!=null)return xfMap[key];
-      const al=align==="c"?'<alignment horizontal="center" vertical="center"/>':align==="l"?'<alignment horizontal="left" vertical="center"/>':align==="r"?'<alignment horizontal="right" vertical="center"/>':"";
-      xfList.push(`<xf numFmtId="${fmt}" fontId="${font}" fillId="${fill}" borderId="${border}" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1">${al}</xf>`);
-      return xfMap[key]=baseX+xfList.length-1;
-    }
-    /* 시트 생성 */
     const all=[...jgPeriods()].reverse(); /* 최신 왼쪽 */
     const n=all.length;
-    const colL=i=>pnlColL(i);
-    const R={}; const MG=[];
-    const setC=(r,c,v,xf,txt)=>{(R[r]=R[r]||{})[c]={v,xf,txt};};
-    const setF=(r,c,f,xf)=>{(R[r]=R[r]||{})[c]={f,xf};};
-    /* r1 제목 */
-    setC(1,0," 1 . 자금 현황",XF2(F.t,L.none,bIdx(""),0,"l"),1);
-    /* r2 헤더 */
-    setC(2,0,"계정명",XF2(F.b,L.none,bIdx("lrtb"),0,"c"),1);
-    setC(2,1,"거래처명",XF2(F.b,L.none,bIdx("lrtb"),0,"c"),1);
-    all.forEach((f,i)=>setC(2,2+i,jgLabel(f),XF2(F.b,L.none,bIdx("lrtb"),0,"c"),1));
     const D=all.map(f=>jgGet(f));
-    const num=(r,c,v,fill,bold)=>{if(v==null)setC(r,c,null,XF2(F.d,fill||L.none,bIdx(""),3,"r"));else setC(r,c,Math.round(v),XF2(bold?F.b:F.d,fill||L.none,bIdx(""),3,"r"));};
-    const lab=(r,txt,fill,colB)=>{setC(r,0,txt,XF2(F.b,fill||L.none,bIdx(""),0,"l"),1);if(colB!=null)setC(r,1,colB,XF2(F.d,fill||L.none,bIdx(""),0,"l"),1);};
-    /* 자금 현황 */
-    lab(3,"현금",null,"");D.forEach((p,i)=>num(3,2+i,p?.cash));
-    lab(4,"현금 계",L.g,"");all.forEach((f,i)=>setF(4,2+i,`SUM(${colL(2+i)}3)`,XF2(F.b,L.g,bIdx(""),3,"r")));
-    JG_ACC.forEach((a,ai)=>{lab(5+ai,ai===0?"보통예금":"",null,a);D.forEach((p,i)=>num(5+ai,2+i,p?.acc?.[ai]));});
-    lab(13,"보통예금 계",L.g,"");all.forEach((f,i)=>setF(13,2+i,`SUM(${colL(2+i)}5:${colL(2+i)}12)`,XF2(F.b,L.g,bIdx(""),3,"r")));
-    JG_DEP.forEach((a,ai)=>{lab(14+ai,ai===0?"정기예.적금":"",null,a);D.forEach((p,i)=>num(14+ai,2+i,p?.dep?.[ai]));});
-    lab(16,"정기예.적금 계",L.g,"");all.forEach((f,i)=>setF(16,2+i,`SUM(${colL(2+i)}14:${colL(2+i)}15)`,XF2(F.b,L.g,bIdx(""),3,"r")));
-    lab(17,"합계 (A)",L.dg,null);all.forEach((f,i)=>setF(17,2+i,`SUM(${colL(2+i)}4+${colL(2+i)}13+${colL(2+i)}16)`,XF2(F.b,L.dg,bIdx("tb"),3,"r")));MG.push([17,0,17,1]);
-    lab(18,"퇴직급여충당금(B)",L.y,null);D.forEach((p,i)=>num(18,2+i,p?.toechung,L.y));MG.push([18,0,18,1]);
-    lab(19,"유동부채 (C)",L.y,null);D.forEach((p,i)=>num(19,2+i,p?.yudong,L.y));MG.push([19,0,19,1]);
-    lab(20,"가용자금 (A-B-C)",L.dg,null);
-    D.forEach((p,i)=>{if(p&&(p.toechung!=null||p.yudong!=null))setF(20,2+i,`SUM(${colL(2+i)}17-${colL(2+i)}18-${colL(2+i)}19)`,XF2(F.b,L.dg,bIdx("tb"),3,"r"));else setC(20,2+i,null,XF2(F.d,L.dg,bIdx("tb"),3,"r"));});
-    MG.push([20,0,20,1]);
-    /* 증감 내역 */
-    setC(22,0,"2. 증감 내역",XF2(F.t,L.none,bIdx(""),0,"l"),1);
-    setC(23,0,"구분",XF2(F.b,L.none,bIdx("lrtb"),0,"c"),1);
-    setC(23,1,"계정명",XF2(F.b,L.none,bIdx("lrtb"),0,"c"),1);
-    all.forEach((f,i)=>setC(23,2+i,jgRange(f),XF2(F.b,L.none,bIdx("lrtb"),0,"c"),1));
-    lab(24,"기초잔액",null,null);all.forEach((f,i)=>num(24,2+i,jgGet(f)?jgBase(f):null,null,1));MG.push([24,0,24,1]);
-    JG_INC.forEach((a,ai)=>{lab(25+ai,ai===0?"증가":"",null,a);D.forEach((p,i)=>num(25+ai,2+i,p?.inc?.[ai]));});
-    setC(32,1,"소계",XF2(F.b,L.g,bIdx(""),0,"l"),1);setC(32,0,null,XF2(F.d,L.none,bIdx(""),0,"l"));
-    all.forEach((f,i)=>setF(32,2+i,`SUM(${colL(2+i)}25:${colL(2+i)}31)`,XF2(F.b,L.g,bIdx(""),3,"r")));
-    MG.push([25,0,32,0]);
-    JG_DEC.forEach((a,ai)=>{lab(33+ai,ai===0?"감소":"",null,a);D.forEach((p,i)=>num(33+ai,2+i,p?.dec?.[ai]));});
-    setC(63,1,"소계",XF2(F.b,L.g,bIdx(""),0,"l"),1);setC(63,0,null,XF2(F.d,L.none,bIdx(""),0,"l"));
-    all.forEach((f,i)=>setF(63,2+i,`SUM(${colL(2+i)}33:${colL(2+i)}62)`,XF2(F.b,L.g,bIdx(""),3,"r")));
-    MG.push([33,0,63,0]);
-    lab(64,"잔액",L.dg,null);all.forEach((f,i)=>setF(64,2+i,`SUM(${colL(2+i)}24+${colL(2+i)}32-${colL(2+i)}63)`,XF2(F.b,L.dg,bIdx("tb"),3,"r")));MG.push([64,0,64,1]);
-    /* XML 조립 */
-    let x='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols>'
-      +`<col min="1" max="1" width="13" customWidth="1"/><col min="2" max="2" width="16.5" customWidth="1"/><col min="3" max="${2+n}" width="13.5" customWidth="1"/>`
-      +'</cols><sheetData>';
-    for(let r=1;r<=64;r++){
-      const row=R[r];if(!row){x+=`<row r="${r}"/>`;continue;}
-      x+=`<row r="${r}" ht="17.25" customHeight="1">`;
-      for(let c=0;c<2+n;c++){
-        const cell=row[c];if(!cell)continue;
-        const ref=pnlColL(c)+r;
-        if(cell.f!=null)x+=`<c r="${ref}" s="${cell.xf}"><f>${cell.f}</f></c>`;
-        else if(cell.v==null)x+=`<c r="${ref}" s="${cell.xf}"/>`;
-        else if(cell.txt)x+=`<c r="${ref}" s="${cell.xf}" t="inlineStr"><is><t xml:space="preserve">${pnlXEsc(cell.v)}</t></is></c>`;
-        else x+=`<c r="${ref}" s="${cell.xf}"><v>${cell.v}</v></c>`;
+    const SK=window.JG_SKEL;
+    const colL=i=>pnlColL(i);
+    const serial=f=>{const y=+f.slice(0,4),mo=+f.slice(5,7),d=+f.slice(8);return Math.round((Date.UTC(y,mo-1,d)-Date.UTC(1899,11,30))/86400000);};
+    /* 행별 기간 셀 내용 정의 */
+    const cellsFor=(r,i,f,p)=>{
+      /* return {v}|{f}|{t}|null(스타일만) */
+      const X=colL(2+i);
+      switch(true){
+        case r===2:return {v:serial(f)};
+        case r===3:return p&&p.cash!=null?{v:Math.round(p.cash)}:null;
+        case r===4:return {f:`SUM(${X}3)`};
+        case r>=5&&r<=12:{const v=p&&p.acc?p.acc[r-5]:null;return v!=null?{v:Math.round(v)}:null;}
+        case r===13:return {f:`SUM(${X}5:${X}12)`};
+        case r>=14&&r<=15:{const v=p&&p.dep?p.dep[r-14]:null;return v!=null?{v:Math.round(v)}:null;}
+        case r===16:return {f:`SUM(${X}14:${X}15)`};
+        case r===17:return {f:`SUM(${X}4+${X}13+${X}16)`};
+        case r===18:return p&&p.toechung!=null?{v:Math.round(p.toechung)}:null;
+        case r===19:return p&&p.yudong!=null?{v:Math.round(p.yudong)}:null;
+        case r===20:return p&&(p.toechung!=null||p.yudong!=null)?{f:`SUM(${X}17-${X}18-${X}19)`}:null;
+        case r===23:return {t:jgRange(f)};
+        case r===24:{const bv=p?jgBase(f):null;return bv!=null?{v:Math.round(bv)}:null;}
+        case r>=25&&r<=31:{const v=p&&p.inc?p.inc[r-25]:null;return v!=null?{v:Math.round(v)}:null;}
+        case r===32:return {f:`SUM(${X}25:${X}31)`};
+        case r>=33&&r<=62:{const v=p&&p.dec?p.dec[r-33]:null;return v!=null?{v:Math.round(v)}:null;}
+        case r===63:return {f:`SUM(${X}33:${X}62)`};
+        case r===64:return {f:`SUM(${X}24+${X}32-${X}63)`};
+        default:return null;
+      }
+    };
+    let x='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+      +(SK.fmtpr||"")
+      +`<cols><col min="1" max="1" width="13" customWidth="1"/><col min="2" max="2" width="16.5" customWidth="1"/><col min="3" max="${2+n}" width="13.5" customWidth="1"/></cols><sheetData>`;
+    for(let r=1;r<=65;r++){
+      const row=SK.rows[String(r)]||SK.rows[r];
+      const attrs=row&&row.a?" "+row.a:"";
+      x+=`<row r="${r}"${attrs}>`;
+      if(row&&row.ab)x+=row.ab;
+      if(row&&row.s!=null&&r>=2){
+        for(let i=0;i<n;i++){
+          const ref=colL(2+i)+r;
+          const c=cellsFor(r,i,all[i],D[i]);
+          if(c==null)x+=`<c r="${ref}" s="${row.s}"/>`;
+          else if(c.f!=null)x+=`<c r="${ref}" s="${row.s}"><f>${c.f}</f></c>`;
+          else if(c.t!=null)x+=`<c r="${ref}" s="${row.s}" t="inlineStr"><is><t xml:space="preserve">${pnlXEsc(c.t)}</t></is></c>`;
+          else x+=`<c r="${ref}" s="${row.s}"><v>${c.v}</v></c>`;
+        }
       }
       x+='</row>';
     }
-    x+='</sheetData><mergeCells count="'+MG.length+'">'+MG.map(m=>`<mergeCell ref="${pnlColL(m[1])}${m[0]}:${pnlColL(m[3])}${m[2]}"/>`).join("")+'</mergeCells><pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/></worksheet>';
-    if(xfList.length)st=st.replace(/(<cellXfs count=")(\d+)(")/,(m,a,n2,b2)=>a+(+n2+xfList.length)+b2).replace(/<\/cellXfs>/,xfList.join("")+"</cellXfs>");
-    zip.file("xl/styles.xml",st);
+    x+='</sheetData>'+(SK.merges||"")+'<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/></worksheet>';
     zip.file("xl/worksheets/sheet1.xml",x);
+    /* 재무상태표(월말): 입력이 있으면 시트5도 원본 골격으로 재생성 */
+    const bsMos=[...jgBsMonths()].reverse();
+    if(bsMos.length){
+      const BS=JG_BS_SKEL;
+      const lastD=ym=>{const[y,m]=ym.split("-");return `${y}.${m}.${String(jgLastDay(y,m)).padStart(2,"0")}`;};
+      const bsCells=(r,ci,b)=>{
+        const T=colL(1+ci*2),Ss=colL(2+ci*2);
+        const g=k=>b&&b[k]!=null?Math.round(b[k]):null;
+        switch(r){
+          case 4:return[null,{f:`SUM(${Ss}5:${Ss}10)`}];
+          case 5:return[null,{f:`SUM(${T}6:${T}9)`}];
+          case 6:return[{v:g("cash")},null];case 7:return[{v:g("sti")},null];case 8:return[{v:g("ar")},null];case 9:return[{v:g("etc1")},null];
+          case 10:return[null,{f:`SUM(${T}11)`}];
+          case 11:return[{v:g("goods")},null];
+          case 12:return[null,{f:`SUM(${Ss}13:${Ss}24)`}];
+          case 13:return[null,{f:`SUM(${T}14)`}];
+          case 14:return[{v:g("ltl")},null];
+          case 15:return[null,{f:`SUM(${T}16:${T}19)`}];
+          case 16:return[{v:g("bld")},null];case 17:return[{v:g("car")},null];case 18:return[{v:g("fix")},null];case 19:return[{v:g("fac")},null];
+          case 20:return[null,{f:`SUM(${T}21:${T}23)`}];
+          case 21:return[{v:g("gw")},null];case 22:return[{v:g("ip")},null];case 23:return[{v:g("etc2")},null];
+          case 24:return[null,{f:`SUM(${T}25+${T}26)`}];
+          case 25:return[{v:g("lease")},null];case 26:return[{v:g("etc3")},null];
+          case 27:return[null,{f:`SUM(${Ss}4+${Ss}12)`}];
+          case 29:return[null,{v:g("ydb")}];
+          case 30:return[{v:g("ap")},null];case 31:return[{v:g("mip")},null];case 32:return[{v:g("vat")},null];case 33:return[{v:g("mib")},null];case 34:return[{v:g("mtax")},null];
+          case 37:return[null,{f:`SUM(${Ss}29:${Ss}36)`}];
+          case 39:return[null,{v:g("cap")}];
+          case 40:return[{v:g("cap")},null];
+          case 41:return[null,{f:`SUM(${T}42)`}];
+          case 42:return[{v:g("ret")},null];case 43:return[{v:g("ni")},null];
+          case 44:return[null,{f:`SUM(${Ss}39:${Ss}41)`}];
+          case 45:return[null,{f:`SUM(${Ss}37+${Ss}44)`}];
+          default:return[null,null];
+        }
+      };
+      const bn=bsMos.length;
+      let bx='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        +(BS.fmtpr||"")
+        +`<cols><col min="1" max="1" width="20.25" customWidth="1"/><col min="2" max="${1+bn*2}" width="14.125" customWidth="1"/></cols><sheetData>`;
+      for(let r=1;r<=48;r++){
+        const row=BS.rows[String(r)]||BS.rows[r];
+        const attrs=row&&row.a?" "+row.a:"";
+        bx+=`<row r="${r}"${attrs}>`;
+        if(row&&row.A)bx+=row.A;
+        if(row&&(row.d!=null||row.s!=null)){
+          for(let ci=0;ci<bn;ci++){
+            const b=jgBsGet(bsMos[ci]);
+            const T=colL(1+ci*2),Ss=colL(2+ci*2);
+            if(r===2){
+              bx+=`<c r="${T}${r}" s="${row.d}" t="inlineStr"><is><t>${lastD(bsMos[ci])}</t></is></c><c r="${Ss}${r}" s="${row.s!=null?row.s:row.d}"/>`;
+              continue;
+            }
+            const[cT,cS]=bsCells(r,ci,b);
+            const emit=(ref,sid,c)=>{
+              if(sid==null)return;
+              if(c==null)bx+=`<c r="${ref}" s="${sid}"/>`;
+              else if(c.f!=null)bx+=`<c r="${ref}" s="${sid}"><f>${c.f}</f></c>`;
+              else if(c.v==null)bx+=`<c r="${ref}" s="${sid}"/>`;
+              else bx+=`<c r="${ref}" s="${sid}"><v>${c.v}</v></c>`;
+            };
+            emit(`${T}${r}`,row.d,cT);
+            emit(`${Ss}${r}`,row.s!=null?row.s:row.d,cS);
+          }
+        }
+        bx+='</row>';
+      }
+      bx+='</sheetData><mergeCells count="'+bn+'">'+bsMos.map((ym,ci)=>`<mergeCell ref="${colL(1+ci*2)}2:${colL(2+ci*2)}2"/>`).join("")+'</mergeCells><pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/></worksheet>';
+      zip.file("xl/worksheets/sheet5.xml",bx);
+    }
     if(zip.file("xl/calcChain.xml"))zip.remove("xl/calcChain.xml");
     const blob=await zip.generateAsync({type:"blob",compression:"DEFLATE",mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
     const d=new Date();
@@ -4926,7 +5227,7 @@ window.jgExportXlsx=async function(){
     aEl.download=`자금현황현금흐름_${String(d.getFullYear()).slice(2)}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}.xlsx`;
     document.body.appendChild(aEl);aEl.click();
     setTimeout(()=>{URL.revokeObjectURL(aEl.href);aEl.remove();},2000);
-    toast("자금현황 엑셀을 내려받았어요 (현금흐름 시트는 앱 입력값, 나머지 4개 시트는 원본 그대로)");
+    toast("자금현황 엑셀을 내려받았어요 (원본 시트 서식 그대로 · 나머지 4개 시트 원본 유지)");
   }catch(e){console.error(e);toast(e.message||"엑셀 생성 실패",true);}
 };
 const RENDERERS = {
