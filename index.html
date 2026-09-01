@@ -128,6 +128,26 @@ body {
 }
 .tab:hover { color: var(--ink-1); }
 .tab.active { color: var(--brand); border-bottom-color: var(--brand); }
+@media (min-width: 1180px) {
+  .tabbar {
+    position: fixed; top: 49px; left: 0; bottom: 0; width: 186px;
+    flex-direction: column; gap: 3px;
+    padding: 16px 12px;
+    border-right: 1px solid var(--grid); border-bottom: none;
+    overflow-y: auto; overflow-x: hidden;
+    z-index: 29;
+  }
+  .tab {
+    text-align: left; width: 100%;
+    padding: 10px 14px;
+    border-bottom: none; border-radius: 10px;
+    font-size: 14.5px;
+  }
+  .tab:hover { background: rgba(0,0,0,0.045); }
+  .tab.active { background: var(--brand); color: #fff; }
+  .main { margin-left: calc(186px + max(14px, (100% - 186px - 1080px) / 2)); margin-right: auto; }
+  .topbar { padding-left: max(28px, calc((100% - 1080px) / 2 + 16px)); }
+}
 /* ===== 본문 ===== */
 .main { max-width: 1080px; margin: 0 auto; padding: 18px 14px 60px; }
 .card {
