@@ -5041,13 +5041,13 @@ function jgStaticHtml(key){
   const bd=v=>v===2?"2px solid #333":v===1?"1px solid #b9b7ae":"1px solid #dedbd0";
   let rows="";
   grid.forEach((row,ri)=>{
-    rows+=`<tr style="height:22px">${row.map((cell,ci)=>{
+    rows+=`<tr style="height:27px">${row.map((cell,ci)=>{
       if(cov[ri+","+ci])return "";
       const[v,si]=cell;
       const st=d.styles[si]||{};
       const sp=span[ri+","+ci];
       const num=typeof v==="number";
-      const css=`padding:2px 6px;font-size:${Math.min(st.sz||11,12)}px;`+
+      const css=`padding:3px 8px;font-size:${(st.sz||11)>=12?15:13.5}px;`+
         (st.bg?`background:#${st.bg};`:"")+(st.b?"font-weight:700;":"")+
         `text-align:${st.al||(num?"right":"left")};`+
         `border-top:${bd(st.bd?st.bd[0]:0)};border-right:${bd(st.bd?st.bd[1]:0)};border-bottom:${bd(st.bd?st.bd[2]:0)};border-left:${bd(st.bd?st.bd[3]:0)};white-space:nowrap`;
