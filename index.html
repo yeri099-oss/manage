@@ -5079,16 +5079,48 @@ function jgBsViewHtml(){
     capT:b=>n0(b,"cap")+n0(b,"ret"),
     both:b=>calc.debt(b)+calc.capT(b),
   };
-  const vc=v=>`<td style="text-align:right">${v==null?"":fmt(Math.round(v))}</td>`;
+  /* ── 총계 카드 ── */
+  const b0=B[0],b1=B[1]||null;
+  const kcard=(name,va,vb,upGood)=>{
+    let delta="";
+    if(va!=null&&vb!=null){
+      const d=va-vb;
+      const good=upGood?d>=0:d<=0;
+      if(d)delta=`<div style="font-size:12.5px;font-weight:700;color:${good?"#1c6b2f":"#C00000"};margin-top:2px">${d>0?"▲":"▼"} ${fmt(Math.abs(d))}</div>`;
+      else delta=`<div style="font-size:12.5px;color:var(--sub);margin-top:2px">변동 없음</div>`;
+    }
+    return `<div style="flex:1;min-width:200px;background:#fff;border:1px solid rgba(0,0,0,0.09);border-radius:12px;padding:12px 16px">
+      <div style="font-size:12px;color:var(--sub);font-weight:700">${name} <span style="font-weight:400">· ${mos[0].replace("-",".")}월</span></div>
+      <div style="font-size:20px;font-weight:800;margin-top:3px">${va!=null?fmt(va):"—"}<span style="font-size:12px;font-weight:400"> 원</span></div>
+      ${delta}</div>`;
+  };
+  const kpi=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+    ${kcard("자산총계",calc.assets(b0),b1?calc.assets(b1):null,true)}
+    ${kcard("부채총계",calc.debt(b0),b1?calc.debt(b1):null,false)}
+    ${kcard("자본총계",calc.capT(b0),b1?calc.capT(b1):null,true)}
+  </div>`;
+  /* ── 자산 구성 막대 ── */
+  const segs=[["당좌자산",calc.dj(b0),"#5B9BD5"],["재고",calc.jg(b0),"#A5C8E4"],["투자",calc.tu(b0),"#70AD47"],["유형자산",calc.yu(b0),"#A9D18E"],["무형자산",calc.mu(b0),"#FFC000"],["기타",calc.gt(b0),"#D9CBA0"]].filter(x=>x[1]>0);
+  const tot=calc.assets(b0)||1;
+  const compBar=segs.length?`<div class="card"><div class="card-title">자산 구성 <span class="unit">${mos[0].replace("-",".")}월 · 자산총계 ${fmt(tot)}원</span></div>
+    <div style="display:flex;height:26px;border-radius:8px;overflow:hidden;border:1px solid rgba(0,0,0,0.1)">
+      ${segs.map(([n,v,c])=>`<div title="${n} ${fmt(v)}원 (${(v/tot*100).toFixed(1)}%)" style="width:${(v/tot*100).toFixed(2)}%;background:${c}"></div>`).join("")}
+    </div>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:12px">
+      ${segs.map(([n,v,c])=>`<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${c};margin-right:4px;vertical-align:-1px"></span>${n} <b>${(v/tot*100).toFixed(1)}%</b> (${fmt(v)})</span>`).join("")}
+    </div></div>`:"";
+  /* ── 표 (총계 색 강조) ── */
+  const vc=(v,bg)=>`<td style="text-align:right${bg?";background:"+bg:""}">${v==null?"":fmt(Math.round(v))}</td>`;
   let rows="";
-  const sec=t=>{rows+=`<tr class="subhead"><td colspan="${mos.length+1}">${t}</td></tr>`;};
+  const sec2=t=>{rows+=`<tr class="subhead"><td colspan="${mos.length+1}">${t}</td></tr>`;};
   const line=(label,fn,opt)=>{
     const o=opt||{};
     const vals=B.map(b=>typeof fn==="string"?g(b,fn):fn(b));
     if(!o.always&&vals.every(v=>v==null||v===0))return;
-    rows+=`<tr${o.total?` class="total"`:""}><td class="l sticky" style="padding-left:${8+(o.lv||0)*14}px${o.sub?";font-weight:700":""}">${esc(label)}</td>${vals.map(vc).join("")}</tr>`;
+    const bg=o.hl?"#E8F0DF":null;
+    rows+=`<tr${o.total?` class="total"`:""}><td class="l sticky" style="padding-left:${8+(o.lv||0)*14}px${o.sub?";font-weight:700":""}${bg?";background:"+bg:""}">${esc(label)}</td>${vals.map(v=>vc(v,bg)).join("")}</tr>`;
   };
-  sec("1. 자산");
+  sec2("1. 자산");
   line("1) 유동자산",calc.yd,{sub:1,always:1});
   line("(1) 당좌자산",calc.dj,{lv:1,sub:1,always:1});
   line("현금 및 현금성자산","cash",{lv:2});
@@ -5112,25 +5144,24 @@ function jgBsViewHtml(){
   line("(4) 기타 비유동자산",calc.gt,{lv:1,sub:1});
   line("임차보증금","lease",{lv:2});
   line("기타","etc3",{lv:2});
-  line("자산총계",calc.assets,{total:1,always:1});
-  sec("2. 부채");
+  line("자산총계",calc.assets,{total:1,always:1,hl:1});
+  sec2("2. 부채");
   line("1) 유동부채","ydb",{sub:1,always:1});
   line("매입채무","ap",{lv:2});
   line("미지급금","mip",{lv:2});
   line("부가세예수금","vat",{lv:2});
   line("미지급비용","mib",{lv:2});
   line("미지급세금","mtax",{lv:2});
-  line("부채총계",calc.debt,{total:1,always:1});
-  sec("3. 자본");
+  line("부채총계",calc.debt,{total:1,always:1,hl:1});
+  sec2("3. 자본");
   line("1) 자본금","cap",{sub:1,always:1});
-  line("보통주자본금","cap",{lv:2});
   line("5) 이익잉여금",b=>n0(b,"ret"),{sub:1,always:1});
   line("미처분이익잉여금","ret",{lv:2});
   line("(당기순이익)","ni",{lv:2});
-  line("자본총계",calc.capT,{total:1,always:1});
-  line("부채와자본총계",calc.both,{total:1,always:1});
-  return `<div class="card"><div class="card-title">재무상태표(월말) <span class="unit">최근 ${mos.length}개월 · 단위: 원 · 부채는 유동부채 직접 입력값</span></div>
-    <div class="table-wrap"><table class="rpt"><thead><tr><th class="l sticky">재무제표표시명</th>${mos.map(ym=>`<th>${ym.replace("-",".")}월</th>`).join("")}</tr></thead>
+  line("자본총계",calc.capT,{total:1,always:1,hl:1});
+  line("부채와자본총계",calc.both,{total:1,always:1,hl:1});
+  return kpi+compBar+`<div class="card"><div class="card-title">재무상태표(월말) <span class="unit">최근 ${mos.length}개월 · 단위: 원 · 부채는 유동부채 직접 입력값</span></div>
+    <div class="table-wrap"><table class="rpt" style="width:100%"><thead><tr><th class="l sticky" style="min-width:190px">재무제표표시명</th>${mos.map(ym=>`<th>${ym.replace("-",".")}월</th>`).join("")}</tr></thead>
     <tbody>${rows}</tbody></table></div></div>`;
 }
 function renderJagum(){
