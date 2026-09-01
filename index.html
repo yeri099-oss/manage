@@ -146,8 +146,17 @@ body {
   .tab:hover { background: rgba(0,0,0,0.045); }
   .tab.active { background: var(--brand); color: #fff; }
   .main { margin-left: calc(186px + max(14px, (100% - 186px - 1080px) / 2)); margin-right: auto; }
+  body.has-subrail .main { margin-left: calc(340px + max(14px, (100% - 340px - 1080px) / 2)); }
   .topbar { padding-left: max(28px, calc((100% - 1080px) / 2 + 16px)); }
-  #sideSubs { display: block !important; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--grid); }
+  body.has-subrail #sideSubs {
+    display: block !important;
+    position: fixed; left: 186px; top: 49px; bottom: 0; width: 154px;
+    background: #f6f6f2;
+    border-right: 1px solid var(--grid);
+    padding: 16px 10px;
+    overflow-y: auto;
+    z-index: 28;
+  }
 }
 #sideSubs { display: none; }
 #sideSubs .side-subgrp { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
@@ -5533,6 +5542,7 @@ function relocateSubtabs(){
   /* 이전에 숨긴 원본 복구 */
   document.querySelectorAll('[data-sidehid]').forEach(el=>{el.style.display="";el.removeAttribute("data-sidehid");});
   box.innerHTML="";
+  document.body.classList.remove("has-subrail");
   if(!window.matchMedia||!matchMedia("(min-width:1180px)").matches)return;
   if(!panel)return;
   const bars=[...panel.querySelectorAll(".subtabs")];
@@ -5562,6 +5572,7 @@ function relocateSubtabs(){
       bar.style.display="none";bar.setAttribute("data-sidehid","1");
     }
   }
+  document.body.classList.toggle("has-subrail",box.children.length>0);
 }
 (function(){
   const main=document.getElementById("main");
