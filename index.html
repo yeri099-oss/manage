@@ -5038,7 +5038,7 @@ function jgStaticHtml(key){
   mg.forEach(([r,c,rs,cs])=>{for(let i=0;i<rs;i++)for(let j=0;j<cs;j++)if(i||j)cov[(r+i)+","+(c+j)]=1;});
   const span={};
   mg.forEach(([r,c,rs,cs])=>{span[r+","+c]=[rs,cs];});
-  const bd=v=>v===2?"2px solid #333":v===1?"1px solid #b9b7ae":"1px solid #dedbd0";
+  const bd=v=>v===2?"2px solid #333":"1px solid #b9b7ae";
   let rows="";
   grid.forEach((row,ri)=>{
     rows+=`<tr style="height:27px">${row.map((cell,ci)=>{
