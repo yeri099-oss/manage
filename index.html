@@ -4974,13 +4974,21 @@ const JG_BS_SEED={"2026-06":{"cash":318021826,"sti":992559200,"ar":-44383329,"et
 function jgStaticHtml(key){
   const d=JG_STATIC[key];
   if(!d)return "";
+  /* 내용(값·색) 없는 우측 열/하단 행 잘라내기 */
+  const hasC=(cell)=>{if(!cell)return false;const[v,si]=cell;const st=d.styles[si]||{};return (v!==""&&v!=null)||!!st.bg;};
+  let lastC=0,lastR=0;
+  d.grid.forEach((row,ri)=>row.forEach((cell,ci)=>{if(hasC(cell)){if(ci>lastC)lastC=ci;if(ri>lastR)lastR=ri;}}));
+  (d.mg||[]).forEach(([r,c,rs,cs])=>{if(hasC((d.grid[r]||[])[c])){if(c+cs-1>lastC)lastC=c+cs-1;if(r+rs-1>lastR)lastR=r+rs-1;}});
+  const grid=d.grid.slice(0,lastR+1).map(row=>row.slice(0,lastC+1));
+  const widths=(d.w||[]).slice(0,lastC+1);
+  const mg=(d.mg||[]).filter(([r,c])=>r<=lastR&&c<=lastC).map(([r,c,rs,cs])=>[r,c,Math.min(rs,lastR-r+1),Math.min(cs,lastC-c+1)]);
   const cov={};
-  (d.mg||[]).forEach(([r,c,rs,cs])=>{for(let i=0;i<rs;i++)for(let j=0;j<cs;j++)if(i||j)cov[(r+i)+","+(c+j)]=1;});
+  mg.forEach(([r,c,rs,cs])=>{for(let i=0;i<rs;i++)for(let j=0;j<cs;j++)if(i||j)cov[(r+i)+","+(c+j)]=1;});
   const span={};
-  (d.mg||[]).forEach(([r,c,rs,cs])=>{span[r+","+c]=[rs,cs];});
+  mg.forEach(([r,c,rs,cs])=>{span[r+","+c]=[rs,cs];});
   const bd=v=>v===2?"2px solid #333":v===1?"1px solid #b9b7ae":"1px solid #dedbd0";
   let rows="";
-  d.grid.forEach((row,ri)=>{
+  grid.forEach((row,ri)=>{
     rows+=`<tr style="height:22px">${row.map((cell,ci)=>{
       if(cov[ri+","+ci])return "";
       const[v,si]=cell;
@@ -4994,9 +5002,10 @@ function jgStaticHtml(key){
       return `<td${sp?` rowspan="${sp[0]}" colspan="${sp[1]}"`:""} style="${css}">${num?fmt(v):esc(String(v))}</td>`;
     }).join("")}</tr>`;
   });
-  const colg=`<colgroup>${(d.w||[]).map(w=>`<col style="width:${Math.min(w,160)}px">`).join("")}</colgroup>`;
+  const colg=`<colgroup>${widths.map(w=>`<col style="width:${Math.min(w,160)}px">`).join("")}</colgroup>`;
+  const outer=key==="pullo"?"border:2px solid #333;":"";
   return `<div class="card"><div class="card-title">${esc(d.name)} <span class="unit">보내주신 엑셀 서식 그대로 — 내용이 바뀌면 새 엑셀 파일을 주시면 갱신해드려요</span></div>
-    <div class="table-wrap"><table style="border-collapse:collapse;min-width:100%">${colg}${rows}</table></div></div>`;
+    <div class="table-wrap"><table style="border-collapse:collapse;min-width:100%;${outer}">${colg}${rows}</table></div></div>`;
 }
 window.jgSetSub=function(k){S.ui.jagumSub=k;renderJagum();};
 function jgBsViewHtml(){
@@ -5090,17 +5099,16 @@ function renderJagum(){
 
       <span style="flex:1"></span>
     </div></div>`:"";
-  const sub=["flow","bs","nenia","pullo","brand"].includes(S.ui.jagumSub)?S.ui.jagumSub:"flow";
+  const sub=["flow","bs","nenia","pullo"].includes(S.ui.jagumSub)?S.ui.jagumSub:"flow";
   S.ui.jagumSub=sub;
   const subtabs=`<div class="subtabs" style="flex-wrap:wrap">
     <button class="subtab ${sub==="flow"?"active":""}" onclick="jgSetSub('flow')">현금흐름(반월)</button>
     <button class="subtab ${sub==="bs"?"active":""}" onclick="jgSetSub('bs')">재무상태표(월말)</button>
     <button class="subtab ${sub==="nenia"?"active":""}" onclick="jgSetSub('nenia')">네니아대여금</button>
     <button class="subtab ${sub==="pullo"?"active":""}" onclick="jgSetSub('pullo')">풀로만대여금</button>
-    <button class="subtab ${sub==="brand"?"active":""}" onclick="jgSetSub('brand')">상표권대금</button>
-    ${jgPeriods().length?`<button class="btn btn-sm" style="margin-left:auto" onclick="jgExportXlsx()">📥 엑셀 받기 (5개 시트)</button>`:""}
+    ${jgPeriods().length?`<button class="btn btn-sm" style="margin-left:auto" onclick="jgExportXlsx()">📥 엑셀 받기</button>`:""}
   </div>`;
-  if(sub==="nenia"||sub==="pullo"||sub==="brand"){el.innerHTML=subtabs+jgStaticHtml(sub);return;}
+  if(sub==="nenia"||sub==="pullo"){el.innerHTML=subtabs+jgStaticHtml(sub);return;}
   if(sub==="bs"){
     const bsCtl=isAd?`<div class="card"><div class="card-title">재무상태표 입력 <span class="unit">매월 말 기준 · 매입/매출 확정 후</span></div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:4px 2px">
@@ -5347,6 +5355,23 @@ window.jgExportXlsx=async function(){
       bx+='</sheetData><mergeCells count="'+bn+'">'+bsMos.map((ym,ci)=>`<mergeCell ref="${colL(1+ci*2)}2:${colL(2+ci*2)}2"/>`).join("")+'</mergeCells><pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/></worksheet>';
       zip.file("xl/worksheets/sheet5.xml",bx);
     }
+    /* 상표권대금 시트 제거 (지급 완료) */
+    try{
+      let wbx=await zip.file("xl/workbook.xml").async("string");
+      let rlx=await zip.file("xl/_rels/workbook.xml.rels").async("string");
+      let ctx=await zip.file("[Content_Types].xml").async("string");
+      const relM=rlx.match(/<Relationship Id="(rId\d+)"[^>]*Target="worksheets\/sheet4\.xml"\/>/);
+      if(relM){
+        rlx=rlx.replace(relM[0],"");
+        wbx=wbx.replace(new RegExp('<sheet [^>]*r:id="'+relM[1]+'"[^>]*/>'),"");
+        ctx=ctx.replace('<Override PartName="/xl/worksheets/sheet4.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>',"");
+        zip.remove("xl/worksheets/sheet4.xml");
+        if(zip.file("xl/worksheets/_rels/sheet4.xml.rels"))zip.remove("xl/worksheets/_rels/sheet4.xml.rels");
+        zip.file("xl/workbook.xml",wbx);
+        zip.file("xl/_rels/workbook.xml.rels",rlx);
+        zip.file("[Content_Types].xml",ctx);
+      }
+    }catch(e){console.warn("상표권 시트 제거",e);}
     if(zip.file("xl/calcChain.xml"))zip.remove("xl/calcChain.xml");
     const blob=await zip.generateAsync({type:"blob",compression:"DEFLATE",mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
     const d=new Date();
@@ -5355,7 +5380,7 @@ window.jgExportXlsx=async function(){
     aEl.download=`자금현황현금흐름_${String(d.getFullYear()).slice(2)}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}.xlsx`;
     document.body.appendChild(aEl);aEl.click();
     setTimeout(()=>{URL.revokeObjectURL(aEl.href);aEl.remove();},2000);
-    toast("자금현황 엑셀을 내려받았어요 (원본 시트 서식 그대로 · 나머지 4개 시트 원본 유지)");
+    toast("자금현황 엑셀을 내려받았어요 (현금흐름·재무상태표는 앱 입력값, 대여금 시트는 원본 그대로)");
   }catch(e){console.error(e);toast(e.message||"엑셀 생성 실패",true);}
 };
 const RENDERERS = {
