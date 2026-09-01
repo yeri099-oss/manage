@@ -4975,10 +4975,9 @@ function jgStaticHtml(key){
   const d=JG_STATIC[key];
   if(!d)return "";
   /* 내용(값·색) 없는 우측 열/하단 행 잘라내기 */
-  const hasC=(cell)=>{if(!cell)return false;const[v,si]=cell;const st=d.styles[si]||{};return (v!==""&&v!=null)||!!st.bg;};
+  const hasC=(cell)=>{if(!cell)return false;const[v,si]=cell;const st=d.styles[si]||{};return String(v==null?"":v).trim()!==""||!!st.bg;};
   let lastC=0,lastR=0;
   d.grid.forEach((row,ri)=>row.forEach((cell,ci)=>{if(hasC(cell)){if(ci>lastC)lastC=ci;if(ri>lastR)lastR=ri;}}));
-  (d.mg||[]).forEach(([r,c,rs,cs])=>{if(hasC((d.grid[r]||[])[c])){if(c+cs-1>lastC)lastC=c+cs-1;if(r+rs-1>lastR)lastR=r+rs-1;}});
   const grid=d.grid.slice(0,lastR+1).map(row=>row.slice(0,lastC+1));
   const widths=(d.w||[]).slice(0,lastC+1);
   const mg=(d.mg||[]).filter(([r,c])=>r<=lastR&&c<=lastC).map(([r,c,rs,cs])=>[r,c,Math.min(rs,lastR-r+1),Math.min(cs,lastC-c+1)]);
