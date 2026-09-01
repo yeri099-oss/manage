@@ -420,10 +420,10 @@ window.FIREBASE_CONFIG = {
   </header>
   <nav class="tabbar" id="tabbar">
     <button class="tab active" data-tab="home">요약</button>
+    <button class="tab" data-tab="jagum">자금일보</button>
     <button class="tab" data-tab="compare">매출비교</button>
     <button class="tab" data-tab="sales">매출현황</button>
     <button class="tab" data-tab="pnl">월별손익</button>
-    <button class="tab" data-tab="jagum">자금일보</button>
     <button class="tab admin-only" data-tab="settings">설정</button>
   </nav>
   <main id="main" class="main">
@@ -4712,6 +4712,23 @@ function jgFormHtml(full){
   h+=`</div>`;
   return h;
 }
+function jgMonths(){ /* 데이터 있는 월 오름차순 'YYYY-MM' */
+  return [...new Set(jgPeriods().map(k=>k.slice(0,7)))].sort();
+}
+function jgMonthAgg(ym){ /* 한 달 = 반월 합산: 잔액류는 마지막 반월(월말) 시점, 증감은 합산 */
+  const halves=jgPeriods().filter(k=>k.slice(0,7)===ym);
+  if(!halves.length)return null;
+  const last=jgGet(halves[halves.length-1]);
+  const inc={},dec={};
+  for(const h of halves){const p=jgGet(h);
+    for(const k in (p.inc||{}))inc[k]=(inc[k]||0)+(Number(p.inc[k])||0);
+    for(const k in (p.dec||{}))dec[k]=(dec[k]||0)+(Number(p.dec[k])||0);
+  }
+  return {cash:last.cash,acc:last.acc||{},dep:last.dep||{},toechung:last.toechung,yudong:last.yudong,
+    inc,dec,base:jgBase(halves[0]),ending:jgEnding(halves[halves.length-1]),
+    partial:halves.length===1&&Number(halves[0].slice(8))===15,
+    range:`${ym.slice(5)}/01~${ym.slice(5)}/${halves[halves.length-1].slice(8)}`};
+}
 function jgPrevSame(full){
   const y=Number(full.slice(0,4)),m=Number(full.slice(5,7)),d=Number(full.slice(8));
   let py=y,pm=m-1;if(pm===0){pm=12;py--;}
@@ -4722,54 +4739,57 @@ function jgPrevSame(full){
 }
 window.jgSetView=function(v){S.ui.jagumView=v;renderJagum();};
 window.jgSetCmp=function(which,val){if(which==="a")S.ui.jgCmpA=val;else S.ui.jgCmpB=val;renderJagum();};
-function jgCmpHtml(){
-  const all=jgPeriods();
-  const A=all.includes(S.ui.jgCmpA)?S.ui.jgCmpA:all[all.length-1];
-  const defB=jgPrevSame(A);
-  const B=all.includes(S.ui.jgCmpB)?S.ui.jgCmpB:defB;
-  S.ui.jgCmpA=A;S.ui.jgCmpB=B;
-  const sel=(id,cur)=>`<select class="ctl" onchange="jgSetCmp('${id}',this.value)">${[...all].reverse().map(k=>`<option value="${k}" ${k===cur?"selected":""}>${jgLabel(k)}</option>`).join("")}</select>`;
-  const pa=jgGet(A),pb=B?jgGet(B):null;
+function jgHalvesTables(halves,groupEnds){
+  /* halves: 반월 키 배열(표시 순서대로), 원값 그대로. groupEnds: 세로 굵은선 넣을 열 인덱스 */
   const GC="#E2F0D9",DC="#C6E0B3",YC="#FFF2CC";
-  const dcell=(a,b2)=>{
-    if(a==null||b2==null)return `<td></td>`;
-    const d=a-b2;
-    if(!d)return `<td style="text-align:right;color:var(--sub)">0</td>`;
-    return `<td style="text-align:right;font-weight:700;color:${d>0?"#1c6b2f":"#C00000"}">${d>0?"+":""}${fmt(Math.round(d))}</td>`;
-  };
-  const vcell=(v,bg,bold)=>`<td style="text-align:right;${bg?`background:${bg};`:""}${bold?"font-weight:700;":""}">${v==null?"":fmt(Math.round(v))}</td>`;
+  const sep=i=>groupEnds&&groupEnds.includes(i)?"border-left:2px solid #999;":"";
+  const td=(v,bg,bold,i)=>`<td style="text-align:right;${sep(i)}${bg?`background:${bg};`:""}${bold?"font-weight:700;":""}">${v==null?"":fmt(Math.round(v))}</td>`;
   let r1="",r2="";
-  const mk=(target)=>(labA,labB,fn,bg,bold,alwaysShow)=>{
-    const va=pa?fn(pa,A):null;
-    const vb=pb?fn(pb,B):null;
-    if(!alwaysShow&&!bg&&!bold&&(va==null||va===0)&&(vb==null||vb===0))return;
-    const row=`<tr${bg?` style="background:${bg}"`:""}><td class="lab sticky"${bg?` style="background:${bg}"`:""}>${labA}</td><td class="l">${labB}</td>${vcell(va,bg,bold)}${vcell(vb,bg,bold)}${dcell(va,vb)}</tr>`;
-    if(target===1)r1+=row;else r2+=row;
+  const line=(labA,labB,fn,bg,bold)=>{r1+=`<tr${bg?` style="background:${bg}"`:""}><td class="lab sticky"${bg?` style="background:${bg}"`:""}>${labA}</td><td class="l">${labB}</td>${halves.map((f,i)=>{const p=jgGet(f);return td(p?fn(p,f):null,bg,bold,i);}).join("")}</tr>`;};
+  line("현금","",p=>p.cash);
+  line("현금 계","",p=>Number(p.cash)||0,GC,1);
+  JG_ACC.forEach((a2,i)=>line(i===0?"보통예금":"",a2,p=>p.acc?.[i]));
+  line("보통예금 계","",p=>jgSum(p.acc),GC,1);
+  JG_DEP.forEach((a2,i)=>line(i===0?"정기예.적금":"",a2,p=>p.dep?.[i]));
+  line("정기예.적금 계","",p=>jgSum(p.dep),GC,1);
+  line("합계 (A)","",p=>jgTotalA(p),DC,1);
+  line("퇴직급여충당금(B)","",p=>p.toechung,YC);
+  line("유동부채 (C)","",p=>p.yudong,YC);
+  line("가용자금 (A-B-C)","",p=>p.toechung!=null||p.yudong!=null?jgTotalA(p)-(p.toechung||0)-(p.yudong||0):null,DC,1);
+  const line2=(labA,labB,fn,bg,bold)=>{
+    const vals=halves.map(f=>{const p=jgGet(f);return p?fn(p,f):null;});
+    if(!bg&&!bold&&vals.every(v=>v==null||v===0))return;
+    r2+=`<tr${bg?` style="background:${bg}"`:""}><td class="lab sticky"${bg?` style="background:${bg}"`:""}>${labA}</td><td class="l">${labB}</td>${vals.map((v,i)=>td(v,bg,bold,i)).join("")}</tr>`;
   };
-  const l1=mk(1),l2=mk(2);
-  l1("현금","",p=>p.cash,null,0,1);
-  JG_ACC.forEach((a,i)=>l1(i===0?"보통예금":"",a,p=>p.acc?.[i],null,0,1));
-  l1("보통예금 계","",p=>jgSum(p.acc),GC,1);
-  JG_DEP.forEach((a,i)=>l1(i===0?"정기예.적금":"",a,p=>p.dep?.[i],null,0,1));
-  l1("합계 (A)","",p=>jgTotalA(p),DC,1);
-  l1("퇴직급여충당금(B)","",p=>p.toechung,YC,0,1);
-  l1("유동부채 (C)","",p=>p.yudong,YC,0,1);
-  l1("가용자금 (A-B-C)","",p=>p.toechung!=null||p.yudong!=null?jgTotalA(p)-(p.toechung||0)-(p.yudong||0):null,DC,1);
-  l2("기초잔액","",(p,f)=>jgBase(f),null,1,1);
-  JG_INC.forEach((a,i)=>l2(i===0?"증가":"",a,p=>p.inc?.[i]));
-  l2("증가 소계","",p=>jgIncSum(p),GC,1);
-  JG_DEC.forEach((a,i)=>l2(i===0?"감소":"",a,p=>p.dec?.[i]));
-  l2("감소 소계","",p=>jgDecSum(p),GC,1);
-  l2("잔액","",(p,f)=>jgEnding(f),DC,1);
-  const head=`<tr><th class="c sticky">계정명</th><th class="l">거래처명</th><th>${jgLabel(A)}</th><th>${B?jgLabel(B):"-"}</th><th>증감</th></tr>`;
-  const head2=`<tr><th class="c sticky">구분</th><th class="l">계정명</th><th>${jgRange(A)}</th><th>${B?jgRange(B):"-"}</th><th>증감</th></tr>`;
+  line2("기초잔액","",(p,f)=>jgBase(f),null,1);
+  JG_INC.forEach((a2,i)=>line2(i===0?"증가":"",a2,p=>p.inc?.[i]));
+  line2("증가 소계","",p=>jgIncSum(p),GC,1);
+  JG_DEC.forEach((a2,i)=>line2(i===0?"감소":"",a2,p=>p.dec?.[i]));
+  line2("감소 소계","",p=>jgDecSum(p),GC,1);
+  line2("잔액","",(p,f)=>jgEnding(f),DC,1);
+  const th1=halves.map((f,i)=>`<th style="${sep(i)}">${jgLabel(f)}</th>`).join("");
+  const th2=halves.map((f,i)=>`<th style="${sep(i)}">${jgRange(f)}</th>`).join("");
   return `
-  <div class="card"><div class="card-title">비교 기준 <span class="unit">기본은 전달 같은 반월 — 원하는 반월로 바꿀 수 있어요</span></div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:4px 2px">기준 ${sel("a",A)} <span style="color:var(--sub)">vs</span> 비교 ${sel("b",B||"")}</div></div>
-  <div class="card"><div class="card-title">1. 자금 현황 — 비교 <span class="unit">단위: 원</span></div>
-    <div class="table-wrap"><table class="rpt"><thead>${head}</thead><tbody>${r1}</tbody></table></div></div>
-  <div class="card"><div class="card-title">2. 증감 내역 — 비교 <span class="unit">값이 있는 계정만 표시</span></div>
-    <div class="table-wrap"><table class="rpt"><thead>${head2}</thead><tbody>${r2}</tbody></table></div></div>`;
+  <div class="card"><div class="card-title">1. 자금 현황 <span class="unit">반월 원값 그대로 · 단위: 원</span></div>
+    <div class="table-wrap"><table class="rpt"><thead><tr><th class="c sticky">계정명</th><th class="l">거래처명</th>${th1}</tr></thead><tbody>${r1}</tbody></table></div></div>
+  <div class="card"><div class="card-title">2. 증감 내역 <span class="unit">값이 있는 계정만 표시 (엑셀에는 전체 계정)</span></div>
+    <div class="table-wrap"><table class="rpt"><thead><tr><th class="c sticky">구분</th><th class="l">계정명</th>${th2}</tr></thead><tbody>${r2}</tbody></table></div></div>`;
+}
+function jgMonthHalves(ym){return jgPeriods().filter(k=>k.slice(0,7)===ym).sort().reverse();} /* 후반 먼저(최신 왼쪽) */
+window.jgSetMonth=function(v){S.ui.jgMonth=v;renderJagum();};
+function jgCmpHtml(){
+  const mos=jgMonths();
+  const A=mos.includes(S.ui.jgCmpA)?S.ui.jgCmpA:mos[mos.length-1];
+  const ai=mos.indexOf(A);
+  const defB=ai>0?mos[ai-1]:null;
+  const B=mos.includes(S.ui.jgCmpB)&&S.ui.jgCmpB!==A?S.ui.jgCmpB:defB;
+  S.ui.jgCmpA=A;S.ui.jgCmpB=B;
+  const sel=(id,cur)=>`<select class="ctl" onchange="jgSetCmp('${id}',this.value)">${[...mos].reverse().map(k=>`<option value="${k}" ${k===cur?"selected":""}>${k.replace("-",".")}월</option>`).join("")}</select>`;
+  const ha=jgMonthHalves(A),hb=B?jgMonthHalves(B):[];
+  const halves=[...ha,...hb];
+  const ctl2=`<div class="card"><div class="card-title">두 달 비교 <span class="unit">각 달의 반월(전반·후반)이 그대로 나란히 보여요</span></div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:4px 2px">기준 ${sel("a",A)} <span style="color:var(--sub)">vs</span> 비교 ${sel("b",B||"")}</div></div>`;
+  return ctl2+jgHalvesTables(halves,[ha.length]);
 }
 function renderJagum(){
   const el=document.getElementById("tab-jagum");
@@ -4790,44 +4810,18 @@ function renderJagum(){
     </div></div>`:(all.length?`<div style="text-align:right;margin-bottom:8px"><button class="btn btn-sm" onclick="jgExportXlsx()">📥 엑셀 받기</button></div>`:"");
   const form=S.ui.jagumEdit&&isAd?jgFormHtml(S.ui.jagumEdit):"";
   if(!all.length){el.innerHTML=ctl+form+`<div class="card"><div class="hint" style="padding:14px">아직 입력된 반월이 없어요.${isAd?" 위에서 반월을 골라 입력해주세요.":""}</div></div>`;return;}
-  const view=S.ui.jagumView==="trend"?"trend":"cmp";
-  const viewTabs=`<div class="subtabs"><button class="subtab ${view==="cmp"?"active":""}" onclick="jgSetView('cmp')">비교 (전달 대비)</button><button class="subtab ${view==="trend"?"active":""}" onclick="jgSetView('trend')">추이 (최근 반월)</button></div>`;
+  const view=S.ui.jagumView==="cmp"?"cmp":"month";
+  const viewTabs=`<div class="subtabs"><button class="subtab ${view==="month"?"active":""}" onclick="jgSetView('month')">한 달 보기</button><button class="subtab ${view==="cmp"?"active":""}" onclick="jgSetView('cmp')">두 달 비교</button></div>`;
   if(view==="cmp"){el.innerHTML=ctl+form+viewTabs+jgCmpHtml();return;}
-  const show=[...all].reverse().slice(0,6);
-  const GC="#E2F0D9",DC="#C6E0B3",YC="#FFF2CC";
-  const td=(v,bg,bold)=>`<td style="text-align:right;${bg?`background:${bg};`:""}${bold?"font-weight:700;":""}">${v==null?"":fmt(Math.round(v))}</td>`;
-  const th=full=>`<th>${jgLabel(full)}</th>`;
-  /* 자금 현황 표 */
-  let r1="";
-  const line=(labA,labB,fn,bg,bold)=>{r1+=`<tr${bg?` style="background:${bg}"`:""}><td class="lab sticky"${bg?` style="background:${bg}"`:""}>${labA}</td><td class="l">${labB}</td>${show.map(f=>{const p=jgGet(f);return td(p?fn(p,f):null,bg,bold);}).join("")}</tr>`;};
-  line("현금","",p=>p.cash);
-  line("현금 계","",p=>Number(p.cash)||0,GC,1);
-  JG_ACC.forEach((a,i)=>line(i===0?"보통예금":"",a,p=>p.acc?.[i]));
-  line("보통예금 계","",p=>jgSum(p.acc),GC,1);
-  JG_DEP.forEach((a,i)=>line(i===0?"정기예.적금":"",a,p=>p.dep?.[i]));
-  line("정기예.적금 계","",p=>jgSum(p.dep),GC,1);
-  line("합계 (A)","",p=>jgTotalA(p),DC,1);
-  line("퇴직급여충당금(B)","",p=>p.toechung,YC);
-  line("유동부채 (C)","",p=>p.yudong,YC);
-  line("가용자금 (A-B-C)","",p=>p.toechung!=null||p.yudong!=null?jgTotalA(p)-(p.toechung||0)-(p.yudong||0):null,DC,1);
-  /* 증감 내역 표 */
-  let r2="";
-  const line2=(labA,labB,fn,bg,bold)=>{
-    const vals=show.map(f=>{const p=jgGet(f);return p?fn(p,f):null;});
-    if(!bg&&!bold&&vals.every(v=>v==null||v===0))return; /* 값 없는 계정 숨김 */
-    r2+=`<tr${bg?` style="background:${bg}"`:""}><td class="lab sticky"${bg?` style="background:${bg}"`:""}>${labA}</td><td class="l">${labB}</td>${vals.map(v=>td(v,bg,bold)).join("")}</tr>`;
-  };
-  line2("기초잔액","",(p,f)=>jgBase(f),null,1);r2=r2||"";
-  JG_INC.forEach((a,i)=>line2(i===0?"증가":"",a,p=>p.inc?.[i]));
-  line2("증가 소계","",p=>jgIncSum(p),GC,1);
-  JG_DEC.forEach((a,i)=>line2(i===0?"감소":"",a,p=>p.dec?.[i]));
-  line2("감소 소계","",p=>jgDecSum(p),GC,1);
-  line2("잔액","",(p,f)=>jgEnding(f),DC,1);
-  el.innerHTML=ctl+form+viewTabs+`
-  <div class="card"><div class="card-title">1. 자금 현황 <span class="unit">최근 ${show.length}개 반월 · 단위: 원 · 전체 기간은 엑셀로</span></div>
-    <div class="table-wrap"><table class="rpt"><thead><tr><th class="c sticky">계정명</th><th class="l">거래처명</th>${show.map(th).join("")}</tr></thead><tbody>${r1}</tbody></table></div></div>
-  <div class="card"><div class="card-title">2. 증감 내역 <span class="unit">값이 있는 계정만 표시 (엑셀에는 전체 계정이 나와요)</span></div>
-    <div class="table-wrap"><table class="rpt"><thead><tr><th class="c sticky">구분</th><th class="l">계정명</th>${show.map(f=>`<th>${jgRange(f)}</th>`).join("")}</tr></thead><tbody>${r2}</tbody></table></div></div>`;
+  {
+    const mos=jgMonths();
+    const M=mos.includes(S.ui.jgMonth)?S.ui.jgMonth:mos[mos.length-1];
+    S.ui.jgMonth=M;
+    const mSel=`<div class="card"><div class="card-title">한 달 보기</div>
+      <div style="display:flex;gap:8px;align-items:center;padding:4px 2px"><select class="ctl" onchange="jgSetMonth(this.value)">${[...mos].reverse().map(k=>`<option value="${k}" ${k===M?"selected":""}>${k.replace("-",".")}월</option>`).join("")}</select></div></div>`;
+    el.innerHTML=ctl+form+viewTabs+mSel+jgHalvesTables(jgMonthHalves(M),null);
+    return;
+  }
 }
 window.jgExportXlsx=async function(){
   try{
