@@ -5030,6 +5030,7 @@ function jgStaticHtml(key){
   const hasC=(cell)=>{if(!cell)return false;const[v,si]=cell;const st=d.styles[si]||{};return String(v==null?"":v).trim()!==""||!!st.bg;};
   let lastC=0,lastR=0;
   d.grid.forEach((row,ri)=>row.forEach((cell,ci)=>{if(hasC(cell)){if(ci>lastC)lastC=ci;if(ri>lastR)lastR=ri;}}));
+  if(key==="nenia")d.grid.forEach(row=>row.forEach((cell,ci)=>{if(cell&&String(cell[0]).trim()==="비고"&&ci-1<lastC)lastC=ci-1;}));
   const grid=d.grid.slice(0,lastR+1).map(row=>row.slice(0,lastC+1));
   const widths=(d.w||[]).slice(0,lastC+1);
   const mg=(d.mg||[]).filter(([r,c])=>r<=lastR&&c<=lastC).map(([r,c,rs,cs])=>[r,c,Math.min(rs,lastR-r+1),Math.min(cs,lastC-c+1)]);
@@ -5055,7 +5056,7 @@ function jgStaticHtml(key){
   });
   const colg=`<colgroup>${widths.map(w=>`<col style="width:${Math.min(w,160)}px">`).join("")}</colgroup>`;
   const outer=key==="pullo"?"border:2px solid #333;":"";
-  return `<div class="card"><div class="card-title">${esc(d.name)} <span class="unit">보내주신 엑셀 서식 그대로 — 내용이 바뀌면 새 엑셀 파일을 주시면 갱신해드려요</span></div>
+  return `<div class="card"><div class="card-title">${esc(d.name)}</div>
     <div class="table-wrap"><table style="border-collapse:collapse;min-width:100%;${outer}">${colg}${rows}</table></div></div>`;
 }
 window.jgSetSub=function(k){S.ui.jagumSub=k;renderJagum();};
