@@ -3090,26 +3090,27 @@ function renderBojagiAll(kind, year, yearSel, monthSel) {
   </div>`;
 }
 /* ── 보자기: 포스 상품매출내역(.xlsx) 업로드 → 수량 반영 ── */
-function bjPosNorm(n){return String(n||"").replace(/\(.*?\)/g,"").replace(/무항생제|탱글|비건|채식(?!육개장)|사이드|사찰식|리뷰용|유기농|보자기\)|\/|\*|_|\s/g,"").replace(/비빔밥/g,"").replace(/쥬/g,"주").replace(/돼지불고기/g,"제육").replace(/스페셜/g,"").toLowerCase();}
+function bjPosNorm(n){return String(n||"").replace(/\(.*?\)/g,"").replace(/무항생제|탱글|비건|채식(?!육개장)|사이드|사찰식|리뷰용|유기농|보자기\)|\/|\*|_|\s/g,"").replace(/비빔밥/g,"").replace(/쥬/g,"주").replace(/돼지불고기/g,"제육").replace(/스페셜/g,"").replace(/&amp;|&|\+/g,"").toLowerCase();}
 function bjPosGuess(name){
   /* 별칭: 이름이 전혀 다른 세트 메뉴 */
   const alias={"비건스페셜":"채소가득","비건 스페셜":"채소가득"};
   const an=String(name||"").trim();
   for(const k in alias)if(an.replace(/\s/g,"")===k.replace(/\s/g,""))name=alias[k];
   const c=bjPosNorm(name);
-  const combo=name.indexOf("+")>=0;
+  const combo=name.indexOf("+")>=0||name.indexOf("&")>=0;
+  const score=ic=>ic===c?1000+ic.length:ic.length; /* 정확 일치 최우선 */
   let best=null;
   for(const it of (S.data.menuItems||[])){
     const ic=bjPosNorm(it.name);
     if(!ic)continue;
-    const isCombo=it.name.indexOf("+")>=0;
+    const isCombo=it.name.indexOf("+")>=0||it.name.indexOf("&")>=0;
     if(combo!==isCombo)continue;
-    if(c.indexOf(ic)>=0||ic.indexOf(c)>=0){if(!best||ic.length>best.len)best={kind:"menu",id:it.id,len:ic.length};}
+    if(c.indexOf(ic)>=0||ic.indexOf(c)>=0){const sc=score(ic);if(!best||sc>best.len)best={kind:"menu",id:it.id,len:sc};}
   }
   if(!best)for(const it of (S.data.drinkItems||[])){
     const ic=bjPosNorm(it.name);
     if(!ic)continue;
-    if(c.indexOf(ic)>=0||ic.indexOf(c)>=0){if(!best||ic.length>best.len)best={kind:"drink",id:it.id,len:ic.length};}
+    if(c.indexOf(ic)>=0||ic.indexOf(c)>=0){const sc=score(ic);if(!best||sc>best.len)best={kind:"drink",id:it.id,len:sc};}
   }
   return best;
 }
