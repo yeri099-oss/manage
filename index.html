@@ -6901,8 +6901,12 @@ function derived(m){
   d.cashGye=d.cashTotalEff-d.cashBojagi;                          // B5 =승인현금-보자기현금
   d.cardGye=m.corner.cardTotal-m.corner.cardBojagi;               // B6 =승인카드-보자기카드
   d.gwase=d.marketGye-m.market.myeon;                             // D4
-  d.cashGwase=d.cashGye-m.market.cashMyeon;
-  d.cardGwase=d.cardGye-m.market.cardMyeon;
+  d.cashMyeonAuto=(d.marketGye>0&&m.market.myeon>0)?Math.round(d.cashGye*m.market.myeon/d.marketGye):0; // 면세 = 현금/마켓계 × 마켓면세계
+  d.cardMyeonAuto=(d.marketGye>0&&m.market.myeon>0)?Math.round(d.cardGye*m.market.myeon/d.marketGye):0;
+  d.cashMyeonEff=m.market.cashMyeon>0?m.market.cashMyeon:d.cashMyeonAuto;
+  d.cardMyeonEff=m.market.cardMyeon>0?m.market.cardMyeon:d.cardMyeonAuto;
+  d.cashGwase=d.cashGye-d.cashMyeonEff;
+  d.cardGwase=d.cardGye-d.cardMyeonEff;
   d.jeongyukGye=m.market.jeongyukMyeon+m.market.jeongyukGwase;
   for(const x of['insadong','bojagi','siksa','pangong']){
     d[x+'Gwase']=m.members[x+'Gong']+m.members[x+'Buga'];
@@ -6929,8 +6933,8 @@ function derived(m){
 }
 function deriveInputs(m){
   const d=derived(m);
-  const card={g:m.market.cardGong,v:m.market.cardBuga,m:m.market.cardMyeon};
-  const cash={g:m.market.cashGong,v:m.market.cashBuga,m:m.market.cashMyeon};
+  const card={g:m.market.cardGong,v:m.market.cardBuga,m:d.cardMyeonEff};
+  const cash={g:m.market.cashGong,v:m.market.cashBuga,m:d.cashMyeonEff};
   const tot={g:m.market.gong,v:m.market.buga,m:m.market.myeon};
   const kb={g:d.taxinvGong,v:d.taxinvBuga,m:d.taxinvMyeon};
   const bjCashG=exVat(d.cashBojagi),bjCardG=exVat(m.corner.cardBojagi);
@@ -7750,8 +7754,9 @@ function renderInput(){
   <table class="g"><tr><th style="width:160px">항목</th><th>계</th><th>면세</th><th>과세 계</th><th>공급가</th><th>부가세</th></tr>
     <tr><td class="lb">포스 전체 계<div class="hint">보자기 결제분 포함</div></td>${inp('market.total')}<td class="au" colspan="4" style="text-align:left;color:var(--sub)">엑셀의 맨 위 총액 (여기서 보자기 몫을 빼서 마켓 계가 계산됩니다)</td></tr>
     <tr><td class="lb">마켓 계</td>`+autoCell('mk_gye',mm=>derived(mm).marketGye,true)+`${inp('market.myeon')}`+autoCell('mk_gw',mm=>derived(mm).gwase)+`${inp('market.gong')}${inp('market.buga')}</tr>
-    <tr><td class="lb">현금</td>`+autoCell('mk_cash',mm=>derived(mm).cashGye)+`${inp('market.cashMyeon')}`+autoCell('mk_cashgw',mm=>derived(mm).cashGwase)+`${inp('market.cashGong')}${inp('market.cashBuga')}</tr>
-    <tr><td class="lb">카드</td>`+autoCell('mk_card',mm=>derived(mm).cardGye)+`${inp('market.cardMyeon')}`+autoCell('mk_cardgw',mm=>derived(mm).cardGwase)+`${inp('market.cardGong')}${inp('market.cardBuga')}</tr>
+    <tr><td class="lb">현금</td>`+autoCell('mk_cash',mm=>derived(mm).cashGye)+`<td><input data-p="market.cashMyeon" class="auinp"></td>`+autoCell('mk_cashgw',mm=>derived(mm).cashGwase)+`${inp('market.cashGong')}${inp('market.cashBuga')}</tr>
+    <tr><td class="lb">카드</td>`+autoCell('mk_card',mm=>derived(mm).cardGye)+`<td><input data-p="market.cardMyeon" class="auinp"></td>`+autoCell('mk_cardgw',mm=>derived(mm).cardGwase)+`${inp('market.cardGong')}${inp('market.cardBuga')}</tr>
+    <tr><td class="lb" style="font-weight:400;color:var(--sub);font-size:12px" colspan="6">현금·카드 면세는 자동 안분: 각 금액 ÷ 마켓 계 × 마켓 면세 · 다르면 클릭해서 직접 입력, 비우면 다시 자동</td></tr>
     <tr><td class="lb">제로페이·기타수단 (계)</td>${inp('market.zeropay')}${blank(4)}</tr>
     <tr><td class="lb">포인트 사용 (계)</td>${inp('market.point')}${blank(4)}</tr>
     <tr><td class="lb">외상 (계)</td>${inp('market.credit')}${blank(4)}</tr>
@@ -7916,7 +7921,7 @@ function renderInput(){
     const v=getPath(m,el.dataset.p);
     el.value=(v===null||v===undefined||v===0)?'':fmt(v);
     if(el.dataset.p==='nts.cardGong'||el.dataset.p==='nts.cardBuga'){if(v===null){const I=deriveInputs(m);const ev=el.dataset.p==='nts.cardGong'?I.estG:I.estV;el.value=ev?fmt(ev):'';}}
-    if(el.dataset.p==='corner.cashTotal'){el.classList.toggle('auinp',!v);if(!v){const a=derived(m).cashTotalAuto;el.value=a?fmt(a):'';}}
+    if(AUTOIN[el.dataset.p]){el.classList.toggle('auinp',!v);if(!v){const a=AUTOIN[el.dataset.p](m);el.value=a?fmt(a):'';}}
     el.addEventListener("change",()=>{
       let val;
       if(el.dataset.nullable&&el.value.trim()===''){val=null;el.value='';}
@@ -8060,12 +8065,19 @@ AUTO.al_l19=mm=>compute(mm).L20;
 function recalcAutos(){
   const m=MONTHS[CUR];
   $$("#cfm-root [data-ac]").forEach(td=>{const fn=AUTO[td.dataset.ac];if(fn)td.textContent=fmt(fn(m));});
-  const ci=document.querySelector('input[data-p="corner.cashTotal"]');
-  if(ci){
-    if(!m.corner.cashTotal&&document.activeElement!==ci){const a=derived(m).cashTotalAuto;ci.value=a?fmt(a):'';}
-    ci.classList.toggle('auinp',!(m.corner.cashTotal>0));
+  for(const pth in AUTOIN){
+    const ci=document.querySelector('input[data-p="'+pth+'"]');
+    if(!ci)continue;
+    const stored=getPath(m,pth);
+    if(!stored&&document.activeElement!==ci){const a=AUTOIN[pth](m);ci.value=a?fmt(a):'';}
+    ci.classList.toggle('auinp',!(stored>0));
   }
 }
+const AUTOIN={
+  'corner.cashTotal':m=>derived(m).cashTotalAuto,
+  'market.cashMyeon':m=>derived(m).cashMyeonAuto,
+  'market.cardMyeon':m=>derived(m).cardMyeonAuto
+};
 function refreshNtsTag(){
   const m=MONTHS[CUR],tag=$("#ntsEstTag");
   if(tag)tag.textContent=(m.nts.cardGong===null&&m.nts.cardBuga===null)?'추정':'직접입력';
