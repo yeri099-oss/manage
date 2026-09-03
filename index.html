@@ -3098,6 +3098,7 @@ function bjPosGuess(name){
   for(const k in alias)if(an.replace(/\s/g,"")===k.replace(/\s/g,""))name=alias[k];
   const c=bjPosNorm(name);
   const combo=name.indexOf("+")>=0||name.indexOf("&")>=0;
+  const wantSide=String(name).indexOf("사이드")>=0;
   const score=ic=>ic===c?1000+ic.length:ic.length; /* 정확 일치 최우선 */
   let best=null;
   for(const it of (S.data.menuItems||[])){
@@ -3105,7 +3106,11 @@ function bjPosGuess(name){
     if(!ic)continue;
     const isCombo=it.name.indexOf("+")>=0||it.name.indexOf("&")>=0;
     if(combo!==isCombo)continue;
-    if(c.indexOf(ic)>=0||ic.indexOf(c)>=0){const sc=score(ic);if(!best||sc>best.len)best={kind:"menu",id:it.id,len:sc};}
+    if(c.indexOf(ic)>=0||ic.indexOf(c)>=0){
+      let sc=score(ic);
+      if((String(it.cat||"").indexOf("사이드")>=0)===wantSide)sc+=500; /* 사이드 여부 일치 가산 */
+      if(!best||sc>best.len)best={kind:"menu",id:it.id,len:sc};
+    }
   }
   if(!best)for(const it of (S.data.drinkItems||[])){
     const ic=bjPosNorm(it.name);
@@ -3244,10 +3249,12 @@ function bjPosCard(year,month){
     <div class="footnote">포스 상품매출내역 · 키오스크 매출분석(상품별) · 쿠팡이츠 주문내역 — 세 파일 다 알아서 인식해요. 쿠팡이츠는 <b>매월 5일 이후</b>에 전월 자료를 내려받을 수 있어요.</div></div>`;
   const map=S.data.bojagiPosMap||{};
   const now=new Date();
-  const opts=[`<optgroup label="메뉴">${(S.data.menuItems||[]).map(it=>`<option value="menu|${it.id}">${esc(it.name)}</option>`).join("")}</optgroup>`,
+  const dupN={};(S.data.menuItems||[]).forEach(it=>{dupN[it.name]=(dupN[it.name]||0)+1;});
+  const mLabel=it=>dupN[it.name]>1?`${it.name} (${it.cat})`:it.name;
+  const opts=[`<optgroup label="메뉴">${(S.data.menuItems||[]).map(it=>`<option value="menu|${it.id}">${esc(mLabel(it))}</option>`).join("")}</optgroup>`,
               `<optgroup label="주류·음료">${(S.data.drinkItems||[]).map(it=>`<option value="drink|${it.id}">${esc(it.name)}</option>`).join("")}</optgroup>`,
               `<option value="skip">(반영 안 함)</option>`].join("");
-  const nameOf=m2=>{if(!m2)return null;if(m2.kind==="skip")return "(반영 안 함)";const list=m2.kind==="menu"?S.data.menuItems:S.data.drinkItems;const it=(list||[]).find(x=>x.id===m2.id);return it?it.name:null;};
+  const nameOf=m2=>{if(!m2)return null;if(m2.kind==="skip")return "(반영 안 함)";const list=m2.kind==="menu"?S.data.menuItems:S.data.drinkItems;const it=(list||[]).find(x=>x.id===m2.id);return it?(m2.kind==="menu"?mLabel(it):it.name):null;};
   let rowsHtml="";
   st.rows.forEach((r,i)=>{
     const known=map[r.code]&&nameOf(map[r.code]);
