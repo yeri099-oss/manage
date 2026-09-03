@@ -6833,7 +6833,7 @@ function setPath(o,p,v){const ks=p.split('.');let t=o;for(let i=0;i<ks.length-1;
 /* ============ 데이터 모델 (v2 — 엑셀 수식 구조와 동일) ============ */
 function emptyMonth(){return{
   v:2,
-  market:{total:0,myeon:0,gong:0,buga:0,cashMyeon:0,cashGong:0,cashBuga:0,cardMyeon:0,cardGong:0,cardBuga:0,zeropay:0,point:0,credit:0,jeongyukMyeon:0,jeongyukGwase:0,pointAccum:0,guest:0},
+  market:{total:0,myeon:0,gong:0,buga:0,cashMyeon:0,cashGong:0,cashBuga:0,cardMyeon:0,cardGong:0,cardBuga:0,zeropay:0,point:0,credit:0,jeongyukMyeon:0,jeongyukGwase:0,pointAccum:0,guest:0,eunuri:0},
   members:{insadongGye:0,insadongGong:0,insadongBuga:0,bojagiGye:0,bojagiGong:0,bojagiBuga:0,siksaGye:0,siksaGong:0,siksaBuga:0,pangongGye:0,pangongGong:0,pangongBuga:0,sanaeGye:0,sanaeGong:0,sanaeBuga:0},
   bpos:{kioskGye:0,kioskGong:0,kioskBuga:0,marketpos:0,coupangGye:0,coupangGong:0,coupangBuga:0,coupangTemp:false,zeropay:0,liquor:0},
   corner:{cardTotal:0,cashTotal:0,cardBojagi:0},
@@ -7388,7 +7388,10 @@ async function msalesFile(f){
     const r=(aoa[i]||[]).map(x=>String(x).trim());
     const dm=r.join(' ').match(/조회일자\s*:\s*(\d{4})-(\d{2})/);
     if(dm)ym=dm[1].slice(2)+dm[2];
-    if(r.includes('단순현금')&&r.includes('신용카드')){hi=i;r.forEach((v,j)=>{if(v&&ci[v]==null)ci[v]=j;});}
+    if(r.includes('단순현금')&&r.includes('신용카드')){
+      hi=i;r.forEach((v,j)=>{if(v&&ci[v]==null)ci[v]=j;});
+      if(i>0)(aoa[i-1]||[]).forEach((v,j)=>{const t=String(v).trim();if(t&&ci[t]==null)ci[t]=j;});
+    }
   }
   if(hi<0)throw new Error("월별 매출현황 형식을 찾지 못했어요 — 오케이포스 '월별 매출현황[월별 종합]' 엑셀인지 확인해 주세요.");
   const numv3=x=>Number(String(x||'').replace(/,/g,''))||0;
@@ -7407,6 +7410,7 @@ async function msalesFile(f){
   const g2=n=>ci[n]!=null?numv3(row[ci[n]]):0;
   const m=MONTHS[CUR];
   m.market.total=g2('결제합계')||g2('실매출');
+  m.market.eunuri=g2('에누리');
   m.corner.cardTotal=g2('신용카드');
   m.corner.cashTotal=g2('단순현금')+g2('현금영수');
   m.market.credit=g2('외상');
@@ -7985,7 +7989,8 @@ function renderInput(){
   // ① 마켓
   h+=`<div class="card"><h2>① 꽃밥마켓 — 마켓포스 <small>OKPOS 매출분석 기준 · 회색 칸은 자동 계산</small></h2>
   <table class="g"><tr><th style="width:160px">항목</th><th>계</th><th>면세</th><th>과세 계</th><th>공급가</th><th>부가세</th></tr>
-    <tr><td class="lb">포스 전체 계<div class="hint">보자기 결제분 포함</div></td>${inp('market.total')}<td class="au" colspan="4" style="text-align:left;color:var(--sub)">엑셀의 맨 위 총액 (여기서 보자기 몫을 빼서 마켓 계가 계산됩니다)</td></tr>
+    <tr><td class="lb">포스 전체 계<div class="hint">보자기 결제분 포함</div></td>${inp('market.total')}<td class="au" colspan="4" style="text-align:left;color:var(--sub)">월별 매출현황의 <b>결제합계</b> (여기서 보자기 몫을 빼서 마켓 계가 계산됩니다)</td></tr>
+    <tr><td class="lb" style="font-weight:400;color:var(--sub)">에누리 (참고)</td>${inp('market.eunuri')}<td class="au" colspan="4" style="text-align:left;color:var(--sub);font-size:12px">실매출 = 전체 계(결제합계) + 에누리${m.market.eunuri>0?' = <b>'+fmt(m.market.total+m.market.eunuri)+'원</b>':''} · 계산에는 쓰이지 않는 참고값이에요</td></tr>
     <tr><td class="lb">마켓 계</td>`+autoCell('mk_gye',mm=>derived(mm).marketGye,true)+`${inp('market.myeon')}`+autoCell('mk_gw',mm=>derived(mm).gwase)+`${inp('market.gong')}${inp('market.buga')}</tr>
     <tr><td class="lb">현금</td>`+autoCell('mk_cash',mm=>derived(mm).cashGye)+`<td><input data-p="market.cashMyeon" class="auinp"></td>`+autoCell('mk_cashgw',mm=>derived(mm).cashGwase)+`${inp('market.cashGong')}${inp('market.cashBuga')}</tr>
     <tr><td class="lb">카드</td>`+autoCell('mk_card',mm=>derived(mm).cardGye)+`<td><input data-p="market.cardMyeon" class="auinp"></td>`+autoCell('mk_cardgw',mm=>derived(mm).cardGwase)+`${inp('market.cardGong')}${inp('market.cardBuga')}</tr>
@@ -8326,7 +8331,7 @@ const AUTOIN={
   'market.cashMyeon':m=>derived(m).cashMyeonAuto,
   'market.cardMyeon':m=>derived(m).cardMyeonAuto
 };
-const MSLOCK=['market.total','corner.cardTotal','corner.cashTotal','market.credit','market.point','market.zeropay'];
+const MSLOCK=['market.total','market.eunuri','corner.cardTotal','corner.cashTotal','market.credit','market.point','market.zeropay'];
 const MBLOCK=['insadong','bojagi','pangong','sanae'].flatMap(k=>['members.'+k+'Gye','members.'+k+'Gong','members.'+k+'Buga']);
 function refreshNtsTag(){
   const m=MONTHS[CUR],tag=$("#ntsEstTag");
