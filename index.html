@@ -6834,7 +6834,7 @@ function setPath(o,p,v){const ks=p.split('.');let t=o;for(let i=0;i<ks.length-1;
 function emptyMonth(){return{
   v:2,
   market:{total:0,myeon:0,gong:0,buga:0,cashMyeon:0,cashGong:0,cashBuga:0,cardMyeon:0,cardGong:0,cardBuga:0,zeropay:0,point:0,credit:0,jeongyukMyeon:0,jeongyukGwase:0,pointAccum:0,guest:0},
-  members:{insadongGye:0,insadongGong:0,insadongBuga:0,bojagiGye:0,bojagiGong:0,bojagiBuga:0,siksaGye:0,siksaGong:0,siksaBuga:0,pangongGye:0,pangongGong:0,pangongBuga:0},
+  members:{insadongGye:0,insadongGong:0,insadongBuga:0,bojagiGye:0,bojagiGong:0,bojagiBuga:0,siksaGye:0,siksaGong:0,siksaBuga:0,pangongGye:0,pangongGong:0,pangongBuga:0,sanaeGye:0,sanaeGong:0,sanaeBuga:0},
   bpos:{kioskGye:0,kioskGong:0,kioskBuga:0,marketpos:0,coupangGye:0,coupangGong:0,coupangBuga:0,coupangTemp:false,zeropay:0,liquor:0},
   corner:{cardTotal:0,cashTotal:0,cardBojagi:0},
   uploads:{},
@@ -7419,6 +7419,45 @@ async function msalesFile(f){
     +(Math.abs(gap)>2?"\n\nℹ 실매출과 결제합계가 "+fmt(Math.abs(gap))+"원 차이(에누리 등) — 검증에 같은 크기의 차이가 뜰 수 있어요.":"")
     +"\n\n채워진 칸은 회색으로 잠겨요. 카드 보자기 몫은 직접 입력해 주세요.");
 }
+async function mbFile(f){
+  const aoa=await apReadXlsx(f);
+  let ym=null,hi=-1,ci={};
+  for(let i=0;i<Math.min(aoa.length,8);i++){
+    const r=(aoa[i]||[]).map(x=>String(x).trim());
+    const dm=r.join(' ').match(/조회일자\s*:\s*(\d{4})-(\d{2})/);
+    if(dm)ym=dm[1].slice(2)+dm[2];
+    if(r.includes('회원명')&&r.includes('매출액')){hi=i;r.forEach((v,j)=>{if(v&&ci[v]==null)ci[v]=j;});}
+  }
+  if(hi<0)throw new Error("회원구매현황 형식을 찾지 못했어요 — 오케이포스 회원분석(일자별회원구매내역) 엑셀인지 확인해 주세요.");
+  const numv4=x=>Number(String(x||'').replace(/,/g,''))||0;
+  const MAP={'꽃밥에피다':'insadong','보자기꽃밥':'bojagi','꽃밥마켓':'pangong','꽃밥이야기':'sanae'};
+  const agg={insadong:{g:0,v:0},bojagi:{g:0,v:0},pangong:{g:0,v:0},sanae:{g:0,v:0}};
+  const unknown={};
+  let n=0;
+  for(let i=hi+1;i<aoa.length;i++){
+    const r=aoa[i]||[];
+    if(!/^\d+$/.test(String(r[0]||'').trim()))continue;
+    const nm=String(r[ci['회원명']]||'').trim();
+    const key=MAP[nm];
+    const amt=numv4(r[ci['매출액']]),vat=numv4(r[ci['부가세']]);
+    if(!key){if(nm&&(amt||vat))unknown[nm]=(unknown[nm]||0)+amt;continue;}
+    agg[key].g+=amt;agg[key].v+=vat;n++;
+  }
+  if(!n)throw new Error("거래 줄을 찾지 못했어요.");
+  if(ym&&ym!==CUR&&!confirm("파일은 "+ymLabel(ym)+" 자료인데 지금 화면은 "+ymLabel(CUR)+"이에요. 그래도 현재 달에 넣을까요?"))return;
+  const m=MONTHS[CUR];
+  for(const k in agg){
+    m.members[k+'Gye']=Math.round(agg[k].g);
+    m.members[k+'Buga']=Math.round(agg[k].v);
+    m.members[k+'Gong']=Math.round(agg[k].v)*10;
+  }
+  m.uploads=m.uploads||{};m.uploads.members=1;
+  touch();renderInput();
+  const line=(nm,k)=>"· "+nm+": "+fmt(m.members[k+'Gye'])+"원 (부가세 "+fmt(m.members[k+'Buga'])+")";
+  alert("회원구매현황 반영 완료\n\n"+line("인사동(꽃밥에피다)","insadong")+"\n"+line("보자기(보자기꽃밥)","bojagi")+"\n"+line("판공(꽃밥마켓)","pangong")+"\n"+line("사내(꽃밥이야기)","sanae")
+    +(Object.keys(unknown).length?"\n\n⚠ 짝을 모르는 회원: "+Object.entries(unknown).map(([k2,v2])=>k2+" "+fmt(v2)+"원").join(', ')+" — 직접 배정해 주세요.":"")
+    +"\n\n면세는 계−부가세×11로 자동 계산돼요. 사내는 보고 반영 시 마켓매출 '사내'에 합산돼요.");
+}
 async function uplRouterPick(inp){
   const files=[...(inp.files||[])];inp.value='';
   if(!files.length)return;
@@ -7429,11 +7468,13 @@ async function uplRouterPick(inp){
       const head=new Uint8Array(buf.slice(0,4));
       if(head[0]===0x50&&head[1]===0x4B){ // xlsx
         const aoa=await apReadXlsx(f);
-        let isCorner=false;
+        let isCorner=false,isMb0=false;
         for(let i=0;i<Math.min(aoa.length,12);i++){
           const r=(aoa[i]||[]).map(x=>String(x).replace(/\s/g,''));
-          if(r[0]==='No.'&&r.some(t=>t.includes('카드번호'))){isCorner=true;break;}
+          if(r.includes('회원명')&&r.includes('매출액')){isMb0=true;break;}
+          if(r[0]==='No.'&&r.some(t=>t.includes('매입사'))){isCorner=true;break;}
         }
+        if(isMb0){try{await mbFile(f);}catch(e){alert(f.name+' 읽기 실패: '+(e.message||e));}continue;}
         if(isCorner){await apCornerPick({files:[f],value:''});continue;}
         let isMs=false;
         for(let i=0;i<Math.min(aoa.length,8);i++){
@@ -7441,6 +7482,12 @@ async function uplRouterPick(inp){
           if(r.includes('단순현금')&&r.includes('신용카드')){isMs=true;break;}
         }
         if(isMs){try{await msalesFile(f);}catch(e){alert(f.name+' 읽기 실패: '+(e.message||e));}continue;}
+        let isMb=false;
+        for(let i=0;i<Math.min(aoa.length,8);i++){
+          const r=(aoa[i]||[]).map(x=>String(x).trim());
+          if(r.includes('회원명')&&r.includes('매출액')){isMb=true;break;}
+        }
+        if(isMb){try{await mbFile(f);}catch(e){alert(f.name+' 읽기 실패: '+(e.message||e));}continue;}
         rest.files.push(f);continue; // 쿠팡이츠/포스 상품 등 → ③ 판별기로
       }
       const text=new TextDecoder('utf-8').decode(buf.slice(0,4000));
@@ -7450,6 +7497,8 @@ async function uplRouterPick(inp){
   }
   if(rest.files.length)await bpFilesPick(rest);
 }
+async function mbPick(inp){const f=inp.files&&inp.files[0];inp.value='';if(!f)return;try{await mbFile(f);}catch(e){alert('읽기 실패: '+(e.message||e));}}
+window.mbPick=mbPick;
 async function msalesPick(inp){const f=inp.files&&inp.files[0];inp.value='';if(!f)return;try{await msalesFile(f);}catch(e){alert('읽기 실패: '+(e.message||e));}}
 window.msalesPick=msalesPick;
 window.uplRouterPick=uplRouterPick;
@@ -7921,6 +7970,7 @@ function renderInput(){
     <tr><td class="lb">마켓포스 카드승인현황 (.xlsx)</td><td class="au">오케이포스</td><td class="au" style="text-align:left">승인현황 카드 '마켓포스 전체'</td><td class="au">${okC(UP.corner,m.corner.cardTotal>0)}</td></tr>
     <tr><td class="lb">키오스크 매출분석 (.xls)</td><td class="au">키오스크</td><td class="au" style="text-align:left">③ 키오스크 계·공급가·부가세 + 매출현황 메뉴별 수량</td><td class="au">${okC(UP.kiosk,m.bpos.kioskGye>0)}</td></tr>
     <tr><td class="lb">쿠팡이츠 주문내역 (.xlsx)</td><td class="au">쿠팡이츠</td><td class="au" style="text-align:left">③ 쿠팡이츠 계·공급가·부가세 + 메뉴별 수량 <span style="color:#b45309">(매월 5일 이후 다운 가능)</span></td><td class="au">${okC(UP.coupang,m.bpos.coupangGye>0)}${m.bpos.coupangGye>0&&m.bpos.coupangTemp?' <span style="color:#b45309;font-size:11px">임시값</span>':''}</td></tr>
+    <tr><td class="lb">회원구매현황 (.xlsx)</td><td class="au">오케이포스</td><td class="au" style="text-align:left">② 인사동·보자기·판공 계/부가세 + 사내(→마켓매출 '사내')</td><td class="au">${okC(UP.members,m.members.insadongGye>0)}</td></tr>
     <tr><td class="lb">제로페이 부가세내역 (.xls)</td><td class="au">홈택스</td><td class="au" style="text-align:left">④ 제로페이·기타수단 총액 + 부가세 합</td><td class="au">${okC(UP.ntszp,m.nts.zeropay>0&&m.nts.zeropayVat!=null)}</td></tr>
   </table>
   <div class="hint">사진(스크린샷)은 읽지 못해요 — 각 화면의 '엑셀 내려받기'로 받은 파일을 넣어주세요. 각 카드에 있는 개별 업로드 칸을 써도 결과는 같아요. 나머지 항목(카드 보자기 몫, 매출분석 숫자, 홈택스 카드·현금영수증 등)은 지금처럼 직접 입력해요.</div></div>`;
@@ -7955,13 +8005,20 @@ function renderInput(){
       +autoCell('mb_'+x+'_m',mm=>derived(mm)[x+'Myeon'])
       +autoCell('mb_'+x+'_g',mm=>derived(mm)[x+'Gwase'])
       +`${inp('members.'+x+'Gong')}${inp('members.'+x+'Buga')}</tr>`).join('')}
+    ${(m.members.sanaeGye||m.members.sanaeGong||m.members.sanaeBuga)?`<tr><td class="lb">사내 (꽃밥이야기)</td>${inp('members.sanaeGye')}`
+      +autoCell('mb_sa_m',mm=>mm.members.sanaeGye-(mm.members.sanaeGong+mm.members.sanaeBuga))
+      +autoCell('mb_sa_g',mm=>mm.members.sanaeGong+mm.members.sanaeBuga)
+      +`${inp('members.sanaeGong')}${inp('members.sanaeBuga')}</tr>
+    <tr><td class="lb"></td><td class="au" colspan="5" style="text-align:left;color:var(--sub);font-size:12px">사내는 세금계산서 합계에 넣지 않아요 — 보고 반영 시 매출현황 마켓매출 '사내'에 인사동·보자기와 함께 합산돼요.</td></tr>`:''}
     <tr><td class="lb">세금계산서발행 (자동 합계)</td>`
       +autoCell('mb_tx_gye',mm=>derived(mm).taxinvGye,true)
       +autoCell('mb_tx_m',mm=>derived(mm).taxinvMyeon,true)
       +autoCell('mb_tx_gw',mm=>derived(mm).taxinvGong+derived(mm).taxinvBuga,true)
       +autoCell('mb_tx_g',mm=>derived(mm).taxinvGong,true)
       +autoCell('mb_tx_v',mm=>derived(mm).taxinvBuga,true)+`</tr>
-  </table><div class="hint">인사동+보자기 합계가 매출확정의 '꽃밥(세금계산서)'로 자동 반영됩니다.</div></div>`;
+  </table>
+  <div class="hint" style="background:#f0f7ff;border:1px dashed #93c5fd;border-radius:8px;padding:8px 10px">📂 <b>회원구매현황 엑셀로 자동 입력</b> — <input type="file" accept=".xlsx" onchange="mbPick(this)" style="font-size:12px"> 회원분석(일자별회원구매내역) 엑셀을 넣으면 인사동·보자기·판공·사내가 자동으로 채워져요 (반품 차감, 면세 자동).</div>
+  <div class="hint">인사동+보자기 합계가 매출확정의 '꽃밥(세금계산서)'로 자동 반영됩니다. 사내(꽃밥이야기)는 세금계산서 합계에 안 들어가고, 보고 반영 시 마켓매출 '사내'에 인사동·보자기와 함께 합산돼요.</div></div>`;
   // ③ 보자기포스
   h+=`<div class="card"><h2>③ 보자기꽃밥 — 보자기포스</h2>
   <table class="g"><tr><th style="width:160px">항목</th><th>계</th><th>공급가</th><th>부가세</th><th colspan="2"></th></tr>
@@ -8106,7 +8163,8 @@ function renderInput(){
     el.value=(v===null||v===undefined||v===0)?'':fmt(v);
     if(el.dataset.p==='nts.cardGong'||el.dataset.p==='nts.cardBuga'){if(v===null){const I=deriveInputs(m);const ev=el.dataset.p==='nts.cardGong'?I.estG:I.estV;el.value=ev?fmt(ev):'';}}
     if(AUTOIN[el.dataset.p]){el.classList.toggle('auinp',!v);if(!v){const a=AUTOIN[el.dataset.p](m);el.value=a?fmt(a):'';}}
-    if(m.uploads&&m.uploads.msales&&MSLOCK.includes(el.dataset.p)){el.readOnly=true;el.classList.add('auinp');el.title='마켓포스 월별 매출현황 엑셀에서 자동 입력됨 — 바꾸려면 엑셀을 다시 넣거나 이 잠금을 무시하고 새 달에 입력하세요';}
+    if(m.uploads&&m.uploads.msales&&MSLOCK.includes(el.dataset.p)){el.readOnly=true;el.classList.add('auinp');el.title='마켓포스 월별 매출현황 엑셀에서 자동 입력됨';}
+    if(m.uploads&&m.uploads.members&&MBLOCK.includes(el.dataset.p)){el.readOnly=true;el.classList.add('auinp');el.title='회원구매현황 엑셀에서 자동 입력됨';}
     el.addEventListener("change",()=>{
       let val;
       if(el.dataset.nullable&&el.value.trim()===''){val=null;el.value='';}
@@ -8269,6 +8327,7 @@ const AUTOIN={
   'market.cardMyeon':m=>derived(m).cardMyeonAuto
 };
 const MSLOCK=['market.total','corner.cardTotal','corner.cashTotal','market.credit','market.point','market.zeropay'];
+const MBLOCK=['insadong','bojagi','pangong','sanae'].flatMap(k=>['members.'+k+'Gye','members.'+k+'Gong','members.'+k+'Buga']);
 function refreshNtsTag(){
   const m=MONTHS[CUR],tag=$("#ntsEstTag");
   if(tag)tag.textContent=(m.nts.cardGong===null&&m.nts.cardBuga===null)?'추정':'직접입력';
@@ -9151,7 +9210,7 @@ function preview(raw){
     coupangTemp: !!(m.bpos&&m.bpos.coupangTemp),
     pos:{ insadong: kb.all, market: V.F8, online: m.ss.gwase+m.ss.myeon, bojagi: V.F15+m.bpos.coupangGye },
     nts:{ total: epida+market+bojagi, epida, market, bojagi },
-    mk:{ total: V.F8, internal: m.members.insadongGye+m.members.bojagiGye, hanwoo: m.market.jeongyukMyeon, pork: m.market.jeongyukGwase },
+    mk:{ total: V.F8, internal: m.members.insadongGye+m.members.bojagiGye+(m.members.sanaeGye||0), pangong: m.members.pangongGye||0, hanwoo: m.market.jeongyukMyeon, pork: m.market.jeongyukGwase },
     ag:{ coupang: m.bpos.coupangGye, smartstore: m.ss.gwase+m.ss.myeon }
   };
 }
@@ -9247,6 +9306,7 @@ function cfmOpenPushModal(){
       ["매출비교 — 꽃밥이야기",c.nts.total],["매출비교 — 꽃밥에피다",c.nts.epida],
       ["매출비교 — 꽃밥마켓",c.nts.market],["매출비교 — 보자기꽃밥",c.nts.bojagi],
       ["마켓 — 총매출",c.mk.total],["마켓 — 사내",c.mk.internal],
+      ["마켓 — 판공(비고에 기입)",c.mk.pangong],
       ["마켓 — 대관령한우",c.mk.hanwoo],["마켓 — 씨알돈육",c.mk.pork],
       ["판매대행 — 쿠팡이츠",c.ag.coupang],["판매대행 — 스마트스토어",c.ag.smartstore],
     ];
@@ -9290,6 +9350,11 @@ async function cfmDoPush(){
     const mcur=Object.assign({},mk.months[mo]||{});
     setIf(mcur,"total",c.mk.total);setIf(mcur,"internal",c.mk.internal);
     setIf(mcur,"hanwoo",c.mk.hanwoo);setIf(mcur,"pork",c.mk.pork);
+    if(c.mk.pangong>0){
+      let nt=String(mcur.note||"").replace(/판공\s*[\d,]+원/g,"").replace(/\s*·\s*$/,"").trim();
+      nt=(nt?nt+" · ":"")+"판공 "+Math.round(c.mk.pangong).toLocaleString("ko-KR")+"원";
+      mcur.note=nt;
+    }
     mk.months[mo]=mcur;
     await saveYearDoc("marketDetail",y,mk);
     /* 판매대행 — 쿠팡/스마트 채널만 */
