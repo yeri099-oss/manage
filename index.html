@@ -6659,6 +6659,7 @@ document.addEventListener("DOMContentLoaded", () => {
 #cfm-root table.g input{width:110px;padding:4px 6px;border:1px solid #d1d5db;border-radius:6px;text-align:right;font-size:13px}
 #cfm-root table.g input:focus{outline:2px solid var(--accent);border-color:var(--accent)}
 #cfm-root table.g input.est{background:var(--estbg);border-color:#a78bfa}
+#cfm-root table.g input.auinp{background:#f8fafc;border-color:transparent;color:#374151}
 #cfm-root table.g input.txt{text-align:left}
 #cfm-root .hint{font-size:12px;color:var(--sub);margin-top:6px}
 #cfm-root .tag{display:inline-block;font-size:11px;border-radius:5px;padding:1px 6px;margin-left:6px;background:var(--estbg);color:var(--est);border:1px solid #a78bfa;vertical-align:1px}
@@ -7742,7 +7743,7 @@ function renderInput(){
   h+=`<div class="card"><h2>승인현황 — 코너(식당) <small>매출관리-승인현황-코너(식당) · "보자기현금 빼주기" · 가장 먼저 입력하면 아래 ① 마켓포스의 현금·카드 계가 자동으로 채워져요</small></h2>
   <table class="g"><tr><th style="width:160px">구분</th><th>마켓포스 전체</th><th>보자기 몫</th><th>마켓 몫 (자동)</th><th colspan="2"></th></tr>
     <tr><td class="lb">카드</td>${inp('corner.cardTotal')}${inp('corner.cardBojagi')}`+autoCell('cn_cardK',mm=>derived(mm).marketCardK)+`${blank(2)}</tr>
-    <tr><td class="lb">현금 <span class="tag" id="cnCashTag">자동</span></td><td><input data-p="corner.cashTotal" class="est"></td>`+autoCell('cn_cashB',mm=>derived(mm).cashBojagi)+autoCell('cn_cashK',mm=>derived(mm).marketCashK)+`<td class="au" colspan="2" style="text-align:left;color:var(--sub);font-size:12px">현금 전체는 자동: ① 포스 전체 계 − 카드 전체 − 제로페이 − 포인트 − 외상 · 다르면 직접 입력, 비우면 다시 자동 · 보자기 현금 = ③ 마켓포스분 계 − 카드 보자기</td></tr>
+    <tr><td class="lb">현금</td><td><input data-p="corner.cashTotal" class="auinp"></td>`+autoCell('cn_cashB',mm=>derived(mm).cashBojagi)+autoCell('cn_cashK',mm=>derived(mm).marketCashK)+`<td class="au" colspan="2" style="text-align:left;color:var(--sub);font-size:12px">현금 전체는 자동 계산(① 포스 전체 계 − 카드 전체 − 제로페이 − 포인트 − 외상) · 다르면 클릭해서 직접 입력, 비우면 다시 자동 · 보자기 현금 = ③ 마켓포스분 계 − 카드 보자기</td></tr>
   </table><div id="vCorner0"></div></div>`;
   // ① 마켓
   h+=`<div class="card"><h2>① 꽃밥마켓 — 마켓포스 <small>OKPOS 매출분석 기준 · 회색 칸은 자동 계산</small></h2>
@@ -7915,7 +7916,7 @@ function renderInput(){
     const v=getPath(m,el.dataset.p);
     el.value=(v===null||v===undefined||v===0)?'':fmt(v);
     if(el.dataset.p==='nts.cardGong'||el.dataset.p==='nts.cardBuga'){if(v===null){const I=deriveInputs(m);const ev=el.dataset.p==='nts.cardGong'?I.estG:I.estV;el.value=ev?fmt(ev):'';}}
-    if(el.dataset.p==='corner.cashTotal'&&!v){const a=derived(m).cashTotalAuto;el.value=a?fmt(a):'';}
+    if(el.dataset.p==='corner.cashTotal'){el.classList.toggle('auinp',!v);if(!v){const a=derived(m).cashTotalAuto;el.value=a?fmt(a):'';}}
     el.addEventListener("change",()=>{
       let val;
       if(el.dataset.nullable&&el.value.trim()===''){val=null;el.value='';}
@@ -8062,7 +8063,7 @@ function recalcAutos(){
   const ci=document.querySelector('input[data-p="corner.cashTotal"]');
   if(ci){
     if(!m.corner.cashTotal&&document.activeElement!==ci){const a=derived(m).cashTotalAuto;ci.value=a?fmt(a):'';}
-    const t=$("#cnCashTag");if(t)t.textContent=m.corner.cashTotal>0?'직접입력':'자동';
+    ci.classList.toggle('auinp',!(m.corner.cashTotal>0));
   }
 }
 function refreshNtsTag(){
