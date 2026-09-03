@@ -6914,7 +6914,7 @@ function derived(m){
     d[x+'Myeon']=m.members[x+'Gye']-d[x+'Gwase'];
   }
   d.taxinvGye=0;d.taxinvGong=0;d.taxinvBuga=0;d.taxinvMyeon=0;
-  for(const x of['insadong','bojagi','siksa','pangong']){
+  for(const x of['insadong','bojagi','siksa']){ /* 판공은 세금계산서 미발행 — 합계 제외 */
     d.taxinvGye+=m.members[x+'Gye'];d.taxinvGong+=m.members[x+'Gong'];
     d.taxinvBuga+=m.members[x+'Buga'];d.taxinvMyeon+=d[x+'Myeon'];
   }
@@ -7406,7 +7406,7 @@ async function msalesFile(f){
   if(useYm&&useYm!==CUR&&!confirm("파일은 "+ymLabel(useYm)+" 자료인데 지금 화면은 "+ymLabel(CUR)+"이에요. 그래도 현재 달에 넣을까요?"))return;
   const g2=n=>ci[n]!=null?numv3(row[ci[n]]):0;
   const m=MONTHS[CUR];
-  m.market.total=g2('실매출');
+  m.market.total=g2('결제합계')||g2('실매출');
   m.corner.cardTotal=g2('신용카드');
   m.corner.cashTotal=g2('단순현금')+g2('현금영수');
   m.market.credit=g2('외상');
@@ -7414,9 +7414,9 @@ async function msalesFile(f){
   m.market.zeropay=g2('기타수단결제');
   m.uploads=m.uploads||{};m.uploads.msales=1;
   touch();renderInput();
-  const pay=g2('결제합계'),gap=m.market.total-pay;
-  alert("마켓포스 월별 매출현황 반영 완료\n\n· 포스 전체 계(실매출): "+fmt(m.market.total)+"원\n· 카드 전체: "+fmt(m.corner.cardTotal)+"원\n· 현금 전체(단순현금+현금영수): "+fmt(m.corner.cashTotal)+"원\n· 외상: "+fmt(m.market.credit)+"원 · 포인트: "+fmt(m.market.point)+"원 · 기타수단: "+fmt(m.market.zeropay)+"원"
-    +(Math.abs(gap)>2?"\n\nℹ 실매출과 결제합계가 "+fmt(Math.abs(gap))+"원 차이(에누리 등) — 검증에 같은 크기의 차이가 뜰 수 있어요.":"")
+  const silGap=g2('실매출')-m.market.total;
+  alert("마켓포스 월별 매출현황 반영 완료\n\n· 포스 전체 계(결제합계): "+fmt(m.market.total)+"원\n· 카드 전체: "+fmt(m.corner.cardTotal)+"원\n· 현금 전체(단순현금+현금영수): "+fmt(m.corner.cashTotal)+"원\n· 외상: "+fmt(m.market.credit)+"원 · 포인트: "+fmt(m.market.point)+"원 · 기타수단: "+fmt(m.market.zeropay)+"원"
+    +(Math.abs(silGap)>2?"\nℹ 실매출("+fmt(g2('실매출'))+")과는 "+fmt(Math.abs(silGap))+"원 차이 — 에누리 등이라 결제합계 기준이 정확해요.":"")
     +"\n\n채워진 칸은 회색으로 잠겨요. 카드 보자기 몫은 직접 입력해 주세요.");
 }
 async function mbFile(f){
@@ -8009,7 +8009,7 @@ function renderInput(){
       +autoCell('mb_sa_m',mm=>mm.members.sanaeGye-(mm.members.sanaeGong+mm.members.sanaeBuga))
       +autoCell('mb_sa_g',mm=>mm.members.sanaeGong+mm.members.sanaeBuga)
       +`${inp('members.sanaeGong')}${inp('members.sanaeBuga')}</tr>
-    <tr><td class="lb"></td><td class="au" colspan="5" style="text-align:left;color:var(--sub);font-size:12px">사내는 세금계산서 합계에 넣지 않아요 — 보고 반영 시 매출현황 마켓매출 '사내'에 인사동·보자기와 함께 합산돼요.</td></tr>`:''}
+    <tr><td class="lb"></td><td class="au" colspan="5" style="text-align:left;color:var(--sub);font-size:12px">판공·사내는 세금계산서 합계에 넣지 않아요 — 판공은 보고 반영 시 마켓매출 비고에, 사내는 마켓매출 '사내'에 들어가요.</td></tr>`:''}
     <tr><td class="lb">세금계산서발행 (자동 합계)</td>`
       +autoCell('mb_tx_gye',mm=>derived(mm).taxinvGye,true)
       +autoCell('mb_tx_m',mm=>derived(mm).taxinvMyeon,true)
@@ -8018,7 +8018,7 @@ function renderInput(){
       +autoCell('mb_tx_v',mm=>derived(mm).taxinvBuga,true)+`</tr>
   </table>
   <div class="hint" style="background:#f0f7ff;border:1px dashed #93c5fd;border-radius:8px;padding:8px 10px">📂 <b>회원구매현황 엑셀로 자동 입력</b> — <input type="file" accept=".xlsx" onchange="mbPick(this)" style="font-size:12px"> 회원분석(일자별회원구매내역) 엑셀을 넣으면 인사동·보자기·판공·사내가 자동으로 채워져요 (반품 차감, 면세 자동).</div>
-  <div class="hint">인사동+보자기 합계가 매출확정의 '꽃밥(세금계산서)'로 자동 반영됩니다. 사내(꽃밥이야기)는 세금계산서 합계에 안 들어가고, 보고 반영 시 마켓매출 '사내'에 인사동·보자기와 함께 합산돼요.</div></div>`;
+  <div class="hint">인사동+보자기 합계가 매출확정의 '꽃밥(세금계산서)'로 자동 반영됩니다. 판공·사내는 세금계산서 합계에 안 들어가요 — 판공은 보고 반영 시 마켓매출 비고에, 사내는 마켓매출 '사내'에 인사동·보자기와 함께 합산돼요.</div></div>`;
   // ③ 보자기포스
   h+=`<div class="card"><h2>③ 보자기꽃밥 — 보자기포스</h2>
   <table class="g"><tr><th style="width:160px">항목</th><th>계</th><th>공급가</th><th>부가세</th><th colspan="2"></th></tr>
