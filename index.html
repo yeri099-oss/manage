@@ -906,6 +906,7 @@ const S = {
     agency: {},          // {year:{deliveryChannels,onlineChannels,months}}
     epidaDetail: {},     // {year:{months:{m:{total,disc,net,days,items:{key:{n,q,a}}}}}}
     epidaDrink: { add: [], remove: [] }, // 피다 주류·음료 수동 분류
+    bojagiPosMap: {},    // 보자기 포스 상품코드 → {kind,id} 매핑
     jagum: {},           // {year:{periods:{'MM-DD':{cash,acc,dep,toechung,yudong,base,inc,dec}}}}
     targets: {},         // {year:{total:{m:amt},epida,market,bojagi}}
     menuItems: [],       // [{id,cat,name}]
@@ -1089,6 +1090,7 @@ async function loadAllData() {
   jobs.push(fsCol("config").doc("bojagiDrinkItems").get().then((d) => { S.data.drinkItems = d.data()?.items || []; }));
   jobs.push(db.collection("salesStatus_months").get().then((snap) => { S.cfmYms = []; snap.forEach((d) => S.cfmYms.push(d.id)); }).catch(() => {}));
   jobs.push(fsCol("config").doc("epidaDrink").get().then((d) => { S.data.epidaDrink = d.data() || { add: [], remove: [] }; }).catch(() => {}));
+  jobs.push(fsCol("config").doc("bojagiPosMap").get().then((d) => { S.data.bojagiPosMap = (d.data() || {}).map || {}; }).catch(() => {}));
   await Promise.all(jobs);
   pnlNormalizeKeys();
 }
@@ -3087,6 +3089,187 @@ function renderBojagiAll(kind, year, yearSel, monthSel) {
     ${body}
   </div>`;
 }
+/* ── 보자기: 포스 상품매출내역(.xlsx) 업로드 → 수량 반영 ── */
+function bjPosNorm(n){return String(n||"").replace(/\(.*?\)/g,"").replace(/무항생제|탱글|비건|채식(?!육개장)|사이드|사찰식|리뷰용|유기농|보자기\)|\/|\*|_|\s/g,"").replace(/비빔밥/g,"").replace(/쥬/g,"주").toLowerCase();}
+function bjPosGuess(name){
+  const c=bjPosNorm(name);
+  const combo=name.indexOf("+")>=0;
+  let best=null;
+  for(const it of (S.data.menuItems||[])){
+    const ic=bjPosNorm(it.name);
+    if(!ic)continue;
+    const isCombo=it.name.indexOf("+")>=0;
+    if(combo!==isCombo)continue;
+    if(c.indexOf(ic)>=0||ic.indexOf(c)>=0){if(!best||ic.length>best.len)best={kind:"menu",id:it.id,len:ic.length};}
+  }
+  if(!best)for(const it of (S.data.drinkItems||[])){
+    const ic=bjPosNorm(it.name);
+    if(!ic)continue;
+    if(c.indexOf(ic)>=0||ic.indexOf(c)>=0){if(!best||ic.length>best.len)best={kind:"drink",id:it.id,len:ic.length};}
+  }
+  return best;
+}
+window.bjPosPick=async function(inp){
+  const f=inp.files&&inp.files[0];inp.value="";
+  if(!f)return;
+  try{
+    toast("파일 읽는 중…");
+    await loadScript(XLS_URL);
+    const wb=XLSX.read(await f.arrayBuffer(),{type:"array"});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const aoa=XLSX.utils.sheet_to_json(ws,{header:1,defval:""});
+    let hi=-1,ci={},kind=null;
+    for(let i=0;i<Math.min(aoa.length,10);i++){
+      const r=aoa[i].map(x=>String(x).trim());
+      if(r.includes("상세내역")&&r.includes("주문번호")){hi=i;r.forEach((v,j)=>ci[v]=j);kind="coupang";break;}
+      if(r.includes("상품명")&&r.includes("판매수량")){hi=i;r.forEach((v,j)=>ci[v]=j);kind=r.includes("상품코드")?"pos":"kiosk";break;}
+    }
+    if(!kind)throw new Error("아는 형식이 아니에요 — 포스 상품매출내역, 키오스크 매출분석(상품별), 쿠팡이츠 주문내역 엑셀을 올려주세요.");
+    const rows=[];let ymGuess=null;let money=0;let moneyGross=0;
+    if(kind==="coupang"){
+      const agg={};
+      const jTot=ci["주문금액"]!=null?ci["주문금액"]:ci["총금액"];
+      const jGross=ci["총금액"];
+      for(let i=hi+1;i<aoa.length;i++){
+        const r=aoa[i];
+        const date=String(r[ci["일자"]]||"").trim();
+        const items=String(r[ci["상세내역"]]||"").trim();
+        const tt=String(r[ci["거래유형"]]||"").trim();
+        if(!date||!items)continue;
+        if(jTot!=null){const v=Number(String(r[jTot]).replace(/[,\s]/g,""));if(!isNaN(v))money+=v;}
+        if(jGross!=null){const v=Number(String(r[jGross]).replace(/[,\s]/g,""));if(!isNaN(v))moneyGross+=v;}
+        const sign=tt==="취소"?-1:1;
+        const dm=date.match(/^(\d{4})-(\d{2})/);
+        if(dm&&!ymGuess)ymGuess={y:dm[1],mo:String(Number(dm[2]))};
+        for(let piece of items.split(",")){
+          piece=piece.trim();
+          if(!piece)continue;
+          let n=1;
+          const xm=piece.match(/\s*[xX×]\s*(\d+)\s*$/);
+          if(xm){n=Number(xm[1]);piece=piece.replace(/\s*[xX×]\s*\d+\s*$/,"").trim();}
+          agg[piece]=(agg[piece]||0)+sign*n;
+        }
+      }
+      for(const name in agg)if(agg[name]>0)rows.push({code:"NM:"+name,name,qty:agg[name]});
+    }else{
+      for(let i=hi+1;i<aoa.length;i++){
+        const r=aoa[i];
+        const first=String(r[0]||"").trim();
+        if(first==="합계")break;
+        const code=kind==="pos"?String(r[ci["상품코드"]]||"").trim():"";
+        const name=String(r[ci["상품명"]]||"").trim();
+        const qty=Number(String(r[ci["판매수량"]]||"").replace(/[,\s]/g,""))||0;
+        if(!name||!qty)continue;
+        const mc=ci["판매금액(원)"]!=null?ci["판매금액(원)"]:ci["실매출액"];
+        if(mc!=null){const v=Number(String(r[mc]).replace(/[,\s]/g,""));if(!isNaN(v))money+=v;}
+        const dm=first.match(/^(\d{4})[.\-\/](\d{2})/);
+        if(dm&&!ymGuess)ymGuess={y:dm[1],mo:String(Number(dm[2]))};
+        rows.push({code:code||("NM:"+name),name,qty});
+      }
+    }
+    if(!rows.length)throw new Error("판매 내역을 찾지 못했어요.");
+    window.__bjPos={rows,ch:kind==="coupang"?"d":kind==="kiosk"?"k":"p",ym:ymGuess,src:kind,money:Math.round(money),moneyGross:Math.round(moneyGross)};
+    renderBojagi();
+  }catch(e){console.error(e);toast(e.message||"파일을 읽지 못했어요",true);}
+};
+window.bjPosCancel=function(){window.__bjPos=null;renderBojagi();};
+window.bjPosApply=async function(){
+  try{
+    const st=window.__bjPos;if(!st)return;
+    const y=document.getElementById("bjPosY").value;
+    const mo=String(Number(document.getElementById("bjPosM").value));
+    const ch=document.getElementById("bjPosCh").value;
+    const map=S.data.bojagiPosMap=S.data.bojagiPosMap||{};
+    /* 선택 상자에서 매핑 확정 */
+    let unassigned=0;
+    st.rows.forEach((r,i)=>{
+      const sel=document.getElementById("bjPm"+i);
+      if(!sel)return;
+      const v=sel.value;
+      if(v==="skip")map[r.code]={kind:"skip"};
+      else if(v){const[kind,id]=v.split("|");map[r.code]={kind,id};}
+      else unassigned++;
+    });
+    if(unassigned){toast(`아직 짝을 안 고른 품목이 ${unassigned}개 있어요`,true);return;}
+    /* 채널 값 반영: 해당 채널을 0으로 초기화 후 파일 값으로 채움 */
+    const mDoc=(S.data.bojagiMenu[y]=S.data.bojagiMenu[y]||{months:{}});mDoc.months=mDoc.months||{};
+    const dDoc=(S.data.bojagiDrinks[y]=S.data.bojagiDrinks[y]||{months:{}});dDoc.months=dDoc.months||{};
+    const mm=(mDoc.months[mo]=mDoc.months[mo]||{});
+    const dm=(dDoc.months[mo]=dDoc.months[mo]||{});
+    for(const box of[mm,dm])for(const id in box)if(box[id])box[id][ch]=0;
+    let applied=0;
+    for(const r of st.rows){
+      const m2=map[r.code];
+      if(!m2||m2.kind==="skip")continue;
+      const box=m2.kind==="menu"?mm:dm;
+      const q=(box[m2.id]=box[m2.id]||{k:0,p:0,d:0});
+      q[ch]=(q[ch]||0)+r.qty;
+      applied++;
+    }
+    /* 0만 남은 항목 정리 */
+    for(const box of[mm,dm])for(const id in box){const q=box[id];if(!q.k&&!q.p&&!q.d)delete box[id];}
+    queueSave("bojagiMenu",y);queueSave("bojagiDrinks",y);
+    /* 쿠팡이츠 금액 → 판매대행 */
+    const agChk=document.getElementById("bjPosAg");
+    if(st.money&&agChk&&agChk.checked){
+      const ag=(S.data.agency[y]=S.data.agency[y]||{deliveryChannels:["쿠팡"],onlineChannels:[],months:{}});
+      ag.months=ag.months||{};
+      const chName=(ag.deliveryChannels||[]).find(c2=>c2.indexOf("쿠팡")>=0);
+      if(chName){
+        const m3=(ag.months[mo]=ag.months[mo]||{delivery:{},online:{}});
+        m3.delivery=m3.delivery||{};
+        m3.delivery[chName]=st.money;
+        if(st.moneyGross){ag.gross=ag.gross||{};ag.gross[mo]=st.moneyGross;}
+        queueSave("agency",y);
+      }
+    }
+    try{if(!IS_DEMO&&typeof db!=="undefined"&&db)await fsCol("config").doc("bojagiPosMap").set({map});}catch(e){console.warn(e);}
+    window.__bjPos=null;
+    S.ui.bojagiYear=Number(y);S.ui.bojagiMonth=mo;
+    const chName={k:"키오스크",p:"포스",d:"배달"}[ch];
+    toast(`${y}년 ${mo}월 ${chName} 수량 ${applied}개 품목을 반영했어요 (짝은 저장돼서 다음부턴 자동)`);
+    renderBojagi();
+  }catch(e){console.error(e);toast(e.message||"반영 실패",true);}
+};
+function bjPosCard(year,month){
+  if(S.user?.role!=="admin")return "";
+  const st=window.__bjPos;
+  const head=`<div class="card"><div class="card-title">📂 포스 상품매출내역 넣기 <span class="unit">마켓포스에서 받은 보자기 판매수량 엑셀 — 상품코드로 메뉴를 기억해요</span></div>`;
+  if(!st)return head+`<div style="padding:6px 2px"><input type="file" accept=".xlsx,.xls" onchange="bjPosPick(this)"></div>
+    <div class="footnote">포스 상품매출내역 · 키오스크 매출분석(상품별) · 쿠팡이츠 주문내역 — 세 파일 다 알아서 인식해요. 쿠팡이츠는 <b>매월 5일 이후</b>에 전월 자료를 내려받을 수 있어요.</div></div>`;
+  const map=S.data.bojagiPosMap||{};
+  const now=new Date();
+  const opts=[`<optgroup label="메뉴">${(S.data.menuItems||[]).map(it=>`<option value="menu|${it.id}">${esc(it.name)}</option>`).join("")}</optgroup>`,
+              `<optgroup label="주류·음료">${(S.data.drinkItems||[]).map(it=>`<option value="drink|${it.id}">${esc(it.name)}</option>`).join("")}</optgroup>`,
+              `<option value="skip">(반영 안 함)</option>`].join("");
+  const nameOf=m2=>{if(!m2)return null;if(m2.kind==="skip")return "(반영 안 함)";const list=m2.kind==="menu"?S.data.menuItems:S.data.drinkItems;const it=(list||[]).find(x=>x.id===m2.id);return it?it.name:null;};
+  let rowsHtml="";
+  st.rows.forEach((r,i)=>{
+    const known=map[r.code]&&nameOf(map[r.code]);
+    if(known){
+      rowsHtml+=`<tr><td class="l">${esc(r.name)}</td><td style="text-align:right">${fmt(r.qty)}</td><td class="l">✅ ${esc(known)} <button class="btn btn-sm" style="font-size:11px;padding:2px 8px" onclick="this.closest('td').innerHTML=document.getElementById('bjPmTpl').innerHTML.replace(/__I__/g,'${i}')">바꾸기</button><select id="bjPm${i}" style="display:none"><option value="${map[r.code].kind==="skip"?"skip":map[r.code].kind+"|"+map[r.code].id}" selected></option></select></td></tr>`;
+    }else{
+      const g=bjPosGuess(r.name);
+      const gv=g?`${g.kind}|${g.id}`:"";
+      rowsHtml+=`<tr style="background:#FFF7E6"><td class="l">${esc(r.name)}</td><td style="text-align:right">${fmt(r.qty)}</td><td class="l">🆕 <select id="bjPm${i}" class="ctl" style="font-size:12px">${gv?opts.replace(`value="${gv}"`,`value="${gv}" selected`):`<option value="" selected>— 선택 —</option>`+opts}${gv?"":""}</select></td></tr>`;
+    }
+  });
+  return head+`
+    <template id="bjPmTpl"><select id="bjPm__I__" class="ctl" style="font-size:12px">${opts}</select></template>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:4px 2px;margin-bottom:6px">
+      <span style="font-size:12px;font-weight:700;color:var(--brand)">${{pos:"포스 파일",kiosk:"키오스크 파일",coupang:"쿠팡이츠 파일"}[st.src]||""} 인식됨</span>
+      <select id="bjPosY" class="ctl">${[now.getFullYear()+1,now.getFullYear(),now.getFullYear()-1].map(yy=>`<option ${yy===Number(st.ym?st.ym.y:year)?"selected":""}>${yy}</option>`).join("")}</select>년
+      <select id="bjPosM" class="ctl">${MONTHS.map(m2=>`<option value="${m2}" ${String(m2)===String(st.ym?st.ym.mo:month)?"selected":""}>${m2}</option>`).join("")}</select>월의
+      <select id="bjPosCh" class="ctl">${[["p","포스"],["k","키오스크"],["d","배달(쿠팡이츠)"]].map(([v,n])=>`<option value="${v}" ${v===st.ch?"selected":""}>${n}</option>`).join("")}</select> 수량으로 반영
+      <span style="flex:1"></span>
+      <button class="btn btn-sm" onclick="bjPosCancel()">취소</button>
+      <button class="btn btn-sm btn-primary" onclick="bjPosApply()">반영</button>
+    </div>
+    ${st.money?`<div style="padding:4px 2px;font-size:13px">${st.src==="coupang"?`주문금액(배달비 제외): <b>${fmt(st.money)}원</b> · 총금액(배달비 포함): <b>${fmt(st.moneyGross||0)}원</b> &nbsp;<label style="font-size:12.5px"><input type="checkbox" id="bjPosAg" checked> 판매대행 탭에 반영 (기준: 주문금액)</label>`:`파일 매출 합계: <b>${fmt(st.money)}원</b> <span class="unit">(매출확정 입력 시 참고)</span>`}</div>`:""}
+    <div class="table-wrap"><table class="rpt" style="font-size:12.5px"><thead><tr><th class="l">파일 품목명</th><th>수량</th><th class="l">앱 메뉴</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>
+    <div class="footnote">🆕 새 품목만 짝을 골라주면 저장돼서 다음 업로드부턴 자동이에요. 반영 시 선택한 채널의 기존 수량은 파일 값으로 교체돼요. 쿠팡이츠 내역은 <b>매월 5일 이후</b>에 전월 자료를 내려받을 수 있어요.</div>
+  </div>`;
+}
 function menuItemsPlus(year, month) {
   // 설정된 품목 + 데이터에만 남아있는 품목(삭제됨 표기)
   const md = S.data.bojagiMenu[year]?.months?.[month] || {};
@@ -3145,7 +3328,7 @@ function renderBojagiMenu(year, month, yearSel, monthSel) {
     pivotRows += `<tr class="${zi % 2 === 0 ? "zr" : ""}"><td class="l sticky">${esc(it.name)}</td>${tds}<td><b>${sum ? fmt(sum) : ""}</b></td><td>${sum && grand ? (sum / grand * 100).toFixed(1) + "%" : ""}</td></tr>`;
   });
   const pivotTotal = `<td class="l sticky">합계</td>` + MONTHS.map((m) => `<td>${mTot[m] ? fmt(mTot[m]) : ""}</td>`).join("") + `<td>${grand ? fmt(grand) : ""}</td><td>${grand ? "100%" : ""}</td>`;
-  return `
+  return bjPosCard(year,month)+`
   <div class="card">
     <div class="card-head">
       <div class="card-title">${year}년 월별 판매수량 (소계) <span class="unit">단위: 개</span></div>
@@ -3478,6 +3661,9 @@ function renderAgency() {
   const dCh = (Y.deliveryChannels || []).filter((c) => !hideEmpty || chHas("delivery", c));
   const oCh = (Y.onlineChannels || []).filter((c) => !hideEmpty || chHas("online", c));
   const agLabel = (ch) => ch === "쿠팡" ? "쿠팡이츠" : ch;
+  const grossOn = !!S.ui.agGross;
+  const grossOf = (m) => (Y.gross || {})[m];
+  const hasGross = Object.keys(Y.gross || {}).length > 0;
   const dSingle = dCh.length === 1;
   const dName = dSingle ? agLabel(dCh[0]) : "배달";
   const onVals = {};
@@ -3514,18 +3700,21 @@ function renderAgency() {
     let tr = `<td class="lab sticky">${m}월</td>`;
     const ds = (kind, ch) => `data-t="ag" data-y="${year}" data-m="${m}" data-kind="${kind}" data-ch="${esc(ch)}"`;
     for (const ch of dCh) {
-      const v = c?.delivery?.[ch];
+      let v = c?.delivery?.[ch];
+      const gv = grossOn && ch.indexOf("쿠팡") >= 0 ? grossOf(m) : null;
+      if (gv != null && v != null) v = gv;
       colTot["d:" + ch] = (colTot["d:" + ch] || 0) + (v || 0);
-      tr += `<td${vb}>${edNum(v, ds("delivery", ch))}</td>`;
+      tr += `<td${vb}>${grossOn && gv != null ? fmt(v) : edNum(c?.delivery?.[ch], ds("delivery", ch))}</td>`;
     }
-    if (dCh.length) { if (!dSingle) tr += `<td class="cy"><b>${c && c.dSub != null ? fmt(c.dSub) : ""}</b></td>`; tDSub += c?.dSub || 0; }
+    const gAdj = (grossOn && grossOf(m) != null && c?.delivery && Object.keys(c.delivery).some(ch2=>ch2.indexOf("쿠팡")>=0)) ? (grossOf(m) - (c.delivery[(Y.deliveryChannels||[]).find(ch2=>ch2.indexOf("쿠팡")>=0)]||0)) : 0;
+    if (dCh.length) { if (!dSingle) tr += `<td class="cy"><b>${c && c.dSub != null ? fmt(c.dSub + gAdj) : ""}</b></td>`; tDSub += (c?.dSub || 0) + gAdj; }
     for (const ch of oCh) {
       const v = c?.online?.[ch];
       colTot["o:" + ch] = (colTot["o:" + ch] || 0) + (v || 0);
       tr += `<td${vb}>${edNum(v, ds("online", ch))}</td>`;
     }
     if (oCh.length) { tr += `<td class="cy"><b>${c && c.oSub != null ? fmt(c.oSub) : ""}</b></td>`; tOSub += c?.oSub || 0; }
-    tr += `<td class="cy2"><b>${c && c.total != null ? fmt(c.total) : ""}</b></td>`;
+    tr += `<td class="cy2"><b>${c && c.total != null ? fmt(c.total + gAdj) : ""}</b></td>`;
     if (edMode()) tr += `<td style="text-align:center"><input type="checkbox" ${ver ? "checked" : ""} onchange="agToggleVerified('${year}','${m}',this.checked)"></td>`;
     rows += `<tr>${tr}</tr>`;
   }
@@ -3537,12 +3726,12 @@ function renderAgency() {
   <div class="card">
     <div class="card-head">
       <div class="card-title">${year}년 판매대행 매출 현황 <span class="unit">국세청기준 · 부가세포함 · 단위: 원</span></div>
-      <div class="card-actions">${segButtons(yrs, year, "setAgencyYear")} ${editBtn()} ${adminBtn(`openAgencyForm(${year})`)}</div>
+      <div class="card-actions">${hasGross ? `<button class="btn btn-sm ${grossOn ? "btn-primary" : ""}" onclick="S.ui.agGross=!S.ui.agGross;renderAgency()">${grossOn ? "🚚 배달비 포함 보는 중" : "🚚 배달비 포함 보기"}</button>` : ""} ${segButtons(yrs, year, "setAgencyYear")} ${editBtn()} ${adminBtn(`openAgencyForm(${year})`)}</div>
     </div>
     <div class="table-wrap">
       <table class="rpt"><thead>${head1}${head2}</thead><tbody>${rows}<tr class="total trg">${trT}</tr></tbody></table>
     </div>
-    <div class="footnote"><span style="display:inline-block;width:11px;height:11px;background:#E2EFDA;border:1px solid #b5cba7;border-radius:2px;vertical-align:-1px"></span> 초록 칠 = 국세청(홈택스) 자료로 검증된 달 · 흰색 = 각 홈페이지에서 확인한 임시 금액. "표에서 바로입력"을 켜면 달마다 검증 체크를 켜고 끌 수 있어요.<br>온라인 판매는 매 분기 국세청 자료로 정산해요. 1~3월분 4월 17일경 · 4~6월분 7월 17일경 · 7~9월분 10월 17일경 · 10~12월분 이듬해 1월 17일경 반영. 채널은 설정 탭에서 추가·삭제할 수 있어요.</div>
+    <div class="footnote">${grossOn?`🚚 지금은 쿠팡이츠에 배달비를 포함한 총금액으로 보는 중이에요 (기본·엑셀·국세청 대사는 주문금액 기준).<br>`:""}<span style="display:inline-block;width:11px;height:11px;background:#E2EFDA;border:1px solid #b5cba7;border-radius:2px;vertical-align:-1px"></span> 초록 칠 = 국세청(홈택스) 자료로 검증된 달 · 흰색 = 각 홈페이지에서 확인한 임시 금액. "표에서 바로입력"을 켜면 달마다 검증 체크를 켜고 끌 수 있어요.<br>온라인 판매는 매 분기 국세청 자료로 정산해요. 1~3월분 4월 17일경 · 4~6월분 7월 17일경 · 7~9월분 10월 17일경 · 10~12월분 이듬해 1월 17일경 반영. 채널은 설정 탭에서 추가·삭제할 수 있어요.</div>
   </div>
   <div class="card">
     <div class="card-title">${year}년 ${dName} 매출</div>
