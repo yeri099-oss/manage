@@ -7910,7 +7910,7 @@ function renderInput(){
   const m=MONTHS[CUR];
   const pg=$("#pg-input");
   let h='';
-  h+=`<div class="card" style="padding:10px 16px"><div class="flex"><button class="btn sm line" id="btnAutofill">🪄 빈 공급가·부가세 자동 채우기</button><span class="hint">계·면세를 넣은 뒤 누르면 비어있는 공급가/부가세를 자동 계산합니다 (이미 입력한 칸은 건드리지 않아요)</span></div></div>`;
+  h+=`<div class="card" style="padding:10px 16px"><span class="hint">🪄 비어있는 공급가·부가세는 계·면세를 입력하면 <b>자동으로 바로</b> 채워져요 — 직접 입력한 칸은 건드리지 않아요.</span></div>`;
   // 📂 엑셀 업로드 체크리스트
   const UP=m.uploads||{};
   const okC=(up,man)=>up?'<span style="color:#15803d;font-weight:700">✓ 엑셀 업로드됨</span>':(man?'<span style="color:#2563eb">✎ 직접 입력됨</span>':'<span style="color:#9ca3af">— 아직</span>');
@@ -8249,6 +8249,12 @@ AUTO.al_k19=mm=>compute(mm).K20;
 AUTO.al_l19=mm=>compute(mm).L20;
 function recalcAutos(){
   const m=MONTHS[CUR];
+  try{autofillEmpty(m);}catch(e){}
+  $$("input[data-p]").forEach(el=>{
+    if(document.activeElement===el||AUTOIN[el.dataset.p])return;
+    const v=getPath(m,el.dataset.p);
+    if(typeof v==='number'&&v&&el.value.trim()==='')el.value=fmt(v);
+  });
   $$("#cfm-root [data-ac]").forEach(td=>{const fn=AUTO[td.dataset.ac];if(fn)td.textContent=fmt(fn(m));});
   for(const pth in AUTOIN){
     const ci=document.querySelector('input[data-p="'+pth+'"]');
