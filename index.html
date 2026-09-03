@@ -5565,6 +5565,36 @@ function jgBsFormHtml(ym){
     <div style="display:flex;flex-wrap:wrap;gap:8px 24px">${JG_BS_FIELDS.map(([k,l])=>row(k,l)).join("")}</div>
   </div>`;
 }
+window.bjApplyQty=function(rows,ch,y,mo){
+  try{
+    const map=S.data.bojagiPosMap||{};
+    const unmapped=[];
+    for(const r of rows){
+      const m2=map[r.code]||(bjPosGuess(r.name)?{auto:1,...bjPosGuess(r.name)}:null);
+      if(!m2)unmapped.push(r.name);
+    }
+    if(unmapped.length)return {ok:false,unmapped};
+    const mDoc=(S.data.bojagiMenu[y]=S.data.bojagiMenu[y]||{months:{}});mDoc.months=mDoc.months||{};
+    const dDoc=(S.data.bojagiDrinks[y]=S.data.bojagiDrinks[y]||{months:{}});dDoc.months=dDoc.months||{};
+    const mm=(mDoc.months[mo]=mDoc.months[mo]||{});
+    const dm=(dDoc.months[mo]=dDoc.months[mo]||{});
+    for(const box of[mm,dm])for(const id in box)if(box[id])box[id][ch]=0;
+    let applied=0,newMap=0;
+    for(const r of rows){
+      let m2=map[r.code];
+      if(!m2){m2=bjPosGuess(r.name);map[r.code]={kind:m2.kind,id:m2.id};newMap++;}
+      if(m2.kind==="skip")continue;
+      const box=m2.kind==="menu"?mm:dm;
+      const q=(box[m2.id]=box[m2.id]||{k:0,p:0,d:0});
+      q[ch]=(q[ch]||0)+r.qty;
+      applied++;
+    }
+    for(const box of[mm,dm])for(const id in box){const q=box[id];if(!q.k&&!q.p&&!q.d)delete box[id];}
+    queueSave("bojagiMenu",y);queueSave("bojagiDrinks",y);
+    if(newMap&&!IS_DEMO&&typeof db!=="undefined"&&db)fsCol("config").doc("bojagiPosMap").set({map}).catch(e=>console.warn(e));
+    return {ok:true,applied};
+  }catch(e){console.error(e);return {ok:false,error:e.message};}
+};
 window.jgExportXlsx=async function(){
   try{
     toast("엑셀 파일 만드는 중… (원본 서식 그대로)");
@@ -7186,13 +7216,17 @@ async function bpFilesPick(inp){
       }
       if(!kind)throw new Error(f.name+': 아는 형식이 아니에요 — 키오스크 매출분석(상품별) 또는 쿠팡이츠 주문내역 엑셀을 넣어주세요.');
       const numv=x=>{const t=String(x==null?'':x).replace(/[,\s]/g,'');const n=Number(t);return isNaN(n)?0:n;};
+      let qtyRows=[];
       if(kind==='kiosk'){
         const mc=ci['판매금액(원)']!=null?ci['판매금액(원)']:ci['실매출액'];
+        const nc=ci['상품명'],qc=ci['판매수량'],cc=ci['상품코드'];
         let sum=0,ym=null;
         for(let i=hi+1;i<aoa.length;i++){
           const r=aoa[i];
           if(String(r[0]||'').trim()==='합계')break;
           sum+=numv(r[mc]);
+          const nm=String(r[nc]||'').trim(),q=numv(r[qc]);
+          if(nm&&q)qtyRows.push({code:(cc!=null&&String(r[cc]||'').trim())||('NM:'+nm),name:nm,qty:q});
           const dm=String(r[0]||'').match(/^(\d{4})[.\-\/](\d{2})/);
           if(dm&&!ym)ym=dm[1].slice(2)+dm[2];
         }
@@ -7201,28 +7235,50 @@ async function bpFilesPick(inp){
         m.bpos.kioskGong=exVat(m.bpos.kioskGye);
         m.bpos.kioskBuga=m.bpos.kioskGye-m.bpos.kioskGong;
         msgs.push('키오스크 '+fmt(m.bpos.kioskGye)+'원 (공급가·부가세 ÷1.1 자동 — 면세 품목 있으면 두 칸만 고치세요)');
+        pushQty(qtyRows,'k',ym,msgs);
       }else{
         const jK=ci['주문금액']!=null?ci['주문금액']:ci['총금액'];
+        const agg={};
         let sum=0,ym=null;
         for(let i=hi+1;i<aoa.length;i++){
           const r=aoa[i];
           const date=String(r[ci['일자']]||'').trim();
           if(!date)continue;
           sum+=numv(r[jK]);
+          const sign=String(r[ci['거래유형']]||'').trim()==='취소'?-1:1;
+          for(let piece of String(r[ci['상세내역']]||'').split(',')){
+            piece=piece.trim();if(!piece)continue;
+            let n=1;const xm=piece.match(/\s*[xX×]\s*(\d+)\s*$/);
+            if(xm){n=Number(xm[1]);piece=piece.replace(/\s*[xX×]\s*\d+\s*$/,'').trim();}
+            agg[piece]=(agg[piece]||0)+sign*n;
+          }
           const dm=date.match(/^(\d{4})-(\d{2})/);
           if(dm&&!ym)ym=dm[1].slice(2)+dm[2];
         }
+        for(const nm in agg)if(agg[nm]>0)qtyRows.push({code:'NM:'+nm,name:nm,qty:agg[nm]});
         if(ym&&ym!==CUR)msgs.push('⚠ '+f.name+' → '+ym+' 자료인데 지금 화면은 '+CUR+' — 값은 넣었으니 달을 확인하세요!');
         m.bpos.coupangGye=Math.round(sum);
         m.bpos.coupangGong=exVat(m.bpos.coupangGye);
         m.bpos.coupangBuga=m.bpos.coupangGye-m.bpos.coupangGong;
         m.bpos.coupangTemp=false;
         msgs.push('쿠팡이츠 '+fmt(m.bpos.coupangGye)+'원 (주문금액 기준 확정값 — 임시 체크 해제)');
+        pushQty(qtyRows,'d',ym,msgs);
       }
     }
     touch();renderAll();
     setTimeout(()=>alert(msgs.join('\n')),50);
   }catch(e){alert(e.message||'파일을 읽지 못했어요');}
+}
+function pushQty(rows,ch,ym,msgs){
+  try{
+    if(!rows.length||typeof window.bjApplyQty!=="function")return;
+    const use=ym||CUR;
+    const y='20'+use.slice(0,2),mo=String(Number(use.slice(2)));
+    const res=window.bjApplyQty(rows,ch,y,mo);
+    const chN={k:'키오스크',p:'포스',d:'배달'}[ch];
+    if(res&&res.ok)msgs.push('→ 매출현황 보자기 메뉴별 '+chN+' 수량 '+res.applied+'개 품목도 채웠어요');
+    else if(res&&res.unmapped)msgs.push('→ 메뉴별 수량은 새 품목 '+res.unmapped.length+'개('+res.unmapped.slice(0,3).join(', ')+'…)의 짝이 없어 못 채웠어요 — 매출현황>보자기 메뉴별에서 이 파일을 한 번 올려 짝지어주세요');
+  }catch(e){console.error(e);}
 }
 window.bpFilesPick=bpFilesPick;
 async function apFileChangeW(wrap,file){
