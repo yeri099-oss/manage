@@ -7287,6 +7287,123 @@ function pushQty(rows,ch,ym,msgs){
     else if(res&&res.unmapped)msgs.push('→ 메뉴별 수량은 새 품목 '+res.unmapped.length+'개('+res.unmapped.slice(0,3).join(', ')+'…)의 짝이 없어 못 채웠어요 — 매출현황>보자기 메뉴별에서 이 파일을 한 번 올려 짝지어주세요');
   }catch(e){console.error(e);}
 }
+async function apCornerPick(inp){
+  const f=inp.files&&inp.files[0];
+  if(!f)return;
+  inp.value='';
+  try{
+    const aoa=await apReadXlsx(f);
+    let ym=null,hi=-1,cCard=-1,cAmt=-1,cGubun=-1;
+    for(let i=0;i<Math.min(aoa.length,12);i++){
+      const r=aoa[i]||[];
+      const joined=r.join(' ');
+      const dm=joined.match(/일자\s*:\s*(\d{4})-(\d{2})/);
+      if(dm)ym=dm[1].slice(2)+dm[2];
+      if(String(r[0]||'').trim()==='No.'){
+        hi=i;
+        for(let c=0;c<r.length;c++){
+          const t=String(r[c]||'').replace(/\s/g,'');
+          if(t.includes('카드번호'))cCard=c;
+          if(t==='승인금액')cAmt=c;
+          if(t==='승인')cGubun=c;
+        }
+      }
+    }
+    if(hi<0||cAmt<0)throw new Error("승인현황 형식을 찾지 못했어요 — 오케이포스 승인현황 엑셀(.xlsx)인지 확인해 주세요.");
+    let tot=0,noCard=0,noN=0,n=0;
+    for(let i=hi+1;i<aoa.length;i++){
+      const r=aoa[i]||[];
+      if(!/^\d+$/.test(String(r[0]||'').trim()))continue;
+      const amt=Number(String(r[cAmt]||'').replace(/,/g,''))||0;
+      tot+=amt;n++;
+      const digits=String(r[cCard]||'').replace(/[^0-9]/g,'');
+      if(!digits){noCard+=amt;noN++;}
+    }
+    if(!n)throw new Error("승인 거래 줄을 찾지 못했어요.");
+    if(ym&&ym!==CUR&&!confirm("파일은 "+ymLabel(ym)+" 자료인데 지금 화면은 "+ymLabel(CUR)+"이에요. 그래도 현재 달에 넣을까요?"))return;
+    const m=MONTHS[CUR];
+    m.corner.cardTotal=Math.round(tot);
+    touch();renderInput();
+    alert("마켓포스 카드승인현황 반영 완료\n\n· 카드 전체: "+fmt(m.corner.cardTotal)+"원 ("+n+"건, 취소 차감)\n· 이 중 카드번호 없는 단말기 간편결제: "+fmt(noCard)+"원 ("+noN+"건) — 제로페이 건은 홈택스에선 '제로페이 자료'로 따로 잡혀요\n\n카드 '보자기 몫'은 직접 입력해 주세요.");
+  }catch(e){alert("읽기 실패: "+(e.message||e));}
+}
+async function ntsZpPick(inp){
+  const f=inp.files&&inp.files[0];
+  if(!f)return;
+  inp.value='';
+  try{
+    const buf=await f.arrayBuffer();
+    const head=new Uint8Array(buf.slice(0,2));
+    let rows;
+    if(head[0]===0x50&&head[1]===0x4B){rows=await apReadXlsx(f);}
+    else{
+      const text=new TextDecoder('utf-8').decode(buf);
+      if(!/<tr/i.test(text))throw new Error("홈택스 '부가세내역' 엑셀(웹 저장 .xls)이 아닌 것 같아요 — 제로페이 조회 화면의 [세부내역 다운로드]/[엑셀 다운로드] 파일을 넣어주세요.");
+      const doc=new DOMParser().parseFromString(text,'text/html');
+      rows=[...doc.querySelectorAll('tr')].map(tr=>[...tr.querySelectorAll('td,th')].map(td=>td.textContent.trim()));
+    }
+    let hi=-1,cAmt=-1,cVat=-1,cPer=-1;
+    for(let i=0;i<rows.length&&hi<0;i++){
+      const r=rows[i]||[];
+      let a=-1,v=-1,p2=-1;
+      for(let j=0;j<r.length;j++){
+        const t=String(r[j]||'').replace(/\s/g,'');
+        if(t.includes('결제금액'))a=j;
+        if(t==='부가세')v=j;
+        if(t==='기간')p2=j;
+      }
+      if(a>=0&&v>=0){hi=i;cAmt=a;cVat=v;cPer=p2;}
+    }
+    if(hi<0)throw new Error("표 머리글(결제금액·부가세)을 찾지 못했어요 — 홈택스 부가세내역 파일인지 확인해 주세요.");
+    let tot=0,vat=0,n=0,ym=null;
+    const numv2=x=>Number(String(x||'').replace(/,/g,''))||0;
+    for(let i=hi+1;i<rows.length;i++){
+      const r=rows[i]||[];
+      const first=String(r[0]||'');
+      if(first.includes('소계')||first.includes('합계'))continue;
+      const per=cPer>=0?String(r[cPer]||''):r.join(' ');
+      const dm=per.match(/(\d{4})[.\-\/](\d{2})/);
+      if(!dm)continue;
+      ym=dm[1].slice(2)+dm[2];
+      tot+=numv2(r[cAmt]);vat+=numv2(r[cVat]);n++;
+    }
+    if(!n)throw new Error("가맹점 데이터 줄을 찾지 못했어요.");
+    if(ym&&ym!==CUR&&!confirm("파일은 "+ymLabel(ym)+" 자료인데 지금 화면은 "+ymLabel(CUR)+"이에요. 그래도 현재 달에 넣을까요?"))return;
+    const m=MONTHS[CUR];
+    m.nts.zeropay=Math.round(tot);
+    m.nts.zeropayVat=Math.round(vat);
+    touch();renderInput();
+    alert("제로페이 부가세내역 반영 완료\n\n· 제로페이·기타수단 총액: "+fmt(m.nts.zeropay)+"원 ("+n+"개 가맹점)\n· 부가세 합(정확값): "+fmt(m.nts.zeropayVat)+"원\n\n④ 카드 칸에는 홈택스 신용카드 자료 중 꽃밥마켓 가맹점분을 입력해 주세요 (전체 합계에는 에피다 카드가 섞여 있어요).");
+  }catch(e){alert("읽기 실패: "+(e.message||e));}
+}
+async function uplRouterPick(inp){
+  const files=[...(inp.files||[])];inp.value='';
+  if(!files.length)return;
+  const rest={files:[],value:''};
+  for(const f of files){
+    try{
+      const buf=await f.arrayBuffer();
+      const head=new Uint8Array(buf.slice(0,4));
+      if(head[0]===0x50&&head[1]===0x4B){ // xlsx
+        const aoa=await apReadXlsx(f);
+        let isCorner=false;
+        for(let i=0;i<Math.min(aoa.length,12);i++){
+          const r=(aoa[i]||[]).map(x=>String(x).replace(/\s/g,''));
+          if(r[0]==='No.'&&r.some(t=>t.includes('카드번호'))){isCorner=true;break;}
+        }
+        if(isCorner){await apCornerPick({files:[f],value:''});continue;}
+        rest.files.push(f);continue; // 쿠팡이츠/포스 상품 등 → ③ 판별기로
+      }
+      const text=new TextDecoder('utf-8').decode(buf.slice(0,4000));
+      if(/<tr/i.test(text)&&text.includes('부가세')&&text.includes('결제금액')){await ntsZpPick({files:[f],value:''});continue;}
+      rest.files.push(f); // 키오스크 SpreadsheetML 등
+    }catch(e){alert(f.name+' 읽기 실패: '+(e.message||e));}
+  }
+  if(rest.files.length)await bpFilesPick(rest);
+}
+window.uplRouterPick=uplRouterPick;
+window.ntsZpPick=ntsZpPick;
+window.apCornerPick=apCornerPick;
 window.bpFilesPick=bpFilesPick;
 async function apFileChangeW(wrap,file){
   const ee=wrap.querySelector('.apErr');if(ee)ee.style.display='none';
@@ -7743,12 +7860,25 @@ function renderInput(){
   const pg=$("#pg-input");
   let h='';
   h+=`<div class="card" style="padding:10px 16px"><div class="flex"><button class="btn sm line" id="btnAutofill">🪄 빈 공급가·부가세 자동 채우기</button><span class="hint">계·면세를 넣은 뒤 누르면 비어있는 공급가/부가세를 자동 계산합니다 (이미 입력한 칸은 건드리지 않아요)</span></div></div>`;
+  // 📂 엑셀 업로드 체크리스트
+  const okC=v=>v?'<span style="color:#15803d;font-weight:700">✓ 채워짐</span>':'<span style="color:#9ca3af">— 아직</span>';
+  h+=`<div class="card"><h2>📂 엑셀 업로드 체크리스트 <small>매달 아래 파일들을 내려받아 여기에 한꺼번에 넣으면, 종류를 자동으로 알아보고 알맞은 칸을 채워요</small></h2>
+  <div class="hint" style="background:#f0f7ff;border:1px dashed #93c5fd;border-radius:8px;padding:8px 10px"><b>파일 선택 (여러 개 한꺼번에 가능)</b> — <input type="file" multiple accept=".xls,.xlsx,.html" onchange="uplRouterPick(this)" style="font-size:12px"></div>
+  <table class="g" style="margin-top:8px"><tr><th style="width:230px">파일</th><th style="width:110px">어디서</th><th>자동으로 채우는 곳</th><th style="width:90px">상태</th></tr>
+    <tr><td class="lb">마켓포스 카드승인현황 (.xlsx)</td><td class="au">오케이포스</td><td class="au" style="text-align:left">승인현황 카드 '마켓포스 전체'</td><td class="au">${okC(m.corner.cardTotal>0)}</td></tr>
+    <tr><td class="lb">키오스크 매출분석 (.xls)</td><td class="au">키오스크</td><td class="au" style="text-align:left">③ 키오스크 계·공급가·부가세 + 매출현황 메뉴별 수량</td><td class="au">${okC(m.bpos.kioskGye>0)}</td></tr>
+    <tr><td class="lb">쿠팡이츠 주문내역 (.xlsx)</td><td class="au">쿠팡이츠</td><td class="au" style="text-align:left">③ 쿠팡이츠 계·공급가·부가세 + 메뉴별 수량 <span style="color:#b45309">(매월 5일 이후 다운 가능)</span></td><td class="au">${okC(m.bpos.coupangGye>0)}${m.bpos.coupangGye>0&&m.bpos.coupangTemp?' <span style="color:#b45309;font-size:11px">임시값</span>':''}</td></tr>
+    <tr><td class="lb">제로페이 부가세내역 (.xls)</td><td class="au">홈택스</td><td class="au" style="text-align:left">④ 제로페이·기타수단 총액 + 부가세 합</td><td class="au">${okC(m.nts.zeropay>0&&m.nts.zeropayVat!=null)}</td></tr>
+  </table>
+  <div class="hint">사진(스크린샷)은 읽지 못해요 — 각 화면의 '엑셀 내려받기'로 받은 파일을 넣어주세요. 각 카드에 있는 개별 업로드 칸을 써도 결과는 같아요. 나머지 항목(카드 보자기 몫, 매출분석 숫자, 홈택스 카드·현금영수증 등)은 지금처럼 직접 입력해요.</div></div>`;
   // ⓪ 승인현황 (가장 먼저 입력)
   h+=`<div class="card"><h2>승인현황 — 코너(식당) <small>매출관리-승인현황-코너(식당) · "보자기현금 빼주기" · 가장 먼저 입력하면 아래 ① 마켓포스의 현금·카드 계가 자동으로 채워져요</small></h2>
   <table class="g"><tr><th style="width:160px">구분</th><th>마켓포스 전체</th><th>보자기 몫</th><th>마켓 몫 (자동)</th><th colspan="2"></th></tr>
     <tr><td class="lb">카드</td>${inp('corner.cardTotal')}${inp('corner.cardBojagi')}`+autoCell('cn_cardK',mm=>derived(mm).marketCardK)+`${blank(2)}</tr>
     <tr><td class="lb">현금</td>${inp('corner.cashTotal')}`+autoCell('cn_cashB',mm=>derived(mm).cashBojagi)+autoCell('cn_cashK',mm=>derived(mm).marketCashK)+`<td class="au" colspan="2" style="text-align:left;color:var(--sub);font-size:12px">포스 승인현황 화면의 현금 전체를 그대로 입력 · 비워두면 참고 계산값(① 전체 계 − 카드 − 제로페이 − 포인트 − 외상)을 대신 사용 · 보자기 현금 = ③ 마켓포스분 계 − 카드 보자기</td></tr>
-  </table><div id="vCorner0"></div></div>`;
+  </table>
+  <div class="hint" style="background:#f0f7ff;border:1px dashed #93c5fd;border-radius:8px;padding:8px 10px">📂 <b>마켓포스 카드승인현황 엑셀로 자동 입력</b> — <input type="file" accept=".xlsx" onchange="apCornerPick(this)" style="font-size:12px"> 오케이포스(마켓포스) 매출관리-승인현황 엑셀(.xlsx)을 넣으면 <b>카드 '마켓포스 전체'</b>가 자동으로 채워져요 (취소 건 차감, 단말기 간편결제 포함). 카드 보자기 몫은 지금처럼 직접 입력해요.</div>
+  <div id="vCorner0"></div></div>`;
   // ① 마켓
   h+=`<div class="card"><h2>① 꽃밥마켓 — 마켓포스 <small>OKPOS 매출분석 기준 · 회색 칸은 자동 계산</small></h2>
   <table class="g"><tr><th style="width:160px">항목</th><th>계</th><th>면세</th><th>과세 계</th><th>공급가</th><th>부가세</th></tr>
@@ -7794,13 +7924,14 @@ function renderInput(){
   h+=`<div class="card"><h2>④ 국세청 — 마켓+보자기 <small>홈택스 · 이 금액을 기준으로 마켓/보자기 매출을 나눕니다</small></h2>
   <table class="g"><tr><th style="width:160px">카드매출</th><th>계</th><th colspan="4"></th></tr>
     <tr><td class="lb">카드</td>${inp('nts.card')}${blank(4)}</tr>
-    <tr><td class="lb">제로페이·기타수단</td>${inp('nts.zeropay')}<td class="au" colspan="4" style="text-align:left;color:var(--sub);font-size:12px">기타수단결제(포스 수기 등록분) 총액 — 단말기로 승인된 간편결제는 카드에 이미 포함되니 여기 넣지 마세요</td></tr>
+    <tr><td class="lb">제로페이·기타수단</td>${inp('nts.zeropay')}<td class="au" colspan="4" style="text-align:left;color:var(--sub);font-size:12px">홈택스 <b>'제로(온누리)페이 자료'</b> 금액을 그대로 입력 — 수기 등록분+단말기 승인 제로페이가 모두 포함돼요(포스는 단말기 건을 카드로 집계하지만 홈택스는 제로페이로 분리). 삼성페이 등 카드 기반 간편결제는 신용카드 자료에 이미 포함되니 넣지 마세요</td></tr>
     <tr><td class="lb">└ 부가세 합 <span class="tag" id="zpVatTag">추정</span></td><td><input data-p="nts.zeropayVat" class="est" data-nullable="1"></td><td class="au" colspan="4" style="text-align:left;color:var(--sub);font-size:12px">기타수단결제의 실제 부가세 합을 알면 적어주세요 (과세 = 부가세×11) · 비우면 마켓 비율로 추정</td></tr>
     <tr><td class="lb">카드매출 합계 (자동)</td>`+autoCell('nts_tot',mm=>derived(mm).ntsTotal,true)+`<td class="au" colspan="4" style="text-align:left;color:var(--sub)">아래 배분표의 빨간 칸으로 들어갑니다</td></tr>
   </table>
+  <div class="hint" style="background:#f0f7ff;border:1px dashed #93c5fd;border-radius:8px;padding:8px 10px">📂 <b>제로페이 부가세내역으로 자동 입력</b> — <input type="file" accept=".xls,.xlsx,.html" onchange="ntsZpPick(this)" style="font-size:12px"> 홈택스 <b>부가세내역</b> 엑셀(.xls)을 넣으면 위의 <b>제로페이·기타수단 총액과 부가세 합</b>이 자동으로 채워져요.</div>
   <div class="flex" style="margin-top:8px"><span class="addrow apBtn">📋 승인내역 확인 — 단말기 간편결제(카드번호 없는 승인)가 얼마나 되는지 보기</span></div>
   <div id="ap-wrap" style="display:none;margin-top:8px">
-    <div class="hint">오케이포스 <b>승인현황</b>을 붙여넣거나 <b>엑셀 파일(.xlsx)을 그대로 선택</b>하면, 카드번호가 별표뿐인 <b>단말기 간편결제</b>를 월별로 집계해 보여줘요 (확인용 — 이 결제들은 포스가 신용카드로 집계해서 카드 행에 이미 포함돼 있어요).</div>
+    <div class="hint">오케이포스 <b>승인현황</b>을 붙여넣거나 <b>엑셀 파일(.xlsx)을 그대로 선택</b>하면, 카드번호가 별표뿐인 <b>단말기 간편결제</b>를 월별로 집계해 보여줘요 (확인용 — 포스는 이 결제들을 신용카드로 집계하지만, 이 중 <b>제로페이 건은 홈택스에선 '제로페이 자료'로 따로</b> 잡혀요. 그래서 포스 카드가 홈택스 카드보다 그만큼 큰 게 정상이에요).</div>
     <textarea class="apTa" style="min-height:110px" placeholder="여기에 표를 붙여넣으세요 — 또는 아래에서 엑셀 파일을 선택하세요"></textarea>
     <div class="flex" style="margin-top:6px"><button class="btn sm apGo">붙여넣은 표 정리하기</button><label class="btn sm" style="cursor:pointer;display:inline-flex;align-items:center">📂 엑셀 파일 선택 (.xlsx)<input type="file" class="apFile" accept=".xlsx" style="display:none"></label></div>
     <div class="apPrev" style="margin-top:8px"></div>
