@@ -7150,6 +7150,81 @@ async function apReadXlsx(file){
   }
   return rows;
 }
+/* ③ 보자기포스: 키오스크·쿠팡이츠 엑셀 자동 입력 */
+async function bpReadAny(file){
+  const buf=await file.arrayBuffer();
+  const head=new Uint8Array(buf.slice(0,2));
+  if(head[0]===0x50&&head[1]===0x4B)return await apReadXlsx(file);
+  const text=new TextDecoder('utf-8').decode(buf);
+  const doc=new DOMParser().parseFromString(text,'application/xml');
+  const rows=[];
+  const rowEls=doc.getElementsByTagName('Row');
+  for(const row of rowEls){
+    const arr=[];
+    for(const cel of row.getElementsByTagName('Cell')){
+      const d=cel.getElementsByTagName('Data')[0];
+      arr.push(d?d.textContent:'');
+    }
+    rows.push(arr);
+  }
+  if(!rows.length)throw new Error(file.name+': 시트를 읽지 못했어요.');
+  return rows;
+}
+async function bpFilesPick(inp){
+  const files=[...(inp.files||[])];inp.value='';
+  if(!files.length)return;
+  const m=MONTHS[CUR];
+  const msgs=[];
+  try{
+    for(const f of files){
+      const aoa=await bpReadAny(f);
+      let hi=-1,ci={},kind=null;
+      for(let i=0;i<Math.min(aoa.length,10);i++){
+        const r=aoa[i].map(x=>String(x).trim());
+        if(r.includes('상세내역')&&r.includes('주문번호')){hi=i;r.forEach((v,j)=>ci[v]=j);kind='coupang';break;}
+        if(r.includes('상품명')&&r.includes('판매수량')){hi=i;r.forEach((v,j)=>ci[v]=j);kind='kiosk';break;}
+      }
+      if(!kind)throw new Error(f.name+': 아는 형식이 아니에요 — 키오스크 매출분석(상품별) 또는 쿠팡이츠 주문내역 엑셀을 넣어주세요.');
+      const numv=x=>{const t=String(x==null?'':x).replace(/[,\s]/g,'');const n=Number(t);return isNaN(n)?0:n;};
+      if(kind==='kiosk'){
+        const mc=ci['판매금액(원)']!=null?ci['판매금액(원)']:ci['실매출액'];
+        let sum=0,ym=null;
+        for(let i=hi+1;i<aoa.length;i++){
+          const r=aoa[i];
+          if(String(r[0]||'').trim()==='합계')break;
+          sum+=numv(r[mc]);
+          const dm=String(r[0]||'').match(/^(\d{4})[.\-\/](\d{2})/);
+          if(dm&&!ym)ym=dm[1].slice(2)+dm[2];
+        }
+        if(ym&&ym!==CUR)msgs.push('⚠ '+f.name+' → '+ym+' 자료인데 지금 화면은 '+CUR+' — 값은 넣었으니 달을 확인하세요!');
+        m.bpos.kioskGye=Math.round(sum);
+        m.bpos.kioskGong=exVat(m.bpos.kioskGye);
+        m.bpos.kioskBuga=m.bpos.kioskGye-m.bpos.kioskGong;
+        msgs.push('키오스크 '+fmt(m.bpos.kioskGye)+'원 (공급가·부가세 ÷1.1 자동 — 면세 품목 있으면 두 칸만 고치세요)');
+      }else{
+        const jK=ci['주문금액']!=null?ci['주문금액']:ci['총금액'];
+        let sum=0,ym=null;
+        for(let i=hi+1;i<aoa.length;i++){
+          const r=aoa[i];
+          const date=String(r[ci['일자']]||'').trim();
+          if(!date)continue;
+          sum+=numv(r[jK]);
+          const dm=date.match(/^(\d{4})-(\d{2})/);
+          if(dm&&!ym)ym=dm[1].slice(2)+dm[2];
+        }
+        if(ym&&ym!==CUR)msgs.push('⚠ '+f.name+' → '+ym+' 자료인데 지금 화면은 '+CUR+' — 값은 넣었으니 달을 확인하세요!');
+        m.bpos.coupangGye=Math.round(sum);
+        m.bpos.coupangGong=exVat(m.bpos.coupangGye);
+        m.bpos.coupangBuga=m.bpos.coupangGye-m.bpos.coupangGong;
+        m.bpos.coupangTemp=false;
+        msgs.push('쿠팡이츠 '+fmt(m.bpos.coupangGye)+'원 (주문금액 기준 확정값 — 임시 체크 해제)');
+      }
+    }
+    touch();renderAll();
+    setTimeout(()=>alert(msgs.join('\n')),50);
+  }catch(e){alert(e.message||'파일을 읽지 못했어요');}
+}
+window.bpFilesPick=bpFilesPick;
 async function apFileChangeW(wrap,file){
   const ee=wrap.querySelector('.apErr');if(ee)ee.style.display='none';
   try{
@@ -7643,6 +7718,7 @@ function renderInput(){
     <tr><td class="lb">보자기포스 계 (자동)</td>`+autoCell('bp_tot',mm=>derived(mm).bposGye,true)+`<td class="au" colspan="4" style="text-align:left;color:var(--sub)">키오스크 + 마켓포스분</td></tr>
     <tr><td class="lb">계 + 쿠팡이츠 (자동)</td>`+autoCell('bp_tot2',mm=>derived(mm).bposGye+mm.bpos.coupangGye,true)+`<td class="au" colspan="4" style="text-align:left;color:var(--sub)">키오스크 + 마켓포스분 + 쿠팡이츠</td></tr>
   </table>
+  <div class="hint" style="background:#f0f7ff;border:1px dashed #93c5fd;border-radius:8px;padding:8px 10px">📂 <b>엑셀로 자동 입력</b> — <input type="file" multiple accept=".xls,.xlsx" onchange="bpFilesPick(this)" style="font-size:12px"> 키오스크 매출분석(상품별)·쿠팡이츠 주문내역을 넣으면 위 칸이 자동으로 채워져요. 쿠팡이츠는 <b>매월 5일 이후</b>에 전월 자료를 내려받을 수 있어요.</div>
   <div class="hint">제로페이는 마켓포스 금액에 합산되어 있어 따로 적지 않습니다.</div>
   <h2 style="margin-top:14px">승인현황 — 코너(식당) <small>매출관리-승인현황-코너(식당) · "보자기현금 빼주기"</small></h2>
   <table class="g"><tr><th style="width:160px">구분</th><th>마켓포스 전체</th><th>보자기 몫</th><th>마켓 몫 (자동)</th><th colspan="2"></th></tr>
