@@ -3234,7 +3234,7 @@ window.bjPosApply=async function(){
 function bjPosCard(year,month){
   if(S.user?.role!=="admin")return "";
   const st=window.__bjPos;
-  const head=`<div class="card"><div class="card-title">📂 포스 상품매출내역 넣기 <span class="unit">마켓포스에서 받은 보자기 판매수량 엑셀 — 상품코드로 메뉴를 기억해요</span></div>`;
+  const head=`<div class="card"><div class="card-title">📂 엑셀 상품매출내역 넣기 <span class="unit">마켓포스에서 받은 보자기 판매수량 엑셀 — 상품코드로 메뉴를 기억해요</span></div>`;
   if(!st)return head+`<div style="padding:6px 2px"><input type="file" accept=".xlsx,.xls" onchange="bjPosPick(this)"></div>
     <div class="footnote">포스 상품매출내역 · 키오스크 매출분석(상품별) · 쿠팡이츠 주문내역 — 세 파일 다 알아서 인식해요. 쿠팡이츠는 <b>매월 5일 이후</b>에 전월 자료를 내려받을 수 있어요.</div></div>`;
   const map=S.data.bojagiPosMap||{};
