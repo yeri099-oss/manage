@@ -6837,6 +6837,7 @@ function emptyMonth(){return{
   members:{insadongGye:0,insadongGong:0,insadongBuga:0,bojagiGye:0,bojagiGong:0,bojagiBuga:0,siksaGye:0,siksaGong:0,siksaBuga:0,pangongGye:0,pangongGong:0,pangongBuga:0},
   bpos:{kioskGye:0,kioskGong:0,kioskBuga:0,marketpos:0,coupangGye:0,coupangGong:0,coupangBuga:0,coupangTemp:false,zeropay:0,liquor:0},
   corner:{cardTotal:0,cashTotal:0,cardBojagi:0},
+  uploads:{},
   nts:{card:0,zeropay:0,zeropayVat:null,hyeonGong:0,hyeonBuga:0,hyeonMyeon:0,cardGong:null,cardBuga:null},
   ss:{gwase:0,myeon:0,card:0,hyeon:0,gita:0,split:null},
   taxEtc:{gong:0,buga:0,myeon:0},
@@ -7242,6 +7243,7 @@ async function bpFilesPick(inp){
         m.bpos.kioskGong=exVat(m.bpos.kioskGye);
         m.bpos.kioskBuga=m.bpos.kioskGye-m.bpos.kioskGong;
         msgs.push('키오스크 '+fmt(m.bpos.kioskGye)+'원 (공급가·부가세 ÷1.1 자동 — 면세 품목 있으면 두 칸만 고치세요)');
+        m.uploads=m.uploads||{};m.uploads.kiosk=1;
         pushQty(qtyRows,'k',ym,msgs);
       }else{
         const jK=ci['주문금액']!=null?ci['주문금액']:ci['총금액'];
@@ -7269,6 +7271,7 @@ async function bpFilesPick(inp){
         m.bpos.coupangBuga=m.bpos.coupangGye-m.bpos.coupangGong;
         m.bpos.coupangTemp=false;
         msgs.push('쿠팡이츠 '+fmt(m.bpos.coupangGye)+'원 (주문금액 기준 확정값 — 임시 체크 해제)');
+        m.uploads=m.uploads||{};m.uploads.coupang=1;
         pushQty(qtyRows,'d',ym,msgs);
       }
     }
@@ -7323,6 +7326,7 @@ async function apCornerPick(inp){
     if(ym&&ym!==CUR&&!confirm("파일은 "+ymLabel(ym)+" 자료인데 지금 화면은 "+ymLabel(CUR)+"이에요. 그래도 현재 달에 넣을까요?"))return;
     const m=MONTHS[CUR];
     m.corner.cardTotal=Math.round(tot);
+    m.uploads=m.uploads||{};m.uploads.corner=1;
     touch();renderInput();
     alert("마켓포스 카드승인현황 반영 완료\n\n· 카드 전체: "+fmt(m.corner.cardTotal)+"원 ("+n+"건, 취소 차감)\n· 이 중 카드번호 없는 단말기 간편결제: "+fmt(noCard)+"원 ("+noN+"건) — 제로페이 건은 홈택스에선 '제로페이 자료'로 따로 잡혀요\n\n카드 '보자기 몫'은 직접 입력해 주세요.");
   }catch(e){alert("읽기 실패: "+(e.message||e));}
@@ -7372,6 +7376,7 @@ async function ntsZpPick(inp){
     const m=MONTHS[CUR];
     m.nts.zeropay=Math.round(tot);
     m.nts.zeropayVat=Math.round(vat);
+    m.uploads=m.uploads||{};m.uploads.ntszp=1;
     touch();renderInput();
     alert("제로페이 부가세내역 반영 완료\n\n· 제로페이·기타수단 총액: "+fmt(m.nts.zeropay)+"원 ("+n+"개 가맹점)\n· 부가세 합(정확값): "+fmt(m.nts.zeropayVat)+"원\n\n④ 카드 칸에는 홈택스 신용카드 자료 중 꽃밥마켓 가맹점분을 입력해 주세요 (전체 합계에는 에피다 카드가 섞여 있어요).");
   }catch(e){alert("읽기 실패: "+(e.message||e));}
@@ -7861,14 +7866,15 @@ function renderInput(){
   let h='';
   h+=`<div class="card" style="padding:10px 16px"><div class="flex"><button class="btn sm line" id="btnAutofill">🪄 빈 공급가·부가세 자동 채우기</button><span class="hint">계·면세를 넣은 뒤 누르면 비어있는 공급가/부가세를 자동 계산합니다 (이미 입력한 칸은 건드리지 않아요)</span></div></div>`;
   // 📂 엑셀 업로드 체크리스트
-  const okC=v=>v?'<span style="color:#15803d;font-weight:700">✓ 채워짐</span>':'<span style="color:#9ca3af">— 아직</span>';
+  const UP=m.uploads||{};
+  const okC=(up,man)=>up?'<span style="color:#15803d;font-weight:700">✓ 엑셀 업로드됨</span>':(man?'<span style="color:#2563eb">✎ 직접 입력됨</span>':'<span style="color:#9ca3af">— 아직</span>');
   h+=`<div class="card"><h2>📂 엑셀 업로드 체크리스트 <small>매달 아래 파일들을 내려받아 여기에 한꺼번에 넣으면, 종류를 자동으로 알아보고 알맞은 칸을 채워요</small></h2>
   <div class="hint" style="background:#f0f7ff;border:1px dashed #93c5fd;border-radius:8px;padding:8px 10px"><b>파일 선택 (여러 개 한꺼번에 가능)</b> — <input type="file" multiple accept=".xls,.xlsx,.html" onchange="uplRouterPick(this)" style="font-size:12px"></div>
   <table class="g" style="margin-top:8px"><tr><th style="width:230px">파일</th><th style="width:110px">어디서</th><th>자동으로 채우는 곳</th><th style="width:90px">상태</th></tr>
-    <tr><td class="lb">마켓포스 카드승인현황 (.xlsx)</td><td class="au">오케이포스</td><td class="au" style="text-align:left">승인현황 카드 '마켓포스 전체'</td><td class="au">${okC(m.corner.cardTotal>0)}</td></tr>
-    <tr><td class="lb">키오스크 매출분석 (.xls)</td><td class="au">키오스크</td><td class="au" style="text-align:left">③ 키오스크 계·공급가·부가세 + 매출현황 메뉴별 수량</td><td class="au">${okC(m.bpos.kioskGye>0)}</td></tr>
-    <tr><td class="lb">쿠팡이츠 주문내역 (.xlsx)</td><td class="au">쿠팡이츠</td><td class="au" style="text-align:left">③ 쿠팡이츠 계·공급가·부가세 + 메뉴별 수량 <span style="color:#b45309">(매월 5일 이후 다운 가능)</span></td><td class="au">${okC(m.bpos.coupangGye>0)}${m.bpos.coupangGye>0&&m.bpos.coupangTemp?' <span style="color:#b45309;font-size:11px">임시값</span>':''}</td></tr>
-    <tr><td class="lb">제로페이 부가세내역 (.xls)</td><td class="au">홈택스</td><td class="au" style="text-align:left">④ 제로페이·기타수단 총액 + 부가세 합</td><td class="au">${okC(m.nts.zeropay>0&&m.nts.zeropayVat!=null)}</td></tr>
+    <tr><td class="lb">마켓포스 카드승인현황 (.xlsx)</td><td class="au">오케이포스</td><td class="au" style="text-align:left">승인현황 카드 '마켓포스 전체'</td><td class="au">${okC(UP.corner,m.corner.cardTotal>0)}</td></tr>
+    <tr><td class="lb">키오스크 매출분석 (.xls)</td><td class="au">키오스크</td><td class="au" style="text-align:left">③ 키오스크 계·공급가·부가세 + 매출현황 메뉴별 수량</td><td class="au">${okC(UP.kiosk,m.bpos.kioskGye>0)}</td></tr>
+    <tr><td class="lb">쿠팡이츠 주문내역 (.xlsx)</td><td class="au">쿠팡이츠</td><td class="au" style="text-align:left">③ 쿠팡이츠 계·공급가·부가세 + 메뉴별 수량 <span style="color:#b45309">(매월 5일 이후 다운 가능)</span></td><td class="au">${okC(UP.coupang,m.bpos.coupangGye>0)}${m.bpos.coupangGye>0&&m.bpos.coupangTemp?' <span style="color:#b45309;font-size:11px">임시값</span>':''}</td></tr>
+    <tr><td class="lb">제로페이 부가세내역 (.xls)</td><td class="au">홈택스</td><td class="au" style="text-align:left">④ 제로페이·기타수단 총액 + 부가세 합</td><td class="au">${okC(UP.ntszp,m.nts.zeropay>0&&m.nts.zeropayVat!=null)}</td></tr>
   </table>
   <div class="hint">사진(스크린샷)은 읽지 못해요 — 각 화면의 '엑셀 내려받기'로 받은 파일을 넣어주세요. 각 카드에 있는 개별 업로드 칸을 써도 결과는 같아요. 나머지 항목(카드 보자기 몫, 매출분석 숫자, 홈택스 카드·현금영수증 등)은 지금처럼 직접 입력해요.</div></div>`;
   // ⓪ 승인현황 (가장 먼저 입력)
