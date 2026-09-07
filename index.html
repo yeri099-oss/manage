@@ -1896,6 +1896,7 @@ async function exportSalesAll(){
       return {
         doc,
         setN(addr,v){if(v==null||v==="")return;const cel=ensure(addr);wipe(cel);const vv=doc.createElementNS(TPL_NS,"v");vv.textContent=String(Math.round(v));cel.appendChild(vv);},
+        setF(addr,fx,styleFrom){const cel=ensure(addr);wipe(cel);const ff=doc.createElementNS(TPL_NS,"f");ff.textContent=fx;cel.appendChild(ff);if(styleFrom&&cells[styleFrom]&&cells[styleFrom].getAttribute("s"))cel.setAttribute("s",cells[styleFrom].getAttribute("s"));},
         setT(addr,t){if(t==null||t==="")return;const cel=ensure(addr);wipe(cel);cel.setAttribute("t","inlineStr");const is=doc.createElementNS(TPL_NS,"is"),tt=doc.createElementNS(TPL_NS,"t");tt.setAttribute("xml:space","preserve");tt.textContent=t;is.appendChild(tt);cel.appendChild(is);},
         txt(addr){const c=cells[addr];if(!c)return"";const t=c.getAttribute("t");
           if(t==="s"){const v=c.getElementsByTagName("v")[0];return v?(SST[+v.textContent]||""):"";}
@@ -1912,6 +1913,11 @@ async function exportSalesAll(){
       for(const b of blocks)for(const y in YC)MONTHS.forEach((m,i)=>{
         const v=scGet(y,m,b.ent);
         if(v!=null)sh.setN(YC[y]+(b.r0+i),v);
+      });
+      /* 증감(N열) 수식 통일: 빈달 안전 + 숫자 %(셀 서식) — 원본의 두 가지 수식 혼재 정리 */
+      for(const b of blocks)MONTHS.forEach((m,i)=>{
+        const r=b.r0+i;
+        sh.setF("N"+r,`IF(OR(N(M${r})=0,N(K${r})=0),"",(M${r}-K${r})/K${r})`,"N"+b.r0);
       });
       await sh.save();
     }
@@ -9469,7 +9475,9 @@ function preview(raw){
   return {
     coupangTemp: !!(m.bpos&&m.bpos.coupangTemp),
     pos:{ insadong: kb.all, market: V.F8, online: m.ss.gwase+m.ss.myeon, bojagi: V.F15+m.bpos.coupangGye },
-    nts:{ total: epida+market+bojagi, epida, market, bojagi },
+    nts: (m.nts.card>0
+      ? { total: epida+market+bojagi, epida, market, bojagi }
+      : { total:0, epida:0, market:0, bojagi:0, notReady:true }),
     mk:{ total: V.F8, internal: m.members.insadongGye+m.members.bojagiGye+(m.members.sanaeGye||0), hanwoo: m.market.jeongyukMyeon, pork: m.market.jeongyukGwase },
     ag:{ coupang: m.bpos.coupangGye, smartstore: m.ss.gwase+m.ss.myeon }
   };
@@ -9670,7 +9678,7 @@ function cfmOpenPushModal(){
     const rows=[
       ["월별 — 인사동",c.pos.insadong],["월별 — 마켓",c.pos.market],
       ["월별 — 온라인",c.pos.online],["월별 — 보자기(쿠팡 포함)",c.pos.bojagi],
-      ["매출비교 — 꽃밥이야기",c.nts.total],["매출비교 — 꽃밥에피다",c.nts.epida],
+      ["매출비교 — 꽃밥이야기"+(c.nts.notReady?" (국세청 미입력 — 건너뜀)":""),c.nts.total],["매출비교 — 꽃밥에피다",c.nts.epida],
       ["매출비교 — 꽃밥마켓",c.nts.market],["매출비교 — 보자기꽃밥",c.nts.bojagi],
       ["마켓 — 총매출",c.mk.total],["마켓 — 사내",c.mk.internal],
       ["마켓 — 대관령한우",c.mk.hanwoo],["마켓 — 씨알돈육",c.mk.pork],
