@@ -3683,7 +3683,54 @@ function renderClsManage(){
     </tbody></table></div></div>`;
   const epCard=`<div class="card"><div class="card-head"><div class="card-title">피다 — 메뉴/주류·음료 분류 <span class="unit">자동 = 품명 키워드로 분류 · 수동 = 직접 옮긴 것 (모든 연도·다음 업로드에 적용)</span></div></div>
     <div style="display:flex;gap:14px;flex-wrap:wrap">${epTbl(itemsAll.filter(it=>!isDr(it.n)),"🍚 메뉴")}${epTbl(itemsAll.filter(it=>isDr(it.n)),"🍶 주류·음료")}</div></div>`;
-  el.innerHTML=`<div class="card" style="padding:10px 16px"><div class="footnote" style="margin:0">🔧 관리자 전용 — 보자기·피다의 품목 분류가 맞는지 여기서 한눈에 확인하고 바로 고칠 수 있어요. 고친 내용은 저장돼서 다음 엑셀 업로드부터 자동 적용돼요.</div></div>`+bjCard+epCard;
+  /* ── 월별 반영 내역 ── */
+  const mgYears=[...new Set([...Object.keys(S.data.bojagiMenu||{}),...Object.keys(S.data.epidaDetail||{})])].sort();
+  let mgY=S.ui.mgY&&mgYears.includes(String(S.ui.mgY))?String(S.ui.mgY):(mgYears[mgYears.length-1]||String(thisYear()));
+  const monthsWith=y2=>[...new Set([...Object.keys(S.data.bojagiMenu[y2]?.months||{}),...Object.keys(S.data.epidaDetail[y2]?.months||{})])].map(Number).sort((a,b)=>a-b);
+  const mws=monthsWith(mgY);
+  let mgM=S.ui.mgM&&mws.includes(Number(S.ui.mgM))?String(S.ui.mgM):String(mws[mws.length-1]||new Date().getMonth()+1);
+  S.ui.mgY=mgY;S.ui.mgM=mgM;
+  const ymSel=`<select class="ctl" onchange="S.ui.mgY=this.value;S.ui.mgM=null;renderClsManage()">${mgYears.map(y2=>`<option value="${y2}" ${y2===mgY?"selected":""}>${y2}년</option>`).join("")}</select>
+    <select class="ctl" onchange="S.ui.mgM=this.value;renderClsManage()">${(mws.length?mws:[Number(mgM)]).map(m3=>`<option value="${m3}" ${String(m3)===mgM?"selected":""}>${m3}월</option>`).join("")}</select>`;
+  /* 보자기: 앱 항목 ← 포스 품목들 */
+  const revSrc={};
+  for(const k of Object.keys(map)){
+    const m3=map[k]||{};
+    if(!m3.kind||m3.kind==="skip")continue;
+    const lbl=(k.indexOf("NM:")===0?k.slice(3):(m3.nm||k))+({"p":" 🖥","k":" 📟","d":" 🛵"}[m3.src]||"");
+    (revSrc[m3.kind+"|"+m3.id]=revSrc[m3.kind+"|"+m3.id]||[]).push(lbl);
+  }
+  const bjMonthRows=(()=>{
+    const mm2=S.data.bojagiMenu[mgY]?.months?.[mgM]||{};
+    const dd2=S.data.bojagiDrinks[mgY]?.months?.[mgM]||{};
+    const rows2=[];
+    const push2=(kind,box,list)=>{
+      for(const id in box){
+        const q=box[id];if(!q)continue;
+        const tot2=(q.k||0)+(q.p||0)+(q.d||0);if(!tot2)continue;
+        const it=(list||[]).find(x=>x.id===id);
+        rows2.push({nm:it?(it.name+(kind==="menu"&&it.cat?" ("+it.cat+")":"")):"(삭제된 항목)",kind,tot:tot2,k:q.k||0,p:q.p||0,d:q.d||0,srcs:revSrc[kind+"|"+id]||[]});
+      }
+    };
+    push2("menu",mm2,S.data.menuItems);push2("drink",dd2,S.data.drinkItems);
+    rows2.sort((a,b)=>b.tot-a.tot);
+    return rows2;
+  })();
+  const bjMonthTbl=bjMonthRows.length?`<div class="card-title" style="font-size:14px;margin:8px 0 4px">보자기 — ${mgM}월에 반영된 수량과 출처</div>
+    <div class="table-wrap"><table class="rpt"><thead><tr><th class="l">앱 항목</th><th style="width:70px">합계</th><th style="width:64px">키오스크</th><th style="width:56px">포스</th><th style="width:56px">배달</th><th class="l">← 여기로 합산된 포스 품목 (🖥마켓포스 📟키오스크 🛵쿠팡이츠)</th></tr></thead><tbody>
+    ${bjMonthRows.map(r2=>`<tr><td class="l"><b>${esc(r2.nm)}</b>${r2.kind==="drink"?' <span class="unit">주류·음료</span>':''}</td><td>${fmt(r2.tot)}</td><td>${r2.k?fmt(r2.k):""}</td><td>${r2.p?fmt(r2.p):""}</td><td>${r2.d?fmt(r2.d):""}</td><td class="l" style="font-size:12px;color:var(--sub)">${r2.srcs.map(esc).join(" · ")||"(직접 입력)"}</td></tr>`).join("")}
+    </tbody></table></div>`:`<div class="footnote">보자기 — ${mgM}월에 반영된 수량이 없어요.</div>`;
+  /* 피다: 품명 그대로 */
+  const epMonthRows=(()=>{
+    const its=S.data.epidaDetail[mgY]?.months?.[mgM]?.items||{};
+    return Object.values(its).filter(it=>it.q).sort((a,b)=>b.q-a.q);
+  })();
+  const epMonthTbl=epMonthRows.length?`<div class="card-title" style="font-size:14px;margin:14px 0 4px">피다 — ${mgM}월 품명별 반영 내역 <span class="unit">피다는 이름을 바꾸지 않고 엑셀 품명 그대로 메뉴별·주류별 표에 들어가요</span></div>
+    <div class="table-wrap"><table class="rpt"><thead><tr><th class="l">엑셀 품명</th><th style="width:80px">수량</th><th class="l">→ 반영된 곳</th></tr></thead><tbody>
+    ${epMonthRows.map(it=>{const dr=isDr(it.n);return `<tr><td class="l">${esc(it.n)}</td><td>${fmt(Math.round(it.q))}</td><td class="l" style="font-size:12px;color:var(--sub)">${dr?"주류별":"메뉴별"} 표의 '${esc(it.n)}' 행</td></tr>`;}).join("")}
+    </tbody></table></div>`:`<div class="footnote">피다 — ${mgM}월에 반영된 내역이 없어요.</div>`;
+  const monthCard=`<div class="card"><div class="card-head"><div class="card-title">🔍 월별 반영 내역 확인 <span class="unit">엑셀의 품목이 그 달에 어디로 들어갔는지</span></div><div class="card-actions">${ymSel}</div></div>${bjMonthTbl}${epMonthTbl}</div>`;
+  el.innerHTML=`<div class="card" style="padding:10px 16px"><div class="footnote" style="margin:0">🔧 관리자 전용 — 보자기·피다의 품목 분류가 맞는지 여기서 한눈에 확인하고 바로 고칠 수 있어요. 고친 내용은 저장돼서 다음 엑셀 업로드부터 자동 적용돼요.</div></div>`+monthCard+bjCard+epCard;
   el.querySelectorAll("select[data-bjkey]").forEach(sel=>{
     sel.addEventListener("change",()=>mgBjMapSet(keys[Number(sel.dataset.bjkey)],sel.value));
   });
