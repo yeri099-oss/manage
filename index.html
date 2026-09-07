@@ -2592,6 +2592,7 @@ function handleCellEdit(inp) {
     set(grp, d.ch);
     if (!Object.keys(md.delivery || {}).length && !Object.keys(md.online || {}).length) delete doc.months[d.m];
     queueSave("agency", d.y);
+    if (d.kind === "online" && window.syncOnlineFromAgency) window.syncOnlineFromAgency();
   }
   scheduleEditRefresh();
 }
@@ -3631,7 +3632,7 @@ function renderClsManage(){
     const it=(list||[]).find(x=>x.id===m2.id);
     return it?(m2.kind==="menu"?mLabel(it):it.name):"(삭제된 항목)";
   };
-  const optsFor=sel=>['<option value="">(매핑 지우기)</option>',
+  const optsFor=sel=>[sel==="__none__"?'<option value="__clear__">(매핑 지우기)</option>':'<option value="">(매핑 지우기)</option>',
     `<optgroup label="메뉴">${(S.data.menuItems||[]).map(it=>`<option value="menu|${it.id}" ${sel==="menu|"+it.id?"selected":""}>${esc(mLabel(it))}</option>`).join("")}</optgroup>`,
     `<optgroup label="주류·음료">${(S.data.drinkItems||[]).map(it=>`<option value="drink|${it.id}" ${sel==="drink|"+it.id?"selected":""}>${esc(it.name)}</option>`).join("")}</optgroup>`,
     `<option value="skip" ${sel==="skip"?"selected":""}>(반영 안 함)</option>`].join("");
@@ -3698,7 +3699,7 @@ function renderClsManage(){
     const m3=map[k]||{};
     if(!m3.kind||m3.kind==="skip")continue;
     const lbl=(k.indexOf("NM:")===0?k.slice(3):(m3.nm||k))+({"p":" 🖥","k":" 📟","d":" 🛵"}[m3.src]||"");
-    (revSrc[m3.kind+"|"+m3.id]=revSrc[m3.kind+"|"+m3.id]||[]).push(lbl);
+    (revSrc[m3.kind+"|"+m3.id]=revSrc[m3.kind+"|"+m3.id]||[]).push({lbl,key:k,sel:m3.kind==="skip"?"skip":m3.kind+"|"+m3.id});
   }
   const bjMonthRows=(()=>{
     const mm2=S.data.bojagiMenu[mgY]?.months?.[mgM]||{};
@@ -3709,7 +3710,7 @@ function renderClsManage(){
         const q=box[id];if(!q)continue;
         const tot2=(q.k||0)+(q.p||0)+(q.d||0);if(!tot2)continue;
         const it=(list||[]).find(x=>x.id===id);
-        rows2.push({nm:it?(it.name+(kind==="menu"&&it.cat?" ("+it.cat+")":"")):"(삭제된 항목)",kind,tot:tot2,k:q.k||0,p:q.p||0,d:q.d||0,srcs:revSrc[kind+"|"+id]||[]});
+        rows2.push({id,nm:it?(it.name+(kind==="menu"&&it.cat?" ("+it.cat+")":"")):"(삭제된 항목)",kind,tot:tot2,k:q.k||0,p:q.p||0,d:q.d||0,srcs:revSrc[kind+"|"+id]||[]});
       }
     };
     push2("menu",mm2,S.data.menuItems);push2("drink",dd2,S.data.drinkItems);
@@ -3717,8 +3718,12 @@ function renderClsManage(){
     return rows2;
   })();
   const bjMonthTbl=bjMonthRows.length?`<div class="card-title" style="font-size:14px;margin:8px 0 4px">보자기 — ${mgM}월에 반영된 수량과 출처</div>
-    <div class="table-wrap"><table class="rpt"><thead><tr><th class="l">앱 항목</th><th style="width:70px">합계</th><th style="width:64px">키오스크</th><th style="width:56px">포스</th><th style="width:56px">배달</th><th class="l">← 여기로 합산된 포스 품목 (🖥마켓포스 📟키오스크 🛵쿠팡이츠)</th></tr></thead><tbody>
-    ${bjMonthRows.map(r2=>`<tr><td class="l"><b>${esc(r2.nm)}</b>${r2.kind==="drink"?' <span class="unit">주류·음료</span>':''}</td><td>${fmt(r2.tot)}</td><td>${r2.k?fmt(r2.k):""}</td><td>${r2.p?fmt(r2.p):""}</td><td>${r2.d?fmt(r2.d):""}</td><td class="l" style="font-size:12px;color:var(--sub)">${r2.srcs.map(esc).join(" · ")||"(직접 입력)"}</td></tr>`).join("")}
+    <div class="table-wrap"><table class="rpt"><thead><tr><th class="l">앱 항목</th><th style="width:70px">합계</th><th style="width:70px">키오스크</th><th style="width:64px">포스</th><th style="width:64px">배달</th><th class="l">← 여기로 합산된 포스 품목 (🖥마켓포스 📟키오스크 🛵쿠팡이츠 · ✎로 짝 변경)</th></tr></thead><tbody>
+    ${bjMonthRows.map(r2=>{
+      const qIn=ch2=>`<input inputmode="numeric" style="width:52px;text-align:right;border:1px solid rgba(0,0,0,.15);border-radius:6px;padding:2px 4px" data-mgqty="${r2.kind}|${r2.id}|${ch2}" value="${r2[ch2]||""}">`;
+      const srcHtml=r2.srcs.map((s2,j)=>`<span style="white-space:nowrap">${esc(s2.lbl)} <select class="ctl" style="max-width:26px;padding:1px 2px;font-size:11px" title="이 포스 품목의 짝 바꾸기" data-mgmap="${esc(s2.key).replace(/"/g,"&quot;")}">${'<option value="'+s2.sel+'" selected>✎</option>'}${optsFor("__none__")}</select></span>`).join(" · ")||"(직접 입력)";
+      return `<tr><td class="l"><b>${esc(r2.nm)}</b>${r2.kind==="drink"?' <span class="unit">주류·음료</span>':''}</td><td><b>${fmt(r2.tot)}</b></td><td>${qIn("k")}</td><td>${qIn("p")}</td><td>${qIn("d")}</td><td class="l" style="font-size:12px;color:var(--sub)">${srcHtml}</td></tr>`;
+    }).join("")}
     </tbody></table></div>`:`<div class="footnote">보자기 — ${mgM}월에 반영된 수량이 없어요.</div>`;
   /* 피다: 품명 그대로 */
   const epMonthRows=(()=>{
@@ -3726,13 +3731,31 @@ function renderClsManage(){
     return Object.values(its).filter(it=>it.q).sort((a,b)=>b.q-a.q);
   })();
   const epMonthTbl=epMonthRows.length?`<div class="card-title" style="font-size:14px;margin:14px 0 4px">피다 — ${mgM}월 품명별 반영 내역 <span class="unit">피다는 이름을 바꾸지 않고 엑셀 품명 그대로 메뉴별·주류별 표에 들어가요</span></div>
-    <div class="table-wrap"><table class="rpt"><thead><tr><th class="l">엑셀 품명</th><th style="width:80px">수량</th><th class="l">→ 반영된 곳</th></tr></thead><tbody>
-    ${epMonthRows.map(it=>{const dr=isDr(it.n);return `<tr><td class="l">${esc(it.n)}</td><td>${fmt(Math.round(it.q))}</td><td class="l" style="font-size:12px;color:var(--sub)">${dr?"주류별":"메뉴별"} 표의 '${esc(it.n)}' 행</td></tr>`;}).join("")}
+    <div class="table-wrap"><table class="rpt"><thead><tr><th class="l">엑셀 품명</th><th style="width:80px">수량</th><th class="l">→ 반영된 곳 (버튼으로 분류 변경)</th></tr></thead><tbody>
+    ${epMonthRows.map(it=>{const dr=isDr(it.n);return `<tr><td class="l">${esc(it.n)}</td><td>${fmt(Math.round(it.q))}</td><td class="l" style="font-size:12px;color:var(--sub)">${dr?"주류별":"메뉴별"} 표의 '${esc(it.n)}' 행 <button class="btn btn-sm" style="font-size:11px;padding:1px 8px;margin-left:6px" data-epmv="${esc(it.n)}" data-todr="${dr?0:1}">${dr?"메뉴별로":"주류별로"}</button></td></tr>`;}).join("")}
     </tbody></table></div>`:`<div class="footnote">피다 — ${mgM}월에 반영된 내역이 없어요.</div>`;
   const monthCard=`<div class="card"><div class="card-head"><div class="card-title">🔍 월별 반영 내역 확인 <span class="unit">엑셀의 품목이 그 달에 어디로 들어갔는지</span></div><div class="card-actions">${ymSel}</div></div>${bjMonthTbl}${epMonthTbl}</div>`;
   el.innerHTML=`<div class="card" style="padding:10px 16px"><div class="footnote" style="margin:0">🔧 관리자 전용 — 보자기·피다의 품목 분류가 맞는지 여기서 한눈에 확인하고 바로 고칠 수 있어요. 고친 내용은 저장돼서 다음 엑셀 업로드부터 자동 적용돼요.</div></div>`+monthCard+bjCard+epCard;
   el.querySelectorAll("select[data-bjkey]").forEach(sel=>{
     sel.addEventListener("change",()=>mgBjMapSet(keys[Number(sel.dataset.bjkey)],sel.value));
+  });
+  el.querySelectorAll("select[data-mgmap]").forEach(sel=>{
+    sel.addEventListener("change",()=>{if(sel.value!=="__none__")mgBjMapSet(sel.dataset.mgmap,sel.value==="__clear__"?"":sel.value);});
+  });
+  el.querySelectorAll("input[data-mgqty]").forEach(inp=>{
+    inp.addEventListener("change",async()=>{
+      const[kind,id,ch2]=inp.dataset.mgqty.split("|");
+      const col=kind==="menu"?"bojagiMenu":"bojagiDrinks";
+      const doc2=(S.data[col][mgY]=S.data[col][mgY]||{months:{}});
+      doc2.months=doc2.months||{};
+      const box=(doc2.months[mgM]=doc2.months[mgM]||{});
+      const q=(box[id]=box[id]||{k:0,p:0,d:0});
+      const v2=Number(String(inp.value).replace(/,/g,""))||0;
+      q[ch2]=v2;
+      if(!q.k&&!q.p&&!q.d)delete box[id];
+      try{await saveYearDoc(col,mgY,doc2);toast("수량을 고쳤어요");}catch(e){toast("저장 실패: "+(e.message||""),true);}
+      renderClsManage();
+    });
   });
   el.querySelectorAll("button[data-epmv]").forEach(b=>{
     b.addEventListener("click",async()=>{await window.epidaMoveDrinkName(b.dataset.epmv,b.dataset.todr==="1");renderClsManage();});
@@ -6311,6 +6334,7 @@ function saveAgencyForm() {
     if (Object.keys(delivery).length || Object.keys(online).length) doc.months[m] = { delivery, online };
     else delete doc.months[m];
     await saveYearDoc("agency", y, doc);
+    if (window.syncOnlineFromAgency) await window.syncOnlineFromAgency();
   });
 }
 /* ============ 설정 탭 ============ */
@@ -9568,8 +9592,30 @@ async function cfmBackfillGuests(){
 }
 (function(){
   let tries=0;
-  const t=setInterval(async()=>{tries++;if(await cfmBackfillGuests()||tries>30)clearInterval(t);},2000);
+  const t=setInterval(async()=>{tries++;const done=await cfmBackfillGuests();if(done)await window.syncOnlineFromAgency();if(done||tries>30)clearInterval(t);},2000);
 })();
+window.syncOnlineFromAgency=async function(){
+  try{
+    const chg={};
+    let n=0;
+    for(const y in S.data.agency){
+      const ag=S.data.agency[y];if(!ag)continue;
+      const mos=ag.months||{};
+      for(const m in mos){
+        const on=mos[m]&&mos[m].online;if(!on)continue;
+        let sum=0;for(const ch in on)sum+=Number(on[ch])||0;
+        if(!(sum>0))continue;
+        const md=(S.data.monthly[y]=S.data.monthly[y]||{months:{}});
+        md.months=md.months||{};
+        const cur=(md.months[m]=md.months[m]||{});
+        if(cur.online!==Math.round(sum)){cur.online=Math.round(sum);chg[y]=1;n++;}
+      }
+    }
+    for(const y in chg)await saveYearDoc("monthly",y,S.data.monthly[y]);
+    if(n&&typeof toast==="function")toast("월별 온라인 매출을 판매대행 온라인 합계로 맞췄어요 ("+n+"개월)");
+    return n;
+  }catch(e){console.error(e);return 0;}
+};
 window.cfmSyncSS=async function(ym,mm){
   try{
     const y="20"+ym.slice(0,2), mo=String(Number(ym.slice(2)));
@@ -9588,6 +9634,7 @@ window.cfmSyncSS=async function(ym,mm){
     ag.months[mo]=m2;
     await saveYearDoc("agency",y,ag);
     if(typeof toast==="function")toast(y+"년 "+mo+"월 스마트스토어 "+(v>0?v.toLocaleString("ko-KR")+"원":"삭제")+" 판매대행에 바로 반영했어요");
+    await window.syncOnlineFromAgency();
   }catch(e){console.error(e);if(typeof toast==="function")toast("스마트스토어 즉시 반영 실패: "+(e.message||""),true);}
 };
 window.cfmSyncGuest=async function(ym,mm){
