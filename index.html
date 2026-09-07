@@ -8236,7 +8236,7 @@ function renderInput(){
     ${['card:카드','hyeon:현금영수증','gita:기타'].map(x=>{const[k,lb]=x.split(':');
       return `<tr><td class="lb">${lb}</td>${inp('ss.'+k)}<td><input data-sp="${k}.0" class="est"></td><td><input data-sp="${k}.1" class="est"></td>`+autoCell('ss_'+k+'_chk',mm=>{const I=deriveInputs(mm);return I.sp[k][0]+I.sp[k][1];})+blank(1)+`</tr>`;}).join('')}
   </table>
-  <div class="hint">채널이 하나뿐이면 배분은 자동입니다. <span class="addrow" id="ssReset">배분 자동으로 되돌리기</span> · <span class="addrow" id="ssPasteBtn">📋 스마트스토어 표 붙여넣어 자동 입력</span></div>
+  <div class="hint">채널이 하나뿐이면 배분은 자동입니다. 합계(과세+면세)를 입력하면 매출현황 판매대행 '스마트스토어'에 <b>바로</b> 반영돼요. <span class="addrow" id="ssReset">배분 자동으로 되돌리기</span> · <span class="addrow" id="ssPasteBtn">📋 스마트스토어 표 붙여넣어 자동 입력</span></div>
   <div id="ssPasteBox" style="display:none;margin-top:8px">
     <textarea id="ssPasteTa" style="min-height:90px;font-size:12px" placeholder="스마트스토어 '부가세 신고내역' 표를 마우스로 드래그해서 복사(Ctrl+C)한 뒤 여기에 붙여넣고(Ctrl+V) 적용을 누르세요"></textarea>
     <div class="flex" style="margin-top:6px"><button class="btn sm" id="ssPasteApply">적용</button><span class="hint" id="ssPasteMsg"></span></div>
@@ -8351,6 +8351,7 @@ function renderInput(){
       touch();recalcAutos();refreshNtsTag();refreshValidWarns();
       if((el.dataset.p==='market.jeongyukMyeon'||el.dataset.p==='market.jeongyukGwase')&&typeof window.cfmSyncJeongyuk==='function')window.cfmSyncJeongyuk(CUR,m);
       if(el.dataset.p==='market.guest'&&typeof window.cfmSyncGuest==='function')window.cfmSyncGuest(CUR,m);
+      if((el.dataset.p==='ss.gwase'||el.dataset.p==='ss.myeon')&&typeof window.cfmSyncSS==='function')window.cfmSyncSS(CUR,m);
     });
   });
   pg.querySelectorAll("input[data-sp]").forEach(el=>{
@@ -8425,6 +8426,7 @@ function renderInput(){
       m.ss.card=res.ch.card[2];m.ss.hyeon=res.ch.hyeon[2];m.ss.gita=res.ch.gita[2];
       m.ss.split={card:[res.ch.card[0],res.ch.card[1]],hyeon:[res.ch.hyeon[0],res.ch.hyeon[1]],gita:[res.ch.gita[0],res.ch.gita[1]]};
       touch();renderInput();
+      if(typeof window.cfmSyncSS==='function')window.cfmSyncSS(CUR,m);
       $("#ssPasteMsg").textContent=`${res.rows}일치 인식 — 과세 ${fmt(res.gwase)} / 면세 ${fmt(res.myeon)} 배분 완료`;
       $("#ssPasteBox").style.display='block';
     }catch(e){$("#ssPasteMsg").textContent='⚠ '+e.message;}
@@ -9511,6 +9513,26 @@ async function cfmBackfillGuests(){
   let tries=0;
   const t=setInterval(async()=>{tries++;if(await cfmBackfillGuests()||tries>30)clearInterval(t);},2000);
 })();
+window.cfmSyncSS=async function(ym,mm){
+  try{
+    const y="20"+ym.slice(0,2), mo=String(Number(ym.slice(2)));
+    const ag=S.data.agency[y];
+    if(!ag||!(ag.onlineChannels||[]).length)return; /* 그 해 판매대행 온라인 채널이 없으면 건너뜀 */
+    const v=Math.round((mm.ss.gwase||0)+(mm.ss.myeon||0));
+    let touched=false;
+    ag.months=ag.months||{};
+    const m2=ag.months[mo]||{};
+    for(const ch of(ag.onlineChannels||[]))if(ch.indexOf("스마트")>=0||ch.indexOf("네이버")>=0){
+      m2.online=m2.online||{};
+      if(v>0)m2.online[ch]=v;else delete m2.online[ch];
+      touched=true;
+    }
+    if(!touched)return;
+    ag.months[mo]=m2;
+    await saveYearDoc("agency",y,ag);
+    if(typeof toast==="function")toast(y+"년 "+mo+"월 스마트스토어 "+(v>0?v.toLocaleString("ko-KR")+"원":"삭제")+" 판매대행에 바로 반영했어요");
+  }catch(e){console.error(e);if(typeof toast==="function")toast("스마트스토어 즉시 반영 실패: "+(e.message||""),true);}
+};
 window.cfmSyncGuest=async function(ym,mm){
   try{
     const y="20"+ym.slice(0,2), mo=String(Number(ym.slice(2)));
