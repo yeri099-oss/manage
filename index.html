@@ -1902,7 +1902,19 @@ async function exportSalesAll(){
           if(t==="s"){const v=c.getElementsByTagName("v")[0];return v?(SST[+v.textContent]||""):"";}
           if(t==="inlineStr")return c.textContent;
           const v=c.getElementsByTagName("v")[0];return v?v.textContent:"";},
-        async save(){let x=ser.serializeToString(doc);if(!x.startsWith("<?xml"))x='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n'+x;zip.file(path,x);}
+        async save(){
+          /* 1) 끊긴 공유수식 정리: 원본(master)이 지워진 shared f는 캐시값만 남기고 제거 (Excel 복구경고 방지) */
+          try{
+            const fs2=[...doc.getElementsByTagName("f")];
+            const masters=new Set();
+            for(const f of fs2)if(f.getAttribute("t")==="shared"&&f.textContent)masters.add(f.getAttribute("si"));
+            for(const f of fs2)if(f.getAttribute("t")==="shared"&&!f.textContent&&!masters.has(f.getAttribute("si")))f.parentNode.removeChild(f);
+          }catch(e){console.warn("shared f 정리",e);}
+          /* 2) 선택영역 초기화: 저장된 드래그 범위를 A1로 */
+          try{
+            for(const sel of [...doc.getElementsByTagName("selection")]){sel.setAttribute("activeCell","A1");sel.setAttribute("sqref","A1");}
+          }catch(e){}
+          let x=ser.serializeToString(doc);if(!x.startsWith("<?xml"))x='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n'+x;zip.file(path,x);}
       };
     }
     /* ── 매출비교 시트 제거 (매출비교 탭과 중복이라 매출현황 엑셀에서 제외) ── */
