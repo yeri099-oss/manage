@@ -7499,6 +7499,12 @@ async function uplRouterPick(inp){
       }
       const text=new TextDecoder('utf-8').decode(buf.slice(0,4000));
       if(/<tr/i.test(text)&&text.includes('부가세')&&text.includes('결제금액')){await ntsZpPick({files:[f],value:''});continue;}
+      let krText='';try{krText=new TextDecoder('euc-kr').decode(buf.slice(0,6000));}catch(e2){}
+      if(krText.indexOf('일일매출상세내역')>=0||krText.indexOf('거래일시')>=0){
+        const wrap=document.getElementById('pp-wrap');
+        if(wrap){wrap.style.display='block';await ppFilePickW(wrap,{files:[f],value:''});alert('일일매출상세내역을 읽었어요 — ⑦ 피다 카드 아래 미리보기에서 고객수를 확인하고 [적용하기]를 눌러주세요.');}
+        continue;
+      }
       rest.files.push(f); // 키오스크 SpreadsheetML 등
     }catch(e){alert(f.name+' 읽기 실패: '+(e.message||e));}
   }
@@ -7602,6 +7608,44 @@ function parsePops(txt){
   if(!Object.keys(M).length)throw new Error('영수증 줄을 찾지 못했어요. 표 전체(머리글 포함)를 복사해서 붙여넣어 주세요.');
   return M;
 }
+async function ppFileToText(f){
+  const buf=await f.arrayBuffer();
+  let text;
+  try{text=new TextDecoder('euc-kr').decode(buf);}catch(e){text=new TextDecoder('utf-8').decode(buf);}
+  if(text.indexOf('거래일시')<0)text=new TextDecoder('utf-8').decode(buf);
+  if(!/<tr/i.test(text)||text.indexOf('거래일시')<0)throw new Error("일일매출상세내역 파일이 아닌 것 같아요 — POPS CLOUD에서 내려받은 .xls 파일을 넣어주세요.");
+  const rows=[];
+  for(const rm of (text.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi)||[])){
+    const cells=[];
+    for(const cm of rm.matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)){
+      cells.push(cm[1].replace(/<[^>]+>/g,' ').replace(/&nbsp;/g,' ').replace(/&amp;/g,'&').replace(/[\u00a0\r\n\t]+/g,' ').replace(/\s+/g,' ').trim());
+    }
+    rows.push(cells);
+  }
+  let hl=0;
+  for(const r of rows)if(r.includes('거래일시')){hl=r.length;break;}
+  const out=[];
+  for(let r of rows){
+    if(!r.length)continue;
+    const isDate=/^\d{4}-\d{2}-\d{2}/.test(String(r[0]||''));
+    const isHead=r.includes('거래일시'), isGye=String(r[0]||'').indexOf('[계]')===0;
+    if(!isDate&&!isHead&&!isGye&&r.length<hl&&r.length>=6){r=['','',''].concat(r);} /* 품목 줄: 품명 위치 맞춤 */
+    if(!isHead&&!isGye&&r.length===hl+1){r=r.slice(0,5).concat(r.slice(6));} /* 품목코드 중복/빈 셀 제거 */
+    else if(!isDate&&!isHead&&!isGye&&r.length<hl&&r[4]&&(String(r[5]||'')===String(r[4])||String(r[5]||'')==='')){r=r.slice(0,5).concat(r.slice(6));}
+    out.push(r.join('\t'));
+  }
+  return out.join('\n');
+}
+async function ppFilePickW(wrap,inp){
+  const f=inp.files&&inp.files[0];inp.value='';
+  if(!f)return;
+  const ee=wrap.querySelector('.ppErr');if(ee)ee.style.display='none';
+  try{
+    const text=await ppFileToText(f);
+    wrap.__ppM=parsePops(text);
+    ppRenderPreviewW(wrap);
+  }catch(e){if(ee){ee.style.display='block';ee.textContent=e.message||String(e);}console.error(e);}
+}
 async function ppParseClickW(wrap){
   const ee=wrap.querySelector('.ppErr');if(ee)ee.style.display='none';
   try{
@@ -7649,6 +7693,7 @@ async function ppApplyClickW(wrap){
       m.kkotbap.card=o.card;
       if(o.guest>0)m.kkotbap.guest=Math.round(o.guest);
       m.kkotbapPos={cnt:o.cnt,sales:o.sales,cash:o.cash,card:o.card,guest:Math.round(o.guest||0),disc:o.disc,svc:o.svc};
+      m.uploads=m.uploads||{};m.uploads.pops=1;
       m.savedAt=new Date().toISOString();
       applied.push(ym);
     }
@@ -7978,6 +8023,7 @@ function renderInput(){
     <tr><td class="lb">키오스크 매출분석 (.xls)</td><td class="au">키오스크</td><td class="au" style="text-align:left">③ 키오스크 계·공급가·부가세 + 매출현황 메뉴별 수량</td><td class="au">${okC(UP.kiosk,m.bpos.kioskGye>0)}</td></tr>
     <tr><td class="lb">쿠팡이츠 주문내역 (.xlsx)</td><td class="au">쿠팡이츠</td><td class="au" style="text-align:left">③ 쿠팡이츠 계·공급가·부가세 + 메뉴별 수량 <span style="color:#b45309">(매월 5일 이후 다운 가능)</span></td><td class="au">${okC(UP.coupang,m.bpos.coupangGye>0)}${m.bpos.coupangGye>0&&m.bpos.coupangTemp?' <span style="color:#b45309;font-size:11px">임시값</span>':''}</td></tr>
     <tr><td class="lb">회원구매현황 (.xlsx)</td><td class="au">오케이포스</td><td class="au" style="text-align:left">② 인사동·보자기·판공 계/부가세 + 사내(→마켓매출 '사내')</td><td class="au">${okC(UP.members,m.members.insadongGye>0)}</td></tr>
+    <tr><td class="lb">피다 일일매출상세내역 (.xls)</td><td class="au">POPS CLOUD</td><td class="au" style="text-align:left">⑦ 피다 카드·현금·고객수 (미리보기에서 [적용하기])</td><td class="au">${okC(UP.pops,m.kkotbap.card>0||m.kkotbap.cash>0)}</td></tr>
     <tr><td class="lb">제로페이 부가세내역 (.xls)</td><td class="au">홈택스</td><td class="au" style="text-align:left">④ 제로페이·기타수단 총액 + 부가세 합</td><td class="au">${okC(UP.ntszp,m.nts.zeropay>0&&m.nts.zeropayVat!=null)}</td></tr>
   </table>
   <div class="hint">사진(스크린샷)은 읽지 못해요 — 각 화면의 '엑셀 내려받기'로 받은 파일을 넣어주세요. 각 카드에 있는 개별 업로드 칸을 써도 결과는 같아요. 나머지 항목(카드 보자기 몫, 매출분석 숫자, 홈택스 카드·현금영수증 등)은 지금처럼 직접 입력해요.</div></div>`;
@@ -8107,11 +8153,11 @@ function renderInput(){
   ${m.kkotbapPos?`<table class="g" style="margin-top:10px"><tr><th style="width:160px">포스 요약</th><th>영수증</th><th>매출 합</th><th>현금</th><th>카드(현금 외)</th><th>고객수</th><th>할인</th><th>서비스</th></tr>
     <tr><td class="lb">일일매출상세내역</td><td class="au" style="text-align:center">${fmt(m.kkotbapPos.cnt)}건</td><td class="au"><b>${fmt(m.kkotbapPos.sales)}</b></td><td class="au">${fmt(m.kkotbapPos.cash)}</td><td class="au">${fmt(m.kkotbapPos.card)}</td><td class="au" style="text-align:center">${fmt(m.kkotbapPos.guest)}명</td><td class="au">${fmt(m.kkotbapPos.disc)}</td><td class="au">${fmt(m.kkotbapPos.svc)}</td></tr>
   </table>`:''}
-  <div class="flex" style="margin-top:8px"><span class="addrow ppBtn">📋 포스 일일매출상세내역 붙여넣기 — 피다 카드·현금 자동 채움</span></div>
+  <div class="flex" style="margin-top:8px"><span class="addrow ppBtn">📋 포스 일일매출상세내역 — 피다 카드·현금 자동 채움 (붙여넣기 또는 엑셀 파일)</span></div>
   <div class="pp-wrap" id="pp-wrap" style="display:none;margin-top:8px">
-    <div class="hint">POPS CLOUD의 <b>영업속보 → 일일매출상세내역</b> 표를 통째로 복사해서 붙여넣으세요. 영수증 줄만 골라 읽고 품목 줄·[계]·RUNDATE는 자동으로 걸러내요. 현금은 정산(현금), 카드는 정산총금액에서 현금을 뺀 값(카드·페이류 포함)으로 계산해요.</div>
-    <textarea class="ppTa" style="min-height:110px" placeholder="여기에 표를 붙여넣으세요"></textarea>
-    <div class="flex" style="margin-top:6px"><button class="btn sm ppGo">정리하기</button></div>
+    <div class="hint">POPS CLOUD의 <b>영업속보 → 일일매출상세내역</b>에서 내려받은 <b>엑셀(.xls) 파일을 그대로 선택</b>하거나, 표를 복사해 붙여넣으세요. 영수증 줄만 골라 읽고 품목 줄·[계]·RUNDATE는 자동으로 걸러내요. 현금은 정산(현금), 카드는 정산총금액에서 현금을 뺀 값(카드·페이류 포함)으로 계산해요.</div>
+    <textarea class="ppTa" style="min-height:110px" placeholder="여기에 표를 붙여넣으세요 — 또는 아래에서 엑셀 파일을 선택하세요"></textarea>
+    <div class="flex" style="margin-top:6px"><button class="btn sm ppGo">정리하기</button><label class="btn sm" style="cursor:pointer;display:inline-flex;align-items:center">📂 엑셀 파일 선택 (.xls)<input type="file" class="ppFile" accept=".xls,.xlsx,.html" style="display:none"></label></div>
     <div class="ppPrev" style="margin-top:8px"></div>
     <div class="err ppErr" style="display:none"></div>
   </div>
@@ -8250,6 +8296,7 @@ function renderInput(){
   pg.querySelectorAll(".hy-wrap .hyGo").forEach(b=>b.addEventListener("click",()=>hyParseClickW(b.closest(".hy-wrap"))));
   const ppB=pg.querySelector(".ppBtn");if(ppB)ppB.addEventListener("click",()=>{const w=document.getElementById("pp-wrap");if(w)w.style.display=w.style.display==='none'?'block':'none';});
   const ppG=pg.querySelector(".pp-wrap .ppGo");if(ppG)ppG.addEventListener("click",()=>ppParseClickW(document.getElementById("pp-wrap")));
+  const ppF=pg.querySelector(".pp-wrap .ppFile");if(ppF)ppF.addEventListener("change",()=>ppFilePickW(document.getElementById("pp-wrap"),ppF));
   const ecPp=$("#ecPasteParse");if(ecPp)ecPp.addEventListener("click",ecParseClick);
   pg.querySelectorAll("[data-buydel]").forEach(el=>el.addEventListener("click",()=>{const[key,i]=el.dataset.buydel.split('.');m[key].splice(+i,1);touch();renderInput();}));
   pg.querySelector("textarea[data-memo]").addEventListener("change",e=>{m.memo=e.target.value;touch();});
