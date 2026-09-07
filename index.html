@@ -7998,7 +7998,7 @@ function renderInput(){
     <tr><td class="lb">제로페이·기타수단 (계)</td>${inp('market.zeropay')}${blank(4)}</tr>
     <tr><td class="lb">포인트 사용 (계)</td>${inp('market.point')}${blank(4)}</tr>
     <tr><td class="lb">외상 (계)</td>${inp('market.credit')}${blank(4)}</tr>
-    <tr><td class="lb">정육</td>`+autoCell('mk_jy',mm=>derived(mm).jeongyukGye)+`${inp('market.jeongyukMyeon')}${inp('market.jeongyukGwase')}<td class="au" colspan="2" style="text-align:left;color:var(--sub)">면세(한우 등)·과세 입력 → 계 자동</td></tr>
+    <tr><td class="lb">정육<div class="hint">매출관리-매출현황-매장상품별-실매출액</div></td>`+autoCell('mk_jy',mm=>derived(mm).jeongyukGye)+`<td><div style="font-size:11px;color:var(--sub);text-align:right;margin-bottom:2px">🐂 우육 — 대관령한우 (면세)</div><input data-p="market.jeongyukMyeon"></td><td><div style="font-size:11px;color:var(--sub);text-align:right;margin-bottom:2px">🐖 돈육 — 씨알돈육 (과세)</div><input data-p="market.jeongyukGwase"></td><td class="au" colspan="2" style="text-align:left;color:var(--sub);font-size:12px">우육·돈육 입력 → 계 자동 · 입력하면 매출현황 마켓매출의 '대관령한우'·'씨알돈육'에 <b>바로</b> 반영돼요 (반영 버튼 불필요)</td></tr>
     <tr><td class="lb">포인트 적립</td>${inp('market.pointAccum')}${blank(4)}</tr>
     <tr><td class="lb">고객수</td>${inp('market.guest')}<td class="au" colspan="4" style="text-align:left;color:var(--sub)">명</td></tr>
   </table><div id="vMarket"></div></div>`;
@@ -8189,6 +8189,7 @@ function renderInput(){
         if(ft){const sfee=m.misc.feeMarket+m.misc.feeBojagi;ft.value=sfee?fmt(sfee):'';}
       }
       touch();recalcAutos();refreshNtsTag();refreshValidWarns();
+      if((el.dataset.p==='market.jeongyukMyeon'||el.dataset.p==='market.jeongyukGwase')&&typeof window.cfmSyncJeongyuk==='function')window.cfmSyncJeongyuk(CUR,m);
     });
   });
   pg.querySelectorAll("input[data-sp]").forEach(el=>{
@@ -9296,6 +9297,19 @@ async function pull(kind,hint){
 /* ================================================================
    ① 원클릭 보고 반영 — 매출확정 탭 상단 [📤 보고 탭에 반영] 버튼
    ================================================================ */
+window.cfmSyncJeongyuk=async function(ym,mm){
+  try{
+    const y="20"+ym.slice(0,2), mo=String(Number(ym.slice(2)));
+    const mk=S.data.marketDetail[y]||{months:{}};
+    mk.months=mk.months||{};
+    const cur=mk.months[mo]||{};
+    cur.hanwoo=Math.round(mm.market.jeongyukMyeon||0);
+    cur.pork=Math.round(mm.market.jeongyukGwase||0);
+    mk.months[mo]=cur;S.data.marketDetail[y]=mk;
+    await saveYearDoc("marketDetail",y,mk);
+    if(typeof toast==="function")toast(y+"년 "+mo+"월 마켓 정육(우육 "+cur.hanwoo.toLocaleString("ko-KR")+" / 돈육 "+cur.pork.toLocaleString("ko-KR")+") 매출현황에 바로 반영했어요");
+  }catch(e){console.error(e);if(typeof toast==="function")toast("정육 즉시 반영 실패: "+(e.message||""),true);}
+};
 function cfmOpenPushModal(){
   try{
     const app=window.__cfmApp;
