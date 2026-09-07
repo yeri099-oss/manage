@@ -1884,7 +1884,13 @@ async function exportSalesAll(){
         const cel=doc.createElementNS(TPL_NS,"c");cel.setAttribute("r",addr);
         const cn=tplColNum(col);let ref=null;
         for(const cc of row.children){if(tplColNum(cc.getAttribute("r").replace(/\d+/g,""))>cn){ref=cc;break;}}
-        row.insertBefore(cel,ref);cells[addr]=cel;return cel;
+        row.insertBefore(cel,ref);cells[addr]=cel;
+        /* 새 칸: 같은 열 위쪽 칸의 서식을 물려받아 콤마·테두리 유지 */
+        for(let d2=1;d2<=8;d2++){
+          const nb=cells[col+(+rn-d2)];
+          if(nb&&nb.getAttribute("s")){cel.setAttribute("s",nb.getAttribute("s"));break;}
+        }
+        return cel;
       }
       const wipe=cel=>{for(const tag of["f","v","is"])for(const x of[...cel.getElementsByTagName(tag)])cel.removeChild(x);cel.removeAttribute("t");};
       return {
@@ -1934,6 +1940,9 @@ async function exportSalesAll(){
           if(pv!=null)sh.setN(cols[k][0]+r,pv);
           if(cv!=null)sh.setN(cols[k][1]+r,cv);
         }
+        const pt=dailyAvgTotal(py,m),ct=dailyAvgTotal(year,m);
+        if(pt!=null)sh.setN("H"+r,pt); /* 합계: 원본 양식에 수식 없는 달(8월~)도 값으로 채움 */
+        if(ct!=null)sh.setN("I"+r,ct);
         const days=S.data.dailyAvg[year]?.days?.[m]||{};
         const note=S.data.dailyAvg[year]?.notes?.[m]||"";
         if(note)sh.setT("J"+r,note);
@@ -1964,7 +1973,7 @@ async function exportSalesAll(){
       for(const L of["B","C","D","E","F","G","H","I","J"]){const t=sh.txt(L+"3").trim();if(t&&t!=="소계")colBy[t]=L;}
       const miss=new Set();
       MONTHS.forEach((m,i)=>{
-        const r=4+i,md=Y.months[m]||{delivery:{},online:{}};
+        const r=4+i,md=(Y.months||{})[m]||{delivery:{},online:{}};
         for(const grp of["delivery","online"])for(const ch in (md[grp]||{})){
           const L=colBy[ch];
           if(L)sh.setN(L+r,md[grp][ch]);
