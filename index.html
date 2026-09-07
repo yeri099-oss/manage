@@ -1905,22 +1905,25 @@ async function exportSalesAll(){
         async save(){let x=ser.serializeToString(doc);if(!x.startsWith("<?xml"))x='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n'+x;zip.file(path,x);}
       };
     }
-    /* ── 매출비교 (sheet1): 연도 열 고정 매핑, 블록1=꽃밥이야기(5~16행), 블록2=꽃밥에피다(22~33행) ── */
-    {
-      const sh=await openSheet("xl/worksheets/sheet1.xml");
-      const YC={ "2020":"B","2021":"C","2022":"E","2023":"G","2024":"I","2025":"K","2026":"M" };
-      const blocks=[{r0:5,ent:"total"},{r0:22,ent:"epida"}];
-      for(const b of blocks)for(const y in YC)MONTHS.forEach((m,i)=>{
-        const v=scGet(y,m,b.ent);
-        if(v!=null)sh.setN(YC[y]+(b.r0+i),v);
-      });
-      /* 증감(N열) 수식 통일: 빈달 안전 + 숫자 %(셀 서식) — 원본의 두 가지 수식 혼재 정리 */
-      for(const b of blocks)MONTHS.forEach((m,i)=>{
-        const r=b.r0+i;
-        sh.setF("N"+r,`IF(OR(N(M${r})=0,N(K${r})=0),"",(M${r}-K${r})/K${r})`,"N"+b.r0);
-      });
-      await sh.save();
-    }
+    /* ── 매출비교 시트 제거 (매출비교 탭과 중복이라 매출현황 엑셀에서 제외) ── */
+    try{
+      let wbx=await zip.file("xl/workbook.xml").async("string");
+      let rlx=await zip.file("xl/_rels/workbook.xml.rels").async("string");
+      let ctx=await zip.file("[Content_Types].xml").async("string");
+      const relM=rlx.match(/<Relationship Id="(rId\d+)"[^>]*Target="worksheets\/sheet1\.xml"\/>/);
+      if(relM){
+        rlx=rlx.replace(relM[0],"");
+        wbx=wbx.replace(new RegExp('<sheet [^>]*r:id="'+relM[1]+'"[^>]*/>'),"");
+        wbx=wbx.replace(/activeTab="\d+"/,'activeTab="0"');
+        ctx=ctx.replace('<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>',"");
+        zip.remove("xl/worksheets/sheet1.xml");
+        if(zip.file("xl/worksheets/_rels/sheet1.xml.rels"))zip.remove("xl/worksheets/_rels/sheet1.xml.rels");
+        zip.file("xl/workbook.xml",wbx);
+        zip.file("xl/_rels/workbook.xml.rels",rlx);
+        zip.file("[Content_Types].xml",ctx);
+      }
+      if(zip.file("xl/calcChain.xml"))zip.remove("xl/calcChain.xml");
+    }catch(e){console.warn("매출비교 시트 제거",e);}
     /* ── 월별 (sheet2) ── */
     const yearM=latestYearOf("monthly");
     {
