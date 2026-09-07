@@ -3207,8 +3207,8 @@ window.bjPosApply=async function(){
       const sel=document.getElementById("bjPm"+i);
       if(!sel)return;
       const v=sel.value;
-      if(v==="skip")map[r.code]={kind:"skip"};
-      else if(v){const[kind,id]=v.split("|");map[r.code]={kind,id};}
+      if(v==="skip")map[r.code]={kind:"skip",nm:r.name,src:ch};
+      else if(v){const[kind,id]=v.split("|");map[r.code]={kind,id,nm:r.name,src:ch};}
       else unassigned++;
     });
     if(unassigned){toast(`아직 짝을 안 고른 품목이 ${unassigned}개 있어요`,true);return;}
@@ -3607,9 +3607,11 @@ window.epidaMoveDrinkName=async function(n,toDrink){
 };
 window.mgBjMapSet=async function(key,val){
   const map=(S.data.bojagiPosMap=S.data.bojagiPosMap||{});
+  const oldNm=map[key]&&map[key].nm, oldSrc=map[key]&&map[key].src;
+  const keep={...(oldNm?{nm:oldNm}:{}),...(oldSrc?{src:oldSrc}:{})};
   if(!val)delete map[key];
-  else if(val==="skip")map[key]={kind:"skip"};
-  else{const[kind,id]=val.split("|");map[key]={kind,id};}
+  else if(val==="skip")map[key]={kind:"skip",...keep};
+  else{const[kind,id]=val.split("|");map[key]={kind,id,...keep};}
   try{ if(!IS_DEMO&&typeof db!=="undefined"&&db)await fsCol("config").doc("bojagiPosMap").set({map}); }catch(e){console.error(e);toast("저장 실패: "+(e.message||""),true);}
   toast("보자기 매핑을 저장했어요");
   renderClsManage();
@@ -3638,21 +3640,29 @@ function renderClsManage(){
     return an.localeCompare(bn,"ko");
   });
   const cnt={menu:0,drink:0,skip:0,broken:0};
-  let bjRows="";
-  keys.forEach((k,i)=>{
+  const srcOf=(k,m2)=>m2.src||(k.indexOf("NM:")===0?"?":"p"); /* 코드 키는 포스에서만 나옴 */
+  const groups={p:[],k:[],d:[],"?":[]};
+  keys.forEach((k,i)=>groups[srcOf(k,map[k]||{})].push([k,i]));
+  const rowOf=(k,i)=>{
     const m2=map[k]||{};
     const nm=nameOf(m2);
     if(m2.kind==="skip")cnt.skip++;else if(nm==="(삭제된 항목)")cnt.broken++;else if(m2.kind==="menu")cnt.menu++;else if(m2.kind==="drink")cnt.drink++;
-    const label=k.indexOf("NM:")===0?k.slice(3):k;
+    const isNM=k.indexOf("NM:")===0;
     const selVal=m2.kind==="skip"?"skip":(m2.kind?m2.kind+"|"+m2.id:"");
-    bjRows+=`<tr${nm==="(삭제된 항목)"?' style="background:#FEF2F2"':''}><td class="l">${esc(label)}${k.indexOf("NM:")===0?"":' <span class="unit">코드</span>'}</td>
+    return `<tr${nm==="(삭제된 항목)"?' style="background:#FEF2F2"':''}><td class="l">${isNM?esc(k.slice(3)):(m2.nm?esc(m2.nm)+` <span class="unit">${esc(k)}</span>`:esc(k)+' <span class="unit">코드 · 이름은 다음 포스 엑셀 업로드 때 채워져요</span>')}</td>
       <td style="text-align:center">${m2.kind==="menu"?"메뉴":(m2.kind==="drink"?"주류·음료":"반영 안 함")}</td>
       <td class="l">${esc(nm||"")}</td>
       <td><select class="ctl" style="max-width:220px" data-bjkey="${i}">${optsFor(selVal)}</select></td></tr>`;
-  });
+  };
+  const secTbl=(list,title,note)=>list.length?`<div class="card-title" style="font-size:14px;margin:10px 0 4px">${title} <span class="unit">${list.length}개${note?" · "+note:""}</span></div>
+    <div class="table-wrap"><table class="rpt"><thead><tr><th class="l">포스 품목</th><th style="width:90px">구분</th><th class="l">연결된 앱 항목</th><th class="l" style="width:240px">바꾸기</th></tr></thead><tbody>${list.map(([k,i])=>rowOf(k,i)).join("")}</tbody></table></div>`:"";
+  const bjBody=secTbl(groups.p,"🖥 마켓포스","상품코드로 기억")
+    +secTbl(groups.k,"📟 키오스크","이름으로 기억")
+    +secTbl(groups.d,"🛵 쿠팡이츠","이름으로 기억")
+    +secTbl(groups["?"],"❔ 출처 미기록 (키오스크·쿠팡이츠 중 하나)","다음 엑셀 업로드 때 자동으로 분류돼요");
   const bjCard=`<div class="card"><div class="card-head"><div class="card-title">보자기 — 포스 품목 ↔ 앱 메뉴 매핑 <span class="unit">엑셀 업로드가 기억해둔 짝 · 바꾸면 다음 업로드부터 적용</span></div></div>
     <div class="footnote">메뉴 ${cnt.menu}개 · 주류·음료 ${cnt.drink}개 · 반영 안 함 ${cnt.skip}개${cnt.broken?` · <b style="color:#b91c1c">연결 깨짐 ${cnt.broken}개</b>`:""} — 잘못 짝지어진 품목은 오른쪽에서 바로 고칠 수 있어요 (수량 데이터는 그대로, 다음 업로드부터 새 짝 적용)</div>
-    <div class="table-wrap"><table class="rpt"><thead><tr><th class="l">포스 품목</th><th style="width:90px">구분</th><th class="l">연결된 앱 항목</th><th class="l" style="width:240px">바꾸기</th></tr></thead><tbody>${bjRows||'<tr><td colspan="4" class="l">아직 기억된 매핑이 없어요 — 보자기 메뉴별에서 엑셀을 한 번 올리면 여기에 쌓여요.</td></tr>'}</tbody></table></div></div>`;
+    ${bjBody||'<div class="footnote">아직 기억된 매핑이 없어요 — 보자기 메뉴별에서 엑셀을 한 번 올리면 여기에 쌓여요.</div>'}</div>`;
   /* ── 피다 분류표 ── */
   const D2=S.data.epidaDetail||{};
   const allK={};
@@ -5688,7 +5698,7 @@ window.bjApplyQty=function(rows,ch,y,mo){
     let applied=0,newMap=0;
     for(const r of rows){
       let m2=map[r.code];
-      if(!m2){m2=bjPosGuess(r.name);map[r.code]={kind:m2.kind,id:m2.id};newMap++;}
+      if(!m2){m2=bjPosGuess(r.name);map[r.code]={kind:m2.kind,id:m2.id,nm:r.name,src:ch};newMap++;}else{let ch2=false;if(!m2.nm&&r.name){m2.nm=r.name;ch2=true;}if(!m2.src){m2.src=ch;ch2=true;}if(ch2)newMap++;}
       if(m2.kind==="skip")continue;
       const box=m2.kind==="menu"?mm:dm;
       const q=(box[m2.id]=box[m2.id]||{k:0,p:0,d:0});
