@@ -2916,7 +2916,7 @@ function renderMarket() {
   const year = S.ui.marketYear || latestYearOf("marketDetail");
   S.ui.marketYear = year;
   const sub = S.ui.marketSub || "sales";
-  let rows = "", t = { total: 0, internal: 0, other: 0, net: 0, days: 0 };
+  let rows = "", t = { total: 0, internal: 0, other: 0, net: 0, days: 0, guest: 0 };
   let meatRows = "", mt = { hanwoo: 0, pork: 0 };
   for (const m of MONTHS) {
     const c = marketCalc(year, m);
@@ -2924,10 +2924,12 @@ function renderMarket() {
       t.total += c.total || 0; t.internal += c.internal || 0; t.other += c.other || 0;
       t.net += c.net || 0; if (c.net != null && c.days) t.days += c.days;
     }
+    if (c.guest) t.guest += c.guest;
     const ds = (k) => `data-t="mk" data-y="${year}" data-m="${m}" data-k="${k}"`;
     rows += `<tr><td class="lab sticky">${m}월</td>
       <td>${edNum(c.total, ds("total"))}</td><td>${edNum(c.internal, ds("internal"))}</td>
       <td class="cy"><b>${c.net != null ? fmt(c.net) : ""}</b></td><td class="cg">${fmtD(c.daily)}</td>
+      <td>${edNum(c.guest, ds("guest"))}</td>
       <td class="note">${edText(c.note, ds("note"))}</td></tr>`;
     if (c.hanwoo != null || c.pork != null) { mt.hanwoo += c.hanwoo || 0; mt.pork += c.pork || 0; }
     meatRows += `<tr><td class="lab sticky">${m}월</td>
@@ -2947,13 +2949,13 @@ function renderMarket() {
     </div>
     <div class="table-wrap">
       <table class="rpt">
-        <thead><tr><th class="c sticky">월별</th><th>총매출</th><th>사내*</th><th class="cy">순매출</th><th class="cg">일평균</th><th class="l">비고</th></tr></thead>
+        <thead><tr><th class="c sticky">월별</th><th>총매출</th><th>사내*</th><th class="cy">순매출</th><th class="cg">일평균</th><th>고객수</th><th class="l">비고</th></tr></thead>
         <tbody>${rows}
-        <tr class="total"><td class="lab sticky">합계</td><td>${fmt(t.total)}</td><td>${fmt(t.internal)}</td><td class="cy">${fmt(t.net)}</td><td class="cg">${t.days ? fmtD(t.net / t.days) : ""}</td><td></td></tr>
+        <tr class="total"><td class="lab sticky">합계</td><td>${fmt(t.total)}</td><td>${fmt(t.internal)}</td><td class="cy">${fmt(t.net)}</td><td class="cg">${t.days ? fmtD(t.net / t.days) : ""}</td><td>${t.guest ? fmt(t.guest) : ""}</td><td></td></tr>
         </tbody>
       </table>
     </div>
-    <div class="footnote">* 사내: 인사동·보자기 매입 &nbsp;·&nbsp; 순매출 = 총매출 − 사내, 일평균 = 순매출 ÷ 마켓 영업일수(일평균 탭에서 입력)</div>
+    <div class="footnote">* 사내: 인사동·보자기 매입 &nbsp;·&nbsp; 순매출 = 총매출 − 사내, 일평균 = 순매출 ÷ 마켓 영업일수(일평균 탭에서 입력) &nbsp;·&nbsp; 고객수는 앱 화면에만 표시(엑셀 양식 미포함)</div>
     <div class="chart-box" style="margin-top:8px"><canvas id="ch-market-stack"></canvas></div>
   </div>`;
   const meatHtml = `
@@ -5995,13 +5997,14 @@ function openMarketForm(year, month) {
      <div class="form-row">${moneyInput("f-internal", "사내 (인사동·보자기 매입)", null)}${moneyInput("f-other", "기타 (명절음식 판매)", null)}</div>
      <hr class="form-sep">
      <div class="form-row">${moneyInput("f-hanwoo", "정육 — 대관령한우", null)}${moneyInput("f-pork", "정육 — 씨알돈육(냉장)", null)}</div>
+     <div class="form-row">${moneyInput("f-guest", "고객수 (명)", null)}</div>
      <div class="form-row"><div class="form-field"><label>비고</label><input type="text" id="f-note"></div></div>
      <div class="form-hint">순매출·일평균은 자동 계산돼요.</div>`,
     saveBtn("saveMarketForm()"));
   const refresh = () => {
     const y = val("f-year"), m = val("f-month");
     const cur = S.data.marketDetail[y]?.months?.[m] || {};
-    ["total", "internal", "other", "hanwoo", "pork"].forEach((k) => {
+    ["total", "internal", "other", "hanwoo", "pork", "guest"].forEach((k) => {
       document.getElementById("f-" + k).value = cur[k] != null ? fmt(cur[k]) : "";
     });
     document.getElementById("f-note").value = cur.note || "";
@@ -6016,7 +6019,7 @@ function saveMarketForm() {
     const y = val("f-year"), m = val("f-month");
     const doc = S.data.marketDetail[y] || { months: {} };
     const d = {};
-    ["total", "internal", "other", "hanwoo", "pork"].forEach((k) => {
+    ["total", "internal", "other", "hanwoo", "pork", "guest"].forEach((k) => {
       const v = numVal("f-" + k); if (v != null) d[k] = v;
     });
     const note = val("f-note")?.trim(); if (note) d.note = note;
@@ -7622,7 +7625,7 @@ function ppRenderPreviewW(wrap){
     if(gap)html+=`<tr><td colspan="8" class="au" style="text-align:left;color:var(--warn)">⚠ ${ymLabel(ym)}: 매출 합과 정산 합이 ${fmt(gap)}원 달라요 (미수금 등) — 카드·현금은 정산 기준으로 채워요.</td></tr>`;
   }
   html+='</table>';
-  html+='<div class="hint">현금 = 정산(현금), 카드 = 정산총금액 − 현금 (카드·페이류 포함). 고객수는 세트·코스 주문 수량 합으로 추정한 값이라 필요하면 고쳐서 적용하세요 (포스 인원수 칸은 거의 1로 찍혀 있어 쓰지 않아요). 적용하면 ⑦ 꽃밥 카드(계)·현금(계)·고객수에 저장돼요.</div>';
+  html+='<div class="hint">현금 = 정산(현금), 카드 = 정산총금액 − 현금 (카드·페이류 포함). 고객수는 세트·코스 주문 수량 합으로 추정한 값이라 필요하면 고쳐서 적용하세요 (포스 인원수 칸은 거의 1로 찍혀 있어 쓰지 않아요). 적용하면 ⑦ 피다 카드(계)·현금(계)·고객수에 저장돼요.</div>';
   html+='<div class="flex" style="margin-top:6px"><button class="btn sm ppApply">적용하기</button></div>';
   wrap.querySelector('.ppPrev').innerHTML=html;
   wrap.querySelectorAll('[data-ppg]').forEach(inp=>{
@@ -8000,7 +8003,7 @@ function renderInput(){
     <tr><td class="lb">외상 (계)</td>${inp('market.credit')}${blank(4)}</tr>
     <tr><td class="lb">정육<div class="hint">매출관리-매출현황-매장상품별-실매출액</div></td>`+autoCell('mk_jy',mm=>derived(mm).jeongyukGye)+`<td><div style="font-size:11px;color:var(--sub);text-align:right;margin-bottom:2px">🐂 우육 — 대관령한우</div><input data-p="market.jeongyukMyeon"></td><td><div style="font-size:11px;color:var(--sub);text-align:right;margin-bottom:2px">🐖 돈육 — 씨알돈육</div><input data-p="market.jeongyukGwase"></td><td class="au" colspan="2" style="text-align:left;color:var(--sub);font-size:12px">축종별 매출액을 그대로 적어요(면세·과세 구분 아님 — 확정 계산에 안 쓰이는 보고용 값) · 입력하면 매출현황 정육매출 '대관령한우'·'씨알돈육'에 <b>바로</b> 반영돼요</td></tr>
     <tr><td class="lb">포인트 적립</td>${inp('market.pointAccum')}${blank(4)}</tr>
-    <tr><td class="lb">고객수</td>${inp('market.guest')}<td class="au" colspan="4" style="text-align:left;color:var(--sub)">명</td></tr>
+    <tr><td class="lb">고객수</td>${inp('market.guest')}<td class="au" colspan="4" style="text-align:left;color:var(--sub);font-size:12px">명 · 입력하면 매출현황 마켓매출 '고객수' 열에 <b>바로</b> 반영돼요</td></tr>
   </table><div id="vMarket"></div></div>`;
   // ② 꽃밥(세금계산서)
   h+=`<div class="card"><h2>② 꽃밥 (세금계산서) <small>OKPOS-회원관리-회원분석-일자별회원구매내역</small></h2>
@@ -8086,25 +8089,25 @@ function renderInput(){
   h+=`<div class="card"><h2>⑥ 기타 (세금계산서) <small>매출확정에 직접 넣던 값</small></h2>
   <table class="g"><tr><th style="width:160px">항목</th><th>공급가</th><th>부가세</th><th>면세</th><th>계 (자동)</th><th></th></tr>
     <tr><td class="lb">기타 세금계산서</td>${inp('taxEtc.gong')}${inp('taxEtc.buga')}${inp('taxEtc.myeon')}`+autoCell('taxetc_t',mm=>mm.taxEtc.gong+mm.taxEtc.buga+mm.taxEtc.myeon)+blank(1)+`</tr>
-  <tr><td colspan="6" class="au" style="text-align:left;color:var(--sub);font-size:12px">기타 세금계산서는 <b>마켓포스 매출에 이미 포함(중복)된 세금계산서만</b> 적는 칸이에요 — 확정표에서 소계로부터 차감돼요. 마켓포스에 안 잡히는 거래처(농림부·네니아 등)는 ⑩ 기타 거래처 매출에 넣으세요. 거긴 확정표와 무관하고 보고앱 매출비교에만 합산돼요.</td></tr>
+  <tr><td colspan="6" class="au" style="text-align:left;color:var(--sub);font-size:12px"><b>세금계산서를 발행했을 때 — "이 매출이 마켓포스에 찍혔나?"로 판단하세요.</b><br>① 포스에 찍힘 + 인사동·보자기·판공(회원 거래) → <b>아무것도 안 적어요</b> (②에서 이미 처리)<br>② 포스에 찍힘 + 회원 거래 아님 → <b>여기 ⑥에</b> 적어요 (포스 매출과 겹치는 만큼 확정표 소계에서 차감 — 드물어서 보통은 비워둬요)<br>③ 포스에 안 찍힘 (농림부·네니아 등 계좌이체 직거래) → <b>⑩ 기타 거래처 매출에</b> 적어요 (확정표와 무관, 보고앱 매출비교에만 합산)</td></tr>
   </table></div>`;
   // ⑦ 꽃밥
   h+=`<div class="card"><h2>⑦ 꽃밥에피다 — 인사동 식당 <small>기록용 (확정표와 별도)</small></h2>
   <table class="g"><tr><th style="width:160px">항목</th><th>계</th><th>공급가</th><th>부가세</th><th colspan="2"></th></tr>
     <tr><td class="lb">캐치테이블</td>${inp('kkotbap.catchGye')}${inp('kkotbap.catchGong')}${inp('kkotbap.catchBuga')}${blank(2)}</tr>
-    <tr><td class="lb">꽃밥 카드 (계)</td>${inp('kkotbap.card')}${blank(4)}</tr>
-    <tr><td class="lb">꽃밥 현금 (계)</td>${inp('kkotbap.cash')}${blank(4)}</tr>
-    <tr><td class="lb">꽃밥 계 (자동)</td>`+autoCell('kb_gye',mm=>kkotbapCalc(mm).gye,true)+autoCell('kb_gong',mm=>kkotbapCalc(mm).gong)+autoCell('kb_buga',mm=>kkotbapCalc(mm).buga)+blank(2)+`</tr>
+    <tr><td class="lb">피다 카드 (계)</td>${inp('kkotbap.card')}${blank(4)}</tr>
+    <tr><td class="lb">피다 현금 (계)</td>${inp('kkotbap.cash')}${blank(4)}</tr>
+    <tr><td class="lb">피다 계 (자동)</td>`+autoCell('kb_gye',mm=>kkotbapCalc(mm).gye,true)+autoCell('kb_gong',mm=>kkotbapCalc(mm).gong)+autoCell('kb_buga',mm=>kkotbapCalc(mm).buga)+blank(2)+`</tr>
     <tr><td class="lb">국세청 카드</td>${inp('kkotbap.ntsCard')}${inp('kkotbap.ntsCardGong')}${inp('kkotbap.ntsCardBuga')}${blank(2)}</tr>
     <tr><td class="lb">국세청 현금영수증</td>${inp('kkotbap.ntsHyeon')}${inp('kkotbap.ntsHyeonGong')}${inp('kkotbap.ntsHyeonBuga')}${blank(2)}</tr>
-    <tr><td class="lb">소매 (자동)</td>`+autoCell('kb_sm',mm=>kkotbapCalc(mm).somae)+autoCell('kb_smg',mm=>kkotbapCalc(mm).somaeGong)+autoCell('kb_smv',mm=>{const k=kkotbapCalc(mm);return k.somae-k.somaeGong;})+`<td class="au" colspan="2" style="text-align:left;color:var(--sub)">꽃밥 계 − 국세청 카드 − 현금영수증</td></tr>
+    <tr><td class="lb">소매 (자동)</td>`+autoCell('kb_sm',mm=>kkotbapCalc(mm).somae)+autoCell('kb_smg',mm=>kkotbapCalc(mm).somaeGong)+autoCell('kb_smv',mm=>{const k=kkotbapCalc(mm);return k.somae-k.somaeGong;})+`<td class="au" colspan="2" style="text-align:left;color:var(--sub)">피다 계 − 국세청 카드 − 현금영수증</td></tr>
     <tr><td class="lb">전체 (캐치 포함, 자동)</td>`+autoCell('kb_all',mm=>kkotbapCalc(mm).all,true)+blank(4)+`</tr>
     <tr><td class="lb">고객수</td>${inp('kkotbap.guest')}<td class="au" colspan="4" style="text-align:left;color:var(--sub)">명</td></tr>
   </table>
   ${m.kkotbapPos?`<table class="g" style="margin-top:10px"><tr><th style="width:160px">포스 요약</th><th>영수증</th><th>매출 합</th><th>현금</th><th>카드(현금 외)</th><th>고객수</th><th>할인</th><th>서비스</th></tr>
     <tr><td class="lb">일일매출상세내역</td><td class="au" style="text-align:center">${fmt(m.kkotbapPos.cnt)}건</td><td class="au"><b>${fmt(m.kkotbapPos.sales)}</b></td><td class="au">${fmt(m.kkotbapPos.cash)}</td><td class="au">${fmt(m.kkotbapPos.card)}</td><td class="au" style="text-align:center">${fmt(m.kkotbapPos.guest)}명</td><td class="au">${fmt(m.kkotbapPos.disc)}</td><td class="au">${fmt(m.kkotbapPos.svc)}</td></tr>
   </table>`:''}
-  <div class="flex" style="margin-top:8px"><span class="addrow ppBtn">📋 포스 일일매출상세내역 붙여넣기 — 피다 꽃밥 카드·현금 자동 채움</span></div>
+  <div class="flex" style="margin-top:8px"><span class="addrow ppBtn">📋 포스 일일매출상세내역 붙여넣기 — 피다 카드·현금 자동 채움</span></div>
   <div class="pp-wrap" id="pp-wrap" style="display:none;margin-top:8px">
     <div class="hint">POPS CLOUD의 <b>영업속보 → 일일매출상세내역</b> 표를 통째로 복사해서 붙여넣으세요. 영수증 줄만 골라 읽고 품목 줄·[계]·RUNDATE는 자동으로 걸러내요. 현금은 정산(현금), 카드는 정산총금액에서 현금을 뺀 값(카드·페이류 포함)으로 계산해요.</div>
     <textarea class="ppTa" style="min-height:110px" placeholder="여기에 표를 붙여넣으세요"></textarea>
@@ -8190,6 +8193,7 @@ function renderInput(){
       }
       touch();recalcAutos();refreshNtsTag();refreshValidWarns();
       if((el.dataset.p==='market.jeongyukMyeon'||el.dataset.p==='market.jeongyukGwase')&&typeof window.cfmSyncJeongyuk==='function')window.cfmSyncJeongyuk(CUR,m);
+      if(el.dataset.p==='market.guest'&&typeof window.cfmSyncGuest==='function')window.cfmSyncGuest(CUR,m);
     });
   });
   pg.querySelectorAll("input[data-sp]").forEach(el=>{
@@ -9309,6 +9313,18 @@ window.cfmSyncJeongyuk=async function(ym,mm){
     await saveYearDoc("marketDetail",y,mk);
     if(typeof toast==="function")toast(y+"년 "+mo+"월 마켓 정육(우육 "+cur.hanwoo.toLocaleString("ko-KR")+" / 돈육 "+cur.pork.toLocaleString("ko-KR")+") 매출현황에 바로 반영했어요");
   }catch(e){console.error(e);if(typeof toast==="function")toast("정육 즉시 반영 실패: "+(e.message||""),true);}
+};
+window.cfmSyncGuest=async function(ym,mm){
+  try{
+    const y="20"+ym.slice(0,2), mo=String(Number(ym.slice(2)));
+    const mk=S.data.marketDetail[y]||{months:{}};
+    mk.months=mk.months||{};
+    const cur=mk.months[mo]||{};
+    if(mm.market.guest>0)cur.guest=Math.round(mm.market.guest);else delete cur.guest;
+    mk.months[mo]=cur;S.data.marketDetail[y]=mk;
+    await saveYearDoc("marketDetail",y,mk);
+    if(typeof toast==="function")toast(y+"년 "+mo+"월 고객수 "+(cur.guest?cur.guest.toLocaleString("ko-KR")+"명":"삭제")+" 매출현황에 바로 반영했어요");
+  }catch(e){console.error(e);if(typeof toast==="function")toast("고객수 즉시 반영 실패: "+(e.message||""),true);}
 };
 function cfmOpenPushModal(){
   try{
