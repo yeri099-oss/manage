@@ -7741,7 +7741,7 @@ window.ntsZpPick=ntsZpPick;
 window.txSlipCopy=async function(btn){
   const m=MONTHS[CUR],d=derived(m);
   const y="20"+CUR.slice(0,2),mo=Number(CUR.slice(2));
-  const txt=y+"년 "+mo+"월 세금계산서 발행 — 과세 "+fmt(d.taxinvGong+d.taxinvBuga)+"원(공급가액 "+fmt(d.taxinvGong)+"원, 부가세 "+fmt(d.taxinvBuga)+"원), 면세 "+fmt(d.taxinvMyeon)+"원, 합계 "+fmt(d.taxinvGye)+"원";
+  const txt="꽃밥에피다(피다+보자기) "+y+"년 "+mo+"월 세금계산서 발행\n과세 "+fmt(d.taxinvGong+d.taxinvBuga)+"원, 면세 "+fmt(d.taxinvMyeon)+"원, 합계 "+fmt(d.taxinvGye)+"원";
   try{
     if(navigator.clipboard&&navigator.clipboard.writeText)await navigator.clipboard.writeText(txt);
     else{const ta=document.createElement("textarea");ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand("copy");ta.remove();}
