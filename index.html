@@ -1678,7 +1678,7 @@ async function exportExcel() {
     }
     // 마켓
     {
-      const aoa = [["연도", "월", "총매출", "사내", "기타", "순매출", "일평균", "대관령한우", "씨알돈육", "비고"]];
+      const aoa = [["연도", "월", "총매출", "피다+보자기", "기타", "순매출", "일평균", "대관령한우", "씨알돈육", "비고"]];
       for (const y of yearsOf("marketDetail")) {
         for (const m of MONTHS) {
           const c = marketCalc(y, m);
@@ -1976,6 +1976,7 @@ async function exportSalesAll(){
     {
       const year=latestYearOf("marketDetail");
       const sh=await openSheet("xl/worksheets/sheet4.xml");
+      sh.setT("C3","피다+보자기 *");
       MONTHS.forEach((m,i)=>{
         const r=4+i,c=marketCalc(year,m);
         sh.setN("B"+r,c.total);sh.setN("C"+r,c.internal);sh.setN("D"+r,c.other);
@@ -2345,7 +2346,7 @@ async function expMarket() {
   const year = S.ui.marketYear || latestYearOf("marketDetail");
   const rows = [
     [xc(`${year}년 마켓 매출 분류 (부가세포함, 단위: 원)`, { bold: true, sz: 12, align: "left" })],
-    [xh("월별", XF.GRAY), xh("총매출", XF.GRAY), xh("사내 *", XF.GRAY), xh("기타 **", XF.GRAY), xh("순매출", XF.Y), xh("일평균", XF.G), xh("비고", XF.GRAY)],
+    [xh("월별", XF.GRAY), xh("총매출", XF.GRAY), xh("피다+보자기 *", XF.GRAY), xh("기타 **", XF.GRAY), xh("순매출", XF.Y), xh("일평균", XF.G), xh("비고", XF.GRAY)],
   ];
   const t = { total: 0, internal: 0, other: 0, net: 0, days: 0 };
   for (const m of MONTHS) {
@@ -2356,7 +2357,7 @@ async function expMarket() {
   }
   rows.push([xh("합계", XF.GRAY), xc(t.total, { fmt: "n", bold: true }), xc(t.internal, { fmt: "n", bold: true }), xc(t.other, { fmt: "n", bold: true }),
     xc(t.net, { fmt: "n", bold: true, fill: XF.Y }), xc(t.days ? Math.round(t.net / t.days) : "", { fmt: "n", bold: true, fill: XF.G }), xc("")]);
-  rows.push([xc("* 사내: 인사동·보자기 매입  ** 기타: 명절음식 판매", { align: "left", sz: 9 })]);
+  rows.push([xc("* 피다+보자기: 인사동·보자기 매입  ** 기타: 명절음식 판매", { align: "left", sz: 9 })]);
   await makeWorkbook([applyFrame({ name: `마켓매출`, rows, widths: [9, 12.9, 11.9, 8.4, 13, 8.4, 13.4] }, { headerEnd: 1, totalRows: [rows.length - 1], vSplit: [0], titleSz: 16, titleH: 36, headerH: 23.2, dataH: 25.1 })], `마켓매출_${year}.xlsx`);
 }
 async function expMeat() {
@@ -2989,13 +2990,13 @@ function renderMarket() {
     </div>
     <div class="table-wrap">
       <table class="rpt">
-        <thead><tr><th class="c sticky">월별</th><th>총매출</th><th>사내*</th><th class="cy">순매출</th><th class="cg">일평균</th><th>고객수</th><th class="l">비고</th></tr></thead>
+        <thead><tr><th class="c sticky">월별</th><th>총매출</th><th>피다+보자기*</th><th class="cy">순매출</th><th class="cg">일평균</th><th>고객수</th><th class="l">비고</th></tr></thead>
         <tbody>${rows}
         <tr class="total"><td class="lab sticky">합계</td><td>${fmt(t.total)}</td><td>${fmt(t.internal)}</td><td class="cy">${fmt(t.net)}</td><td class="cg">${t.days ? fmtD(t.net / t.days) : ""}</td><td>${t.guest ? fmt(t.guest) : ""}</td><td></td></tr>
         </tbody>
       </table>
     </div>
-    <div class="footnote">* 사내: 인사동·보자기 매입 &nbsp;·&nbsp; 순매출 = 총매출 − 사내, 일평균 = 순매출 ÷ 마켓 영업일수(일평균 탭에서 입력) &nbsp;·&nbsp; 고객수는 앱 화면에만 표시(엑셀 양식 미포함)</div>
+    <div class="footnote">* 피다+보자기: 인사동·보자기 매입 &nbsp;·&nbsp; 순매출 = 총매출 − 피다+보자기, 일평균 = 순매출 ÷ 마켓 영업일수(일평균 탭에서 입력) &nbsp;·&nbsp; 고객수는 앱 화면에만 표시(엑셀 양식 미포함)</div>
     <div class="chart-box" style="margin-top:8px"><canvas id="ch-market-stack"></canvas></div>
   </div>`;
   const meatHtml = `
@@ -3021,7 +3022,7 @@ function renderMarket() {
       labels: MONTH_LABELS,
       datasets: [
         { label: "순매출", data: MONTHS.map((m) => marketCalc(year, m).net || 0), backgroundColor: "#FFD966" },
-        { label: "사내", data: MONTHS.map((m) => marketCalc(year, m).internal || 0), backgroundColor: "#FFF2CC" },
+        { label: "피다+보자기", data: MONTHS.map((m) => marketCalc(year, m).internal || 0), backgroundColor: "#FFF2CC" },
       ].map((d) => ({ ...d, stack: "s", borderColor: "#BF8F00", borderWidth: 1, borderRadius: 3, maxBarThickness: 40 })),
     },
     options: {
@@ -6213,7 +6214,7 @@ function openMarketForm(year, month) {
   openModal("마켓 매출 입력",
     ymSelector(year, lastM, yearsOf("marketDetail")) +
     `<div class="form-row">${moneyInput("f-total", "총매출", null)}</div>
-     <div class="form-row">${moneyInput("f-internal", "사내 (인사동·보자기 매입)", null)}${moneyInput("f-other", "기타 (명절음식 판매)", null)}</div>
+     <div class="form-row">${moneyInput("f-internal", "피다+보자기 (인사동·보자기 매입)", null)}${moneyInput("f-other", "기타 (명절음식 판매)", null)}</div>
      <hr class="form-sep">
      <div class="form-row">${moneyInput("f-hanwoo", "정육 — 대관령한우", null)}${moneyInput("f-pork", "정육 — 씨알돈육(냉장)", null)}</div>
      <div class="form-row">${moneyInput("f-guest", "고객수 (명)", null)}</div>
@@ -7737,6 +7738,16 @@ async function msalesPick(inp){const f=inp.files&&inp.files[0];inp.value='';if(!
 window.msalesPick=msalesPick;
 window.uplRouterPick=uplRouterPick;
 window.ntsZpPick=ntsZpPick;
+window.txSlipCopy=async function(btn){
+  const m=MONTHS[CUR],d=derived(m);
+  const y="20"+CUR.slice(0,2),mo=Number(CUR.slice(2));
+  const txt=y+"년 "+mo+"월 세금계산서 발행 — 과세 "+fmt(d.taxinvGong+d.taxinvBuga)+"원(공급가액 "+fmt(d.taxinvGong)+"원, 부가세 "+fmt(d.taxinvBuga)+"원), 면세 "+fmt(d.taxinvMyeon)+"원, 합계 "+fmt(d.taxinvGye)+"원";
+  try{
+    if(navigator.clipboard&&navigator.clipboard.writeText)await navigator.clipboard.writeText(txt);
+    else{const ta=document.createElement("textarea");ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand("copy");ta.remove();}
+    if(btn){const o=btn.textContent;btn.textContent="✅ 복사됨!";setTimeout(()=>{btn.textContent=o;},1600);}
+  }catch(e){alert("복사 실패 — 직접 드래그해서 복사해주세요:\n\n"+txt);}
+};
 window.apCornerPick=apCornerPick;
 window.bpFilesPick=bpFilesPick;
 async function apFileChangeW(wrap,file){
@@ -8289,7 +8300,7 @@ function renderInput(){
       +autoCell('mb_tx_v',mm=>derived(mm).taxinvBuga,true)+`</tr>
   </table>
   <div style="margin-top:10px;background:#FDF6E9;border:1.5px solid #E4C87A;border-radius:10px;padding:12px 14px">
-    <div style="font-weight:700;margin-bottom:8px">📋 매출전표 입력용 — 인사동+보자기 세금계산서</div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span style="font-weight:700">📋 매출전표 입력용 — 인사동+보자기 세금계산서</span><button class="btn sm line" onclick="txSlipCopy(this)" style="font-size:12px">📄 업무일지용 복사</button></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
       <div style="flex:1;min-width:180px;background:#fff;border:1px solid #E4C87A;border-radius:8px;padding:8px 12px">
         <div style="font-size:12px;color:var(--sub)">과세 — 세금계산서</div>
@@ -8320,7 +8331,7 @@ function renderInput(){
       +autoCell('mb_sa_m',mm=>mm.members.sanaeGye-(mm.members.sanaeGong+mm.members.sanaeBuga))
       +autoCell('mb_sa_g',mm=>mm.members.sanaeGong+mm.members.sanaeBuga)
       +`${inp('members.sanaeGong')}${inp('members.sanaeBuga')}</tr>
-    <tr><td class="lb"></td><td class="au" colspan="5" style="text-align:left;color:var(--sub);font-size:12px">사내는 보고 반영 시 마켓매출 '사내'에 합산되고, 판공은 확정앱 기록으로만 남아요.</td></tr>
+    <tr><td class="lb"></td><td class="au" colspan="5" style="text-align:left;color:var(--sub);font-size:12px">판공+사내 합계는 보고 반영 시 매출현황 마켓매출 비고칸에 자동으로 적혀요.</td></tr>
   </table>
   <div class="hint" style="background:#f0f7ff;border:1px dashed #93c5fd;border-radius:8px;padding:8px 10px">📂 <b>회원구매현황 엑셀로 자동 입력</b> — <input type="file" accept=".xlsx" onchange="mbPick(this)" style="font-size:12px"> 회원분석(일자별회원구매내역) 엑셀을 넣으면 인사동·보자기·판공·사내가 자동으로 채워져요 (반품 차감, 면세 자동).</div>
   <div class="hint">인사동+보자기 합계가 매출확정의 '꽃밥(세금계산서)'로 자동 반영됩니다.</div></div>`;
@@ -9527,7 +9538,7 @@ function preview(raw){
     nts: (m.nts.card>0
       ? { total: epida+market+bojagi, epida, market, bojagi }
       : { total:0, epida:0, market:0, bojagi:0, notReady:true }),
-    mk:{ total: V.F8, internal: m.members.insadongGye+m.members.bojagiGye+(m.members.sanaeGye||0), hanwoo: m.market.jeongyukMyeon, pork: m.market.jeongyukGwase },
+    mk:{ total: V.F8, internal: m.members.insadongGye+m.members.bojagiGye, pgsn: (m.members.pangongGye||0)+(m.members.sanaeGye||0), hanwoo: m.market.jeongyukMyeon, pork: m.market.jeongyukGwase },
     ag:{ coupang: m.bpos.coupangGye, smartstore: m.ss.gwase+m.ss.myeon }
   };
 }
@@ -9644,7 +9655,7 @@ async function cfmBackfillGuests(){
       const mos=(S.data.marketDetail[y]||{}).months||{};
       for(const mo in mos){
         const cur=mos[mo];
-        if(cur&&cur.note&&/판공\s*[\d,]+원/.test(cur.note)){
+        if(cur&&cur.note&&/판공\s*[\d,]+원/.test(cur.note)&&!/판공\+사내/.test(cur.note)){
           const nt=String(cur.note).replace(/판공\s*[\d,]+원/g,"").replace(/\s*·\s*·\s*/g," · ").replace(/^\s*·\s*|\s*·\s*$/g,"").trim();
           if(nt)cur.note=nt;else delete cur.note;
           changed[y]=1;
@@ -9735,7 +9746,8 @@ function cfmOpenPushModal(){
       ["월별 — 온라인",c.pos.online],["월별 — 보자기(쿠팡 포함)",c.pos.bojagi],
       ["매출비교 — 꽃밥이야기"+(c.nts.notReady?" (국세청 미입력 — 건너뜀)":""),c.nts.total],["매출비교 — 꽃밥에피다",c.nts.epida],
       ["매출비교 — 꽃밥마켓",c.nts.market],["매출비교 — 보자기꽃밥",c.nts.bojagi],
-      ["마켓 — 총매출",c.mk.total],["마켓 — 사내",c.mk.internal],
+      ["마켓 — 총매출",c.mk.total],["마켓 — 피다+보자기",c.mk.internal],
+      ["마켓 — 판공+사내(비고에 기입)",c.mk.pgsn],
       ["마켓 — 대관령한우",c.mk.hanwoo],["마켓 — 씨알돈육",c.mk.pork],
       ["판매대행 — 쿠팡이츠",c.ag.coupang],["판매대행 — 스마트스토어",c.ag.smartstore],
     ];
@@ -9779,7 +9791,11 @@ async function cfmDoPush(){
     const mcur=Object.assign({},mk.months[mo]||{});
     setIf(mcur,"total",c.mk.total);setIf(mcur,"internal",c.mk.internal);
     setIf(mcur,"hanwoo",c.mk.hanwoo);setIf(mcur,"pork",c.mk.pork);
-    if(mcur.note){const nt=String(mcur.note).replace(/판공\s*[\d,]+원/g,"").replace(/\s*·\s*·\s*/g," · ").replace(/^\s*·\s*|\s*·\s*$/g,"").trim();if(nt)mcur.note=nt;else delete mcur.note;}
+    {
+      let nt=String(mcur.note||"").replace(/판공(\+사내)?\s*[\d,]+원/g,"").replace(/\s*·\s*·\s*/g," · ").replace(/^\s*·\s*|\s*·\s*$/g,"").trim();
+      if(c.mk.pgsn>0)nt=(nt?nt+" · ":"")+"판공+사내 "+Math.round(c.mk.pgsn).toLocaleString("ko-KR")+"원";
+      if(nt)mcur.note=nt;else delete mcur.note;
+    }
     mk.months[mo]=mcur;
     await saveYearDoc("marketDetail",y,mk);
     /* 판매대행 — 쿠팡/스마트 채널만 */
