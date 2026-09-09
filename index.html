@@ -428,12 +428,15 @@ li.drag-over { border-top: 2px solid var(--brand); }
 .paychip{border:1px solid rgba(0,0,0,.15);background:#fff;border-radius:999px;padding:4px 12px;font-size:12.5px;cursor:pointer;font-family:inherit}
 .paychip.on{background:var(--brand,#2F6B3F);color:#fff;border-color:var(--brand,#2F6B3F);font-weight:700}
 .paychip.bonus{border-style:dashed}
-table.payws{border-collapse:collapse;font-size:12.5px}
-table.payws td{border:1px solid #e4e4e0;padding:2px 6px;max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right;height:22px;background:#fff}
+table.payws{border-collapse:collapse;font-size:13px;min-width:100%}
+table.payws td{border:1px solid #e8e8e4;padding:6px 10px;white-space:nowrap;text-align:right;background:#fff;min-width:56px}
+table.payws td.ls{text-align:left}
 table.payws td.ec{cursor:text}
-table.payws td.ec:focus{outline:2px solid var(--brand,#2F6B3F);overflow:visible}
+table.payws td.ec:focus{outline:2px solid var(--brand,#2F6B3F)}
 table.payws td.ec.edited{box-shadow:inset 0 0 0 2px #E8C84A}
+table.payws td.ec.autofill{box-shadow:inset 0 0 0 2px #7FB98E}
 table.payws td.fx{color:#333}
+table.payws tr:first-child td{font-size:14px}
 </style>
 <script>
 // Firebase 설정 (trip-84bd3 프로젝트)
@@ -6029,7 +6032,7 @@ function payParseEpc(aoa){
     const sub=aoa[i+1]||[];
     emps.push({
       name:nm, dept:String(r[1]||"").trim(),
-      pay:num(r[2]), sudang:num(r[3]), bonus:num(r[4])+num(r[5]), yeoncha:num(r[6]),
+      pay:num(r[2]), sudang:num(r[3]), bonus:num(r[4])+num(r[5]), bonus1:num(r[4]), sbonus:num(r[5]), yeoncha:num(r[6]),
       total:num(r[7]),
       tax:num(r[8]), ltax:num(r[9]), pension:num(r[10]), health:num(r[11]), care:num(r[12]),
       employ:num(sub[8]), prepaid:num(sub[9]),
@@ -6169,6 +6172,22 @@ function payXfCss(styles,sIdx){
   return css;
 }
 function payIsPct(styles,sIdx){return !!(styles&&sIdx!=null&&styles.xfs[+sIdx]&&styles.xfs[+sIdx].pct);}
+function payXfCssLite(styles,sIdx){
+  if(sIdx==null||!styles)return "";
+  styles.cssMemoL=styles.cssMemoL||{};
+  if(styles.cssMemoL[sIdx]!=null)return styles.cssMemoL[sIdx];
+  const xf=styles.xfs[+sIdx];
+  let css="";
+  if(xf){
+    const f=styles.fonts[xf.fontId]||{};
+    if(f.b)css+="font-weight:700;";
+    if(f.color&&f.color.toLowerCase()!=="#000000")css+="color:"+f.color+";";
+    const fill=styles.fills[xf.fillId];
+    if(fill&&fill.toLowerCase()!=="#ffffff")css+="background:"+fill+";";
+  }
+  styles.cssMemoL[sIdx]=css;
+  return css;
+}
 async function pumParse(buf){
   const zip=await JSZip.loadAsync(buf.slice(0));
   const par=new DOMParser();
@@ -6346,15 +6365,142 @@ function payEmpRows(){
   }
   return {sheet:sh,rows:rows,val:payMkVal(sh,(window.__pay.edits||{})["상용직급여"])};
 }
-function payEdit(shName,ref,v){
+function payEdit(shName,ref,v,auto){
   const P=window.__pay;
-  P.edits=P.edits||{};
+  P.edits=P.edits||{};P.autoSet=P.autoSet||{};
   const ed=(P.edits[shName]=P.edits[shName]||{});
+  const as=(P.autoSet[shName]=P.autoSet[shName]||{});
+  if(auto&&ed[ref]!==undefined&&!as[ref])return; /* 손으로 고친 칸은 자동이 안 덮음 */
   const sh=paySheetByName(shName);
   const c=sh?sh.cells[ref]:null;
   const orig=c?(c.typ==="num"?(c.v===""?"":Number(c.v)):c.v):"";
-  if(v===orig||(v===""&&orig===""))delete ed[ref];
-  else ed[ref]=v;
+  if(v===orig||(v===""&&orig==="")){delete ed[ref];delete as[ref];}
+  else{ed[ref]=v;if(auto)as[ref]=1;else delete as[ref];}
+}
+/* 급여품의·인건비현황 파생 칸 자동 채움 (자동 칸은 초록 테두리, 직접 고치면 그때부턴 안 덮음) */
+function payAutoFill(){
+  const P=window.__pay;
+  if(!P.wb)return;
+  try{
+    const em=payEmpRows();
+    if(!em)return;
+    const sh=em.sheet;
+    /* 상용직급여 부서 그룹(소계 행 기준) */
+    const groups=[];let cur=[];
+    for(let r=3;r<=sh.maxR;r++){
+      const a=sh.cells["A"+r];
+      if(!a||a.typ!=="str")continue;
+      const nm=String(a.v).trim();
+      if(nm.indexOf("소계")>=0){if(cur.length)groups.push(cur);cur=[];continue;}
+      if(nm.indexOf("합계")>=0)break;
+      if(em.rows.some(x=>x.r===r))cur.push(r);
+    }
+    if(cur.length)groups.push(cur);
+    const V=em.val;
+    const gSum=(rows,col)=>rows.reduce((t,r)=>t+V(col+r),0);
+    const af=(shName,ref,val)=>{
+      val=Math.round(val);
+      const s2=paySheetByName(shName);
+      const c2=s2?s2.cells[ref]:null;
+      const hasOrig=c2&&c2.typ==="num"&&c2.v!=="";
+      const hasEd=((P.edits||{})[shName]||{})[ref]!==undefined;
+      if(val===0&&!hasOrig&&!hasEd)return; /* 0은 빈 칸에 안 적음 */
+      payEdit(shName,ref,val,true);
+    };
+    /* ① 급여품의: 부서별 상용직 행의 급여(E)·상여금(H) */
+    const pw=paySheetByName("급여품의");
+    if(pw&&groups.length){
+      const tgts=[];
+      for(let r=2;r<=pw.maxR;r++){
+        const a=pw.cells["A"+r],b=pw.cells["B"+r],c=pw.cells["C"+r];
+        const at=a&&a.typ==="str"?String(a.v):"";
+        if(at.replace(/\s+/g,"")==="합계")break;
+        const bt=b&&b.typ==="str"?String(b.v).trim():"";
+        const ct=c&&c.typ==="str"?String(c.v).trim():"";
+        if(!bt||bt==="부서")continue;
+        if(ct&&ct!=="상용직")continue;
+        tgts.push(r);
+      }
+      /* 직원 이름 → 부서 라벨 (휴일근무수당 시트 그룹 + 이카운트 부서) */
+      const nameDept={};
+      const hs=paySheetByName("휴일근무수당");
+      if(hs){
+        let curL=null;
+        for(let r=2;r<=hs.maxR;r++){
+          const a=hs.cells["A"+r];
+          if(a&&a.typ==="str"){
+            const t=String(a.v).trim();
+            if(t&&t!=="부서명"&&t!=="계"&&t.indexOf("휴일근무")<0)curL=t;
+          }
+          const b2=hs.cells["B"+r];
+          if(b2&&b2.typ==="str"&&curL){
+            const n=String(b2.v).replace(/\s+/g,"");
+            if(n&&n!=="성명")nameDept[n]=curL;
+          }
+        }
+      }
+      const EPCMAP={"꽃밥이야기":"꽃밥이야기","꽃밥마켓":"마켓","보자기꽃밥":"보자기","꽃밥에피다":"인사동"};
+      if(P.epc)P.epc.emps.forEach(e=>{
+        const n=e.name.replace(/\s+/g,"");
+        if(!nameDept[n])nameDept[n]=EPCMAP[e.dept]||e.dept;
+      });
+      /* 각 그룹의 부서 = 구성원 이름의 다수결 */
+      const groupLabel=(g)=>{
+        const cnt={};
+        g.forEach(r=>{
+          const row=em.rows.find(x=>x.r===r);
+          const l=row?nameDept[row.name.replace(/\s+/g,"")]:null;
+          if(l)cnt[l]=(cnt[l]||0)+1;
+        });
+        let best=null,bn=0;
+        for(const k in cnt)if(cnt[k]>bn){best=k;bn=cnt[k];}
+        return best;
+      };
+      const byLabel={};
+      groups.forEach(g=>{const l=groupLabel(g);if(l&&!byLabel[l])byLabel[l]=g;});
+      tgts.forEach((r)=>{
+        const b=pw.cells["B"+r];
+        const bt=b&&b.typ==="str"?String(b.v).trim():"";
+        const g=byLabel[bt];
+        if(!g)return;
+        af("급여품의","E"+r,gSum(g,"B"));
+        af("급여품의","H"+r,gSum(g,"D"));
+      });
+    }
+    /* ② 인건비현황: 이번 달 행 */
+    const lb=paySheetByName("인건비현황"),ym=payYm();
+    if(lb&&pw&&ym){
+      const pv=payMkVal(pw,(P.edits||{})["급여품의"]);
+      let tot=null;
+      for(let r=2;r<=pw.maxR;r++){const a=pw.cells["A"+r];if(a&&a.typ==="str"&&String(a.v).replace(/\s+/g,"")==="합계"){tot=r;break;}}
+      let yong=0;
+      const ys=paySheetByName("용역직급여");
+      if(ys){
+        const yv=payMkVal(ys,(P.edits||{})["용역직급여"]);
+        for(let r=2;r<=ys.maxR;r++){const a=ys.cells["A"+r];if(a&&a.typ==="str"&&String(a.v).trim()==="계"){yong=yv("E"+r);break;}}
+      }
+      let mrow=null,inYear=false;
+      for(let r=1;r<=lb.maxR;r++){
+        const a=lb.cells["A"+r];
+        if(!a||a.typ!=="str")continue;
+        const t=String(a.v);
+        if(t.indexOf("인건비 현황")>=0)inYear=t.indexOf(String(ym.y))>=0;
+        else if(inYear&&t.trim()===ym.m+"월"){mrow=r;break;}
+      }
+      if(mrow&&tot!=null){
+        af("인건비현황","C"+mrow,pv("E"+tot)-yong); /* 급여(용역 제외) */
+        af("인건비현황","D"+mrow,pv("F"+tot));      /* 초과근무수당 */
+        af("인건비현황","E"+mrow,pv("G"+tot));      /* 휴일근무수당 */
+        af("인건비현황","J"+mrow,pv("I"+tot));      /* 퇴직금 */
+        af("인건비현황","H"+mrow,yong);             /* 용역직 */
+        const bonusAll=gSum(groups.flat?groups.flat():[].concat.apply([],groups),"D");
+        let sb=0;
+        if(P.epc)P.epc.emps.forEach(e=>{sb+=e.sbonus||0;});
+        af("인건비현황","F"+mrow,bonusAll-sb);      /* 상여금 */
+        if(P.epc)af("인건비현황","G"+mrow,sb);      /* 특별상여금 */
+      }
+    }
+  }catch(e){console.warn("autofill",e);}
 }
 function payApplyEpc(){
   const P=window.__pay;
@@ -6504,6 +6650,7 @@ function payB64Buf(b64){const bin=atob(b64);const u=new Uint8Array(bin.length);f
 function paySchedSave(){
   const P=window.__pay;
   if(!P.wb)return;
+  payAutoFill();
   P.cloudState="saving";
   const st=document.getElementById("payCloudSt");
   if(st)st.textContent="☁ 저장 중…";
@@ -6517,7 +6664,7 @@ async function paySaveCloud(){
   if(!ym){P.cloudState="err";const st0=document.getElementById("payCloudSt");if(st0)st0.textContent="⚠ 파일에서 연월(예: 2026년 8월)을 못 읽어 저장하지 못했어요";return;}
   try{
     const key=ym.y+"-"+ym.m;
-    const fileDoc={y:ym.y,m:Number(ym.m),fileName:P.wb.fileName||"급여품의.xlsx",b64:P.wb.b64||payBufB64(P.wb.zipBuf),edits:P.edits||{},savedAt:Date.now()};
+    const fileDoc={y:ym.y,m:Number(ym.m),fileName:P.wb.fileName||"급여품의.xlsx",b64:P.wb.b64||payBufB64(P.wb.zipBuf),edits:P.edits||{},autoSet:P.autoSet||{},savedAt:Date.now()};
     P.wb.b64=fileDoc.b64;
     S.data.payFiles[key]=fileDoc;
     /* 집계도 같이 갱신 */
@@ -6552,6 +6699,7 @@ async function payLoadMonth(key){
     P.wb.fileName=fd.fileName;
     P.wb.b64=fd.b64;
     P.edits=fd.edits||{};
+    P.autoSet=fd.autoSet||{};
     P.result=null;P.epc=null;
     P.sheet=P.wb.sheets.some(x=>x.name==="상용직급여")?"상용직급여":P.wb.sheets[0].name;
     P.cloudState="saved";
@@ -6706,19 +6854,28 @@ function renderPay(){
       const val=payMkVal(sh,edits);
       const ST=wb.styles;
       const mg=sh.merges||{},cov=sh.covered||{};
-      let colg="";
-      for(let c=1;c<=sh.maxC;c++){const w=(sh.colW||{})[c];colg+=`<col style="${w?"width:"+w+"px":"width:70px"}">`;}
+      /* 내용 있는 범위만: 꼬리 빈 열·빈 행 정리 */
+      const hasTxt=(c)=>c&&((c.typ==="str"&&String(c.v).trim()!=="")||(c.typ!=="str"&&c.v!=="")||typeof c.f==="string");
+      let useC=1;
+      for(const ref in sh.cells){
+        if(!hasTxt(sh.cells[ref]))continue;
+        const ci=payColIdx(ref.replace(/\d+/g,""));
+        if(ci>useC)useC=ci;
+      }
+      for(const ref in edits){const ci=payColIdx(ref.replace(/\d+/g,""));if(ci>useC)useC=ci;}
+      useC=Math.min(useC,sh.maxC);
       let trs="";
       for(let r=1;r<=sh.maxR;r++){
         let tds="";
-        const rh=(sh.rowH||{})[r];
-        for(let c=1;c<=sh.maxC;c++){
+        let hasAny=false;
+        for(let c=1;c<=useC;c++){
           const ref=payIdxCol(c)+r;
-          if(cov[ref])continue;
+          if(cov[ref]){if(hasTxt(sh.cells[ref])||edits[ref]!==undefined)hasAny=true;continue;}
           const m=mg[ref];
-          const span=m?` colspan="${m.cs}" rowspan="${m.rs}"`:"";
+          const span=m?` colspan="${Math.min(m.cs,useC-c+1)}" rowspan="${m.rs}"`:"";
           const cell=sh.cells[ref];
-          const scss=cell?payXfCss(ST,cell.s):"";
+          if(hasTxt(cell)||edits[ref]!==undefined)hasAny=true;
+          const scss=cell?payXfCssLite(ST,cell.s):"";
           const pct=cell&&payIsPct(ST,cell.s);
           const fv=(x)=>pct&&x!==""&&x!=null&&!isNaN(Number(x))&&String(x)!==""?(Math.round(Number(x)*10000)/100)+"%":payFmtCell(x);
           if(cell&&typeof cell.f==="string"){
@@ -6727,14 +6884,16 @@ function renderPay(){
             tds+=`<td class="fx"${span} style="${scss}color:#b45309">오류</td>`;
           }else{
             const ed=edits[ref];
+            const isAuto=ed!==undefined&&((P.autoSet||{})[sh.name]||{})[ref];
             const disp=ed!==undefined?fv(ed):(cell?(cell.typ==="str"?cell.v:fv(cell.v)):"");
-            tds+=`<td class="ec${ed!==undefined?" edited":""}"${span} style="${scss}" contenteditable="true" data-sh="${esc(sh.name)}" data-ref="${ref}" onblur="payCellEdit(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">${esc(disp)}</td>`;
+            const isStr=ed!==undefined?typeof ed!=="number":(cell?cell.typ==="str":false);
+            tds+=`<td class="ec${isStr?" ls":""}${ed!==undefined?(isAuto?" autofill":" edited"):""}"${span} style="${scss}" title="${isAuto?"자동 채움 — 직접 고치면 그 값이 우선돼요":""}" contenteditable="true" data-sh="${esc(sh.name)}" data-ref="${ref}" onblur="payCellEdit(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">${esc(disp)}</td>`;
           }
         }
-        trs+=`<tr${rh?` style="height:${rh}px"`:""}>${tds}</tr>`;
+        if(hasAny)trs+=`<tr>${tds}</tr>`;
       }
-      body=`<div class="footnote" style="margin-bottom:6px">칸을 누르면 바로 수정할 수 있어요(Enter로 확정). 수식 칸은 자동 계산이라 수정이 안 돼요(마우스를 올리면 수식이 보여요).</div>
-      <div class="table-wrap" style="max-height:560px;overflow:auto"><table class="payws"><colgroup>${colg}</colgroup><tbody>${trs}</tbody></table></div>`;
+      body=`<div class="footnote" style="margin-bottom:6px">칸을 누르면 바로 수정할 수 있어요(Enter로 확정). 수식 칸은 자동 계산이라 수정이 안 돼요(마우스를 올리면 수식이 보여요). <span style="color:#4E8B60">초록 테두리</span>는 자동 채움, <span style="color:#B08A00">노란 테두리</span>는 직접 수정한 칸이에요.</div>
+      <div class="table-wrap" style="max-height:560px;overflow:auto"><table class="payws"><tbody>${trs}</tbody></table></div>`;
     }
     wbBox=`<div class="card"><div class="paychips">${chips}</div>${body}</div>`;
   }
