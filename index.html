@@ -435,6 +435,7 @@ table.payws td.ec{cursor:text}
 table.payws td.ec:focus{outline:2px solid var(--brand,#2F6B3F)}
 table.payws td.ec.edited{box-shadow:inset 0 0 0 2px #E8C84A}
 table.payws td.ec.autofill{box-shadow:inset 0 0 0 2px #7FB98E}
+table.payws td.ot{background:#F5F9F3;border-left:2px dashed #7FB98E}
 table.payws td.fx{color:#333}
 table.payws tr:first-child td{font-size:14px}
 </style>
@@ -6444,7 +6445,8 @@ function payAutoFill(){
           if(!n||n==="성명")continue;
           const emp=em.rows.find(x=>x.name.replace(/\s+/g,"")===n);
           if(!emp)continue;
-          const v=Math.round(hv(tcol+r));
+          const ot=Number(((P.edits||{})["__ot"]||{})[String(emp.r)]||0);
+          const v=Math.round(hv(tcol+r))+Math.round(ot);
           if(v>0)payEdit("상용직급여","C"+emp.r,v,true);
           else{
             /* 0이면: 이 칸을 자동으로 채웠던 경우에만 되돌림 (직접 적은 별도 수당은 보존) */
@@ -6586,6 +6588,20 @@ function payApplyEpc(){
   P.result={matched:matched,notFound:notFound,mismatch:mismatch};
   toast("상용직 "+matched.length+"명 공제내역 반영됨");
 }
+/* ---------- 초과근무수당(앱 전용 열) ---------- */
+function payOtEdit(el){
+  const r=el.dataset.r;
+  const t=String(el.textContent||"").replace(/[,\s]/g,"");
+  const P=window.__pay;
+  P.edits=P.edits||{};
+  const o=(P.edits["__ot"]=P.edits["__ot"]||{});
+  const n=Number(t);
+  if(!t||isNaN(n)||n===0)delete o[r];else o[r]=n;
+  if(!Object.keys(o).length)delete P.edits["__ot"];
+  paySchedSave();
+  renderPay();
+}
+window.payOtEdit=payOtEdit;
 /* ---------- 셀 직접 수정 ---------- */
 function payCellEdit(el){
   const shName=el.dataset.sh,ref=el.dataset.ref;
@@ -6865,6 +6881,22 @@ function renderPay(){
       const val=payMkVal(sh,edits);
       const ST=wb.styles;
       const mg=sh.merges||{},cov=sh.covered||{};
+      /* 휴일근무수당 시트: 앱 전용 '초과근무수당(직접)' 열 준비 */
+      const isHol=sh.name==="휴일근무수당";
+      let otHeadRow=null,otEmpOf={};
+      if(isHol){
+        for(let r=1;r<=4;r++){const b0=sh.cells["B"+r];if(b0&&b0.typ==="str"&&String(b0.v).trim()==="성명"){otHeadRow=r;break;}}
+        const em0=payEmpRows();
+        if(em0)for(let r=1;r<=sh.maxR;r++){
+          const a0=sh.cells["A"+r];
+          if(a0&&a0.typ==="str"&&String(a0.v).trim()==="계")break;
+          const b0=sh.cells["B"+r];
+          if(b0&&b0.typ==="str"){
+            const emp=em0.rows.find(x=>x.name.replace(/\s+/g,"")===String(b0.v).replace(/\s+/g,""));
+            if(emp)otEmpOf[r]=emp.r;
+          }
+        }
+      }
       /* 내용 있는 범위만: 꼬리 빈 열·빈 행 정리 */
       const hasTxt=(c)=>c&&((c.typ==="str"&&String(c.v).trim()!=="")||(c.typ!=="str"&&c.v!=="")||typeof c.f==="string");
       let useC=1;
@@ -6901,9 +6933,19 @@ function renderPay(){
             tds+=`<td class="ec${isStr?" ls":""}${ed!==undefined?(isAuto?" autofill":" edited"):""}"${span} style="${scss}" title="${isAuto?"자동 채움 — 직접 고치면 그 값이 우선돼요":""}" contenteditable="true" data-sh="${esc(sh.name)}" data-ref="${ref}" onblur="payCellEdit(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">${esc(disp)}</td>`;
           }
         }
+        if(isHol){
+          if(r===otHeadRow)tds+=`<td class="ot" style="font-weight:700">초과근무수당 ✍ 직접입력</td>`;
+          else if(otEmpOf[r]!=null){
+            const ov=((P.edits||{})["__ot"]||{})[String(otEmpOf[r])];
+            tds+=`<td class="ec ot${ov!=null?" edited":""}" contenteditable="true" data-r="${otEmpOf[r]}" onblur="payOtEdit(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">${ov!=null?fmt(ov):""}</td>`;
+          }else tds+=`<td class="ot"></td>`;
+        }
         if(hasAny)trs+=`<tr>${tds}</tr>`;
       }
       let bjNote="";
+      if(sh.name==="휴일근무수당"){
+        bjNote=` <b style="color:#2F6B3F">시간을 적으면 수당이 계산되고, 맨 오른쪽 '초과근무수당 직접입력' 열(다른 엑셀에서 정리한 값)과 합쳐져 상용직급여 제수당에 자동 반영돼요.</b>`;
+      }
       if(sh.name==="상여금"){
         const ymN=payYm();
         let hasCol=false;
