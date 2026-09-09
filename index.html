@@ -930,6 +930,7 @@ const S = {
     epidaDetail: {},     // {year:{months:{m:{total,disc,net,days,items:{key:{n,q,a}}}}}}
     epidaDrink: { add: [], remove: [] }, // 피다 주류·음료 수동 분류
     payMonthly: {},      // {year:{months:{m:{count,total,deduct,net,byDept}}}} — 급여 월별 집계(관리자 전용)
+    payFiles: {},        // {"y-m":{y,m,fileName,b64,edits,savedAt}} — 급여품의 파일+수정 내역(관리자 전용)
     bojagiPosMap: {},    // 보자기 포스 상품코드 → {kind,id} 매핑
     jagum: {},           // {year:{periods:{'MM-DD':{cash,acc,dep,toechung,yudong,base,inc,dec}}}}
     targets: {},         // {year:{total:{m:amt},epida,market,bojagi}}
@@ -1114,7 +1115,7 @@ async function loadAllData() {
   jobs.push(fsCol("config").doc("bojagiDrinkItems").get().then((d) => { S.data.drinkItems = d.data()?.items || []; }));
   jobs.push(db.collection("salesStatus_months").get().then((snap) => { S.cfmYms = []; snap.forEach((d) => S.cfmYms.push(d.id)); }).catch(() => {}));
   jobs.push(fsCol("config").doc("epidaDrink").get().then((d) => { S.data.epidaDrink = d.data() || { add: [], remove: [] }; }).catch(() => {}));
-  jobs.push(fsCol("payMonthly").get().then((snap)=>{const out={};snap.forEach((d)=>out[d.id]=d.data());S.data.payMonthly=out;}).catch(()=>{S.data.payMonthly=S.data.payMonthly||{};}));
+  jobs.push(fsCol("payMonthly").get().then((snap)=>{const out={},files={};snap.forEach((d)=>{if(d.id.indexOf("file_")===0)files[d.id.slice(5)]=d.data();else out[d.id]=d.data();});S.data.payMonthly=out;S.data.payFiles=files;}).catch(()=>{S.data.payMonthly=S.data.payMonthly||{};S.data.payFiles=S.data.payFiles||{};}));
   jobs.push(fsCol("config").doc("bojagiPosMap").get().then((d) => { S.data.bojagiPosMap = (d.data() || {}).map || {}; }).catch(() => {}));
   await Promise.all(jobs);
   pnlNormalizeKeys();
@@ -6048,7 +6049,7 @@ async function payPick(which,inp){
       const aoa=await payReadX(f);
       window.__pay.epc=payParseEpc(aoa);
       toast("이카운트 급여대장 "+window.__pay.epc.emps.length+"명 읽음 — 급여탭에 반영돼요");
-      if(window.__pay.wb)payApplyEpc();
+      if(window.__pay.wb){payApplyEpc();paySchedSave();}
     }else{
       const buf=await f.arrayBuffer();
       window.__pay.wb=await pumParse(buf);
@@ -6058,6 +6059,7 @@ async function payPick(which,inp){
       window.__pay.sheet=window.__pay.wb.sheets.some(s=>s.name==="상용직급여")?"상용직급여":window.__pay.wb.sheets[0].name;
       toast("급여품의 읽음: 시트 "+window.__pay.wb.sheets.length+"개");
       if(window.__pay.epc)payApplyEpc();
+      paySchedSave();
     }
   }catch(e){console.error(e);toast(e.message||"파일을 읽지 못했어요",true);}
   inp.value="";
@@ -6287,6 +6289,7 @@ function payBonusSet(inp){
     const br=bt.bjRowOf[nm.replace(/\s+/g,"")];
     if(br)payEdit("상여금",bt.bjCol+br,v===""?"":v);
   }
+  paySchedSave();
   renderPay();
 }
 /* ---------- 셀 직접 수정 ---------- */
@@ -6296,6 +6299,7 @@ function payCellEdit(el){
   const num=t.replace(/,/g,"");
   const v=t===""?"":(/^-?\d+(\.\d+)?$/.test(num)?Number(num):t);
   payEdit(shName,ref,v);
+  paySchedSave();
   renderPay();
 }
 /* ---------- 수정 반영 엑셀 다운로드 ---------- */
@@ -6369,6 +6373,68 @@ async function payDownload(){
     toast("수정 반영한 급여품의를 내려받았어요 — 소계·합계 수식은 엑셀에서 열면 다시 계산돼요");
   }catch(e){console.error(e);toast(e.message||"다운로드 실패",true);}
 }
+/* ---------- 클라우드 자동 저장(월별) ---------- */
+function payBufB64(buf){let s2="";const u=new Uint8Array(buf);for(let i=0;i<u.length;i+=0x8000)s2+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000));return btoa(s2);}
+function payB64Buf(b64){const bin=atob(b64);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u.buffer;}
+function paySchedSave(){
+  const P=window.__pay;
+  if(!P.wb)return;
+  P.cloudState="saving";
+  const st=document.getElementById("payCloudSt");
+  if(st)st.textContent="☁ 저장 중…";
+  clearTimeout(P.saveTimer);
+  P.saveTimer=setTimeout(()=>{paySaveCloud();},1200);
+}
+async function paySaveCloud(){
+  const P=window.__pay;
+  if(!P.wb)return;
+  const ym=payYm();
+  if(!ym){P.cloudState="err";const st0=document.getElementById("payCloudSt");if(st0)st0.textContent="⚠ 파일에서 연월(예: 2026년 8월)을 못 읽어 저장하지 못했어요";return;}
+  try{
+    const key=ym.y+"-"+ym.m;
+    const fileDoc={y:ym.y,m:Number(ym.m),fileName:P.wb.fileName||"급여품의.xlsx",b64:P.wb.b64||payBufB64(P.wb.zipBuf),edits:P.edits||{},savedAt:Date.now()};
+    P.wb.b64=fileDoc.b64;
+    S.data.payFiles[key]=fileDoc;
+    /* 집계도 같이 갱신 */
+    const sm=paySummaryData();
+    const ydoc=(S.data.payMonthly[ym.y]=S.data.payMonthly[ym.y]||{months:{}});
+    const prevAgg=(ydoc.months||{})[ym.m];
+    let byDept=prevAgg&&prevAgg.byDept?prevAgg.byDept:{};
+    if(P.epc){byDept={};P.epc.emps.forEach(e=>{const d=(byDept[e.dept||"기타"]=byDept[e.dept||"기타"]||{count:0,total:0,net:0});d.count++;d.total+=e.total;d.net+=e.net;});}
+    ydoc.months=ydoc.months||{};
+    ydoc.months[ym.m]={count:sm.count,total:Math.round(sm.total),deduct:Math.round(sm.deduct),net:Math.round(sm.net),byDept:byDept};
+    if(!IS_DEMO){
+      await fsCol("payMonthly").doc("file_"+key).set(fileDoc);
+      await fsCol("payMonthly").doc(String(ym.y)).set(ydoc);
+    }
+    P.cloudState="saved";P.ruleErr=false;
+  }catch(e){
+    console.error(e);
+    P.cloudState="err";P.ruleErr=true;
+  }
+  const st=document.getElementById("payCloudSt");
+  if(st)st.textContent=P.cloudState==="saved"?"☁ 저장됨 ✓":"⚠ 저장 실패";
+  if(P.cloudState==="err")renderPay();
+  else{const hb=document.getElementById("payHist");if(hb)hb.outerHTML=payHistHtml();}
+}
+async function payLoadMonth(key){
+  const P=window.__pay;
+  const fd=S.data.payFiles[key];
+  if(!fd)return;
+  try{
+    const buf=payB64Buf(fd.b64);
+    P.wb=await pumParse(buf);
+    P.wb.fileName=fd.fileName;
+    P.wb.b64=fd.b64;
+    P.edits=fd.edits||{};
+    P.result=null;P.epc=null;
+    P.sheet=P.wb.sheets.some(x=>x.name==="상용직급여")?"상용직급여":P.wb.sheets[0].name;
+    P.cloudState="saved";
+    toast(fd.y+"년 "+fd.m+"월 급여품의를 불러왔어요");
+  }catch(e){console.error(e);toast("저장된 파일을 여는 데 실패했어요",true);}
+  renderPay();
+}
+window.payLoadMonth=payLoadMonth;
 /* ---------- 지급 요약 데이터 ---------- */
 function paySummaryData(){
   const P=window.__pay;
@@ -6387,6 +6453,29 @@ function paySummaryData(){
   }
   return null;
 }
+/* ---------- 월별 급여 집계 표 ---------- */
+function paySortKeys(o){return Object.keys(o||{}).sort((a,b)=>{const[pa,qa]=a.split("-").map(Number),[pb,qb]=b.split("-").map(Number);return pb-pa||qb-qa;});}
+function payHistHtml(){
+  const cur=payYm();
+  const rows=[];
+  const yrs=Object.keys(S.data.payMonthly||{}).sort().reverse();
+  for(const y of yrs){
+    const mos=(S.data.payMonthly[y]||{}).months||{};
+    const ms=Object.keys(mos).map(Number).sort((a,b)=>b-a);
+    for(const m of ms){
+      const d=mos[m];
+      const sal=monthlyCalc(y,String(m));
+      const rate=sal.total?d.total/sal.total*100:null;
+      const key=y+"-"+m;
+      const isCur=cur&&String(cur.y)===String(y)&&String(cur.m)===String(m);
+      const open=S.data.payFiles[key]&&!isCur?` <button class="btn btn-sm" style="padding:1px 8px;font-size:11.5px" onclick="payLoadMonth('${key}')">열기</button>`:(isCur?' <span style="color:var(--brand,#2F6B3F);font-size:11.5px">◀ 보는 중</span>':"");
+      rows.push(`<tr><td class="lb">${y}년 ${m}월${open}</td><td>${d.count}명</td><td>${fmt(d.total)}</td><td>${fmt(d.deduct)}</td><td><b>${fmt(d.net)}</b></td><td>${sal.total?fmt(sal.total):'<span style="color:var(--sub)">월별 미입력</span>'}</td><td>${rate!=null?'<b>'+rate.toFixed(1)+'%</b>':""}</td></tr>`);
+    }
+  }
+  if(!rows.length)return `<div class="card" id="payHist"><div class="card-title">월별 급여 집계</div><div class="footnote">아직 저장된 달이 없어요. 위에 급여품의 엑셀을 올리면 그 달이 자동으로 저장돼요.</div></div>`;
+  return `<div class="card" id="payHist"><div class="card-title">월별 급여 집계 <span class="unit">인건비율 = 지급총액 ÷ 월별 매출현황 합계(포스기준)</span></div>
+    <div class="table-wrap" style="margin-top:6px"><table class="rpt"><thead><tr><th class="l">월</th><th>인원</th><th>지급총액</th><th>공제총액</th><th>실지급액</th><th>매출(월별 합계)</th><th>인건비율</th></tr></thead><tbody>${rows.join("")}</tbody></table></div></div>`;
+}
 /* ---------- 급여탭 렌더 ---------- */
 function payFmtCell(v){
   if(v===""||v==null)return"";
@@ -6400,9 +6489,28 @@ function renderPay(){
   if(!el)return;
   if(S.user?.role!=="admin"){el.innerHTML='<div class="card">관리자만 볼 수 있어요.</div>';return;}
   const P=window.__pay||{};
+  /* 처음 열면 가장 최근 저장 달 자동 불러오기 */
+  if(!P.wb&&!P.autoLoadTried){
+    P.autoLoadTried=true;
+    const ks=paySortKeys(S.data.payFiles);
+    if(ks.length){el.innerHTML='<div class="card">저장된 급여 자료를 불러오는 중…</div>';payLoadMonth(ks[0]);return;}
+  }
   const wb=P.wb,epc=P.epc,ym=payYm();
+  /* 저장된 달 선택 칩 */
+  let mchips="";
+  {
+    const ks=paySortKeys(S.data.payFiles);
+    if(ks.length){
+      mchips=`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px"><span class="footnote" style="margin-right:2px">저장된 달:</span>`+ks.map(k=>{
+        const[yy,mm]=k.split("-");
+        const on=ym&&String(ym.y)===yy&&String(ym.m)===mm;
+        return `<button class="paychip${on?" on":""}" onclick="payLoadMonth('${k}')">${yy}년 ${mm}월</button>`;
+      }).join("")+`</div>`;
+    }
+  }
   /* 업로드 카드 */
-  const upBox=`<div class="card"><div class="card-title">급여 관리 <span class="unit">관리자 전용 · 파일은 브라우저 안에서만 처리(서버 저장 안 함)</span></div>
+  const upBox=`<div class="card"><div class="card-title">급여 관리 <span class="unit">관리자 전용 · 올리고 수정하면 그 달이 자동 저장돼 언제든 다시 볼 수 있어요</span></div>
+    ${mchips}
     <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px">
       <div style="flex:1;min-width:260px;border:1px dashed rgba(0,0,0,.2);border-radius:10px;padding:10px 12px">
         <div style="font-weight:700;font-size:13.5px">① 급여품의 (.xlsx)</div>
@@ -6417,8 +6525,9 @@ function renderPay(){
         <div class="footnote" style="margin-top:4px">${epc?`✅ ${epc.emps.length}명 반영${epc.ym?` (${epc.ym.y}년 ${epc.ym.m}월)`:""}`:"— 아직"}</div>
       </div>
     </div>
-    ${wb?`<div style="margin-top:10px"><button class="btn btn-primary" onclick="payDownload()">📥 수정 반영해서 엑셀 받기</button>
-    <span class="footnote" style="margin-left:8px">받은 파일을 다음에 다시 올리면 이어서 수정할 수 있어요. 소계·합계 수식은 엑셀에서 열 때 다시 계산돼요.</span></div>`:""}
+    ${wb?`<div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><button class="btn btn-primary" onclick="payDownload()">📥 수정 반영해서 엑셀 받기</button>
+    <span class="footnote" id="payCloudSt">${P.cloudState==="saving"?"☁ 저장 중…":P.cloudState==="saved"?"☁ 저장됨 ✓":P.cloudState==="err"?"⚠ 저장 실패":""}</span>
+    <span class="footnote">수정하면 자동으로 저장되고, 소계·합계 수식은 엑셀에서 열 때 다시 계산돼요.</span></div>`:""}
   </div>`;
   /* 반영 결과 */
   let res="";
@@ -6436,14 +6545,14 @@ function renderPay(){
       deptLine=`<div class="footnote" style="margin-top:6px">부서별 실지급(이카운트 기준): ${depts.map(([k,v])=>`${esc(k)} ${fmt(v.net)}원(${v.n}명)`).join(" / ")}</div>`;
     }
     sumBox=`<div class="card"><div class="card-head"><div class="card-title">상용직 지급 요약${ym?` — ${ym.y}년 ${ym.m}월`:""} <span class="unit">${sm.src} 기준</span></div>
-      <div class="card-actions"><button class="btn btn-sm" onclick="paySummaryCopy(this)">📄 업무일지용 복사</button><button class="btn btn-sm btn-primary" onclick="payRecordMonth()">📌 이 달 집계 기록하기</button></div></div>
+      <div class="card-actions"><button class="btn btn-sm" onclick="paySummaryCopy(this)">📄 업무일지용 복사</button></div></div>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
         <div style="flex:1;min-width:150px;background:rgba(47,107,63,.06);border-radius:10px;padding:10px 12px"><div style="font-size:12px;color:var(--sub)">지급총액</div><div style="font-size:18px;font-weight:700">${fmt(sm.total)}원</div></div>
         <div style="flex:1;min-width:150px;background:rgba(47,107,63,.06);border-radius:10px;padding:10px 12px"><div style="font-size:12px;color:var(--sub)">공제총액</div><div style="font-size:18px;font-weight:700">${fmt(sm.deduct)}원</div></div>
         <div style="flex:1;min-width:150px;background:rgba(47,107,63,.12);border-radius:10px;padding:10px 12px"><div style="font-size:12px;color:var(--sub)">실지급액 (이체 합계)</div><div style="font-size:18px;font-weight:700">${fmt(sm.net)}원</div></div>
       </div>
       ${deptLine}
-      <div class="footnote">기록하기를 누르면 개인별 내역 없이 <b>합계 집계만</b> 저장돼요 — 아래 월별 표와 인건비율에 쓰여요.</div></div>`;
+      </div>`;
   }
   /* 시트 보기 */
   let wbBox="";
@@ -6495,27 +6604,8 @@ function renderPay(){
     }
     wbBox=`<div class="card"><div class="paychips">${chips}</div>${body}</div>`;
   }
-  /* 월별 급여 집계 표 + 인건비율 */
-  let histBox="";
-  {
-    const yrs=Object.keys(S.data.payMonthly||{}).sort().reverse();
-    if(yrs.length){
-      let rows2="";
-      for(const y of yrs){
-        const mos=S.data.payMonthly[y].months||{};
-        const ms=Object.keys(mos).map(Number).sort((a,b)=>a-b);
-        for(const m of ms){
-          const d=mos[m];
-          const sal=monthlyCalc(y,String(m));
-          const rate=sal.total?d.total/sal.total*100:null;
-          rows2+=`<tr><td class="lb">${y}년 ${m}월</td><td>${d.count}명</td><td>${fmt(d.total)}</td><td>${fmt(d.deduct)}</td><td><b>${fmt(d.net)}</b></td><td>${sal.total?fmt(sal.total):'<span style="color:var(--sub)">월별 미입력</span>'}</td><td>${rate!=null?'<b>'+rate.toFixed(1)+'%</b>':""}</td></tr>`;
-        }
-      }
-      histBox=`<div class="card"><div class="card-title">월별 급여 집계 <span class="unit">인건비율 = 지급총액 ÷ 월별 매출현황 합계(포스기준)</span></div>
-        <div class="table-wrap" style="margin-top:6px"><table class="rpt"><thead><tr><th class="l">월</th><th>인원</th><th>지급총액</th><th>공제총액</th><th>실지급액</th><th>매출(월별 합계)</th><th>인건비율</th></tr></thead><tbody>${rows2}</tbody></table></div></div>`;
-    }
-  }
-  const ruleBox=P.ruleErr?`<div class="card" style="border:1.5px solid #E4A2A2;background:#FDF3F3"><div class="card-title">⚠ 급여 기록 저장 권한이 아직 없어요</div>
+  const histBox=payHistHtml();
+  const ruleBox=P.ruleErr?`<div class="card" style="border:1.5px solid #E4A2A2;background:#FDF3F3"><div class="card-title">⚠ 급여 저장 권한이 아직 없어요 — 규칙 추가가 필요해요</div>
     <div class="footnote">Firebase 콘솔 → Firestore → 규칙에서, 기존 규칙 안(다른 match들 옆)에 아래 한 블록을 추가하고 게시해주세요. 한 번만 하면 돼요.</div>
     <pre style="background:#fff;border:1px solid rgba(0,0,0,.1);border-radius:8px;padding:10px;font-size:12px;overflow:auto">match /salesApp_payMonthly/{doc} {
   allow read, write: if salesAdmin();
