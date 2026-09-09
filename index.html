@@ -473,6 +473,7 @@ window.FIREBASE_CONFIG = {
     <button class="tab" data-tab="compare">매출비교</button>
     <button class="tab" data-tab="sales">매출현황</button>
     <button class="tab" data-tab="pnl">월별손익</button>
+    <button class="tab admin-only" data-tab="pay">급여</button>
     <button class="tab admin-only" data-tab="settings">설정</button>
     <div id="sideSubs"></div>
   </nav>
@@ -491,6 +492,7 @@ window.FIREBASE_CONFIG = {
       <div id="tab-manage" class="hidden"></div>
     </section>
     <section id="tab-pnl" class="tab-panel hidden"></section>
+    <section id="tab-pay" class="tab-panel hidden"></section>
     <section id="tab-jagum" class="tab-panel hidden"></section>
     <section id="tab-settings" class="tab-panel hidden"></section>
   </main>
@@ -5969,9 +5971,199 @@ window.jgExportXlsx=async function(){
     toast("자금현황 엑셀을 내려받았어요 (현금흐름·재무상태표는 앱 입력값, 대여금 시트는 원본 그대로)");
   }catch(e){console.error(e);toast(e.message||"엑셀 생성 실패",true);}
 };
+/* ============ 급여 탭 (관리자 전용) ============ */
+async function payReadX(file){
+  const zip=await JSZip.loadAsync(await file.arrayBuffer());
+  const par=new DOMParser();
+  let sst=[];
+  const ssf=zip.file("xl/sharedStrings.xml");
+  if(ssf){const d=par.parseFromString(await ssf.async("string"),"application/xml");sst=[...d.getElementsByTagName("si")].map(x=>x.textContent);}
+  const shp=Object.keys(zip.files).filter(n=>/^xl\/worksheets\/sheet\d+\.xml$/.test(n)).sort((a,b)=>Number(a.match(/\d+/)[0])-Number(b.match(/\d+/)[0]))[0];
+  const doc=par.parseFromString(await zip.file(shp).async("string"),"application/xml");
+  const rows=[];
+  for(const r of doc.getElementsByTagName("row")){
+    const arr=[];
+    for(const c of r.getElementsByTagName("c")){
+      const ref=c.getAttribute("r")||"",col=ref.replace(/\d+/g,"");
+      let idx=0;for(let k=0;k<col.length;k++)idx=idx*26+(col.charCodeAt(k)-64);idx--;
+      const t=c.getAttribute("t");let v="";
+      const vEl=c.getElementsByTagName("v")[0];
+      if(vEl){v=vEl.textContent;if(t==="s")v=sst[+v]!=null?sst[+v]:"";}
+      else if(t==="inlineStr")v=c.textContent;
+      while(arr.length<idx)arr.push("");
+      arr[idx]=v;
+    }
+    rows.push(arr);
+  }
+  return rows;
+}
+function payParseEpc(aoa){
+  const num=x=>{const t=String(x==null?"":x).replace(/[,\s]/g,"");if(!t)return 0;const n=Number(t);return isNaN(n)?0:n;};
+  let hi=-1,ym=null;
+  for(let i=0;i<Math.min(aoa.length,12);i++){
+    const j=(aoa[i]||[]).join(" ");
+    const dm=j.match(/(\d{4})년\s*(\d{1,2})월/)||j.match(/신고귀속\s*:\s*(\d{4})(\d{2})/);
+    if(dm&&!ym)ym={y:dm[1],m:String(Number(dm[2]))};
+    if(String((aoa[i]||[])[0]).trim()==="성명"){hi=i;}
+  }
+  if(hi<0)throw new Error("이카운트 급여대장 형식을 찾지 못했어요 — '성명' 머리글이 있는 EPC 엑셀인지 확인해주세요.");
+  const emps=[];
+  for(let i=hi+1;i<aoa.length;i++){
+    const r=aoa[i]||[],nm=String(r[0]||"").trim();
+    if(!nm||nm==="성명"||nm==="사원번호"||nm.indexOf("합계")>=0)continue;
+    if(!(num(r[7])>0))continue; /* 지급총액 있는 줄 = 직원 본줄 */
+    const sub=aoa[i+1]||[];
+    emps.push({
+      name:nm, dept:String(r[1]||"").trim(),
+      pay:num(r[2]), sudang:num(r[3]), bonus:num(r[4])+num(r[5]), yeoncha:num(r[6]),
+      total:num(r[7]),
+      tax:num(r[8]), ltax:num(r[9]), pension:num(r[10]), health:num(r[11]), care:num(r[12]),
+      employ:num(sub[8]), prepaid:num(sub[9]),
+      deduct:num(r[13]), net:num(r[14])
+    });
+  }
+  if(!emps.length)throw new Error("직원 줄을 찾지 못했어요.");
+  return {ym,emps};
+}
+window.__pay={};
+async function payPick(which,inp){
+  const f=inp.files&&inp.files[0];inp.value="";
+  if(!f)return;
+  try{
+    if(which==="epc"){
+      const aoa=await payReadX(f);
+      window.__pay.epc=payParseEpc(aoa);
+      toast("이카운트 급여대장 "+window.__pay.epc.emps.length+"명 읽음"+(window.__pay.epc.ym?" ("+window.__pay.epc.ym.y+"년 "+window.__pay.epc.ym.m+"월)":""));
+    }else{
+      window.__pay.pumFile=f;
+      window.__pay.pumBuf=await f.arrayBuffer();
+      toast("급여품의 파일 준비됨: "+f.name);
+    }
+  }catch(e){console.error(e);toast(e.message||"파일을 읽지 못했어요",true);}
+  renderPay();
+}
+async function payFillDownload(){
+  try{
+    const P=window.__pay;
+    if(!P.epc||!P.pumBuf){toast("두 파일을 모두 올려주세요",true);return;}
+    const zip=await JSZip.loadAsync(P.pumBuf.slice(0));
+    const par=new DOMParser(),ser=new XMLSerializer();
+    const NSX="http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    /* 시트 이름 → 파일 매핑 */
+    const wbd=par.parseFromString(await zip.file("xl/workbook.xml").async("string"),"application/xml");
+    const rld=par.parseFromString(await zip.file("xl/_rels/workbook.xml.rels").async("string"),"application/xml");
+    const rid2t={};[...rld.getElementsByTagName("Relationship")].forEach(r=>rid2t[r.getAttribute("Id")]=r.getAttribute("Target"));
+    let shPath=null;
+    for(const sh of wbd.getElementsByTagName("sheet"))if(sh.getAttribute("name")==="상용직급여")shPath="xl/"+rid2t[sh.getAttribute("r:id")||sh.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships","id")].replace(/^\//,"");
+    if(!shPath)throw new Error("급여품의 파일에서 '상용직급여' 시트를 찾지 못했어요.");
+    let sst=[];
+    const ssf=zip.file("xl/sharedStrings.xml");
+    let ssd=null;
+    if(ssf){ssd=par.parseFromString(await ssf.async("string"),"application/xml");sst=[...ssd.getElementsByTagName("si")].map(x=>x.textContent);}
+    const doc=par.parseFromString(await zip.file(shPath).async("string"),"application/xml");
+    const byName={};P.epc.emps.forEach(e=>byName[e.name.replace(/\s+/g,"")]=e);
+    const matched=[],mismatch=[];
+    const usedNames=new Set();
+    for(const row of doc.getElementsByTagName("row")){
+      const rn=row.getAttribute("r");
+      let nameCell=null;
+      for(const c of row.getElementsByTagName("c"))if(c.getAttribute("r")==="A"+rn){nameCell=c;break;}
+      if(!nameCell||nameCell.getAttribute("t")!=="s")continue;
+      const vEl=nameCell.getElementsByTagName("v")[0];
+      if(!vEl)continue;
+      const nm=String(sst[+vEl.textContent]||"").trim();
+      if(!nm||nm==="사원명"||nm==="소계"||nm==="합계"||nm.indexOf("소계")>=0)continue;
+      const e=byName[nm.replace(/\s+/g,"")];
+      if(!e)continue;
+      usedNames.add(e.name);
+      /* F~K: 소득세 지방 국민 건강 장기 고용 */
+      const vals={F:e.tax,G:e.ltax,H:e.pension,I:e.health,J:e.care,K:e.employ};
+      for(const col in vals){
+        let cel=null;
+        for(const c of row.getElementsByTagName("c"))if(c.getAttribute("r")===col+rn){cel=c;break;}
+        if(!cel){
+          cel=doc.createElementNS(NSX,"c");cel.setAttribute("r",col+rn);
+          let ref=null;const cn=col.charCodeAt(0);
+          for(const cc of row.getElementsByTagName("c")){const c0=cc.getAttribute("r").replace(/\d+/g,"");if(c0.length===1&&c0.charCodeAt(0)>cn){ref=cc;break;}}
+          row.insertBefore(cel,ref);
+        }
+        cel.removeAttribute("t");
+        for(const tg of["f","v","is"])for(const x of[...cel.getElementsByTagName(tg)])cel.removeChild(x);
+        const vv=doc.createElementNS(NSX,"v");vv.textContent=String(Math.round(vals[col]));cel.appendChild(vv);
+      }
+      /* 지급총액 대사: 품의 E열 값 */
+      let eCel=null;
+      for(const c of row.getElementsByTagName("c"))if(c.getAttribute("r")==="E"+rn){eCel=c;break;}
+      let eVal=null;
+      if(eCel){const v2=eCel.getElementsByTagName("v")[0];if(v2)eVal=Number(v2.textContent);}
+      if(eVal!=null&&Math.abs(eVal-e.total)>2)mismatch.push(nm+" 지급총액 (품의 "+fmt(eVal)+" / 이카운트 "+fmt(e.total)+")");
+      matched.push(nm);
+    }
+    const notFound=P.epc.emps.filter(e=>!usedNames.has(e.name)).map(e=>e.name+"("+(e.dept||"?")+")");
+    /* 선택영역 A1 + 저장 */
+    for(const sel of [...doc.getElementsByTagName("selection")]){sel.setAttribute("activeCell","A1");sel.setAttribute("sqref","A1");}
+    zip.file(shPath,ser.serializeToString(doc));
+    if(zip.file("xl/calcChain.xml"))zip.remove("xl/calcChain.xml");
+    const blob=await zip.generateAsync({type:"blob",compression:"DEFLATE",mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+    const aEl=document.createElement("a");
+    aEl.href=URL.createObjectURL(blob);
+    const base=(P.pumFile&&P.pumFile.name?P.pumFile.name.replace(/\.xlsx$/i,""):"급여품의");
+    aEl.download=base+"_채움.xlsx";
+    document.body.appendChild(aEl);aEl.click();
+    setTimeout(()=>{URL.revokeObjectURL(aEl.href);aEl.remove();},2000);
+    window.__pay.result={matched,notFound,mismatch};
+    toast("상용직 "+matched.length+"명 공제내역을 채워서 내려받았어요");
+    renderPay();
+  }catch(e){console.error(e);toast(e.message||"채우기 실패",true);}
+}
+function renderPay(){
+  const el=document.getElementById("tab-pay");
+  if(!el)return;
+  if(S.user?.role!=="admin"){el.innerHTML='<div class="card">관리자만 볼 수 있어요.</div>';return;}
+  const P=window.__pay||{};
+  const epc=P.epc;
+  let prev="";
+  if(epc){
+    const t={total:0,deduct:0,net:0};
+    epc.emps.forEach(e=>{t.total+=e.total;t.deduct+=e.deduct;t.net+=e.net;});
+    prev=`<div class="table-wrap" style="margin-top:8px"><table class="rpt" style="font-size:12.5px">
+      <thead><tr><th class="l">성명</th><th class="l">부서</th><th>지급총액</th><th>소득세</th><th>지방소득세</th><th>국민연금</th><th>건강보험</th><th>장기요양</th><th>고용보험</th><th>공제총액</th><th>실지급액</th></tr></thead><tbody>
+      ${epc.emps.map(e=>`<tr><td class="l">${esc(e.name)}</td><td class="l">${esc(e.dept)}</td><td>${fmt(e.total)}</td><td>${fmt(e.tax)}</td><td>${fmt(e.ltax)}</td><td>${fmt(e.pension)}</td><td>${fmt(e.health)}</td><td>${fmt(e.care)}</td><td>${fmt(e.employ)}</td><td>${fmt(e.deduct)}</td><td><b>${fmt(e.net)}</b></td></tr>`).join("")}
+      <tr class="total"><td class="l" colspan="2">합계 (${epc.emps.length}명)</td><td>${fmt(t.total)}</td><td colspan="6"></td><td>${fmt(t.deduct)}</td><td>${fmt(t.net)}</td></tr>
+      </tbody></table></div>`;
+  }
+  let res="";
+  if(P.result){
+    res=`<div class="card"><div class="card-title">채움 결과</div>
+      <div class="footnote">채운 직원 ${P.result.matched.length}명${P.result.mismatch.length?`<br><b style="color:#b45309">지급총액 불일치:</b> ${P.result.mismatch.map(esc).join(", ")} — 이카운트와 품의의 급여·수당 입력이 다른지 확인하세요`:""}${P.result.notFound.length?`<br><b style="color:#b45309">품의 상용직 시트에 없는 직원:</b> ${P.result.notFound.map(esc).join(", ")} — 시급직·용역직이면 해당 시트에 직접 적어주세요`:""}</div></div>`;
+  }
+  el.innerHTML=`
+  <div class="card"><div class="card-title">급여품의 자동 채움 <span class="unit">이카운트 급여대장(EPC)으로 급여품의 공제내역 채우기 · 관리자 전용</span></div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px">
+      <div style="flex:1;min-width:260px;border:1px dashed rgba(0,0,0,.2);border-radius:10px;padding:10px 12px">
+        <div style="font-weight:700;font-size:13.5px">1. 이카운트 급여대장 (.xlsx)</div>
+        <div class="footnote" style="margin:4px 0 6px">급여 → 급여대장 엑셀 (EPC001E) — 소득세·4대보험이 계산된 파일</div>
+        <input type="file" accept=".xlsx" onchange="payPick('epc',this)">
+        <div class="footnote" style="margin-top:4px">${epc?`✅ ${epc.emps.length}명 읽음${epc.ym?` (${epc.ym.y}년 ${epc.ym.m}월)`:""}`:"— 아직"}</div>
+      </div>
+      <div style="flex:1;min-width:260px;border:1px dashed rgba(0,0,0,.2);border-radius:10px;padding:10px 12px">
+        <div style="font-weight:700;font-size:13.5px">2. 작성 중인 급여품의 (.xlsx)</div>
+        <div class="footnote" style="margin:4px 0 6px">급여·수당까지 적어둔 이번 달 급여품의 파일</div>
+        <input type="file" accept=".xlsx" onchange="payPick('pum',this)">
+        <div class="footnote" style="margin-top:4px">${P.pumFile?"✅ "+esc(P.pumFile.name):"— 아직"}</div>
+      </div>
+    </div>
+    <div style="margin-top:10px"><button class="btn btn-primary" onclick="payFillDownload()" ${epc&&P.pumBuf?"":"disabled"}>📥 급여품의 채워서 내려받기</button>
+    <span class="footnote" style="margin-left:8px">상용직급여 시트의 소득세·지방소득세·국민연금·건강보험·장기요양·고용보험 칸을 이름으로 짝지어 채워요. 공제총액·실지급액·소계는 시트의 수식이 자동 계산해요.</span></div>
+  </div>
+  ${res}
+  ${epc?`<div class="card"><div class="card-title">이카운트 급여대장 미리보기</div>${prev}</div>`:""}
+  <div class="footnote" style="margin-top:6px">급여 자료는 이 화면(관리자 전용)에서만 다루고 서버에 저장하지 않아요 — 파일은 브라우저 안에서만 처리돼요.</div>`;
+}
+window.payPick=payPick;window.payFillDownload=payFillDownload;
 const RENDERERS = {
   home: () => renderHome(),
-  compare: renderCompare, sales: renderSales, pnl: renderPnl, jagum: renderJagum, settings: () => renderSettings(),
+  compare: renderCompare, sales: renderSales, pnl: renderPnl, jagum: renderJagum, pay: renderPay, settings: () => renderSettings(),
 };
 function switchTab(tab) {
   if(["monthly","daily","market","bojagi","agency"].includes(tab)){S.ui.salesSub=tab;tab="sales";}
@@ -6754,6 +6946,7 @@ async function showApp() {
       <div id="tab-manage" class="hidden"></div>
     </section>
     <section id="tab-pnl" class="tab-panel hidden"></section>
+    <section id="tab-pay" class="tab-panel hidden"></section>
     <section id="tab-jagum" class="tab-panel hidden"></section>
     <section id="tab-settings" class="tab-panel hidden"></section>`;
   document.getElementById("tab-home").innerHTML = `<div class="loading"><span class="spin"></span><br>데이터를 불러오는 중…</div>`;
