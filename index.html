@@ -6327,7 +6327,11 @@ function payMkVal(sheet,edits){
     memo[ref]=0;/* 순환 방지 */
     let out=0;
     const ed=edits?edits[ref]:undefined;
-    if(ed!==undefined){out=typeof ed==="number"?ed:0;}
+    if(ed!==undefined){
+      if(typeof ed==="number")out=ed;
+      else if(ed&&typeof ed==="object"&&ed.f){const r2=payEvalFormula(ed.f,val);out=isNaN(r2)?0:r2;}
+      else out=0;
+    }
     else{
       const c=sheet.cells[ref];
       if(c){
@@ -6398,31 +6402,144 @@ function payAutoFill(){
       if(em.rows.some(x=>x.r===r))cur.push(r);
     }
     if(cur.length)groups.push(cur);
-    /* 상여금 시트의 이번 달 열 → 상용직급여 상여금(D열) 자동 반영 */
-    const ymB=payYm();
-    const bj=paySheetByName("상여금");
-    if(bj&&ymB){
-      let bjCol=null;
-      for(let c=2;c<=bj.maxC;c++){
-        const h=bj.cells[payIdxCol(c)+"3"];
-        if(h&&h.typ==="str"&&String(h.v).trim()===ymB.m+"월"){bjCol=payIdxCol(c);break;}
-      }
-      if(bjCol){
-        const bv=payMkVal(bj,(P.edits||{})["상여금"]);
-        for(let r=4;r<=bj.maxR;r++){
-          const nb=bj.cells["B"+r];
-          if(!nb||nb.typ!=="str")continue;
-          const n=String(nb.v).replace(/\s+/g,"");
-          const emp=em.rows.find(x=>x.name.replace(/\s+/g,"")===n);
-          if(!emp)continue;
-          const cellB=bj.cells[bjCol+r];
+    const af=(shName,ref,val)=>{
+      val=Math.round(val);
+      const s2=paySheetByName(shName);
+      const c2=s2?s2.cells[ref]:null;
+      const hasOrig=c2&&c2.typ==="num"&&c2.v!=="";
+      const hasEd=((P.edits||{})[shName]||{})[ref]!==undefined;
+      if(val===0&&!hasOrig){if(hasEd)payEdit(shName,ref,"",true);return;} /* 0이면 빈 칸으로 */
+      payEdit(shName,ref,val,true);
+    };
+    /* 상여금 시트(이번 달 열 + 앱에서 추가한 특별상여 열) → 상용직급여 상여금(D열) 자동 반영 */
+    P.bjSpecialSum=0;P.bjPreOf=P.bjPreOf||{};
+    const BJ=payBjCols();
+    if(BJ&&(BJ.monthCol||BJ.added.length)){
+      const cols=[];
+      if(BJ.monthCol)cols.push(BJ.monthCol);
+      BJ.added.forEach(a=>{if(a.col!==BJ.monthCol)cols.push(a.col);});
+      const bv=payMkVal(BJ.sheet,(P.edits||{})["상여금"]);
+      P.bjSpecialOf={};P.bjPreOf={};
+      for(let r=BJ.hdrRow+1;r<=BJ.sheet.maxR;r++){
+        const nb=BJ.sheet.cells["B"+r];
+        if(!nb||nb.typ!=="str")continue;
+        const n=String(nb.v).replace(/\s+/g,"");
+        const emp=em.rows.find(x=>x.name.replace(/\s+/g,"")===n);
+        if(!emp)continue;
+        let tot=0,hasVal=false;
+        for(const L of cols){
+          const ref=L+r;
+          const cellB=BJ.sheet.cells[ref];
           if(cellB&&typeof cellB.f==="string")continue;
-          const hasVal=((((P.edits||{})["상여금"]||{})[bjCol+r]!==undefined)&&(P.edits["상여금"][bjCol+r]!==""))||(cellB&&cellB.typ==="num"&&cellB.v!=="");
-          if(hasVal)payEdit("상용직급여","D"+emp.r,Math.round(bv(bjCol+r)),true);
-          else{
-            const as2=((P.autoSet||{})["상용직급여"]||{})["D"+emp.r];
-            const ex2=((P.edits||{})["상용직급여"]||{})["D"+emp.r];
-            if(as2&&ex2!==undefined)payEdit("상용직급여","D"+emp.r,"",true);
+          const edv=((P.edits||{})["상여금"]||{})[ref];
+          const hv2=(edv!==undefined&&edv!=="")||(cellB&&cellB.typ==="num"&&cellB.v!=="");
+          if(hv2){
+            hasVal=true;
+            const v2=bv(ref);
+            tot+=v2;
+            if(L!==BJ.monthCol){
+              P.bjSpecialSum+=v2;
+              P.bjSpecialOf[emp.r]=(P.bjSpecialOf[emp.r]||0)+v2;
+              if(((P.edits||{})["__bjpre"]||{})[L])P.bjPreOf[emp.r]=(P.bjPreOf[emp.r]||0)+v2;
+            }
+          }
+        }
+        if(hasVal)payEdit("상용직급여","D"+emp.r,Math.round(tot),true);
+        else{
+          const as2=((P.autoSet||{})["상용직급여"]||{})["D"+emp.r];
+          const ex2=((P.edits||{})["상용직급여"]||{})["D"+emp.r];
+          if(as2&&ex2!==undefined)payEdit("상용직급여","D"+emp.r,"",true);
+        }
+      }
+    }
+    /* 특별상여 내역 열을 상용직급여에 표시 (엑셀 다운로드에도 포함) */
+    {
+      const spOf=P.bjSpecialOf||{};
+      const specTotal=Math.round(P.bjSpecialSum||0);
+      let shHdr=3;
+      for(let r=1;r<=5;r++){const a0=sh.cells["A"+r];if(a0&&a0.typ==="str"&&String(a0.v).trim()==="사원명"){shHdr=r;break;}}
+      const sEd=(P.edits||{})["상용직급여"]||{};
+      let scol=null;
+      for(let c=2;c<=sh.maxC&&!scol;c++){
+        const L2=payIdxCol(c),rf=L2+shHdr;
+        const t3=sEd[rf]!==undefined?String(sEd[rf]||""):((sh.cells[rf]&&sh.cells[rf].typ==="str")?String(sh.cells[rf].v):"");
+        if(t3.trim()==="특별상여금")scol=L2;
+      }
+      if(!scol&&specTotal>0){
+        for(let c=14;c<=30&&!scol;c++){
+          if(c>sh.maxC)sh.maxC=c;
+          const L2=payIdxCol(c);
+          let has=false;
+          const hh=sh.cells[L2+shHdr];
+          if(hh&&hh.typ==="str"&&String(hh.v).trim())has=true;
+          if(!has)for(const row of em.rows){const cc=sh.cells[L2+row.r];if(cc&&cc.typ==="num"&&cc.v!==""){has=true;break;}}
+          if(!has)scol=L2;
+        }
+      }
+      if(scol){
+        const hRef=scol+shHdr;
+        if(specTotal>0)payEdit("상용직급여",hRef,"특별상여금",true);
+        else{
+          const asH=((P.autoSet||{})["상용직급여"]||{})[hRef];
+          if(asH&&sEd[hRef]!==undefined)payEdit("상용직급여",hRef,"",true);
+        }
+        for(const row of em.rows)af("상용직급여",scol+row.r,Math.round(spOf[row.r]||0));
+      }
+      /* 선지급(기지급액) 처리: 기지급액 열 + 공제총액 수식에 합산 */
+      const preOf=P.bjPreOf||{};
+      /* 이카운트 기지급액과 이중 반영 방지: 큰 쪽 사용 */
+      const epcPre={};
+      if(P.epc)P.epc.emps.forEach(e2=>{
+        const emp2=em.rows.find(x=>x.name.replace(/\s+/g,"")===e2.name.replace(/\s+/g,""));
+        if(emp2&&e2.prepaid>0)epcPre[emp2.r]=e2.prepaid;
+      });
+      const preAmt={};let preTotal=0;
+      for(const row of em.rows){
+        const v3=Math.max(Math.round(preOf[row.r]||0),Math.round(epcPre[row.r]||0));
+        preAmt[row.r]=v3;preTotal+=v3;
+      }
+      /* 열 위치 파악: 지급총액/공제총액 열, 기지급액 열 */
+      let EcI=null,LcI=null,preColI=null;
+      for(let c=2;c<=sh.maxC;c++){
+        const rf=payIdxCol(c)+shHdr;
+        const t3=sEd[rf]!==undefined?String(sEd[rf]||""):((sh.cells[rf]&&sh.cells[rf].typ==="str")?String(sh.cells[rf].v):"");
+        const tt=t3.trim();
+        if(tt==="지급총액")EcI=c;
+        else if(tt==="공제총액")LcI=c;
+        else if(tt==="기지급액")preColI=c;
+      }
+      if(!preColI&&preTotal>0){
+        for(let c=14;c<=30&&!preColI;c++){
+          if(c>sh.maxC)sh.maxC=c;
+          const L2=payIdxCol(c);
+          const rf=L2+shHdr;
+          const t3=sEd[rf]!==undefined?String(sEd[rf]||""):((sh.cells[rf]&&sh.cells[rf].typ==="str")?String(sh.cells[rf].v):"");
+          if(t3.trim())continue;
+          let has=false;
+          for(const row of em.rows){const cc=sh.cells[L2+row.r];if(cc&&cc.typ==="num"&&cc.v!==""){has=true;break;}}
+          if(!has)preColI=c;
+        }
+      }
+      if(preColI&&EcI&&LcI){
+        const preL=payIdxCol(preColI),Lc=payIdxCol(LcI);
+        const d1=payIdxCol(EcI+1),d2=payIdxCol(LcI-1);
+        const hRef2=preL+shHdr;
+        if(preTotal>0)payEdit("상용직급여",hRef2,"기지급액",true);
+        else{
+          const asH2=((P.autoSet||{})["상용직급여"]||{})[hRef2];
+          if(asH2&&sEd[hRef2]!==undefined)payEdit("상용직급여",hRef2,"",true);
+        }
+        const sEd2=(P.edits||{})["상용직급여"]||{};
+        const sAs2=(P.autoSet||{})["상용직급여"]||{};
+        for(const row of em.rows){
+          af("상용직급여",preL+row.r,preAmt[row.r]);
+          const lref=Lc+row.r;
+          if(preAmt[row.r]>0){
+            /* 공제총액 = 기존 공제합 + 기지급액 (수식으로 교체, 엑셀에도 반영) */
+            const V2=payMkVal(sh,sEd2);
+            payEdit("상용직급여",lref,{f:"SUM("+d1+row.r+":"+d2+row.r+","+preL+row.r+")",v:Math.round(V2(lref))},true);
+          }else if(sAs2[lref]&&sEd2[lref]!==undefined&&typeof sEd2[lref]==="object"){
+            delete sEd2[lref];delete sAs2[lref];
           }
         }
       }
@@ -6437,6 +6554,7 @@ function payAutoFill(){
       }
       if(tcol){
         const hv=payMkVal(hd,(P.edits||{})["휴일근무수당"]);
+        P.holOf={};
         for(let r=3;r<=hd.maxR;r++){
           const a=hd.cells["A"+r];
           if(a&&a.typ==="str"&&String(a.v).trim()==="계")break;
@@ -6447,7 +6565,9 @@ function payAutoFill(){
           const emp=em.rows.find(x=>x.name.replace(/\s+/g,"")===n);
           if(!emp)continue;
           const ot=Number(((P.edits||{})["__ot"]||{})[String(emp.r)]||0);
-          const v=Math.round(hv(tcol+r))+Math.round(ot);
+          const hol=Math.round(hv(tcol+r));
+          P.holOf[emp.r]=hol;
+          const v=hol+Math.round(ot);
           if(v>0)payEdit("상용직급여","C"+emp.r,v,true);
           else{
             /* 0이면: 이 칸을 자동으로 채웠던 경우에만 되돌림 (직접 적은 별도 수당은 보존) */
@@ -6460,15 +6580,6 @@ function payAutoFill(){
     }
     const V=payMkVal(sh,(P.edits||{})["상용직급여"]);
     const gSum=(rows,col)=>rows.reduce((t,r)=>t+V(col+r),0);
-    const af=(shName,ref,val)=>{
-      val=Math.round(val);
-      const s2=paySheetByName(shName);
-      const c2=s2?s2.cells[ref]:null;
-      const hasOrig=c2&&c2.typ==="num"&&c2.v!=="";
-      const hasEd=((P.edits||{})[shName]||{})[ref]!==undefined;
-      if(val===0&&!hasOrig){if(hasEd)payEdit(shName,ref,"",true);return;} /* 0이면 빈 칸으로 */
-      payEdit(shName,ref,val,true);
-    };
     /* ① 급여품의: 부서별 상용직 행의 급여(E)·상여금(H) */
     const pw=paySheetByName("급여품의");
     if(pw&&groups.length){
@@ -6520,6 +6631,7 @@ function payAutoFill(){
       };
       const byLabel={};
       groups.forEach(g=>{const l=groupLabel(g);if(l&&!byLabel[l])byLabel[l]=g;});
+      const holOf=P.holOf||{};
       tgts.forEach((r)=>{
         const b=pw.cells["B"+r];
         const bt=b&&b.typ==="str"?String(b.v).trim():"";
@@ -6527,6 +6639,11 @@ function payAutoFill(){
         if(!g)return;
         af("급여품의","E"+r,gSum(g,"B"));
         af("급여품의","H"+r,gSum(g,"D"));
+        /* 제수당(C합) = 휴일수당(휴일시트) + 초과·기타 → 품의 G=휴일합, F=나머지 */
+        const cSum=gSum(g,"C");
+        const holSum=g.reduce((t,rr)=>t+(holOf[rr]||0),0);
+        af("급여품의","G"+r,holSum);
+        af("급여품의","F"+r,Math.round(cSum-holSum));
       });
     }
     /* ② 인건비현황: 이번 달 행 */
@@ -6558,8 +6675,9 @@ function payAutoFill(){
         const bonusAll=gSum(groups.flat?groups.flat():[].concat.apply([],groups),"D");
         let sb=0;
         if(P.epc)P.epc.emps.forEach(e=>{sb+=e.sbonus||0;});
-        af("인건비현황","F"+mrow,bonusAll-sb);      /* 상여금 */
-        if(P.epc)af("인건비현황","G"+mrow,sb);      /* 특별상여금 */
+        const spec=Math.round(P.bjSpecialSum||0);
+        af("인건비현황","F"+mrow,bonusAll-sb-spec);          /* 상여금(월분) */
+        if(P.epc||spec)af("인건비현황","G"+mrow,sb+spec);    /* 특별상여금(명절 등) */
       }
     }
   }catch(e){console.warn("autofill",e);}
@@ -6588,6 +6706,119 @@ function payApplyEpc(){
   const notFound=P.epc.emps.filter(e=>!used.has(e.name)).map(e=>e.name+"("+(e.dept||"?")+")");
   P.result={matched:matched,notFound:notFound,mismatch:mismatch};
   toast("상용직 "+matched.length+"명 공제내역 반영됨");
+}
+/* ---------- 상여금 시트 열 구조 (월 열 + 앱에서 추가한 특별상여 열) ---------- */
+function payBjCols(){
+  const P=window.__pay;
+  const bj=paySheetByName("상여금");
+  if(!bj)return null;
+  const ed=(P.edits||{})["상여금"]||{};
+  let hdrRow=3;
+  for(let r=1;r<=6;r++){const b=bj.cells["B"+r];if(b&&b.typ==="str"&&String(b.v).trim()==="이름"){hdrRow=r;break;}}
+  const ym=payYm();
+  let monthCol=null,freeCol=null;
+  const added=[];
+  for(let c=3;c<=bj.maxC;c++){
+    const L=payIdxCol(c),ref=L+hdrRow;
+    const cell=bj.cells[ref];
+    const orig=cell&&cell.typ==="str"?String(cell.v).trim():"";
+    const edv=ed[ref]!==undefined?String(ed[ref]||"").trim():null;
+    const label=edv!==null?edv:orig;
+    if(label){
+      if(ym&&label===ym.m+"월"&&!monthCol)monthCol=L;
+      if(edv!==null&&edv&&!orig)added.push({col:L,label:label});
+    }else if(!freeCol){
+      let has=false;
+      for(let r=hdrRow+1;r<=bj.maxR&&!has;r++){
+        const c2=bj.cells[L+r];
+        if((ed[L+r]!==undefined&&ed[L+r]!=="")||(c2&&!c2.f&&c2.typ==="num"&&c2.v!==""))has=true;
+      }
+      if(!has)freeCol=L;
+    }
+  }
+  return {sheet:bj,hdrRow:hdrRow,monthCol:monthCol,added:added,freeCol:freeCol,ym:ym};
+}
+function payBonusColAdd(){
+  const inp=document.getElementById("bjNewCol");
+  const label=inp?String(inp.value||"").trim():"";
+  if(!label){toast("항목 이름을 먼저 적어주세요 (예: 추석)",true);return;}
+  const BJ=payBjCols();
+  if(!BJ)return;
+  let free=BJ.freeCol;
+  if(!free){
+    if(BJ.sheet.maxC<30){BJ.sheet.maxC++;free=payIdxCol(BJ.sheet.maxC);}
+    else{toast("빈 열이 없어요 — 엑셀에서 열을 추가한 뒤 다시 올려주세요",true);return;}
+  }
+  payEdit("상여금",free+BJ.hdrRow,label);
+  window.__pay.edits["__bjpre"]=window.__pay.edits["__bjpre"]||{};
+  window.__pay.edits["__bjpre"][free]=1;/* 특별상여는 보통 선지급 → 기본 켬 */
+  paySchedSave();
+  renderPay();
+}
+function payBonusColDel(col){
+  const P=window.__pay;
+  const BJ=payBjCols();
+  if(!BJ)return;
+  payEdit("상여금",col+BJ.hdrRow,"");
+  if((P.edits||{})["__bjpre"])delete P.edits["__bjpre"][col];
+  for(let r=BJ.hdrRow+1;r<=BJ.sheet.maxR;r++){
+    const ref=col+r;
+    const cell=BJ.sheet.cells[ref];
+    const hasV=(cell&&!cell.f&&cell.typ==="num"&&cell.v!=="")||((((P.edits||{})["상여금"]||{})[ref])!==undefined);
+    if(hasV&&!(cell&&cell.typ==="str"))payEdit("상여금",ref,"");
+  }
+  paySchedSave();
+  renderPay();
+}
+function payBonusPreToggle(col){
+  const P=window.__pay;
+  P.edits=P.edits||{};
+  const pre=(P.edits["__bjpre"]=P.edits["__bjpre"]||{});
+  if(pre[col])delete pre[col];else pre[col]=1;
+  if(!Object.keys(pre).length)delete P.edits["__bjpre"];
+  paySchedSave();
+  renderPay();
+}
+window.payBonusPreToggle=payBonusPreToggle;
+window.payBonusColAdd=payBonusColAdd;window.payBonusColDel=payBonusColDel;
+/* ---------- 엔터로 아래 칸 이동 ---------- */
+function payKeyDown(e,el){
+  if(e.key==="Enter"){
+    e.preventDefault();
+    const ref=el.dataset.ref;
+    window.__pay.focusNext={sh:el.dataset.sh,col:ref.replace(/\d+/g,""),row:Number(ref.replace(/[A-Z]/g,""))+1};
+    el.blur();
+  }
+}
+function payKeyDownOt(e,el){
+  if(e.key==="Enter"){
+    e.preventDefault();
+    window.__pay.focusNext={ot:true,r:el.dataset.r};
+    el.blur();
+  }
+}
+window.payKeyDown=payKeyDown;window.payKeyDownOt=payKeyDownOt;
+function payApplyFocus(root){
+  const P=window.__pay;
+  const fn=P.focusNext;
+  if(!fn)return;
+  P.focusNext=null;
+  let target=null;
+  if(fn.ot){
+    const ots=[...root.querySelectorAll("td.ot.ec")];
+    const i=ots.findIndex(x=>x.dataset.r===String(fn.r));
+    if(i>=0&&i+1<ots.length)target=ots[i+1];
+  }else{
+    for(let r=fn.row;r<=fn.row+40&&!target;r++)target=root.querySelector('td.ec[data-sh="'+fn.sh+'"][data-ref="'+fn.col+r+'"]');
+  }
+  if(target){
+    target.focus();
+    try{
+      const sel=window.getSelection();sel.removeAllRanges();
+      const rg=document.createRange();rg.selectNodeContents(target);sel.addRange(rg);
+    }catch(e){}
+    target.scrollIntoView({block:"nearest"});
+  }
 }
 /* ---------- 휴일 추가/삭제 (휴일근무수당 시트) ---------- */
 function payHolAdd(){
@@ -6685,7 +6916,10 @@ async function payDownload(){
         for(const tg of["f","v","is"])for(const x of[...cel.getElementsByTagName(tg)])cel.removeChild(x);
         const val=edits[ref];
         if(val===""||val==null)continue;/* 비움 */
-        if(typeof val==="number"){
+        if(typeof val==="object"&&val.f){
+          const fe=doc.createElementNS(NSX,"f");fe.textContent=String(val.f);cel.appendChild(fe);
+          const vv0=doc.createElementNS(NSX,"v");vv0.textContent=String(Math.round(val.v||0));cel.appendChild(vv0);
+        }else if(typeof val==="number"){
           const vv=doc.createElementNS(NSX,"v");vv.textContent=String(val);cel.appendChild(vv);
         }else{
           cel.setAttribute("t","inlineStr");
@@ -6772,6 +7006,14 @@ async function payLoadMonth(key){
     P.wb.b64=fd.b64;
     P.edits=fd.edits||{};
     P.autoSet=fd.autoSet||{};
+    for(const sh2 of P.wb.sheets){
+      const ed2=P.edits[sh2.name]||{};
+      for(const ref in ed2){
+        const ci=payColIdx(ref.replace(/\d+/g,"")),ri=Number(ref.replace(/[A-Z]/g,""));
+        if(ci>sh2.maxC)sh2.maxC=Math.min(ci,30);
+        if(ri>sh2.maxR)sh2.maxR=Math.min(ri,300);
+      }
+    }
     P.result=null;P.epc=null;
     P.sheet=P.wb.sheets.some(x=>x.name==="상용직급여")?"상용직급여":P.wb.sheets[0].name;
     P.cloudState="saved";
@@ -7102,14 +7344,14 @@ function renderPay(){
             const isAuto=ed!==undefined&&((P.autoSet||{})[sh.name]||{})[ref];
             const disp=ed!==undefined?fv(ed):(cell?(cell.typ==="str"?cell.v:fv(cell.v)):"");
             const isStr=ed!==undefined?typeof ed!=="number":(cell?cell.typ==="str":false);
-            tds+=`<td class="ec${isStr?" ls":""}${ed!==undefined?(isAuto?" autofill":" edited"):""}"${span} style="${scss}" title="${isAuto?"자동 채움 — 직접 고치면 그 값이 우선돼요":""}" contenteditable="true" data-sh="${esc(sh.name)}" data-ref="${ref}" onblur="payCellEdit(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">${esc(disp)}</td>`;
+            tds+=`<td class="ec${isStr?" ls":""}${ed!==undefined?(isAuto?" autofill":" edited"):""}"${span} style="${scss}" title="${isAuto?"자동 채움 — 직접 고치면 그 값이 우선돼요":""}" contenteditable="true" data-sh="${esc(sh.name)}" data-ref="${ref}" onblur="payCellEdit(this)" onkeydown="payKeyDown(event,this)">${esc(disp)}</td>`;
           }
         }
         if(isHol){
           if(r===otHeadRow)tds+=`<td class="ot" style="font-weight:700">초과근무수당 ✍ 직접입력</td>`;
           else if(otEmpOf[r]!=null){
             const ov=((P.edits||{})["__ot"]||{})[String(otEmpOf[r])];
-            tds+=`<td class="ec ot${ov!=null?" edited":""}" contenteditable="true" data-r="${otEmpOf[r]}" onblur="payOtEdit(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">${ov!=null?fmt(ov):""}</td>`;
+            tds+=`<td class="ec ot${ov!=null?" edited":""}" contenteditable="true" data-r="${otEmpOf[r]}" onblur="payOtEdit(this)" onkeydown="payKeyDownOt(event,this)">${ov!=null?fmt(ov):""}</td>`;
           }else tds+=`<td class="ot"></td>`;
         }
         if(hasAny)trs+=`<tr>${tds}</tr>`;
@@ -7118,14 +7360,22 @@ function renderPay(){
       if(sh.name==="휴일근무수당"){
         bjNote=` <b style="color:#2F6B3F">시간을 적으면 수당이 계산되고, 맨 오른쪽 '초과근무수당 직접입력' 열(다른 엑셀에서 정리한 값)과 합쳐져 상용직급여 제수당에 자동 반영돼요.</b>`;
       }
+      let bjCtl="";
       if(sh.name==="상여금"){
-        const ymN=payYm();
-        let hasCol=false;
-        if(ymN)for(let c=2;c<=sh.maxC;c++){const h=sh.cells[payIdxCol(c)+"3"];if(h&&h.typ==="str"&&String(h.v).trim()===ymN.m+"월"){hasCol=true;break;}}
-        bjNote=ymN?(hasCol?` <b style="color:#2F6B3F">이 시트의 ${ymN.m}월 열에 적으면 상용직급여 → 급여품의 → 인건비현황까지 자동으로 반영돼요.</b>`:` <b style="color:#b45309">${ymN.m}월 열이 없어요 — 엑셀에서 열을 추가한 뒤 다시 올려주세요.</b>`):"";
+        const BJ=payBjCols();
+        const ymN=BJ?BJ.ym:null;
+        bjNote=ymN?(BJ.monthCol?` <b style="color:#2F6B3F">${ymN.m}월 열과 아래에서 추가한 특별상여 열에 적으면, 합쳐진 금액이 상용직급여 → 급여품의 → 인건비현황까지 자동 반영돼요. 특별상여 열 금액은 인건비현황의 특별상여금으로 잡히고, ☑선지급이면 상용직급여에 기지급액으로 공제돼 실지급에서 빠져요.</b>`:` <b style="color:#b45309">${ymN.m}월 열이 없어요 — 엑셀에서 열을 추가한 뒤 다시 올려주세요.</b>`):"";
+        if(BJ){
+          bjCtl=`<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+            <span class="footnote" style="font-weight:700">특별상여 항목:</span>
+            ${BJ.added.length?BJ.added.map(a=>{const pre=((P.edits||{})["__bjpre"]||{})[a.col];return `<span class="paychip" style="cursor:default">${esc(a.label)} <b style="cursor:pointer;color:${pre?"#2F6B3F":"#999"}" onclick="payBonusPreToggle('${a.col}')" title="선지급이면 기지급액으로 공제돼 실지급에서 빠져요">${pre?"☑ 선지급":"☐ 선지급"}</b> <b style="cursor:pointer;color:#b45309" onclick="payBonusColDel('${a.col}')" title="이 항목 지우기">✕</b></span>`;}).join(""):'<span class="footnote">아직 없음</span>'}
+            <input id="bjNewCol" placeholder="예: 추석" style="width:110px;padding:4px 8px;border:1px solid rgba(0,0,0,.2);border-radius:8px;font-family:inherit">
+            <button class="btn btn-sm" onclick="payBonusColAdd()">➕ 항목 추가</button>
+          </div>`;
+        }
       }
       body=`<div class="footnote" style="margin-bottom:6px">칸을 누르면 바로 수정할 수 있어요(Enter로 확정). 수식 칸은 자동 계산이라 수정이 안 돼요(마우스를 올리면 수식이 보여요). <span style="color:#4E8B60">초록 테두리</span>는 자동 채움, <span style="color:#B08A00">노란 테두리</span>는 직접 수정한 칸이에요.${bjNote}</div>
-      ${holCtl}
+      ${holCtl}${bjCtl}
       <div class="table-wrap" style="max-height:560px;overflow:auto"><table class="payws"><tbody>${trs}</tbody></table></div>`;
     }
     wbBox=`<div class="card"><div class="paychips">${chips}</div>${body}</div>`;
@@ -7137,6 +7387,7 @@ function renderPay(){
   allow read, write: if salesAdmin();
 }</pre></div>`:"";
   el.innerHTML=`${ruleBox}${upBox}${res}${wbBox}${sumBox}${acctBox}${histBox}`;
+  payApplyFocus(el);
 }
 async function payRecordMonth(){
   try{
