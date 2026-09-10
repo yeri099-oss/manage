@@ -6782,6 +6782,39 @@ function payBonusPreToggle(col){
 }
 window.payBonusPreToggle=payBonusPreToggle;
 window.payBonusColAdd=payBonusColAdd;window.payBonusColDel=payBonusColDel;
+/* ---------- 손익·4대보험: 상용직급여에서 공제 가져오기 (사람 이름 기준, 버튼 실행) ---------- */
+function payPnlImport(){
+  const P=window.__pay;
+  const pn=paySheetByName("손익");
+  const em=payEmpRows();
+  if(!pn||!em){toast("손익 또는 상용직급여 시트를 찾지 못했어요",true);return;}
+  const bo=paySheetByName("4대보험");
+  const ed=(P.edits||{})["손익"]||{};
+  const put=(sh2,ref,v)=>{payEdit(sh2,ref,v===0?"":Math.round(v));};
+  let n=0;const miss=[];
+  for(let r=2;r<=pn.maxR;r++){
+    const edA=ed["A"+r];
+    const a=pn.cells["A"+r];
+    const nm=edA!==undefined?String(edA).trim():(a&&a.typ==="str"?String(a.v).trim():"");
+    if(!nm||nm==="사원명")continue;
+    const emp=em.rows.find(x=>x.name.replace(/\s+/g,"")===nm.replace(/\s+/g,""));
+    if(!emp){miss.push(nm);continue;}
+    const V={F:em.val("F"+emp.r),G:em.val("G"+emp.r),H:em.val("H"+emp.r),I:em.val("I"+emp.r),J:em.val("J"+emp.r),K:em.val("K"+emp.r)};
+    for(const c in V)put("손익",c+r,V[c]);
+    if(bo){
+      /* 4대보험 시트: 같은 행 번호에 A국민 B건강 C장기 (D는 빈칸 유지) E고용 */
+      put("4대보험","A"+r,V.H);
+      put("4대보험","B"+r,V.I);
+      put("4대보험","C"+r,V.J);
+      put("4대보험","E"+r,V.K);
+    }
+    n++;
+  }
+  paySchedSave();
+  renderPay();
+  toast(n+"명 공제를 가져왔어요"+(miss.length?" · 상용직급여에 없는 이름: "+miss.join(", "):""));
+}
+window.payPnlImport=payPnlImport;
 /* ---------- 엔터로 아래 칸 이동 ---------- */
 function payKeyDown(e,el){
   if(e.key==="Enter"){
@@ -7329,7 +7362,8 @@ function renderPay(){
   let wbBox="";
   if(wb){
     const active=P.sheet||wb.sheets[0].name;
-    const chips=wb.sheets.map(s=>`<button class="paychip${s.name===active?" on":""}" onclick="window.__pay.sheet='${esc(s.name)}';renderPay()">${esc(s.name)}${(P.edits||{})[s.name]&&Object.keys(P.edits[s.name]).length?" ✎":""}</button>`).join("");
+    const chipList=wb.sheets.filter(x=>x.name!=="퇴직금").concat(wb.sheets.filter(x=>x.name==="퇴직금"));
+    const chips=chipList.map(s=>`<button class="paychip${s.name===active?" on":""}" onclick="window.__pay.sheet='${esc(s.name)}';renderPay()">${esc(s.name)}${(P.edits||{})[s.name]&&Object.keys(P.edits[s.name]).length?" ✎":""}</button>`).join("");
     let body="";
     {
       const sh=wb.sheets.find(s=>s.name===active)||wb.sheets[0];
@@ -7457,7 +7491,13 @@ function renderPay(){
       if(sh.name==="휴일근무수당"){
         bjNote=` <b style="color:#2F6B3F">시간을 적으면 수당이 계산되고, 맨 오른쪽 '초과근무수당 직접입력' 열(다른 엑셀에서 정리한 값)과 합쳐져 상용직급여 제수당에 자동 반영돼요.</b>`;
       }
-      let bjCtl="";
+      let bjCtl="",pnlCtl="";
+      if(sh.name==="손익"){
+        pnlCtl=`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+          <button class="btn btn-sm btn-primary" onclick="payPnlImport()">📥 상용직급여에서 공제 가져오기</button>
+          <span class="footnote">A열에 사람 이름을 순서대로 적은 뒤 누르면 소득세·지방소득세·국민연금·건강보험·장기요양·고용보험이 이름 매칭으로 채워지고, <b>4대보험 시트도 같은 자리에</b>(장기요양과 고용 사이 빈칸 유지) 같이 채워져요.</span>
+        </div>`;
+      }
       if(sh.name==="상여금"){
         const BJ=payBjCols();
         const ymN=BJ?BJ.ym:null;
@@ -7472,7 +7512,7 @@ function renderPay(){
         }
       }
       body=`<div class="footnote" style="margin-bottom:6px">칸을 누르면 바로 수정할 수 있어요(Enter로 확정). 수식 칸은 자동 계산이라 수정이 안 돼요(마우스를 올리면 수식이 보여요). <span style="color:#4E8B60">초록 테두리</span>는 자동 채움, <span style="color:#B08A00">노란 테두리</span>는 직접 수정한 칸이에요.${bjNote}</div>
-      ${holCtl}${bjCtl}
+      ${holCtl}${bjCtl}${pnlCtl}
       <div class="table-wrap" style="max-height:560px;overflow:auto"><table class="payws"><tbody>${trs}</tbody></table></div>`;
     }
     wbBox=`<div class="card"><div class="paychips">${chips}</div>${body}</div>`;
