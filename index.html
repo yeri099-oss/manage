@@ -934,6 +934,7 @@ const S = {
     epidaDrink: { add: [], remove: [] }, // 피다 주류·음료 수동 분류
     payMonthly: {},      // {year:{months:{m:{count,total,deduct,net,byDept}}}} — 급여 월별 집계(관리자 전용)
     payFiles: {},        // {"y-m":{y,m,fileName,b64,edits,savedAt}} — 급여품의 파일+수정 내역(관리자 전용)
+    payAcct: {},         // {이름(공백제거): "i"(이야기)|"p"(피다)} — 급여 지급 통장 배정
     bojagiPosMap: {},    // 보자기 포스 상품코드 → {kind,id} 매핑
     jagum: {},           // {year:{periods:{'MM-DD':{cash,acc,dep,toechung,yudong,base,inc,dec}}}}
     targets: {},         // {year:{total:{m:amt},epida,market,bojagi}}
@@ -1118,7 +1119,7 @@ async function loadAllData() {
   jobs.push(fsCol("config").doc("bojagiDrinkItems").get().then((d) => { S.data.drinkItems = d.data()?.items || []; }));
   jobs.push(db.collection("salesStatus_months").get().then((snap) => { S.cfmYms = []; snap.forEach((d) => S.cfmYms.push(d.id)); }).catch(() => {}));
   jobs.push(fsCol("config").doc("epidaDrink").get().then((d) => { S.data.epidaDrink = d.data() || { add: [], remove: [] }; }).catch(() => {}));
-  jobs.push(fsCol("payMonthly").get().then((snap)=>{const out={},files={};snap.forEach((d)=>{if(d.id.indexOf("file_")===0)files[d.id.slice(5)]=d.data();else out[d.id]=d.data();});S.data.payMonthly=out;S.data.payFiles=files;}).catch(()=>{S.data.payMonthly=S.data.payMonthly||{};S.data.payFiles=S.data.payFiles||{};}));
+  jobs.push(fsCol("payMonthly").get().then((snap)=>{const out={},files={};snap.forEach((d)=>{if(d.id.indexOf("file_")===0)files[d.id.slice(5)]=d.data();else if(d.id==="acctConfig")S.data.payAcct=d.data().acctOf||{};else out[d.id]=d.data();});S.data.payMonthly=out;S.data.payFiles=files;}).catch(()=>{S.data.payMonthly=S.data.payMonthly||{};S.data.payFiles=S.data.payFiles||{};S.data.payAcct=S.data.payAcct||{};}));
   jobs.push(fsCol("config").doc("bojagiPosMap").get().then((d) => { S.data.bojagiPosMap = (d.data() || {}).map || {}; }).catch(() => {}));
   await Promise.all(jobs);
   pnlNormalizeKeys();
@@ -6779,6 +6780,68 @@ async function payLoadMonth(key){
   renderPay();
 }
 window.payLoadMonth=payLoadMonth;
+/* ---------- 급여지급표 (통장별 실지급액) ---------- */
+const PAY_ACCT_DEF={/* 2026-07 지급표 기준 초기 배정 */
+  "송정은":"i","최예리":"i","오신일":"i","박소정":"i","이순복":"i","홍선미":"i","김은현":"i","정승영":"i","장희진":"i","문승주":"i","이경엽":"i",
+  "임해경":"p","오지현":"p","키하라사키":"p","사키":"p","이수현":"p","이은혜":"p","원정연":"p","신선영":"p","이샘":"p","이샘":"p","김진이":"p","이옥란":"p","윤세희":"p","오현미":"p"
+};
+function payAcctOf(name){
+  const k=String(name).replace(/\s+/g,"");
+  return (S.data.payAcct||{})[k]||PAY_ACCT_DEF[k]||null;
+}
+async function payAcctSet(name,acct){
+  const k=String(name).replace(/\s+/g,"");
+  S.data.payAcct=S.data.payAcct||{};
+  S.data.payAcct[k]=acct;
+  try{
+    if(!IS_DEMO)await fsCol("payMonthly").doc("acctConfig").set({acctOf:S.data.payAcct});
+  }catch(e){console.error(e);window.__pay.ruleErr=true;}
+  renderPay();
+}
+window.payAcctSet=payAcctSet;
+function payPayees(){
+  const P=window.__pay;
+  const out=[];
+  const em=payEmpRows();
+  if(em)em.rows.forEach(row=>out.push({name:row.name,amt:Math.round(em.val("M"+row.r)),src:"상용"}));
+  const hs=paySheetByName("시급직급여");
+  if(hs){
+    const hv=payMkVal(hs,(P.edits||{})["시급직급여"]);
+    for(let r=3;r<=hs.maxR;r++){
+      const b=hs.cells["B"+r];
+      if(!b||b.typ!=="str")continue;
+      const nm=String(b.v).trim();
+      if(!nm||nm==="성명"||nm==="파출"||nm.indexOf("계")>=0||nm.indexOf("합")>=0)continue;
+      const amt=Math.round(hv("L"+r));
+      out.push({name:nm,amt:amt,src:"시급"});
+    }
+  }
+  const ys=paySheetByName("용역직급여");
+  if(ys){
+    const yv=payMkVal(ys,(P.edits||{})["용역직급여"]);
+    for(let r=3;r<=ys.maxR;r++){
+      const a=ys.cells["A"+r];
+      if(!a||a.typ!=="str")continue;
+      const nm=String(a.v).trim();
+      if(!nm||nm==="성명"||nm==="계"||nm.indexOf("합")>=0)continue;
+      out.push({name:nm,amt:Math.round(yv("J"+r)),src:"용역"});
+    }
+  }
+  return out;
+}
+async function payPayCopy(acct,btn){
+  const ppl=payPayees().filter(x=>payAcctOf(x.name)===acct);
+  const label=acct==="i"?"이야기":"피다";
+  let t=0;
+  const lines=ppl.map(x=>{t+=x.amt;return x.name+"\t"+fmt(x.amt);});
+  const txt=label+"\n사원명\t실지급액\n"+lines.join("\n")+"\n합계\t"+fmt(t);
+  try{
+    if(navigator.clipboard&&navigator.clipboard.writeText)await navigator.clipboard.writeText(txt);
+    else{const ta=document.createElement("textarea");ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand("copy");ta.remove();}
+    if(btn){const o=btn.textContent;btn.textContent="✅ 복사됨!";setTimeout(()=>{btn.textContent=o;},1600);}
+  }catch(e){alert(txt);}
+}
+window.payPayCopy=payPayCopy;
 /* ---------- 지급 요약 데이터 ---------- */
 function paySummaryData(){
   const P=window.__pay;
@@ -6897,6 +6960,31 @@ function renderPay(){
       </div>
       ${deptLine}
       </div>`;
+  }
+  /* 급여지급표 (통장별) */
+  let acctBox="";
+  if(wb){
+    const ppl=payPayees();
+    const grp={i:[],p:[],un:[]};
+    ppl.forEach(x=>{const a=payAcctOf(x.name);(a==="i"?grp.i:a==="p"?grp.p:grp.un).push(x);});
+    const tableOf=(list,acct)=>{
+      let t=0;
+      const rows=list.map(x=>{t+=x.amt;
+        const other=acct==="i"?"p":"i";
+        return `<tr><td class="l">${esc(x.name)} <span style="font-size:11px;color:var(--sub)">${x.src}</span></td><td><b>${fmt(x.amt)}</b></td><td><button class="btn btn-sm" style="padding:1px 7px;font-size:11px" onclick="payAcctSet('${esc(x.name)}','${other}')" title="다른 통장으로 옮기기">→ ${other==="i"?"이야기":"피다"}</button></td></tr>`;
+      }).join("");
+      return `<table class="rpt" style="width:100%"><thead><tr><th class="l">사원명</th><th>실지급액</th><th></th></tr></thead><tbody>${rows}<tr class="total"><td class="l">합계 (${list.length}명)</td><td><b>${fmt(t)}</b></td><td></td></tr></tbody></table>`;
+    };
+    const unRows=grp.un.length?`<div style="margin-top:10px;padding:10px 12px;background:#FDF6EC;border:1px solid #E8C88A;border-radius:10px">
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px">⚠ 통장 미지정 — 어느 통장에서 나가는지 골라주세요</div>
+      ${grp.un.map(x=>`<div style="display:flex;gap:8px;align-items:center;margin:3px 0"><span style="min-width:120px">${esc(x.name)} <b>${fmt(x.amt)}</b>원 <span style="font-size:11px;color:var(--sub)">${x.src}</span></span><button class="btn btn-sm" onclick="payAcctSet('${esc(x.name)}','i')">이야기</button><button class="btn btn-sm" onclick="payAcctSet('${esc(x.name)}','p')">피다</button></div>`).join("")}
+    </div>`:"";
+    acctBox=`<div class="card"><div class="card-title">급여지급표 <span class="unit">통장별 실지급액 — 상용직·시급직·용역직 합침 · 배정은 한 번 정하면 계속 기억돼요</span></div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px">
+        <div style="flex:1;min-width:280px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><b>🏦 이야기 (꽃밥이야기 통장)</b><button class="btn btn-sm" onclick="payPayCopy('i',this)">📄 복사</button></div>${tableOf(grp.i,"i")}</div>
+        <div style="flex:1;min-width:280px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><b>🏦 피다 (꽃밥에피다 통장)</b><button class="btn btn-sm" onclick="payPayCopy('p',this)">📄 복사</button></div>${tableOf(grp.p,"p")}</div>
+      </div>
+      ${unRows}</div>`;
   }
   /* 시트 보기 */
   let wbBox="";
@@ -7048,7 +7136,7 @@ function renderPay(){
     <pre style="background:#fff;border:1px solid rgba(0,0,0,.1);border-radius:8px;padding:10px;font-size:12px;overflow:auto">match /salesApp_payMonthly/{doc} {
   allow read, write: if salesAdmin();
 }</pre></div>`:"";
-  el.innerHTML=`${ruleBox}${upBox}${res}${wbBox}${sumBox}${histBox}`;
+  el.innerHTML=`${ruleBox}${upBox}${res}${wbBox}${sumBox}${acctBox}${histBox}`;
 }
 async function payRecordMonth(){
   try{
