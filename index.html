@@ -935,6 +935,8 @@ const S = {
     payMonthly: {},      // {year:{months:{m:{count,total,deduct,net,byDept}}}} — 급여 월별 집계(관리자 전용)
     payFiles: {},        // {"y-m":{y,m,fileName,b64,edits,savedAt}} — 급여품의 파일+수정 내역(관리자 전용)
     payAcct: {},         // {이름(공백제거): "i"(이야기)|"p"(피다)} — 급여 지급 통장 배정
+    payTax: { byName: {} }, // 사원별 공제 계산 설정(국민연금액·건강·장기·고용·가족수·적용률·실측기준)
+    payTaxTable: null,   // 근로소득 간이세액표 {brk:[구간하한(원)], v:[[가족수1..11 세액]]}
     bojagiPosMap: {},    // 보자기 포스 상품코드 → {kind,id} 매핑
     jagum: {},           // {year:{periods:{'MM-DD':{cash,acc,dep,toechung,yudong,base,inc,dec}}}}
     targets: {},         // {year:{total:{m:amt},epida,market,bojagi}}
@@ -1119,7 +1121,7 @@ async function loadAllData() {
   jobs.push(fsCol("config").doc("bojagiDrinkItems").get().then((d) => { S.data.drinkItems = d.data()?.items || []; }));
   jobs.push(db.collection("salesStatus_months").get().then((snap) => { S.cfmYms = []; snap.forEach((d) => S.cfmYms.push(d.id)); }).catch(() => {}));
   jobs.push(fsCol("config").doc("epidaDrink").get().then((d) => { S.data.epidaDrink = d.data() || { add: [], remove: [] }; }).catch(() => {}));
-  jobs.push(fsCol("payMonthly").get().then((snap)=>{const out={},files={};snap.forEach((d)=>{if(d.id.indexOf("file_")===0)files[d.id.slice(5)]=d.data();else if(d.id==="acctConfig")S.data.payAcct=d.data().acctOf||{};else out[d.id]=d.data();});S.data.payMonthly=out;S.data.payFiles=files;}).catch(()=>{S.data.payMonthly=S.data.payMonthly||{};S.data.payFiles=S.data.payFiles||{};S.data.payAcct=S.data.payAcct||{};}));
+  jobs.push(fsCol("payMonthly").get().then((snap)=>{const out={},files={};snap.forEach((d)=>{if(d.id.indexOf("file_")===0)files[d.id.slice(5)]=d.data();else if(d.id==="acctConfig")S.data.payAcct=d.data().acctOf||{};else if(d.id==="taxConfig")S.data.payTax=d.data()||{byName:{}};else if(d.id==="taxTable")S.data.payTaxTable=d.data()||null;else out[d.id]=d.data();});S.data.payMonthly=out;S.data.payFiles=files;}).catch(()=>{S.data.payMonthly=S.data.payMonthly||{};S.data.payFiles=S.data.payFiles||{};S.data.payAcct=S.data.payAcct||{};}));
   jobs.push(fsCol("config").doc("bojagiPosMap").get().then((d) => { S.data.bojagiPosMap = (d.data() || {}).map || {}; }).catch(() => {}));
   await Promise.all(jobs);
   pnlNormalizeKeys();
@@ -6357,20 +6359,50 @@ function payYm(){
   if(P.epc&&P.epc.ym)return P.epc.ym;
   return null;
 }
+function payColMap(){
+  const sh=paySheetByName("상용직급여");
+  if(!sh)return null;
+  let hRow=3;
+  for(let r=1;r<=5;r++){const a=sh.cells["A"+r];if(a&&a.typ==="str"&&String(a.v).trim()==="사원명"){hRow=r;break;}}
+  const names={"급여":"pay","제수당":"alw","상여금":"bon","특별상여금":"sbon","지급총액":"tot","소득세":"tax","지방소득세":"ltax","국민연금":"np","건강보험":"hi","장기요양보험":"ltc","고용보험":"ei","기지급액":"pre","공제총액":"ded","실지급액":"net"};
+  const M={hRow:hRow};
+  const ed=((window.__pay||{}).edits||{})["상용직급여"]||{};
+  for(let c=2;c<=sh.maxC;c++){
+    const L=payIdxCol(c),rf=L+hRow;
+    const t=ed[rf]!==undefined?String(ed[rf]||""):((sh.cells[rf]&&sh.cells[rf].typ==="str")?String(sh.cells[rf].v):"");
+    const k=names[t.trim()];
+    if(k&&!M[k])M[k]=L;
+  }
+  M.pay=M.pay||"B";M.alw=M.alw||"C";M.bon=M.bon||"D";M.tot=M.tot||"E";
+  M.tax=M.tax||"F";M.ltax=M.ltax||"G";M.np=M.np||"H";M.hi=M.hi||"I";M.ltc=M.ltc||"J";M.ei=M.ei||"K";M.ded=M.ded||"L";M.net=M.net||"M";
+  return M;
+}
+/* 지급총액/공제총액 SUM 범위에 해당 열이 포함되는지 (새 양식 감지) */
+function payColInSum(colLetter,sumColLetter){
+  const em=payEmpRows();
+  if(!em||!em.rows.length)return false;
+  const c0=em.sheet.cells[sumColLetter+em.rows[0].r];
+  if(!c0||typeof c0.f!=="string")return false;
+  const m=c0.f.match(/SUM\(([A-Z]+)\d+:([A-Z]+)\d+/);
+  if(!m)return false;
+  const ci=payColIdx(colLetter);
+  return ci>=payColIdx(m[1])&&ci<=payColIdx(m[2]);
+}
 function payEmpRows(){
   const sh=paySheetByName("상용직급여");
   if(!sh)return null;
+  const cm=payColMap();
   const rows=[];
-  for(let r=3;r<=sh.maxR;r++){
+  for(let r=cm.hRow;r<=sh.maxR;r++){
     const a=sh.cells["A"+r];
     if(!a||a.typ!=="str")continue;
     const nm=String(a.v||"").trim();
     if(!nm||nm==="사원명"||nm.indexOf("소계")>=0||nm.indexOf("합계")>=0||nm.indexOf("**")>=0)continue;
-    const e=sh.cells["E"+r];
+    const e=sh.cells[cm.tot+r];
     if(!(e&&typeof e.f==="string"))continue;/* 지급총액 수식 있는 줄 = 직원 줄 */
     rows.push({r:r,name:nm});
   }
-  return {sheet:sh,rows:rows,val:payMkVal(sh,(window.__pay.edits||{})["상용직급여"])};
+  return {sheet:sh,rows:rows,cm:cm,val:payMkVal(sh,(window.__pay.edits||{})["상용직급여"])};
 }
 function payEdit(shName,ref,v,auto){
   const P=window.__pay;
@@ -6427,6 +6459,9 @@ function payAutoFill(){
         const n=String(nb.v).replace(/\s+/g,"");
         const emp=em.rows.find(x=>x.name.replace(/\s+/g,"")===n);
         if(!emp)continue;
+        const cmB=em.cm;
+        /* 새 양식(특별상여금 열이 지급총액 SUM 안에 있음)이면 월상여만 상여금 열에 */
+        const sbonReal=cmB.sbon&&payColInSum(cmB.sbon,cmB.tot);
         let tot=0,hasVal=false;
         for(const L of cols){
           const ref=L+r;
@@ -6435,21 +6470,20 @@ function payAutoFill(){
           const edv=((P.edits||{})["상여금"]||{})[ref];
           const hv2=(edv!==undefined&&edv!=="")||(cellB&&cellB.typ==="num"&&cellB.v!=="");
           if(hv2){
-            hasVal=true;
             const v2=bv(ref);
-            tot+=v2;
             if(L!==BJ.monthCol){
               P.bjSpecialSum+=v2;
               P.bjSpecialOf[emp.r]=(P.bjSpecialOf[emp.r]||0)+v2;
               if(((P.edits||{})["__bjpre"]||{})[L])P.bjPreOf[emp.r]=(P.bjPreOf[emp.r]||0)+v2;
-            }
+              if(!sbonReal){tot+=v2;hasVal=true;}
+            }else{tot+=v2;hasVal=true;}
           }
         }
-        if(hasVal)payEdit("상용직급여","D"+emp.r,Math.round(tot),true);
+        if(hasVal)payEdit("상용직급여",cmB.bon+emp.r,Math.round(tot),true);
         else{
-          const as2=((P.autoSet||{})["상용직급여"]||{})["D"+emp.r];
-          const ex2=((P.edits||{})["상용직급여"]||{})["D"+emp.r];
-          if(as2&&ex2!==undefined)payEdit("상용직급여","D"+emp.r,"",true);
+          const as2=((P.autoSet||{})["상용직급여"]||{})[cmB.bon+emp.r];
+          const ex2=((P.edits||{})["상용직급여"]||{})[cmB.bon+emp.r];
+          if(as2&&ex2!==undefined)payEdit("상용직급여",cmB.bon+emp.r,"",true);
         }
       }
     }
@@ -6532,9 +6566,11 @@ function payAutoFill(){
         }
         const sEd2=(P.edits||{})["상용직급여"]||{};
         const sAs2=(P.autoSet||{})["상용직급여"]||{};
+        const preInDed=payColInSum(preL,Lc);/* 새 양식: 공제총액 수식이 기지급액 포함 */
         for(const row of em.rows){
           af("상용직급여",preL+row.r,preAmt[row.r]);
           const lref=Lc+row.r;
+          if(preInDed)continue;
           if(preAmt[row.r]>0){
             /* 공제총액 = 기존 공제합 + 기지급액 (수식으로 교체, 엑셀에도 반영) */
             const V2=payMkVal(sh,sEd2);
@@ -6555,6 +6591,9 @@ function payAutoFill(){
       }
       if(tcol){
         const hv=payMkVal(hd,(P.edits||{})["휴일근무수당"]);
+        const hEd=(P.edits||{})["휴일근무수당"]||{};
+        const editRows=new Set();
+        for(const ref in hEd){const rr=Number(ref.replace(/[A-Z]/g,""));if(rr)editRows.add(rr);}
         P.holOf={};
         for(let r=3;r<=hd.maxR;r++){
           const a=hd.cells["A"+r];
@@ -6569,12 +6608,19 @@ function payAutoFill(){
           const hol=Math.round(hv(tcol+r));
           P.holOf[emp.r]=hol;
           const v=hol+Math.round(ot);
-          if(v>0)payEdit("상용직급여","C"+emp.r,v,true);
+          /* 업로드된 완성 파일 보호: 파일에 이미 제수당 값이 있고, 이 사람에 대해
+             앱에서 새로 입력(휴일 시간·수당, 초과입력)하거나 이전에 자동으로 채운 적이 없으면 안 덮음 */
+          const alwRef=em.cm.alw+emp.r;
+          const alwCell=em.sheet.cells[alwRef];
+          const hasFileVal=alwCell&&!alwCell.f&&alwCell.typ==="num"&&alwCell.v!=="";
+          const owned=(((P.autoSet||{})["상용직급여"]||{})[alwRef])||ot>0||editRows.has(r);
+          if(hasFileVal&&!owned)continue;
+          if(v>0)payEdit("상용직급여",alwRef,v,true);
           else{
             /* 0이면: 이 칸을 자동으로 채웠던 경우에만 되돌림 (직접 적은 별도 수당은 보존) */
-            const as2=((P.autoSet||{})["상용직급여"]||{})["C"+emp.r];
-            const ex2=((P.edits||{})["상용직급여"]||{})["C"+emp.r];
-            if(as2&&ex2!==undefined)payEdit("상용직급여","C"+emp.r,"",true);
+            const as2=((P.autoSet||{})["상용직급여"]||{})[em.cm.alw+emp.r];
+            const ex2=((P.edits||{})["상용직급여"]||{})[em.cm.alw+emp.r];
+            if(as2&&ex2!==undefined)payEdit("상용직급여",em.cm.alw+emp.r,"",true);
           }
         }
       }
@@ -6638,10 +6684,11 @@ function payAutoFill(){
         const bt=b&&b.typ==="str"?String(b.v).trim():"";
         const g=byLabel[bt];
         if(!g)return;
-        af("급여품의","E"+r,gSum(g,"B"));
-        af("급여품의","H"+r,gSum(g,"D"));
-        /* 제수당(C합) = 휴일수당(휴일시트) + 초과·기타 → 품의 G=휴일합, F=나머지 */
-        const cSum=gSum(g,"C");
+        const cmP=em.cm;
+        af("급여품의","E"+r,gSum(g,cmP.pay));
+        af("급여품의","H"+r,gSum(g,cmP.bon)+(cmP.sbon?g.reduce((t,rr)=>t+V(cmP.sbon+rr),0):0));
+        /* 제수당 합 = 휴일수당(휴일시트) + 초과·기타 → 품의 G=휴일합, F=나머지 */
+        const cSum=gSum(g,cmP.alw);
         const holSum=g.reduce((t,rr)=>t+(holOf[rr]||0),0);
         af("급여품의","G"+r,holSum);
         af("급여품의","F"+r,Math.round(cSum-holSum));
@@ -6673,7 +6720,8 @@ function payAutoFill(){
         af("인건비현황","E"+mrow,pv("G"+tot));      /* 휴일근무수당 */
         af("인건비현황","J"+mrow,pv("I"+tot));      /* 퇴직금 */
         af("인건비현황","H"+mrow,yong);             /* 용역직 */
-        const bonusAll=gSum(groups.flat?groups.flat():[].concat.apply([],groups),"D");
+        const allRows=groups.flat?groups.flat():[].concat.apply([],groups);
+        const bonusAll=gSum(allRows,em.cm.bon)+(em.cm.sbon?allRows.reduce((t,rr)=>t+V(em.cm.sbon+rr),0):0);
         let sb=0;
         if(P.epc)P.epc.emps.forEach(e=>{sb+=e.sbonus||0;});
         const spec=Math.round(P.bjSpecialSum||0);
@@ -6688,12 +6736,14 @@ function payApplyEpc(){
   const em=payEmpRows();
   if(!em||!P.epc)return;
   const byName={};P.epc.emps.forEach(e=>byName[e.name.replace(/\s+/g,"")]=e);
+  const cmE=em.cm;
   const matched=[],mismatch=[],used=new Set();
   for(const row of em.rows){
     const e=byName[row.name.replace(/\s+/g,"")];
     if(!e)continue;
     used.add(e.name);
-    const vals={F:e.tax,G:e.ltax,H:e.pension,I:e.health,J:e.care,K:e.employ};
+    const vals={};
+    vals[cmE.tax]=e.tax;vals[cmE.ltax]=e.ltax;vals[cmE.np]=e.pension;vals[cmE.hi]=e.health;vals[cmE.ltc]=e.care;vals[cmE.ei]=e.employ;
     for(const col in vals)payEdit("상용직급여",col+row.r,Math.round(vals[col]));
     matched.push(row.name);
   }
@@ -6701,7 +6751,7 @@ function payApplyEpc(){
   for(const row of em2.rows){
     const e=byName[row.name.replace(/\s+/g,"")];
     if(!e)continue;
-    const ev=em2.val("E"+row.r);
+    const ev=em2.val(em2.cm.tot+row.r);
     if(Math.abs(ev-e.total)>2)mismatch.push(row.name+" 지급총액 (품의 "+fmt(ev)+" / 이카운트 "+fmt(e.total)+")");
   }
   const notFound=P.epc.emps.filter(e=>!used.has(e.name)).map(e=>e.name+"("+(e.dept||"?")+")");
@@ -6782,6 +6832,166 @@ function payBonusPreToggle(col){
 }
 window.payBonusPreToggle=payBonusPreToggle;
 window.payBonusColAdd=payBonusColAdd;window.payBonusColDel=payBonusColDel;
+/* ---------- 공제 자동 계산 (이카운트 방식 재현) ---------- */
+const PAY_RATE={hi:0.03595,ltcOfHi:0.1314,ei:0.009};/* 2026 검증 요율 */
+function payF10(x){return Math.floor(x/10+1e-7)*10;}
+function payGanseiAlgo(monthly,fam){
+  if(monthly<1060000)return 0;
+  const A=monthly*12;
+  let ded;
+  if(A<=5000000)ded=A*0.7;
+  else if(A<=15000000)ded=3500000+(A-5000000)*0.4;
+  else if(A<=45000000)ded=7500000+(A-15000000)*0.15;
+  else if(A<=100000000)ded=12000000+(A-45000000)*0.05;
+  else ded=14750000+(A-100000000)*0.02;
+  ded=Math.min(ded,20000000);
+  const gs=A-ded;
+  const ins=1500000*fam;
+  const base=Math.min(Math.max(monthly,370000),6170000);
+  const pension=base*0.045*12;
+  let sp;
+  if(fam===1)sp=3100000+A*0.04;
+  else if(fam===2)sp=3600000+A*0.04;
+  else sp=5000000+A*0.07;
+  if(A>30000000)sp-=(A-30000000)*0.05;
+  if(sp<0)sp=0;
+  let b=gs-ins-pension-sp;
+  if(b<0)b=0;
+  let t;
+  if(b<=14000000)t=b*0.06;
+  else if(b<=50000000)t=840000+(b-14000000)*0.15;
+  else if(b<=88000000)t=6240000+(b-50000000)*0.24;
+  else t=15360000+(b-88000000)*0.35;
+  let cr=t<=1300000?t*0.55:715000+(t-1300000)*0.30;
+  let crmax;
+  if(A<=33000000)crmax=740000;
+  else if(A<=70000000)crmax=Math.max(660000,740000-(A-33000000)*0.008);
+  else crmax=Math.max(500000,660000-(A-70000000)*0.5);
+  cr=Math.min(cr,crmax);
+  return Math.max(0,payF10((t-cr)/12));
+}
+function payIncomeTax(monthly,cfg){
+  const fam=Math.max(1,Number(cfg.fam||1)),child=Number(cfg.child||0);
+  const famCol=Math.min(fam+child,11);
+  const rate=(Number(cfg.rate)||100)/100;
+  const T=S.data.payTaxTable;
+  if(T&&T.brk&&T.brk.length){
+    /* 간이세액표 조회 */
+    let lo=0,hi2=T.brk.length-1,idx=-1;
+    for(let i=0;i<T.brk.length;i++){if(monthly>=T.brk[i])idx=i;else break;}
+    if(idx>=0&&idx<T.v.length){
+      const v=T.v[idx][famCol-1]||0;
+      return {tax:payF10(v*rate),src:"table"};
+    }
+  }
+  /* 실측 기준 + 산식 차분 (표 없을 때) */
+  if(cfg.refPay&&cfg.refTax!=null){
+    const d=payGanseiAlgo(monthly,famCol)-payGanseiAlgo(cfg.refPay,famCol);
+    return {tax:Math.max(0,payF10(cfg.refTax+d*rate)),src:"diff"};
+  }
+  return {tax:payF10(payGanseiAlgo(monthly,famCol)*rate),src:"algo"};
+}
+async function payTaxSaveCfg(){
+  try{
+    if(!IS_DEMO)await fsCol("payMonthly").doc("taxConfig").set(S.data.payTax||{byName:{}});
+  }catch(e){console.error(e);window.__pay.ruleErr=true;}
+}
+function payTaxInfer(){
+  const em=payEmpRows();
+  if(!em){toast("상용직급여 시트를 먼저 열어주세요",true);return;}
+  const cm=em.cm;
+  S.data.payTax=S.data.payTax||{byName:{}};
+  const by=(S.data.payTax.byName=S.data.payTax.byName||{});
+  let n=0;
+  for(const row of em.rows){
+    const k=row.name.replace(/\s+/g,"");
+    const E=Math.round(em.val(cm.tot+row.r));
+    if(!E)continue;
+    const F=Math.round(em.val(cm.tax+row.r)),H=Math.round(em.val(cm.np+row.r)),I=Math.round(em.val(cm.hi+row.r)),J=Math.round(em.val(cm.ltc+row.r)),K=Math.round(em.val(cm.ei+row.r));
+    const c=(by[k]=by[k]||{});
+    c.np=H;
+    c.hiMode=Math.abs(I-payF10(E*PAY_RATE.hi))<=10?"auto":(I===0?"none":I);
+    c.ltc=J>0;
+    c.eiMode=Math.abs(K-payF10(E*PAY_RATE.ei))<=10?"auto":(K===0?"none":"auto");
+    if(c.fam==null){
+      let best=1,bd=Infinity;
+      for(let f=1;f<=11;f++){const d=Math.abs(payGanseiAlgo(E,f)-F);if(d<bd){bd=d;best=f;}}
+      c.fam=best;c.child=0;
+    }
+    if(c.rate==null)c.rate=100;
+    c.refPay=E;c.refTax=F;
+    n++;
+  }
+  payTaxSaveCfg();
+  renderPay();
+  toast(n+"명 설정을 현재 시트 값에서 유추했어요 — 가족수는 추정이니 사원 설정에서 확인해주세요");
+}
+function payTaxCalc(){
+  const em=payEmpRows();
+  if(!em){toast("상용직급여 시트를 먼저 열어주세요",true);return;}
+  const cm=em.cm;
+  const by=((S.data.payTax||{}).byName)||{};
+  let n=0,miss=[],diffUsed=0;
+  for(const row of em.rows){
+    const k=row.name.replace(/\s+/g,"");
+    const c=by[k];
+    if(!c){miss.push(row.name);continue;}
+    const E=Math.round(em.val(cm.tot+row.r));
+    const tx=payIncomeTax(E,c);
+    if(tx.src==="diff"||tx.src==="algo")diffUsed++;
+    const hi=c.hiMode==="auto"?payF10(E*PAY_RATE.hi):(c.hiMode==="none"?0:Math.round(Number(c.hiMode)||0));
+    const vals={};
+    vals[cm.tax]=tx.tax;
+    vals[cm.ltax]=payF10(tx.tax*0.1);
+    vals[cm.np]=Math.round(Number(c.np)||0);
+    vals[cm.hi]=hi;
+    vals[cm.ltc]=c.ltc?payF10(hi*PAY_RATE.ltcOfHi):0;
+    vals[cm.ei]=c.eiMode==="auto"?payF10(E*PAY_RATE.ei):0;
+    for(const col in vals)payEdit("상용직급여",col+row.r,vals[col]);
+    n++;
+  }
+  paySchedSave();
+  renderPay();
+  toast(n+"명 공제를 계산했어요"+(miss.length?" · 설정 없음: "+miss.join(", "):"")+(diffUsed&&!S.data.payTaxTable?" · 소득세는 추정치예요(간이세액표 업로드 시 정확)":""));
+}
+async function payTaxTablePick(inp){
+  const f=inp.files&&inp.files[0];
+  if(!f)return;
+  try{
+    const aoa=await payReadX(f);
+    const brk=[],v=[];
+    for(const r of aoa){
+      if(!r||r.length<13)continue;
+      const nums=r.map(x=>{const t=String(x==null?"":x).replace(/[,\s]/g,"");return t&&!isNaN(Number(t))?Number(t):null;});
+      /* [이상, 미만, 1인..11인] 형태: 앞 2개 천원 단위 구간 + 11개 세액 */
+      if(nums[0]!=null&&nums[1]!=null&&nums[0]<nums[1]){
+        const taxes=nums.slice(2,13);
+        if(taxes.every(x=>x!=null)){brk.push(Math.round(nums[0]*1000));v.push(taxes.map(x=>Math.round(x)));}
+      }
+    }
+    if(brk.length<100)throw new Error("간이세액표 형식을 찾지 못했어요 — 국세청 엑셀(월급여 구간+가족수 1~11 열)인지 확인해주세요 (인식 "+brk.length+"구간)");
+    S.data.payTaxTable={brk:brk,v:v,rows:brk.length,savedAt:Date.now()};
+    if(!IS_DEMO)await fsCol("payMonthly").doc("taxTable").set(S.data.payTaxTable);
+    toast("간이세액표 "+brk.length+"개 구간을 저장했어요 — 이제 소득세가 표 기준으로 정확히 계산돼요");
+  }catch(e){console.error(e);toast(e.message||"간이세액표 읽기 실패",true);}
+  inp.value="";
+  renderPay();
+}
+window.payTaxInfer=payTaxInfer;window.payTaxCalc=payTaxCalc;window.payTaxTablePick=payTaxTablePick;
+function payTaxCfgSet(el){
+  const k=el.dataset.k,f=el.dataset.f;
+  S.data.payTax=S.data.payTax||{byName:{}};
+  const c=(S.data.payTax.byName[k]=S.data.payTax.byName[k]||{});
+  let v=el.type==="checkbox"?el.checked:el.value;
+  if(f==="np")v=Number(String(v).replace(/[,\s]/g,""))||0;
+  if(f==="fam"||f==="child")v=Math.max(0,Number(v)||0);
+  if(f==="rate")v=Number(v)||100;
+  if(f==="hiModeSel"){c.hiMode=(v==="fix")?(typeof c.hiMode==="number"?c.hiMode:0):v;payTaxSaveCfg();return;}
+  if(f==="hiFix"){c.hiMode=Number(String(v).replace(/[,\s]/g,""))||0;payTaxSaveCfg();return;}
+  c[f]=v;
+  payTaxSaveCfg();
+}
+window.payTaxCfgSet=payTaxCfgSet;
 /* ---------- 손익·4대보험: 상용직급여에서 공제 가져오기 (사람 이름 기준, 버튼 실행) ---------- */
 function payPnlImport(){
   const P=window.__pay;
@@ -6791,6 +7001,7 @@ function payPnlImport(){
   const bo=paySheetByName("4대보험");
   const ed=(P.edits||{})["손익"]||{};
   const put=(sh2,ref,v)=>{payEdit(sh2,ref,v===0?"":Math.round(v));};
+  payPnlImport._pm=null;
   let n=0;const miss=[];
   for(let r=2;r<=pn.maxR;r++){
     const edA=ed["A"+r];
@@ -6799,14 +7010,29 @@ function payPnlImport(){
     if(!nm||nm==="사원명")continue;
     const emp=em.rows.find(x=>x.name.replace(/\s+/g,"")===nm.replace(/\s+/g,""));
     if(!emp){miss.push(nm);continue;}
-    const V={F:em.val("F"+emp.r),G:em.val("G"+emp.r),H:em.val("H"+emp.r),I:em.val("I"+emp.r),J:em.val("J"+emp.r),K:em.val("K"+emp.r)};
-    for(const c in V)put("손익",c+r,V[c]);
+    const cmL=em.cm;
+    const V={tax:em.val(cmL.tax+emp.r),ltax:em.val(cmL.ltax+emp.r),np:em.val(cmL.np+emp.r),hi:em.val(cmL.hi+emp.r),ltc:em.val(cmL.ltc+emp.r),ei:em.val(cmL.ei+emp.r)};
+    /* 손익 시트 자체 헤더로 열 찾기 */
+    if(!payPnlImport._pm){
+      const pm={};
+      const nm2={"소득세":"tax","지방소득세":"ltax","국민연금":"np","건강보험":"hi","장기요양보험":"ltc","고용보험":"ei"};
+      for(let c=2;c<=pn.maxC;c++){
+        const h=pn.cells[payIdxCol(c)+"1"];
+        const k2=h&&h.typ==="str"?nm2[String(h.v).trim()]:null;
+        if(k2&&!pm[k2])pm[k2]=payIdxCol(c);
+      }
+      pm.tax=pm.tax||"F";pm.ltax=pm.ltax||"G";pm.np=pm.np||"H";pm.hi=pm.hi||"I";pm.ltc=pm.ltc||"J";pm.ei=pm.ei||"K";
+      payPnlImport._pm=pm;
+    }
+    const pm=payPnlImport._pm;
+    put("손익",pm.tax+r,V.tax);put("손익",pm.ltax+r,V.ltax);put("손익",pm.np+r,V.np);
+    put("손익",pm.hi+r,V.hi);put("손익",pm.ltc+r,V.ltc);put("손익",pm.ei+r,V.ei);
     if(bo){
       /* 4대보험 시트: 같은 행 번호에 A국민 B건강 C장기 (D는 빈칸 유지) E고용 */
-      put("4대보험","A"+r,V.H);
-      put("4대보험","B"+r,V.I);
-      put("4대보험","C"+r,V.J);
-      put("4대보험","E"+r,V.K);
+      put("4대보험","A"+r,V.np);
+      put("4대보험","B"+r,V.hi);
+      put("4대보험","C"+r,V.ltc);
+      put("4대보험","E"+r,V.ei);
     }
     n++;
   }
@@ -6901,6 +7127,21 @@ window.payOtEdit=payOtEdit;
 function payCellEdit(el){
   const shName=el.dataset.sh,ref=el.dataset.ref;
   let t=String(el.textContent||"").trim();
+  /* 수식 칸을 비우면 수식으로 복원 */
+  {
+    const sh0=paySheetByName(shName);
+    const c0=sh0?sh0.cells[ref]:null;
+    if(t===""&&c0&&typeof c0.f==="string"){
+      const P0=window.__pay;
+      if(((P0.edits||{})[shName]||{})[ref]!==undefined){
+        delete P0.edits[shName][ref];
+        if((P0.autoSet||{})[shName])delete P0.autoSet[shName][ref];
+        paySchedSave();
+      }
+      renderPay();
+      return;
+    }
+  }
   let pctIn=false;
   if(/%$/.test(t)){pctIn=true;t=t.slice(0,-1).trim();}
   const num=t.replace(/,/g,"");
@@ -7130,7 +7371,7 @@ function payPayees(){
   const P=window.__pay;
   const out=[];
   const em=payEmpRows();
-  if(em)em.rows.forEach(row=>out.push({name:row.name,amt:Math.round(em.val("M"+row.r)),src:"상용"}));
+  if(em)em.rows.forEach(row=>out.push({name:row.name,amt:Math.round(em.val(em.cm.net+row.r)),src:"상용"}));
   const hs=paySheetByName("시급직급여");
   if(hs){
     const hv=payMkVal(hs,(P.edits||{})["시급직급여"]);
@@ -7275,7 +7516,7 @@ function paySummaryData(){
     const em=payEmpRows();
     if(em&&em.rows.length){
       const t={count:0,total:0,deduct:0,net:0,src:"급여품의(수정 반영)"};
-      em.rows.forEach(row=>{t.count++;t.total+=em.val("E"+row.r);t.deduct+=em.val("L"+row.r);t.net+=em.val("M"+row.r);});
+      em.rows.forEach(row=>{t.count++;t.total+=em.val(em.cm.tot+row.r);t.deduct+=em.val(em.cm.ded+row.r);t.net+=em.val(em.cm.net+row.r);});
       return t;
     }
   }
@@ -7426,9 +7667,36 @@ function renderPay(){
   if(wb){
     const active=P.sheet||wb.sheets[0].name;
     const chipList=wb.sheets.filter(x=>x.name!=="퇴직금").concat(wb.sheets.filter(x=>x.name==="퇴직금"));
-    const chips=chipList.map(s=>`<button class="paychip${s.name===active?" on":""}" onclick="window.__pay.sheet='${esc(s.name)}';renderPay()">${esc(s.name)}${(P.edits||{})[s.name]&&Object.keys(P.edits[s.name]).length?" ✎":""}</button>`).join("");
+    const chips=chipList.map(s=>`<button class="paychip${s.name===active?" on":""}" onclick="window.__pay.sheet='${esc(s.name)}';renderPay()">${esc(s.name)}${(P.edits||{})[s.name]&&Object.keys(P.edits[s.name]).length?" ✎":""}</button>`).join("")
+      +`<button class="paychip${active==="__cfg"?" on":""}" style="border-style:dashed" onclick="window.__pay.sheet='__cfg';renderPay()">⚙ 사원 설정</button>`;
     let body="";
-    {
+    if(active==="__cfg"){
+      const em=payEmpRows();
+      const by=((S.data.payTax||{}).byName)||{};
+      const T=S.data.payTaxTable;
+      let rows3="";
+      if(em)for(const row of em.rows){
+        const k=row.name.replace(/\s+/g,"");
+        const c=by[k]||{};
+        const hiSel=c.hiMode==="auto"||c.hiMode==null?"auto":(c.hiMode==="none"?"none":"fix");
+        rows3+=`<tr><td class="l">${esc(row.name)}</td>
+          <td><input type="text" inputmode="numeric" style="width:88px;text-align:right" value="${c.np?fmt(c.np):""}" data-k="${k}" data-f="np" onchange="payTaxCfgSet(this)"></td>
+          <td><select data-k="${k}" data-f="hiModeSel" onchange="payTaxCfgSet(this)"><option value="auto"${hiSel==="auto"?" selected":""}>자동(3.595%)</option><option value="fix"${hiSel==="fix"?" selected":""}>직접</option><option value="none"${hiSel==="none"?" selected":""}>없음</option></select>${hiSel==="fix"?`<input type="text" inputmode="numeric" style="width:80px;text-align:right" value="${fmt(c.hiMode)}" data-k="${k}" data-f="hiFix" onchange="payTaxCfgSet(this)">`:""}</td>
+          <td style="text-align:center"><input type="checkbox" ${c.ltc?"checked":""} data-k="${k}" data-f="ltc" onchange="payTaxCfgSet(this)"></td>
+          <td><select data-k="${k}" data-f="eiMode" onchange="payTaxCfgSet(this)"><option value="auto"${c.eiMode!=="none"?" selected":""}>자동(0.9%)</option><option value="none"${c.eiMode==="none"?" selected":""}>없음</option></select></td>
+          <td><input type="number" min="1" max="11" style="width:50px" value="${c.fam||1}" data-k="${k}" data-f="fam" onchange="payTaxCfgSet(this)"></td>
+          <td><input type="number" min="0" max="11" style="width:50px" value="${c.child||0}" data-k="${k}" data-f="child" onchange="payTaxCfgSet(this)"></td>
+          <td><select data-k="${k}" data-f="rate" onchange="payTaxCfgSet(this)"><option value="80"${c.rate==80?" selected":""}>80%</option><option value="100"${!c.rate||c.rate==100?" selected":""}>100%</option><option value="120"${c.rate==120?" selected":""}>120%</option></select></td>
+          <td class="l" style="font-size:11.5px;color:var(--sub)">${c.refPay?fmt(c.refPay)+"→"+fmt(c.refTax):"—"}</td></tr>`;
+      }
+      body=`<div class="footnote" style="margin-bottom:6px">이카운트의 사원별 설정과 같은 항목이에요. 국민연금은 고정 월액(기준소득월액×4.5%), 건강보험 자동은 과세총액×3.595%(장기요양은 건강×13.14%), 고용보험 자동은 0.9% — 8월 실데이터로 원 단위까지 검증한 요율이에요. 주민번호 같은 신원 정보는 저장하지 않아요.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+        <button class="btn btn-sm btn-primary" onclick="payTaxInfer()">✨ 현재 시트 값에서 자동 유추</button>
+        <label class="btn btn-sm" style="cursor:pointer">📎 간이세액표 엑셀 업로드<input type="file" accept=".xlsx,.xls" style="display:none" onchange="payTaxTablePick(this)"></label>
+        <span class="footnote">${T?`✅ 간이세액표 ${T.rows}개 구간 저장됨 — 소득세 표 기준 정확 계산`:`⚠ 간이세액표 미등록 — 소득세는 실측 기준 추정치(±수천 원). 홈택스에서 근로소득 간이세액표 엑셀을 받아 올리면 정확해져요.`}</span>
+      </div>
+      <div class="table-wrap"><table class="rpt" style="font-size:12.5px"><thead><tr><th class="l">사원</th><th>국민연금(월)</th><th>건강보험</th><th>장기요양</th><th>고용보험</th><th>가족수</th><th>8~20세 자녀</th><th>세액표</th><th>기준 실측(총액→소득세)</th></tr></thead><tbody>${rows3}</tbody></table></div>`;
+    }else{
       const sh=wb.sheets.find(s=>s.name===active)||wb.sheets[0];
       const edits=(P.edits||{})[sh.name]||{};
       const val=payMkVal(sh,edits);
@@ -7483,6 +7751,8 @@ function renderPay(){
                 if((hedits[rf]!==undefined&&hedits[rf]!=="")||(cc&&!cc.f&&cc.typ==="num"&&cc.v!==""))hasData=true;
               }
               pairs.push({c1:c,c2:c+1,hdrRef:hdrRef,label:label,active:!!label||hasData});
+              holHide.payCols=holHide.payCols||new Set();
+              holHide.payCols.add(c+1);
               c++;
             }else if(st==="수당"){
               let label="";
@@ -7529,8 +7799,12 @@ function renderPay(){
           const scss=cell?payXfCssLite(ST,cell.s):"";
           const pct=cell&&payIsPct(ST,cell.s);
           const fv=(x)=>pct&&x!==""&&x!=null&&!isNaN(Number(x))&&String(x)!==""?(Math.round(Number(x)*10000)/100)+"%":payFmtCell(x);
-          if(cell&&typeof cell.f==="string"){
+          if(cell&&typeof cell.f==="string"&&!(isHol&&holHide.payCols&&holHide.payCols.has(c))){
             tds+=`<td class="fx"${span} style="${scss}" title="=${esc(cell.f)}">${fv(val(ref))}</td>`;
+          }else if(cell&&typeof cell.f==="string"){
+            /* 휴일 수당 칸: 수식이지만 금액 직접 입력 가능 (지우면 수식 복원) */
+            const edF=edits[ref];
+            tds+=`<td class="ec${edF!==undefined?" edited":""}"${span} style="${scss}" title="직접 금액을 적으면 수식 대신 그 값이 쓰여요. 지우면 수식으로 돌아가요. (수식: =${esc(cell.f)})" contenteditable="true" data-sh="${esc(sh.name)}" data-ref="${ref}" onblur="payCellEdit(this)" onkeydown="payKeyDown(event,this)">${edF!==undefined?fv(edF):fv(val(ref))}</td>`;
           }else if(cell&&cell.typ==="err"){
             tds+=`<td class="fx"${span} style="${scss}color:#b45309">오류</td>`;
           }else{
@@ -7555,6 +7829,12 @@ function renderPay(){
         bjNote=` <b style="color:#2F6B3F">시간을 적으면 수당이 계산되고, 맨 오른쪽 '초과근무수당 직접입력' 열(다른 엑셀에서 정리한 값)과 합쳐져 상용직급여 제수당에 자동 반영돼요.</b>`;
       }
       let bjCtl="",pnlCtl="";
+      if(sh.name==="상용직급여"){
+        pnlCtl=`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+          <button class="btn btn-sm btn-primary" onclick="payTaxCalc()">🧮 공제 자동 계산</button>
+          <span class="footnote">⚙ 사원 설정 기준으로 소득세·지방세·4대보험을 채워요 — 상여를 늦게 받아도 이카운트 없이 바로 계산. ${S.data.payTaxTable?"소득세는 간이세액표 기준.":"<b style=\"color:#b45309\">소득세는 추정치</b>(⚙ 사원 설정에서 간이세액표 업로드 시 정확)."}</span>
+        </div>`;
+      }
       if(sh.name==="손익"){
         pnlCtl=`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
           <button class="btn btn-sm btn-primary" onclick="payPnlImport()">📥 상용직급여에서 공제 가져오기</button>
