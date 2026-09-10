@@ -6348,12 +6348,13 @@ function payMkVal(sheet,edits){
 function paySheetByName(nm){const P=window.__pay;return P.wb?P.wb.sheets.find(s=>s.name===nm):null;}
 function payYm(){
   const P=window.__pay;
-  if(P.epc&&P.epc.ym)return P.epc.ym;
   if(P.wb)for(const s of P.wb.sheets){
-    const a1=s.cells["A1"];
-    const m=a1&&typeof a1.v==="string"?a1.v.match(/(\d{4})년\s*(\d{1,2})월/):null;
+    const ed=((P.edits||{})[s.name]||{})["A1"];
+    const raw=ed!==undefined?ed:(s.cells["A1"]?s.cells["A1"].v:null);
+    const m=typeof raw==="string"?raw.match(/(\d{4})년\s*(\d{1,2})월/):null;
     if(m)return {y:m[1],m:String(Number(m[2]))};
   }
+  if(P.epc&&P.epc.ym)return P.epc.ym;
   return null;
 }
 function payEmpRows(){
@@ -7071,6 +7072,43 @@ function payPayees(){
   }
   return out;
 }
+function paySheetNetTotals(){
+  const P=window.__pay;
+  const out={};
+  const em=payEmpRows();
+  if(em){
+    const sh=em.sheet;
+    let hRow=3;
+    for(let r=1;r<=5;r++){const a0=sh.cells["A"+r];if(a0&&a0.typ==="str"&&String(a0.v).trim()==="사원명"){hRow=r;break;}}
+    let mCol="M";
+    for(let c=2;c<=sh.maxC;c++){const h=sh.cells[payIdxCol(c)+hRow];if(h&&h.typ==="str"&&String(h.v).trim()==="실지급액"){mCol=payIdxCol(c);break;}}
+    for(let r=sh.maxR;r>=3;r--){
+      const a=sh.cells["A"+r];
+      if(a&&a.typ==="str"&&String(a.v).replace(/\s+/g,"")==="합계"){out.sang=Math.round(em.val(mCol+r));break;}
+    }
+  }
+  const hs=paySheetByName("시급직급여");
+  if(hs){
+    const hv=payMkVal(hs,(window.__pay.edits||{})["시급직급여"]);
+    let lCol="L";
+    for(let c=2;c<=hs.maxC;c++){const h=hs.cells[payIdxCol(c)+"3"];if(h&&h.typ==="str"&&String(h.v).trim()==="실지급액"){lCol=payIdxCol(c);break;}}
+    for(let r=hs.maxR;r>=3;r--){
+      const a=hs.cells["A"+r];
+      if(a&&a.typ==="str"&&String(a.v).replace(/\s+/g,"")==="합계"){out.sigup=Math.round(hv(lCol+r));break;}
+    }
+  }
+  const ys=paySheetByName("용역직급여");
+  if(ys){
+    const yv=payMkVal(ys,(window.__pay.edits||{})["용역직급여"]);
+    let jCol="J";
+    for(let c=2;c<=ys.maxC;c++){const h=ys.cells[payIdxCol(c)+"3"];if(h&&h.typ==="str"&&String(h.v).trim()==="실지급액"){jCol=payIdxCol(c);break;}}
+    for(let r=ys.maxR;r>=3;r--){
+      const a=ys.cells["A"+r];
+      if(a&&a.typ==="str"&&String(a.v).trim()==="계"){out.yong=Math.round(yv(jCol+r));break;}
+    }
+  }
+  return out;
+}
 async function payPayCopy(acct,btn){
   const ppl=payPayees().filter(x=>payAcctOf(x.name)===acct);
   const label=acct==="i"?"이야기":"피다";
@@ -7171,7 +7209,7 @@ function renderPay(){
         <div style="font-weight:700;font-size:13.5px">② 이카운트 급여대장 (.xlsx · EPC001E)</div>
         <div class="footnote" style="margin:4px 0 6px">올리면 상용직급여 시트의 공제 6칸이 자동으로 채워져요 (화면에 따로 안 보여요)</div>
         <input type="file" accept=".xlsx" onchange="payPick('epc',this)">
-        <div class="footnote" style="margin-top:4px">${epc?`✅ ${epc.emps.length}명 반영${epc.ym?` (${epc.ym.y}년 ${epc.ym.m}월)`:""}`:"— 아직"}</div>
+        <div class="footnote" style="margin-top:4px">${epc?`✅ ${epc.emps.length}명 반영${epc.ym?` (${epc.ym.y}년 ${epc.ym.m}월)`:""}`:"— 아직"}${epc&&epc.ym&&ym&&(String(epc.ym.y)!==String(ym.y)||String(epc.ym.m)!==String(ym.m))?`<br><b style="color:#b45309">⚠ 이카운트는 ${epc.ym.y}년 ${epc.ym.m}월 자료인데 지금 급여품의는 ${ym.y}년 ${ym.m}월이에요</b>`:""}</div>
       </div>
     </div>
     ${wb?`<div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><button class="btn btn-primary" onclick="payDownload()">📥 수정 반영해서 엑셀 받기</button>
@@ -7226,6 +7264,24 @@ function renderPay(){
         <div style="flex:1;min-width:280px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><b>🏦 이야기 (꽃밥이야기 통장)</b><button class="btn btn-sm" onclick="payPayCopy('i',this)">📄 복사</button></div>${tableOf(grp.i,"i")}</div>
         <div style="flex:1;min-width:280px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><b>🏦 피다 (꽃밥에피다 통장)</b><button class="btn btn-sm" onclick="payPayCopy('p',this)">📄 복사</button></div>${tableOf(grp.p,"p")}</div>
       </div>
+      ${(function(){
+        const sumOf=(l)=>l.reduce((t,x)=>t+x.amt,0);
+        const si=sumOf(grp.i),sp=sumOf(grp.p),su2=sumOf(grp.un);
+        const banks=si+sp;
+        const T=paySheetNetTotals();
+        /* 시트 합계행 기준 총합 (없는 시트는 지급표 값으로 대체) */
+        const sang=T.sang!=null?T.sang:sumOf(ppl.filter(x=>x.src==="상용"));
+        const sigup=T.sigup!=null?T.sigup:sumOf(ppl.filter(x=>x.src==="시급"));
+        const yong=T.yong!=null?T.yong:sumOf(ppl.filter(x=>x.src==="용역"));
+        const total=sang+sigup+yong;
+        /* 시급직 파출(실지급 0)은 지급표에 없어도 합계는 같음 */
+        const diff=banks-total;
+        const ok=diff===0&&!grp.un.length;
+        return `<div style="margin-top:10px;padding:10px 12px;border-radius:10px;background:${ok?"rgba(47,107,63,.07)":"#FDF3F3"};border:1px solid ${ok?"rgba(47,107,63,.25)":"#E4A2A2"}">
+          <div style="font-weight:700;font-size:13px">${ok?"✅ 검산 일치":"⚠ 검산 불일치"} — 이야기 ${fmt(si)} + 피다 ${fmt(sp)} = <b>${fmt(banks)}원</b></div>
+          <div class="footnote" style="margin-top:3px">시트 합계 기준 실지급 총합: 상용직 ${fmt(sang)} + 시급직 ${fmt(sigup)} + 용역직 ${fmt(yong)} = <b>${fmt(total)}원</b>${diff!==0?` / <b style="color:#b45309">차액 ${fmt(diff)}원</b>`:""}${grp.un.length?` / <b style="color:#b45309">통장 미지정 ${grp.un.length}명 ${fmt(su2)}원</b>`:""}</div>
+        </div>`;
+      })()}
       ${unRows}</div>`;
   }
   /* 시트 보기 */
