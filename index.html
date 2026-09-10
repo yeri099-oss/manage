@@ -6971,7 +6971,7 @@ async function paySaveCloud(){
   if(!ym){P.cloudState="err";const st0=document.getElementById("payCloudSt");if(st0)st0.textContent="⚠ 파일에서 연월(예: 2026년 8월)을 못 읽어 저장하지 못했어요";return;}
   try{
     const key=ym.y+"-"+ym.m;
-    const fileDoc={y:ym.y,m:Number(ym.m),fileName:P.wb.fileName||"급여품의.xlsx",b64:P.wb.b64||payBufB64(P.wb.zipBuf),edits:P.edits||{},autoSet:P.autoSet||{},savedAt:Date.now()};
+    const fileDoc={y:ym.y,m:Number(ym.m),fileName:P.wb.fileName||"급여품의.xlsx",b64:P.wb.b64||payBufB64(P.wb.zipBuf),edits:JSON.parse(JSON.stringify(P.edits||{})),autoSet:JSON.parse(JSON.stringify(P.autoSet||{})),savedAt:Date.now()};
     P.wb.b64=fileDoc.b64;
     S.data.payFiles[key]=fileDoc;
     /* 집계도 같이 갱신 */
@@ -6994,7 +6994,10 @@ async function paySaveCloud(){
   const st=document.getElementById("payCloudSt");
   if(st)st.textContent=P.cloudState==="saved"?"☁ 저장됨 ✓":"⚠ 저장 실패";
   if(P.cloudState==="err")renderPay();
-  else{const hb=document.getElementById("payHist");if(hb)hb.outerHTML=payHistHtml();}
+  else{
+    const hb=document.getElementById("payHist");if(hb)hb.outerHTML=payHistHtml();
+    const mb=document.getElementById("payMonBox");if(mb)mb.outerHTML=payMonBoxHtml();
+  }
 }
 async function payLoadMonth(key){
   const P=window.__pay;
@@ -7005,8 +7008,8 @@ async function payLoadMonth(key){
     P.wb=await pumParse(buf);
     P.wb.fileName=fd.fileName;
     P.wb.b64=fd.b64;
-    P.edits=fd.edits||{};
-    P.autoSet=fd.autoSet||{};
+    P.edits=JSON.parse(JSON.stringify(fd.edits||{}));
+    P.autoSet=JSON.parse(JSON.stringify(fd.autoSet||{}));
     for(const sh2 of P.wb.sheets){
       const ed2=P.edits[sh2.name]||{};
       for(const ref in ed2){
@@ -7023,6 +7026,54 @@ async function payLoadMonth(key){
   renderPay();
 }
 window.payLoadMonth=payLoadMonth;
+function payMonBoxHtml(){
+  const ym=payYm();
+  const ks=paySortKeys(S.data.payFiles);
+  const curKey=ym?ym.y+"-"+ym.m:null;
+  if(!ks.length&&!curKey)return "";
+  let opts="";
+  if(curKey&&ks.indexOf(curKey)<0)opts+=`<option value="${curKey}" selected>${ym.y}년 ${ym.m}월 (저장 전)</option>`;
+  ks.forEach(k=>{
+    const[yy,mm]=k.split("-");
+    opts+=`<option value="${k}"${k===curKey?" selected":""}>${yy}년 ${mm}월</option>`;
+  });
+  if(ks.length){
+    const[ly,lm]=ks[0].split("-").map(Number);
+    let ny=ly,nm2=lm+1;if(nm2>12){nm2=1;ny++;}
+    opts+=`<option value="__new:${ny}-${nm2}">➕ ${ny}년 ${nm2}월 새로 시작 (지난달 이어받기)</option>`;
+  }
+  return `<div id="payMonBox" style="display:flex;gap:8px;align-items:center;margin-top:8px"><span class="footnote" style="font-weight:700">보는 달:</span>
+    <select onchange="payMonSelChange(this)" style="padding:5px 10px;border:1px solid rgba(0,0,0,.2);border-radius:8px;font-family:inherit;font-size:13px;font-weight:700">${opts}</select>
+    <span class="footnote">달을 고르면 그 달 자료가 열려요</span></div>`;
+}
+function payMonSelChange(sel){
+  const v=sel.value;
+  if(!v)return;
+  if(v.indexOf("__new:")===0){
+    const[y2,m2]=v.slice(6).split("-");
+    payStartMonth(y2,m2);
+  }else if(S.data.payFiles[v])payLoadMonth(v);
+}
+async function payStartMonth(y2,m2){
+  const P=window.__pay;
+  const ks=paySortKeys(S.data.payFiles);
+  const cur=payYm();
+  const curKey=cur?cur.y+"-"+cur.m:null;
+  /* 기준은 항상 가장 최근 저장 달 */
+  if(ks.length&&curKey!==ks[0])await payLoadMonth(ks[0]);
+  if(!P.wb){toast("기준이 될 달이 없어요 — 급여품의 파일을 먼저 올려주세요",true);return;}
+  const pw=paySheetByName("급여품의");
+  if(!pw){toast("급여품의 시트를 찾지 못했어요",true);return;}
+  payEdit("급여품의","A1",y2+"년 "+m2+"월 인건비 현황");
+  P.epc=null;P.result=null;
+  /* 상여금 시트에 새 달 열이 없으면 빈 열에 만들어 줌 */
+  const BJ=payBjCols();
+  if(BJ&&!BJ.monthCol&&BJ.freeCol)payEdit("상여금",BJ.freeCol+BJ.hdrRow,m2+"월");
+  paySchedSave();
+  renderPay();
+  toast(y2+"년 "+m2+"월 급여를 시작했어요 — 지난달 내용을 이어받았으니 이카운트를 올리면 공제가 새로 반영돼요");
+}
+window.payMonSelChange=payMonSelChange;window.payStartMonth=payStartMonth;
 /* ---------- 급여지급표 (통장별 실지급액) ---------- */
 const PAY_ACCT_DEF={/* 2026-07 지급표 기준 초기 배정 */
   "송정은":"i","최예리":"i","오신일":"i","박소정":"i","이순복":"i","홍선미":"i","김은현":"i","정승영":"i","장희진":"i","문승주":"i","이경엽":"i",
@@ -7183,18 +7234,8 @@ function renderPay(){
     if(ks.length){el.innerHTML='<div class="card">저장된 급여 자료를 불러오는 중…</div>';payLoadMonth(ks[0]);return;}
   }
   const wb=P.wb,epc=P.epc,ym=payYm();
-  /* 저장된 달 선택 칩 */
-  let mchips="";
-  {
-    const ks=paySortKeys(S.data.payFiles);
-    if(ks.length){
-      mchips=`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px"><span class="footnote" style="margin-right:2px">저장된 달:</span>`+ks.map(k=>{
-        const[yy,mm]=k.split("-");
-        const on=ym&&String(ym.y)===yy&&String(ym.m)===mm;
-        return `<button class="paychip${on?" on":""}" onclick="payLoadMonth('${k}')">${yy}년 ${mm}월</button>`;
-      }).join("")+`</div>`;
-    }
-  }
+  /* 달 이동 드롭다운 */
+  const mchips=payMonBoxHtml();
   /* 업로드 카드 */
   const upBox=`<div class="card"><div class="card-title">급여 관리 <span class="unit">관리자 전용 · 올리고 수정하면 그 달이 자동 저장돼 언제든 다시 볼 수 있어요</span></div>
     ${mchips}
