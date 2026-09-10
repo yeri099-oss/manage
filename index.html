@@ -6871,16 +6871,18 @@ function payGanseiAlgo(monthly,fam){
   return Math.max(0,payF10((t-cr)/12));
 }
 function payIncomeTax(monthly,cfg){
+  /* 2026.3.1 시행 규칙: 공제대상가족수(자녀 포함 전체)로 표 조회 후,
+     8세이상 20세이하 자녀수별 금액 차감(1명 20,830 / 2명 45,830 / 3명째부터 +33,330), 음수면 0 */
   const fam=Math.max(1,Number(cfg.fam||1)),child=Number(cfg.child||0);
-  const famCol=Math.min(fam+child,11);
+  const famCol=Math.min(fam,11);
   const rate=(Number(cfg.rate)||100)/100;
+  const childDed=child<=0?0:(child===1?20830:(45830+(child-2)*33330));
   const T=S.data.payTaxTable;
   if(T&&T.brk&&T.brk.length){
-    /* 간이세액표 조회 */
-    let lo=0,hi2=T.brk.length-1,idx=-1;
+    let idx=-1;
     for(let i=0;i<T.brk.length;i++){if(monthly>=T.brk[i])idx=i;else break;}
     if(idx>=0&&idx<T.v.length){
-      const v=T.v[idx][famCol-1]||0;
+      const v=Math.max(0,(T.v[idx][famCol-1]||0)-childDed);
       return {tax:payF10(v*rate),src:"table"};
     }
   }
@@ -6889,7 +6891,7 @@ function payIncomeTax(monthly,cfg){
     const d=payGanseiAlgo(monthly,famCol)-payGanseiAlgo(cfg.refPay,famCol);
     return {tax:Math.max(0,payF10(cfg.refTax+d*rate)),src:"diff"};
   }
-  return {tax:payF10(payGanseiAlgo(monthly,famCol)*rate),src:"algo"};
+  return {tax:Math.max(0,payF10((payGanseiAlgo(monthly,famCol)-childDed)*rate)),src:"algo"};
 }
 async function payTaxSaveCfg(){
   try{
@@ -7695,7 +7697,7 @@ function renderPay(){
         <label class="btn btn-sm" style="cursor:pointer">📎 간이세액표 엑셀 업로드<input type="file" accept=".xlsx,.xls" style="display:none" onchange="payTaxTablePick(this)"></label>
         <span class="footnote">${T?`✅ 간이세액표 ${T.rows}개 구간 저장됨 — 소득세 표 기준 정확 계산`:`⚠ 간이세액표 미등록 — 소득세는 실측 기준 추정치(±수천 원). 홈택스에서 근로소득 간이세액표 엑셀을 받아 올리면 정확해져요.`}</span>
       </div>
-      <div class="table-wrap"><table class="rpt" style="font-size:12.5px"><thead><tr><th class="l">사원</th><th>국민연금(월)</th><th>건강보험</th><th>장기요양</th><th>고용보험</th><th>가족수</th><th>8~20세 자녀</th><th>세액표</th><th>기준 실측(총액→소득세)</th></tr></thead><tbody>${rows3}</tbody></table></div>`;
+      <div class="table-wrap"><table class="rpt" style="font-size:12.5px"><thead><tr><th class="l">사원</th><th>국민연금(월)</th><th>건강보험</th><th>장기요양</th><th>고용보험</th><th>가족수(자녀 포함 전체)</th><th>8~20세 자녀</th><th>세액표</th><th>기준 실측(총액→소득세)</th></tr></thead><tbody>${rows3}</tbody></table></div>`;
     }else{
       const sh=wb.sheets.find(s=>s.name===active)||wb.sheets[0];
       const edits=(P.edits||{})[sh.name]||{};
@@ -7826,7 +7828,7 @@ function renderPay(){
       }
       let bjNote="";
       if(sh.name==="휴일근무수당"){
-        bjNote=` <b style="color:#2F6B3F">시간을 적으면 수당이 계산되고, 맨 오른쪽 '초과근무수당 직접입력' 열(다른 엑셀에서 정리한 값)과 합쳐져 상용직급여 제수당에 자동 반영돼요.</b>`;
+        bjNote=` <b style="color:#2F6B3F">시간을 적으면 수당이 계산되고, 맨 오른쪽 '초과근무수당 직접입력' 열(다른 엑셀에서 정리한 값)과 합쳐져 상용직급여 제수당에 자동 반영돼요.</b> <span style="color:#6B5B95">임원 일급: 휴일 1일 = 월급여÷241.6×14 (8시간×1.5 + 초과1시간×2), 초과근무 1일 = 월급여÷241.6×9.5 — 수당 칸에 금액을 직접 적으면 돼요.</span>`;
       }
       let bjCtl="",pnlCtl="";
       if(sh.name==="상용직급여"){
