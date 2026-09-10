@@ -7193,6 +7193,68 @@ function paySheetNetTotals(){
   }
   return out;
 }
+async function payDistDownload(){
+  try{
+    const ym=payYm();
+    const ppl=payPayees();
+    if(!ppl.length){toast("먼저 급여품의 파일을 올려주세요",true);return;}
+    const gi=ppl.filter(x=>payAcctOf(x.name)==="i"),gp=ppl.filter(x=>payAcctOf(x.name)==="p");
+    const ymNum=ym?(Number(ym.y)%100)*100+Number(ym.m):0;
+    const esc2=(t)=>String(t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    let rows="";let r=1;
+    const rowXml=(cells)=>{const rr=r++;return `<row r="${rr}">`+cells.map(c=>{
+      const ref=c.col+rr;
+      if(c.n!=null)return `<c r="${ref}" s="${c.s||0}"><v>${c.n}</v></c>`;
+      if(c.f!=null)return `<c r="${ref}" s="${c.s||0}"><f>${esc2(c.f)}</f></c>`;
+      if(c.t!=null)return `<c r="${ref}" s="${c.s||0}" t="inlineStr"><is><t>${esc2(c.t)}</t></is></c>`;
+      return "";
+    }).join("")+`</row>`;};
+    rows+=rowXml([{col:"A",n:ymNum||""}]);
+    const block=(label,list)=>{
+      rows+=rowXml([{col:"B",t:label,s:1}]);
+      rows+=rowXml([{col:"B",t:"사원명",s:1},{col:"C",t:"실지급액",s:1}]);
+      const start=r;
+      list.forEach(x=>{rows+=rowXml([{col:"B",t:x.name},{col:"C",n:x.amt,s:2}]);});
+      const totR=r;
+      rows+=rowXml([{col:"B",t:"합계",s:1},{col:"C",f:`SUM(C${start}:C${totR-1})`,s:3}]);
+      return totR;/* 합계 행 번호 */
+    };
+    const iTot=block("이야기",gi);
+    rows+=rowXml([]);/* 빈 줄 */
+    const startP=r;
+    rows+=rowXml([{col:"B",t:"피다",s:1}]);
+    rows+=rowXml([{col:"B",t:"사원명",s:1},{col:"C",t:"실지급액",s:1}]);
+    const ps=r;
+    gp.forEach(x=>{rows+=rowXml([{col:"B",t:x.name},{col:"C",n:x.amt,s:2}]);});
+    const pTot=r;
+    rows+=rowXml([{col:"B",t:"합계",s:1},{col:"C",f:`SUM(C${ps}:C${pTot-1})`,s:3},{col:"E",f:`SUM(C${iTot},C${pTot})`,s:3}]);
+    const sheetXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols><col min="2" max="2" width="11" customWidth="1"/><col min="3" max="3" width="13" customWidth="1"/><col min="5" max="5" width="13" customWidth="1"/></cols><sheetData>${rows}</sheetData></worksheet>`;
+    const stylesXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="맑은 고딕"/></font><font><b/><sz val="11"/><name val="맑은 고딕"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" applyFont="1"/><xf numFmtId="3" fontId="0" fillId="0" borderId="0" applyNumberFormat="1"/><xf numFmtId="3" fontId="1" fillId="0" borderId="0" applyNumberFormat="1" applyFont="1"/></cellXfs></styleSheet>`;
+    const shName=ymNum?String(ymNum):"급여지급";
+    const wbXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${shName}" sheetId="1" r:id="rId1"/></sheets><calcPr fullCalcOnLoad="1"/></workbook>`;
+    const zip=new JSZip();
+    zip.file("[Content_Types].xml",`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`);
+    zip.file("_rels/.rels",`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`);
+    zip.file("xl/workbook.xml",wbXml);
+    zip.file("xl/_rels/workbook.xml.rels",`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`);
+    zip.file("xl/styles.xml",stylesXml);
+    zip.file("xl/worksheets/sheet1.xml",sheetXml);
+    const blob=await zip.generateAsync({type:"blob",compression:"DEFLATE",mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+    const aEl=document.createElement("a");
+    aEl.href=URL.createObjectURL(blob);
+    aEl.download="급여지급_"+shName+".xlsx";
+    document.body.appendChild(aEl);aEl.click();
+    setTimeout(()=>{URL.revokeObjectURL(aEl.href);aEl.remove();},2000);
+    toast("급여지급표 엑셀을 내려받았어요 — 쓰시던 급여지급 파일에 시트로 옮겨 붙이면 돼요");
+  }catch(e){console.error(e);toast(e.message||"다운로드 실패",true);}
+}
+window.payDistDownload=payDistDownload;
 async function payPayCopy(acct,btn){
   const ppl=payPayees().filter(x=>payAcctOf(x.name)===acct);
   const label=acct==="i"?"이야기":"피다";
@@ -7333,7 +7395,8 @@ function renderPay(){
       <div style="font-weight:700;font-size:13px;margin-bottom:6px">⚠ 통장 미지정 — 어느 통장에서 나가는지 골라주세요</div>
       ${grp.un.map(x=>`<div style="display:flex;gap:8px;align-items:center;margin:3px 0"><span style="min-width:120px">${esc(x.name)} <b>${fmt(x.amt)}</b>원 <span style="font-size:11px;color:var(--sub)">${x.src}</span></span><button class="btn btn-sm" onclick="payAcctSet('${esc(x.name)}','i')">이야기</button><button class="btn btn-sm" onclick="payAcctSet('${esc(x.name)}','p')">피다</button></div>`).join("")}
     </div>`:"";
-    acctBox=`<div class="card"><div class="card-title">급여지급표 <span class="unit">통장별 실지급액 — 상용직·시급직·용역직 합침 · 배정은 한 번 정하면 계속 기억돼요</span></div>
+    acctBox=`<div class="card"><div class="card-head"><div class="card-title">급여지급표 <span class="unit">통장별 실지급액 — 상용직·시급직·용역직 합침 · 배정은 한 번 정하면 계속 기억돼요</span></div>
+      <div class="card-actions"><button class="btn btn-sm btn-primary" onclick="payDistDownload()">📥 엑셀 받기</button></div></div>
       <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px">
         <div style="flex:1;min-width:280px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><b>🏦 이야기 (꽃밥이야기 통장)</b><button class="btn btn-sm" onclick="payPayCopy('i',this)">📄 복사</button></div>${tableOf(grp.i,"i")}</div>
         <div style="flex:1;min-width:280px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><b>🏦 피다 (꽃밥에피다 통장)</b><button class="btn btn-sm" onclick="payPayCopy('p',this)">📄 복사</button></div>${tableOf(grp.p,"p")}</div>
