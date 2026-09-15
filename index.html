@@ -4051,7 +4051,7 @@ function parsePnl(text){
       const t=String(cell).replace(/\s+/g,"");
       if(!t)return;
       if(t.indexOf("꽃밥이야기")>=0)idx.total=i;
-      else if(t.indexOf("인사동")>=0||t.indexOf("에피다")>=0)idx.insadong=i;
+      else if(t.indexOf("인사동")>=0||t.indexOf("피다")>=0)idx.insadong=i;
       else if(t.indexOf("북촌")>=0)idx.bukchon=i;
       else if(t==="마켓"||t.indexOf("마켓")===0)idx.market=i;
       else if(t.indexOf("보자기")>=0)idx.bojagi=i;
@@ -4314,7 +4314,7 @@ function pnlDetectEnt(a1){
   const t=String(a1||"");
   const part=(t.split("/")[1]||"").trim();
   if(part.indexOf("마케팅")>=0)return "bukchon"; /* 북촌 리포트: 부문 선택 시 '마케팅'을 맨 앞에 → '마케팅 외' */
-  if(part.indexOf("에피다")>=0)return "insadong";
+  if(part.indexOf("피다")>=0)return "insadong";
   if(part.indexOf("마켓")>=0)return "market";
   if(part.indexOf("보자기")>=0)return "bojagi";
   return "total"; /* 부문명 없이 날짜가 바로 오면 전체 */
@@ -4866,7 +4866,7 @@ function aiPnlAnswer(q,years,months){
   }
   return {html:out.join("<br>"),table:lastTable,goto:["pnl",yrs[yrs.length-1],(months&&months.length===1)?`${yrs[yrs.length-1]}-${String(months[0]).padStart(2,"0")}`:"",""]};
 }
-const AI_HELP=`이런 걸 물어볼 수 있어요:<br>· "2025년 보자기비빔밥 판매량" (메뉴·주류)<br>· "올해 가장 많이 팔린 메뉴" / "주류 톱3" / "3월에 제일 많이 팔린 메뉴"<br>· "올해 마켓 매출" / "2026년 3월 전체 매출" — 그냥 물으면 국세청기준(매출비교), "포스기준"을 붙이면 매출현황(포스) 금액으로 답해요<br>· "2026년 에피다 영업손익" / "7월 판관비" (관리자)<br>연도·월·사업장을 함께 적으면 더 정확해요.<br>답 다음에 "그래프로 보여줘"라고 하면 방금 결과를 그래프로 그려줘요.`;
+const AI_HELP=`이런 걸 물어볼 수 있어요:<br>· "2025년 보자기비빔밥 판매량" (메뉴·주류)<br>· "올해 가장 많이 팔린 메뉴" / "주류 톱3" / "3월에 제일 많이 팔린 메뉴"<br>· "올해 마켓 매출" / "2026년 3월 전체 매출" — 그냥 물으면 국세청기준(매출비교), "포스기준"을 붙이면 매출현황(포스) 금액으로 답해요<br>· "2026년 피다 영업손익" / "7월 판관비" (관리자)<br>연도·월·사업장을 함께 적으면 더 정확해요.<br>답 다음에 "그래프로 보여줘"라고 하면 방금 결과를 그래프로 그려줘요.`;
 function aiJosa(w,a,b){const ch=String(w).charCodeAt(String(w).length-1);return(ch>=0xAC00&&ch<=0xD7A3&&(ch-0xAC00)%28>0)?a:b;}
 function aiRankAnswer(q,years,months){
   const c=aiCompact(q);
@@ -8741,7 +8741,7 @@ function buyB64Buf(b64){const bin=atob(b64);const u=new Uint8Array(bin.length);f
 const buyX=(t)=>String(t==null?"":t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 function buySerIso(n){const d=new Date(Math.round((Number(n)-25569)*86400000));return d.getUTCFullYear()+"-"+String(d.getUTCMonth()+1).padStart(2,"0")+"-"+String(d.getUTCDate()).padStart(2,"0");}
 function buyIsoSer(s){const m=String(s).match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);if(!m)return null;return Date.UTC(+m[1],+m[2]-1,+m[3])/86400000+25569;}
-const BUY_SCOPES=[["all","전체(꽃밥이야기)"],["market","꽃밥마켓"],["insa","에피다+보자기"]];
+const BUY_SCOPES=[["all","전체(꽃밥이야기)"],["market","꽃밥마켓"],["insa","피다+보자기"]];
 function buyScopeSheet(y,sc){return sc==="all"?String(y):sc==="market"?y+"마켓":y+"인사동+보자기";}
 /* ---------- 저장 ---------- */
 function buyMark(id){const B=window.__buy;B.dirty[id]=1;if(id.indexOf("stat_")===0){const d=bd().stat[id.slice(5)];if(d)d.dirty=1;}const st=document.getElementById("buyCloudSt");if(st)st.textContent="☁ 저장 중…";clearTimeout(B.saveTimer);B.saveTimer=setTimeout(buyFlush,1200);}
@@ -9072,7 +9072,7 @@ function buyStatFixAll(){
   const y=buyStatCurY();
   const xs=buyXchecks(y);
   if(!xs.length)return;
-  if(!confirm(xs.length+"건 모두 '전체 = 마켓+에피다·보자기 합'으로 맞출까요?"))return;
+  if(!confirm(xs.length+"건 모두 '전체 = 마켓+피다·보자기 합'으로 맞출까요?"))return;
   const d=bd().stat[y];
   for(const x of xs){
     const rm=buyFindRow(y,"market",x.name),ri=buyFindRow(y,"insa",x.name);
@@ -9113,7 +9113,7 @@ function renderBuyStat(){
     const tds=ms.map(m=>{const v=r.m[String(m)];if(v!=null){sum+=v;totals[m]=(totals[m]||0)+v;}return `<td class="bsc" onclick="buyStatCell(this,'${sc}',${ri},${m})">${v!=null?fmt(v):""}</td>`;}).join("");
     grand+=sum;
     let flag="";
-    if(sc==="all"){const bad=xs.some(x=>x.name===r.name);if(bad)flag=` <span class="buy-warn" title="마켓+에피다·보자기 합과 달라요">⚠</span>`;}
+    if(sc==="all"){const bad=xs.some(x=>x.name===r.name);if(bad)flag=` <span class="buy-warn" title="마켓+피다·보자기 합과 달라요">⚠</span>`;}
     body+=`<tr><td class="l bmeta" onclick="buyStatMeta(this,'${sc}',${ri},'item')">${esc(r.item||"")}</td>
       <td class="l bmeta" onclick="buyStatMeta(this,'${sc}',${ri},'name')"><b>${esc(r.name)}</b>${flag}</td>${tds}<td style="text-align:right"><b>${fmt(sum)}</b></td></tr>`;
   });
@@ -9138,13 +9138,13 @@ function renderBuyStat(){
   /* 크로스체크 */
   if(xs.length){
     html+=`<div style="margin-top:12px;padding:10px;border:1.5px solid #e5b7b3;border-radius:10px;max-width:680px">
-      <b class="buy-warn">⚠ 크로스체크 ${xs.length}건</b> <span class="unit">전체(꽃밥이야기) ≠ 마켓 + 에피다·보자기</span>
+      <b class="buy-warn">⚠ 크로스체크 ${xs.length}건</b> <span class="unit">전체(꽃밥이야기) ≠ 마켓 + 피다·보자기</span>
       <button class="btn btn-sm" style="margin-left:8px" onclick="buyStatFixAll()">모두 합으로 맞추기</button>
-      <div class="table-wrap" style="margin-top:6px;max-height:220px;overflow:auto"><table class="rpt"><thead><tr><th class="l">거래처</th><th>월</th><th>전체</th><th>마켓+에피다·보자기</th><th>차이</th><th></th></tr></thead><tbody>
+      <div class="table-wrap" style="margin-top:6px;max-height:220px;overflow:auto"><table class="rpt"><thead><tr><th class="l">거래처</th><th>월</th><th>전체</th><th>마켓+피다·보자기</th><th>차이</th><th></th></tr></thead><tbody>
       ${xs.slice(0,80).map(x=>`<tr><td class="l">${esc(x.name)}</td><td>${x.m}월</td><td>${fmt(x.all)}</td><td>${fmt(x.sum)}</td><td class="buy-warn">${fmt(x.all-x.sum)}</td><td><button class="btn btn-sm" data-nm="${esc(x.name)}" data-m="${x.m}" onclick="buyStatFix(this.dataset.nm,+this.dataset.m)">맞추기</button></td></tr>`).join("")}
       </tbody></table></div></div>`;
   }else{
-    html+=`<div class="footnote" style="margin-top:10px;color:#2F6B3F">✓ 크로스체크 통과 — 전체 = 마켓 + 에피다·보자기 (모든 달)</div>`;
+    html+=`<div class="footnote" style="margin-top:10px;color:#2F6B3F">✓ 크로스체크 통과 — 전체 = 마켓 + 피다·보자기 (모든 달)</div>`;
   }
   html+=`</div>`;
   el.innerHTML=html;
@@ -9210,7 +9210,7 @@ function buyStatAddVendor(){
   openModal("새 거래처 추가",
     `<div style="line-height:2.1">거래처명 <input type="text" id="buyNewVName" style="width:160px"><br>
      품목 <input type="text" id="buyNewVItem" style="width:160px"><br>
-     <label><input type="checkbox" id="buyNewVAll" checked> 전체·마켓·에피다보자기 세 시트에 모두 추가</label></div>`,
+     <label><input type="checkbox" id="buyNewVAll" checked> 전체·마켓·피다+보자기 세 시트에 모두 추가</label></div>`,
     `<button class="btn" onclick="closeModal()">취소</button><button class="btn btn-primary" onclick="buyStatAddVendorGo()">추가</button>`);
 }
 function buyStatAddVendorGo(){
@@ -9292,9 +9292,9 @@ function buyApplyOpen(){
   }).join("");
   const unconfN=order.filter(nm=>agg[nm].unconf).length;
   openModal(`${buyKeyLabel(key)} → 매입현황 ${y}년 ${m}월 반영`,
-    `${dl}<div class="footnote" style="margin-bottom:6px">마켓·에피다보자기 금액을 나눠 적으면 <b>전체(꽃밥이야기)는 자동으로 두 값의 합</b>으로 들어가요.
+    `${dl}<div class="footnote" style="margin-bottom:6px">마켓·피다+보자기 금액을 나눠 적으면 <b>전체(꽃밥이야기)는 자동으로 두 값의 합</b>으로 들어가요.
      같은 매입현황 거래처로 여러 줄을 보내면 합쳐져요. 이미 ${m}월 값이 있으면 덮어써요.${unconfN?`<br><span class="buy-warn">⚠ 미확인 금액 ${unconfN}곳이 포함돼 있어요.</span>`:""}</div>
-     <div class="table-wrap" style="max-height:380px;overflow:auto"><table class="rpt buy-tbl"><thead><tr><th class="l">월마감 거래처</th><th>금액</th><th class="l">매입현황 거래처</th><th>마켓</th><th>에피다+보자기</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>`,
+     <div class="table-wrap" style="max-height:380px;overflow:auto"><table class="rpt buy-tbl"><thead><tr><th class="l">월마감 거래처</th><th>금액</th><th class="l">매입현황 거래처</th><th>마켓</th><th>피다+보자기</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>`,
     `<button class="btn" onclick="closeModal()">취소</button><button class="btn btn-primary" onclick="buyApplyGo('${key}')">반영하기</button>`);
   window.__buyApplyOrder=order;
 }
@@ -10667,7 +10667,7 @@ async function ntsZpPick(inp){
     m.nts.zeropayVat=Math.round(vat);
     m.uploads=m.uploads||{};m.uploads.ntszp=1;
     touch();renderInput();
-    alert("제로페이 부가세내역 반영 완료\n\n· 제로페이·기타수단 총액: "+fmt(m.nts.zeropay)+"원 ("+n+"개 가맹점)\n· 부가세 합(정확값): "+fmt(m.nts.zeropayVat)+"원\n\n④ 카드 칸에는 홈택스 신용카드 자료 중 꽃밥마켓 가맹점분을 입력해 주세요 (전체 합계에는 에피다 카드가 섞여 있어요).");
+    alert("제로페이 부가세내역 반영 완료\n\n· 제로페이·기타수단 총액: "+fmt(m.nts.zeropay)+"원 ("+n+"개 가맹점)\n· 부가세 합(정확값): "+fmt(m.nts.zeropayVat)+"원\n\n④ 카드 칸에는 홈택스 신용카드 자료 중 꽃밥마켓 가맹점분을 입력해 주세요 (전체 합계에는 피다 카드가 섞여 있어요).");
   }catch(e){alert("읽기 실패: "+(e.message||e));}
 }
 async function msalesFile(f){
@@ -12934,7 +12934,7 @@ async function cfmCheckMismatch(){
     cmp("월별 온라인",mrow.online,c.pos.online);
     cmp("월별 보자기",mrow.bojagi,c.pos.bojagi);
     cmp("매출비교 전체",scGet(ys,mo,"total"),c.nts.total);
-    cmp("매출비교 에피다",scGet(ys,mo,"epida"),c.nts.epida);
+    cmp("매출비교 피다",scGet(ys,mo,"epida"),c.nts.epida);
     cmp("매출비교 마켓",scGet(ys,mo,"market"),c.nts.market);
     cmp("매출비교 보자기",scGet(ys,mo,"bojagi"),c.nts.bojagi);
     cmp("마켓 총매출",(S.data.marketDetail[ys]?.months||{})[mo]?.total,c.mk.total);
