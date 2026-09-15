@@ -9055,8 +9055,10 @@ function buyXchecks(y){
     for(const m of d.months||[]){
       const k=String(m);
       const va=ra&&ra.m[k]!=null?ra.m[k]:0;
-      const vs=(rm&&rm.m[k]!=null?rm.m[k]:0)+(ri&&ri.m[k]!=null?ri.m[k]:0);
-      if(va!==vs&&(va||vs))out.push({name:nm,m:m,all:va,sum:vs});
+      const vm=rm&&rm.m[k]!=null?rm.m[k]:0;
+      const vi=ri&&ri.m[k]!=null?ri.m[k]:0;
+      const vs=vm+vi;
+      if(va!==vs&&(va||vs))out.push({name:nm,m:m,all:va,sum:vs,market:vm,insa:vi});
     }
   }
   out.sort((a,b)=>b.m-a.m||a.name.localeCompare(b.name,"ko"));
@@ -9144,8 +9146,15 @@ function renderBuyStat(){
     html+=`<div style="margin-top:12px;padding:10px;border:1.5px solid #e5b7b3;border-radius:10px;max-width:680px">
       <b class="buy-warn">⚠ 크로스체크 ${xs.length}건</b> <span class="unit">전체(꽃밥이야기) ≠ 마켓 + 피다·보자기</span>
       <button class="btn btn-sm" style="margin-left:8px" onclick="buyStatFixAll()">모두 합으로 맞추기</button>
-      <div class="table-wrap" style="margin-top:6px;max-height:220px;overflow:auto"><table class="rpt"><thead><tr><th class="l">거래처</th><th>월</th><th>전체</th><th>마켓+피다·보자기</th><th>차이</th><th></th></tr></thead><tbody>
-      ${xs.slice(0,80).map(x=>`<tr><td class="l">${esc(x.name)}</td><td>${x.m}월</td><td>${fmt(x.all)}</td><td>${fmt(x.sum)}</td><td class="buy-warn">${fmt(x.all-x.sum)}</td><td><button class="btn btn-sm" data-nm="${esc(x.name)}" data-m="${x.m}" onclick="buyStatFix(this.dataset.nm,+this.dataset.m)">맞추기</button></td></tr>`).join("")}
+      <div class="footnote" style="margin-top:4px">전체·마켓·피다·보자기 칸을 눌러 바로 고칠 수 있어요. "맞추기"는 전체를 마켓+피다·보자기 합으로 바꿔요.</div>
+      <div class="table-wrap" style="margin-top:6px;max-height:260px;overflow:auto"><table class="rpt"><thead><tr><th class="l">거래처</th><th>월</th><th>전체</th><th>마켓</th><th>피다·보자기</th><th>차이</th><th></th></tr></thead><tbody>
+      ${xs.slice(0,80).map(x=>`<tr data-nm="${esc(x.name)}" data-m="${x.m}">
+        <td class="l">${esc(x.name)}</td><td>${x.m}월</td>
+        <td class="bsc" onclick="buyXcCell(this,'all')">${fmt(x.all)}</td>
+        <td class="bsc" onclick="buyXcCell(this,'market')">${x.market?fmt(x.market):""}</td>
+        <td class="bsc" onclick="buyXcCell(this,'insa')">${x.insa?fmt(x.insa):""}</td>
+        <td class="buy-warn">${fmt(x.all-x.sum)}</td>
+        <td><button class="btn btn-sm" onclick="buyStatFix(this.closest('tr').dataset.nm,+this.closest('tr').dataset.m)">맞추기</button></td></tr>`).join("")}
       </tbody></table></div></div>`;
   }else{
     html+=`<div class="footnote" style="margin-top:10px;color:#2F6B3F">✓ 크로스체크 통과 — 전체 = 마켓 + 피다·보자기 (모든 달)</div>`;
@@ -9996,6 +10005,30 @@ function buyUnifyApply(){
   const xs=buyXchecks(y);
   toast(done+"묶음 이름을 통일했어요"+(xs.length?" · 남은 크로스체크 "+xs.length+"건은 '모두 합으로 맞추기'로 정리하세요":" · 크로스체크 전부 해결 ✓"));
 }
+function buyXcCell(td,sc){
+  if(td.querySelector("input"))return;
+  const tr=td.closest("tr");
+  const nm=tr.dataset.nm,m=+tr.dataset.m,mk=String(m);
+  const y=buyStatCurY(),d=bd().stat[y];
+  const row=buyFindRow(y,sc,nm);
+  const cur=row&&row.m[mk]!=null?row.m[mk]:null;
+  td.innerHTML=`<input type="text" inputmode="numeric" value="${cur!=null?fmt(cur):""}">`;
+  const inp=td.querySelector("input");
+  inp.focus();inp.select&&inp.select();
+  let done=false;
+  const commit=()=>{
+    if(done)return;done=true;
+    const v=String(inp.value).replace(/[,\s]/g,"");
+    const n2=Number(v);
+    const r2=buyEnsureRow(y,sc,nm,"");
+    if(v===""||isNaN(n2)||n2===0)delete r2.m[mk];else r2.m[mk]=n2;
+    d.savedAt=Date.now();buyMark("stat_"+y);
+    renderBuyStat();
+  };
+  inp.addEventListener("blur",commit);
+  inp.addEventListener("keydown",(e)=>{if(e.key==="Enter"){e.preventDefault();commit();}else if(e.key==="Escape"){done=true;renderBuyStat();}});
+}
+window.buyXcCell=buyXcCell;
 window.buyUnifyOpen=buyUnifyOpen;window.buyUnifyApply=buyUnifyApply;
 </script>
 
