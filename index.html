@@ -488,6 +488,7 @@ window.FIREBASE_CONFIG = {
     <button class="tab" data-tab="compare">매출비교</button>
     <button class="tab" data-tab="sales">매출현황</button>
     <button class="tab" data-tab="pnl">월별손익</button>
+    <button class="tab admin-only" data-tab="buy">매입</button>
     <button class="tab admin-only" data-tab="pay">급여</button>
     <button class="tab admin-only" data-tab="settings">설정</button>
     <div id="sideSubs"></div>
@@ -507,6 +508,7 @@ window.FIREBASE_CONFIG = {
       <div id="tab-manage" class="hidden"></div>
     </section>
     <section id="tab-pnl" class="tab-panel hidden"></section>
+    <section id="tab-buy" class="tab-panel hidden"></section>
     <section id="tab-pay" class="tab-panel hidden"></section>
     <section id="tab-jagum" class="tab-panel hidden"></section>
     <section id="tab-settings" class="tab-panel hidden"></section>
@@ -1123,6 +1125,7 @@ async function loadAllData() {
   jobs.push(fsCol("config").doc("epidaDrink").get().then((d) => { S.data.epidaDrink = d.data() || { add: [], remove: [] }; }).catch(() => {}));
   jobs.push(fsCol("payMonthly").get().then((snap)=>{const out={},files={};snap.forEach((d)=>{if(d.id.indexOf("file_")===0)files[d.id.slice(5)]=d.data();else if(d.id==="acctConfig")S.data.payAcct=d.data().acctOf||{};else if(d.id==="taxConfig")S.data.payTax=d.data()||{byName:{}};else if(d.id==="taxTable")S.data.payTaxTable=d.data()||null;else out[d.id]=d.data();});S.data.payMonthly=out;S.data.payFiles=files;}).catch(()=>{S.data.payMonthly=S.data.payMonthly||{};S.data.payFiles=S.data.payFiles||{};S.data.payAcct=S.data.payAcct||{};}));
   jobs.push(fsCol("config").doc("bojagiPosMap").get().then((d) => { S.data.bojagiPosMap = (d.data() || {}).map || {}; }).catch(() => {}));
+  jobs.push(fsCol("buy").get().then((snap)=>{const B={files:{},close:{},stat:{},vendorMap:{}};snap.forEach((d)=>{const id=d.id;if(id==="file_close")B.files.close=d.data();else if(id==="file_stat")B.files.stat=d.data();else if(id.indexOf("close_")===0)B.close[id.slice(6)]=d.data();else if(id.indexOf("stat_")===0)B.stat[id.slice(5)]=d.data();else if(id==="vendorMap")B.vendorMap=(d.data()||{}).map||{};});S.data.buy=B;}).catch(()=>{S.data.buy=S.data.buy||{files:{},close:{},stat:{},vendorMap:{}};}));
   await Promise.all(jobs);
   pnlNormalizeKeys();
 }
@@ -7962,7 +7965,7 @@ window.payRecordMonth=payRecordMonth;window.paySummaryCopy=paySummaryCopy;
 window.payPick=payPick;window.payDownload=payDownload;window.payCellEdit=payCellEdit;
 const RENDERERS = {
   home: () => renderHome(),
-  compare: renderCompare, sales: renderSales, pnl: renderPnl, jagum: renderJagum, pay: renderPay, settings: () => renderSettings(),
+  compare: renderCompare, sales: renderSales, pnl: renderPnl, jagum: renderJagum, pay: renderPay, buy: () => renderBuy(), settings: () => renderSettings(),
 };
 function switchTab(tab) {
   if(["monthly","daily","market","bojagi","agency"].includes(tab)){S.ui.salesSub=tab;tab="sales";}
@@ -8713,6 +8716,1056 @@ async function removeChannel(kind, name) {
   catch (e) { toast(e.message, true); }
 }
 </script>
+<style>
+/* === 매입 탭 === */
+.buy-yel td{background:#fff3ad !important}
+.buy-tbl input[type=text],.buy-tbl input[type=number]{border:1px solid var(--line,#ddd);border-radius:6px;padding:4px 6px;font-size:13px;width:100%;box-sizing:border-box;background:transparent}
+.buy-tbl input[type=number]{text-align:right}
+.buy-tbl td{padding:3px 4px}
+.bsc{cursor:pointer;text-align:right}
+.bsc:hover{outline:1.5px solid #9ec5a5}
+.bsc input{width:92px;text-align:right;border:1.5px solid #2F6B3F;border-radius:4px;padding:2px 4px;font-size:12.5px}
+.bmeta{cursor:pointer}
+.bmeta:hover{outline:1.5px dashed #bbb}
+.buy-chip{display:inline-block;padding:2px 10px;border-radius:20px;border:1px solid var(--line,#ddd);cursor:pointer;font-size:12.5px;margin-right:4px;background:var(--card,#fff)}
+.buy-chip.on{background:#2F6B3F;color:#fff;border-color:#2F6B3F}
+.buy-warn{color:#b3261e;font-weight:600}
+</style>
+<script>
+/* === buy.js — 매입 탭 (월마감결제 · 매입현황) === */
+"use strict";
+window.__buy=window.__buy||{ui:{sub:"close",closeKey:null,statYear:null,statScope:"all",q:"",editM:null},dirty:{},saveTimer:null,wbClose:null,wbStat:null};
+function bd(){S.data.buy=S.data.buy||{files:{},close:{},stat:{},vendorMap:{}};S.data.buy.files=S.data.buy.files||{};S.data.buy.close=S.data.buy.close||{};S.data.buy.stat=S.data.buy.stat||{};S.data.buy.vendorMap=S.data.buy.vendorMap||{};return S.data.buy;}
+function buyB64Buf(b64){const bin=atob(b64);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u.buffer;}
+const buyX=(t)=>String(t==null?"":t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+function buySerIso(n){const d=new Date(Math.round((Number(n)-25569)*86400000));return d.getUTCFullYear()+"-"+String(d.getUTCMonth()+1).padStart(2,"0")+"-"+String(d.getUTCDate()).padStart(2,"0");}
+function buyIsoSer(s){const m=String(s).match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);if(!m)return null;return Date.UTC(+m[1],+m[2]-1,+m[3])/86400000+25569;}
+const BUY_SCOPES=[["all","전체(꽃밥이야기)"],["market","꽃밥마켓"],["insa","에피다+보자기"]];
+function buyScopeSheet(y,sc){return sc==="all"?String(y):sc==="market"?y+"마켓":y+"인사동+보자기";}
+/* ---------- 저장 ---------- */
+function buyMark(id){const B=window.__buy;B.dirty[id]=1;if(id.indexOf("stat_")===0){const d=bd().stat[id.slice(5)];if(d)d.dirty=1;}const st=document.getElementById("buyCloudSt");if(st)st.textContent="☁ 저장 중…";clearTimeout(B.saveTimer);B.saveTimer=setTimeout(buyFlush,1200);}
+async function buyFlush(){
+  const B=window.__buy,D=bd();const ids=Object.keys(B.dirty);B.dirty={};
+  let ok=true;
+  if(!IS_DEMO){
+    for(const id of ids){
+      try{
+        let data=null;
+        if(id==="vendorMap")data={map:JSON.parse(JSON.stringify(D.vendorMap))};
+        else if(id.indexOf("close_")===0)data=JSON.parse(JSON.stringify(D.close[id.slice(6)]||null));
+        else if(id.indexOf("stat_")===0)data=JSON.parse(JSON.stringify(D.stat[id.slice(5)]||null));
+        else if(id==="file_close")data=JSON.parse(JSON.stringify(D.files.close));
+        else if(id==="file_stat")data=JSON.parse(JSON.stringify(D.files.stat));
+        if(data)await fsCol("buy").doc(id).set(data);
+        else await fsCol("buy").doc(id).delete();
+      }catch(e){console.error("buy save",id,e);ok=false;}
+    }
+  }
+  const st=document.getElementById("buyCloudSt");
+  if(st)st.textContent=IS_DEMO?"미리보기 모드(저장 안 됨)":(ok?"☁ 저장됨 ✓":"⚠ 저장 실패 — 새로고침 후 다시 시도해 주세요");
+}
+/* ---------- 파싱 ---------- */
+function buyYellowSet(styles){
+  const set={};
+  if(styles&&styles.xfs)styles.xfs.forEach((xf,i)=>{const f=(styles.fills[xf.fillId]||"").toLowerCase();if(f==="#ffff00"||f==="#fff200"||f==="#ffef00")set[i]=1;});
+  return set;
+}
+function buyCloseFromSheet(sh,yset){
+  const C=sh.cells||{};
+  const gv=(ref)=>{const c=C[ref];return c?c.v:"";};
+  /* 합계행 */
+  let tot=0;
+  for(let r=3;r<=sh.maxR;r++){if(String(gv("A"+r)).trim()==="합계"){tot=r;break;}}
+  if(!tot)return null;
+  /* 부서 앵커: D열 문자열 값 */
+  const anchors=[];
+  for(let r=3;r<tot;r++){const c=C["D"+r];if(c&&c.typ==="str"&&String(c.v).trim()&&!sh.covered["D"+r])anchors.push({r:r,dept:String(c.v).trim()});}
+  if(!anchors.length)return null;
+  const groups=[];
+  for(let i=0;i<anchors.length;i++){
+    const a=anchors[i],end=(i+1<anchors.length?anchors[i+1].r:tot)-1;
+    const rows=[];
+    for(let r=a.r;r<=end;r++){
+      const nm=String(gv("B"+r)).trim();
+      const ac=C["C"+r];
+      const amt=(ac&&ac.v!==""&&ac.typ==="num")?Number(ac.v):null;
+      if(!nm&&amt==null)continue;
+      const fc=C["F"+r];
+      const memo=(fc&&fc.typ==="str"&&!fc.f)?String(fc.v):"";
+      const okY=!((ac&&yset[ac.s])||(C["B"+r]&&yset[C["B"+r].s]));
+      rows.push({name:nm,amt:amt,ok:okY,memo:memo});
+    }
+    groups.push({dept:a.dept,rows:rows});
+  }
+  let payDate="";
+  const a3=C["A3"];
+  if(a3){payDate=a3.typ==="num"&&a3.v!==""?buySerIso(a3.v):String(a3.v);}
+  return {payDate:payDate,groups:groups};
+}
+function buyStatFromSheet(sh){
+  const C=sh.cells||{};
+  const gv=(ref)=>{const c=C[ref];return c?c.v:"";};
+  const labels={},cols=[];/* cols: [{c:'C',m:7,label:'7월'}] */
+  for(let ci=3;ci<=sh.maxC;ci++){
+    const col=payIdxCol(ci),h=String(gv(col+"1")).trim();
+    if(!h)continue;
+    if(h==="계")break;
+    const mm=h.match(/^0?(\d{1,2})\s*월$/);
+    if(!mm)continue;
+    cols.push({c:col,m:+mm[1],label:h});labels[String(+mm[1])]=h;
+  }
+  let tot=0;
+  for(let r=2;r<=sh.maxR;r++){if(String(gv("A"+r)).trim()==="합계"||(String(gv("A"+r)).trim()===""&&String(gv("B"+r)).trim()===""&&r>3&&String(gv("A"+(r-1))).trim()==="합계"))if(String(gv("A"+r)).trim()==="합계"){tot=r;break;}}
+  if(!tot)tot=sh.maxR+1;
+  const rows=[];
+  for(let r=2;r<tot;r++){
+    const nm=String(gv("B"+r)).trim();
+    if(!nm)continue;
+    const m={};
+    for(const co of cols){const c=C[co.c+r];if(c&&c.typ==="num"&&c.v!=="")m[String(co.m)]=Number(c.v);}
+    rows.push({item:String(gv("A"+r)).trim(),name:nm,m:m});
+  }
+  return {rows:rows,labels:labels,months:cols.map(x=>x.m)};
+}
+/* ---------- 업로드 ---------- */
+async function buyPick(which,inp){
+  const f=inp.files&&inp.files[0];
+  if(!f)return;
+  try{
+    const buf=await f.arrayBuffer();
+    const wb=await pumParse(buf);
+    const b64=payBufB64(wb.zipBuf);
+    const D=bd(),B=window.__buy;
+    if(which==="close"){
+      const yset=buyYellowSet(wb.styles);
+      const parsed={};
+      for(const sh of wb.sheets){
+        if(!/^\d{4}$/.test(sh.name))continue;
+        const doc=buyCloseFromSheet(sh,yset);
+        if(doc)parsed[sh.name]=doc;
+      }
+      if(!Object.keys(parsed).length){toast("월마감 시트(예: 2608)를 찾지 못했어요",true);return;}
+      const exist=Object.keys(parsed).filter(k=>D.close[k]);
+      if(exist.length&&!confirm("이미 있는 "+exist.length+"개 달("+exist.slice(0,4).join(", ")+"…)을 파일 내용으로 덮어쓸까요?\n(앱에서 만든 다른 달은 그대로 둬요)"))return;
+      for(const k in parsed){D.close[k]={payDate:parsed[k].payDate,groups:parsed[k].groups,src:"file",savedAt:Date.now()};buyMark("close_"+k);}
+      D.files.close={b64:b64,fileName:f.name,up:Date.now()};buyMark("file_close");
+      B.wbClose=wb;
+      B.ui.closeKey=Object.keys(D.close).sort().reverse()[0];
+      toast("월마감결제 "+Object.keys(parsed).length+"개 달을 읽었어요");
+    }else{
+      const years={};
+      for(const y of ["2023","2024","2025","2026","2027","2028","2029","2030"]){
+        const shAll=wb.sheets.find(s=>s.name===y);
+        if(!shAll)continue;
+        const shM=wb.sheets.find(s=>s.name===y+"마켓");
+        const shI=wb.sheets.find(s=>s.name===y+"인사동+보자기");
+        const pAll=buyStatFromSheet(shAll);
+        const pM=shM?buyStatFromSheet(shM):{rows:[],labels:{},months:[]};
+        const pI=shI?buyStatFromSheet(shI):{rows:[],labels:{},months:[]};
+        const months=[...new Set([...pAll.months,...pM.months,...pI.months])].sort((a,b)=>a-b);
+        years[y]={labels:Object.assign({},pM.labels,pI.labels,pAll.labels),months:months,scopes:{all:{rows:pAll.rows},market:{rows:pM.rows},insa:{rows:pI.rows}},savedAt:Date.now()};
+      }
+      if(!Object.keys(years).length){toast("연도 시트(예: 2026, 2026마켓)를 찾지 못했어요",true);return;}
+      const exist=Object.keys(years).filter(k=>D.stat[k]);
+      if(exist.length&&!confirm("이미 있는 "+exist.join(", ")+"년 매입현황을 파일 내용으로 덮어쓸까요?"))return;
+      for(const y in years){D.stat[y]=years[y];buyMark("stat_"+y);}
+      for(const y in years)delete D.stat[y].dirty;/* 업로드 직후는 원본 그대로 */
+      D.files.stat={b64:b64,fileName:f.name,up:Date.now()};buyMark("file_stat");
+      B.wbStat=wb;
+      B.ui.statYear=Object.keys(D.stat).sort().reverse()[0];
+      toast("매입현황 "+Object.keys(years).join("·")+"년을 읽었어요");
+    }
+    renderBuy();
+  }catch(e){console.error(e);toast(e.message||"파일을 읽지 못했어요",true);}
+  finally{inp.value="";}
+}
+/* ---------- 월마감 도우미 ---------- */
+function buyCloseKeys(){return Object.keys(bd().close).sort().reverse();}
+function buyCloseCur(){const B=window.__buy;const ks=buyCloseKeys();if(!ks.length)return null;if(!B.ui.closeKey||!bd().close[B.ui.closeKey])B.ui.closeKey=ks[0];return B.ui.closeKey;}
+function buyKeyLabel(k){return "20"+k.slice(0,2)+"년 "+Number(k.slice(2))+"월";}
+function buyNextKey(k){let y=+k.slice(0,2),m=+k.slice(2);m++;if(m>12){m=1;y++;}return String(y).padStart(2,"0")+String(m).padStart(2,"0");}
+function buyGroupSum(g){return g.rows.reduce((a,r)=>a+(r.amt||0),0);}
+/* ---------- 월마감 렌더 ---------- */
+function renderBuyClose(){
+  const el=document.getElementById("tab-buyclose");
+  if(!el)return;
+  const D=bd(),B=window.__buy;
+  const key=buyCloseCur();
+  const upBtn=`<button class="btn btn-sm" onclick="document.getElementById('buyFileClose').click()">📂 월마감 엑셀 ${D.files.close?"교체":"올리기"}</button>
+    <input type="file" id="buyFileClose" accept=".xlsx" style="display:none" onchange="buyPick('close',this)">`;
+  if(!key){
+    el.innerHTML=`<div class="card"><div class="card-title">월마감결제</div>
+      <div class="footnote" style="margin:8px 0">쓰시던 <b>월마감결제 엑셀</b>을 한 번만 올려주세요. 달별 시트를 모두 읽어서 웹에서 바로 수정·기입할 수 있게 돼요.</div>${upBtn}</div>`;
+    return;
+  }
+  const doc=D.close[key];
+  const ks=buyCloseKeys();
+  const years=[...new Set(ks.map(k=>"20"+k.slice(0,2)))].sort().reverse();
+  const dlYear=B.ui.closeDlYear&&years.includes(B.ui.closeDlYear)?B.ui.closeDlYear:years[0];
+  B.ui.closeDlYear=dlYear;
+  let unconf=0,total=0;
+  doc.groups.forEach(g=>g.rows.forEach(r=>{if(!r.ok)unconf++;total+=r.amt||0;}));
+  const dateIso=/^\d{4}-\d{2}-\d{2}$/.test(doc.payDate||"");
+  let html=`<div class="card"><div class="card-title" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">월마감결제
+      <select onchange="buyCloseSel(this.value)">${ks.map(k=>`<option value="${k}" ${k===key?"selected":""}>${buyKeyLabel(k)}</option>`).join("")}</select>
+      <button class="btn btn-sm" onclick="buyNewMonth()">➕ 새 달 만들기</button>
+      <span id="buyCloudSt" class="footnote" style="margin-left:auto"></span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:6px 0">
+      <label>결제예정일자 ${dateIso?`<input type="date" value="${doc.payDate}" onchange="buyCloseDate(this.value)">`:`<input type="text" value="${esc(doc.payDate||"")}" style="width:110px" onchange="buyCloseDate(this.value)">`}</label>
+      <span class="footnote">노란 줄 = 아직 금액 확인 전(거래명세서·계산서 대조 전) · 확인되면 ✓ 체크</span>
+    </div>`;
+  doc.groups.forEach((g,gi)=>{
+    const sum=buyGroupSum(g);
+    html+=`<div style="margin-top:10px"><b>${esc(g.dept)}</b> <span class="unit">소계 ${fmt(sum)}원 · ${g.rows.length}곳</span>
+      <div class="table-wrap"><table class="rpt buy-tbl" style="max-width:640px"><thead><tr><th style="width:36px">확인</th><th class="l">거래처</th><th style="width:130px">금액</th><th class="l" style="width:150px">비고</th><th style="width:30px"></th></tr></thead><tbody>`;
+    g.rows.forEach((r,ri)=>{
+      html+=`<tr class="${r.ok?"":"buy-yel"}">
+        <td style="text-align:center"><input type="checkbox" ${r.ok?"checked":""} onchange="buyCloseOk(${gi},${ri},this.checked)"></td>
+        <td><input type="text" value="${esc(r.name)}" onchange="buyCloseEdit(${gi},${ri},'name',this.value)"></td>
+        <td><input type="number" value="${r.amt==null?"":r.amt}" onchange="buyCloseEdit(${gi},${ri},'amt',this.value)"></td>
+        <td><input type="text" value="${esc(r.memo||"")}" onchange="buyCloseEdit(${gi},${ri},'memo',this.value)"></td>
+        <td><button class="btn btn-sm" style="padding:1px 7px" onclick="buyCloseDel(${gi},${ri})">×</button></td></tr>`;
+    });
+    html+=`</tbody></table></div><button class="btn btn-sm" onclick="buyCloseAdd(${gi})">＋ 거래처 추가</button></div>`;
+  });
+  html+=`<div style="margin-top:14px;padding:10px;border:1px solid var(--line,#ddd);border-radius:10px;max-width:640px">
+      ${doc.groups.map(g=>`<span style="margin-right:16px">${esc(g.dept)} <b>${fmt(buyGroupSum(g))}</b></span>`).join("")}
+      <span style="margin-right:16px">총 합계 <b style="font-size:15px">${fmt(total)}</b>원</span>
+      ${unconf?`<span class="buy-warn">미확인 ${unconf}건</span>`:`<span style="color:#2F6B3F">모두 확인됨 ✓</span>`}
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;align-items:center">
+      <button class="btn btn-primary" onclick="buyApplyOpen()">📤 매입현황에 반영…</button>
+      <span style="margin-left:auto"></span>
+      <select onchange="window.__buy.ui.closeDlYear=this.value">${years.map(y=>`<option ${y===dlYear?"selected":""}>${y}</option>`).join("")}</select>
+      <button class="btn" onclick="buyCloseDl()">📥 연도별 엑셀 받기</button>
+      ${upBtn}
+    </div>
+    <div class="footnote" style="margin-top:6px">엑셀은 선택한 연도의 1~12월(있는 달만)이 시트로 나뉘어 담겨요. 원본 파일 그대로의 서식이고, 행을 추가·삭제한 달만 표준 양식으로 다시 만들어요.</div>
+  </div>`;
+  el.innerHTML=html;
+  buyFlushLabel();
+}
+function buyFlushLabel(){const st=document.getElementById("buyCloudSt");if(st&&!Object.keys(window.__buy.dirty).length)st.textContent=IS_DEMO?"미리보기 모드(저장 안 됨)":"";}
+function buyCloseSel(k){window.__buy.ui.closeKey=k;renderBuyClose();}
+function buyCloseDate(v){const d=bd().close[buyCloseCur()];d.payDate=v;d.savedAt=Date.now();buyMark("close_"+buyCloseCur());}
+function buyCloseEdit(gi,ri,f,v){
+  const key=buyCloseCur(),d=bd().close[key],r=d.groups[gi].rows[ri];
+  if(f==="amt")r.amt=v===""?null:Number(v);
+  else r[f]=v;
+  d.savedAt=Date.now();buyMark("close_"+key);
+  renderBuyClose();
+}
+function buyCloseOk(gi,ri,chk){
+  const key=buyCloseCur(),d=bd().close[key];
+  d.groups[gi].rows[ri].ok=!!chk;
+  d.savedAt=Date.now();buyMark("close_"+key);
+  renderBuyClose();
+}
+function buyCloseAdd(gi){
+  const key=buyCloseCur(),d=bd().close[key];
+  d.groups[gi].rows.push({name:"",amt:null,ok:true,memo:""});
+  d.savedAt=Date.now();buyMark("close_"+key);
+  renderBuyClose();
+}
+function buyCloseDel(gi,ri){
+  const key=buyCloseCur(),d=bd().close[key],r=d.groups[gi].rows[ri];
+  if((r.name||r.amt)&&!confirm(`'${r.name||"이 행"}'을 지울까요?`))return;
+  d.groups[gi].rows.splice(ri,1);
+  d.savedAt=Date.now();buyMark("close_"+key);
+  renderBuyClose();
+}
+function buyNewMonth(){
+  const D=bd();const ks=buyCloseKeys();
+  const nk=ks.length?buyNextKey(ks[0]):(()=>{const t=new Date();return String(t.getFullYear()%100).padStart(2,"0")+String(t.getMonth()+1).padStart(2,"0");})();
+  if(D.close[nk]){window.__buy.ui.closeKey=nk;renderBuyClose();return;}
+  const prev=ks.length?D.close[ks[0]]:null;
+  openModal(buyKeyLabel(nk)+" 새로 만들기",
+    `<div style="line-height:1.9">${prev?`<label><input type="checkbox" id="buyCopyPrev" checked> 지난달(${buyKeyLabel(ks[0])}) 거래처 목록 가져오기 (금액은 비워요)</label><br>`:""}
+     결제예정일자: <input type="date" id="buyNewDate" value=""></div>`,
+    `<button class="btn" onclick="closeModal()">취소</button><button class="btn btn-primary" onclick="buyNewMonthGo('${nk}')">만들기</button>`);
+  const y=2000+ +nk.slice(0,2),m=+nk.slice(2);
+  const nx=m===12?(y+1)+"-01":y+"-"+String(m+1).padStart(2,"0");
+  const de=document.getElementById("buyNewDate");if(de)de.value=nx+"-15";
+}
+function buyNewMonthGo(nk){
+  const D=bd();const ks=buyCloseKeys();
+  const cp=document.getElementById("buyCopyPrev");
+  const dt=document.getElementById("buyNewDate");
+  let groups;
+  if(cp&&cp.checked&&ks.length){
+    groups=D.close[ks[0]].groups.map(g=>({dept:g.dept,rows:g.rows.filter(r=>r.name).map(r=>({name:r.name,amt:null,ok:true,memo:""}))}));
+  }else groups=[{dept:"인사동",rows:[]},{dept:"보자기",rows:[]},{dept:"마켓",rows:[]}];
+  D.close[nk]={payDate:dt&&dt.value||"",groups:groups,src:"app",savedAt:Date.now()};
+  buyMark("close_"+nk);
+  window.__buy.ui.closeKey=nk;
+  closeModal();renderBuyClose();
+  toast(buyKeyLabel(nk)+"을 만들었어요");
+}
+</script>
+<script>
+/* === buy2.js — 매입현황 + 반영 + 크로스체크 === */
+"use strict";
+function buyStatYears(){return Object.keys(bd().stat).sort().reverse();}
+function buyStatCurY(){const B=window.__buy;const ys=buyStatYears();if(!ys.length)return null;if(!B.ui.statYear||!bd().stat[B.ui.statYear])B.ui.statYear=ys[0];return B.ui.statYear;}
+function buyStatMonths(y){const d=bd().stat[y];return d?(d.months||[]).slice().sort((a,b)=>b-a):[];}
+function buyVendorNames(y){
+  const d=bd().stat[y];if(!d)return[];
+  const set=new Set();
+  for(const sc of ["all","market","insa"])(d.scopes[sc].rows||[]).forEach(r=>set.add(r.name));
+  return [...set].sort((a,b)=>a.localeCompare(b,"ko"));
+}
+function buyFindRow(y,sc,name){const d=bd().stat[y];if(!d)return null;return (d.scopes[sc].rows||[]).find(r=>r.name===name)||null;}
+function buyEnsureRow(y,sc,name,item){
+  const d=bd().stat[y];
+  let r=buyFindRow(y,sc,name);
+  if(r)return r;
+  r={item:item||"",name:name,m:{}};
+  const rows=d.scopes[sc].rows;
+  let i=0;while(i<rows.length&&rows[i].name.localeCompare(name,"ko")<0)i++;
+  rows.splice(i,0,r);
+  return r;
+}
+/* ---------- 크로스체크 ---------- */
+function buyXchecks(y){
+  const d=bd().stat[y];if(!d)return[];
+  const out=[];
+  const names=new Set();
+  for(const sc of ["all","market","insa"])d.scopes[sc].rows.forEach(r=>names.add(r.name));
+  for(const nm of names){
+    const ra=buyFindRow(y,"all",nm),rm=buyFindRow(y,"market",nm),ri=buyFindRow(y,"insa",nm);
+    for(const m of d.months||[]){
+      const k=String(m);
+      const va=ra&&ra.m[k]!=null?ra.m[k]:0;
+      const vs=(rm&&rm.m[k]!=null?rm.m[k]:0)+(ri&&ri.m[k]!=null?ri.m[k]:0);
+      if(va!==vs&&(va||vs))out.push({name:nm,m:m,all:va,sum:vs});
+    }
+  }
+  out.sort((a,b)=>b.m-a.m||a.name.localeCompare(b.name,"ko"));
+  return out;
+}
+function buyStatFix(nm,m){
+  const y=buyStatCurY(),d=bd().stat[y];
+  const rm=buyFindRow(y,"market",nm),ri=buyFindRow(y,"insa",nm);
+  const vs=(rm&&rm.m[String(m)]!=null?rm.m[String(m)]:0)+(ri&&ri.m[String(m)]!=null?ri.m[String(m)]:0);
+  const ra=buyEnsureRow(y,"all",nm,(rm&&rm.item)||(ri&&ri.item)||"");
+  if(vs)ra.m[String(m)]=vs;else delete ra.m[String(m)];
+  d.savedAt=Date.now();buyMark("stat_"+y);renderBuyStat();
+}
+function buyStatFixAll(){
+  const y=buyStatCurY();
+  const xs=buyXchecks(y);
+  if(!xs.length)return;
+  if(!confirm(xs.length+"건 모두 '전체 = 마켓+에피다·보자기 합'으로 맞출까요?"))return;
+  const d=bd().stat[y];
+  for(const x of xs){
+    const rm=buyFindRow(y,"market",x.name),ri=buyFindRow(y,"insa",x.name);
+    const vs=(rm&&rm.m[String(x.m)]!=null?rm.m[String(x.m)]:0)+(ri&&ri.m[String(x.m)]!=null?ri.m[String(x.m)]:0);
+    const ra=buyEnsureRow(y,"all",x.name,(rm&&rm.item)||(ri&&ri.item)||"");
+    if(vs)ra.m[String(x.m)]=vs;else delete ra.m[String(x.m)];
+  }
+  d.savedAt=Date.now();buyMark("stat_"+y);renderBuyStat();
+}
+/* ---------- 매입현황 렌더 ---------- */
+function renderBuyStat(){
+  const el=document.getElementById("tab-buystat");
+  if(!el)return;
+  const D=bd(),B=window.__buy;
+  const upBtn=`<button class="btn btn-sm" onclick="document.getElementById('buyFileStat').click()">📂 매입현황 엑셀 ${D.files.stat?"교체":"올리기"}</button>
+    <input type="file" id="buyFileStat" accept=".xlsx" style="display:none" onchange="buyPick('stat',this)">`;
+  const y=buyStatCurY();
+  if(!y){
+    el.innerHTML=`<div class="card"><div class="card-title">매입현황</div>
+      <div class="footnote" style="margin:8px 0">쓰시던 <b>매입현황 엑셀</b>(연도·마켓·인사동+보자기 시트)을 한 번만 올려주세요.</div>${upBtn}</div>`;
+    return;
+  }
+  const d=D.stat[y];
+  const ms=buyStatMonths(y);
+  const sc=B.ui.statScope;
+  const rows=d.scopes[sc].rows||[];
+  const q=(B.ui.q||"").trim();
+  const xs=buyXchecks(y);
+  const dlM=B.ui.statDlM&&ms.includes(+B.ui.statDlM)?+B.ui.statDlM:(ms[0]||1);
+  B.ui.statDlM=dlM;
+  /* 표 */
+  const mCols=ms.map(m=>`<th style="min-width:78px">${esc(d.labels[String(m)]||m+"월")}</th>`).join("");
+  let body="",totals={},grand=0;
+  const list=q?rows.filter(r=>r.name.indexOf(q)>=0||String(r.item||"").indexOf(q)>=0):rows;
+  list.forEach((r)=>{
+    const ri=rows.indexOf(r);
+    let sum=0;
+    const tds=ms.map(m=>{const v=r.m[String(m)];if(v!=null){sum+=v;totals[m]=(totals[m]||0)+v;}return `<td class="bsc" onclick="buyStatCell(this,'${sc}',${ri},${m})">${v!=null?fmt(v):""}</td>`;}).join("");
+    grand+=sum;
+    let flag="";
+    if(sc==="all"){const bad=xs.some(x=>x.name===r.name);if(bad)flag=` <span class="buy-warn" title="마켓+에피다·보자기 합과 달라요">⚠</span>`;}
+    body+=`<tr><td class="l bmeta" onclick="buyStatMeta(this,'${sc}',${ri},'item')">${esc(r.item||"")}</td>
+      <td class="l bmeta" onclick="buyStatMeta(this,'${sc}',${ri},'name')"><b>${esc(r.name)}</b>${flag}</td>${tds}<td style="text-align:right"><b>${fmt(sum)}</b></td></tr>`;
+  });
+  const totTds=ms.map(m=>`<td style="text-align:right"><b>${fmt(totals[m]||0)}</b></td>`).join("");
+  let html=`<div class="card"><div class="card-title" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">매입현황
+      <select onchange="buyStatYearSel(this.value)">${buyStatYears().map(yy=>`<option ${yy===y?"selected":""}>${yy}</option>`).join("")}</select>
+      ${BUY_SCOPES.map(([k,n])=>`<span class="buy-chip ${k===sc?"on":""}" onclick="buyStatScopeSel('${k}')">${n}</span>`).join("")}
+      <span id="buyCloudSt" class="footnote" style="margin-left:auto"></span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0">
+      <input type="text" placeholder="🔍 거래처 검색" value="${esc(q)}" style="border:1px solid var(--line,#ddd);border-radius:8px;padding:5px 9px;width:170px" oninput="buyStatQ(this.value)">
+      <button class="btn btn-sm" onclick="buyStatAddVendor()">＋ 새 거래처</button>
+      <button class="btn btn-sm" onclick="buyStatAddMonth()">＋ 월 추가</button>
+      <span style="margin-left:auto"></span>
+      <select onchange="window.__buy.ui.statDlM=this.value">${ms.map(m=>`<option value="${m}" ${m===dlM?"selected":""}>${m}월까지</option>`).join("")}</select>
+      <button class="btn" onclick="buyStatDl()">📥 엑셀 받기</button>
+      ${upBtn}
+    </div>
+    <div class="footnote">칸을 누르면 바로 고칠 수 있어요(Enter = 아래 칸으로) · 품목/거래처명도 눌러서 수정 · 선결제·바로결제는 검색해서 직접 기입</div>
+    <div class="table-wrap" style="margin-top:6px;max-height:560px;overflow:auto"><table class="rpt buy-tbl"><thead><tr><th class="l" style="min-width:80px">품목</th><th class="l" style="min-width:130px">거래처명</th>${mCols}<th style="min-width:90px">계</th></tr></thead>
+    <tbody>${body}</tbody>
+    <tfoot><tr style="background:#eef3ee"><td class="l"><b>합계${q?" (검색결과)":""}</b></td><td></td>${totTds}<td style="text-align:right"><b>${fmt(grand)}</b></td></tr></tfoot></table></div>`;
+  /* 크로스체크 */
+  if(xs.length){
+    html+=`<div style="margin-top:12px;padding:10px;border:1.5px solid #e5b7b3;border-radius:10px;max-width:680px">
+      <b class="buy-warn">⚠ 크로스체크 ${xs.length}건</b> <span class="unit">전체(꽃밥이야기) ≠ 마켓 + 에피다·보자기</span>
+      <button class="btn btn-sm" style="margin-left:8px" onclick="buyStatFixAll()">모두 합으로 맞추기</button>
+      <div class="table-wrap" style="margin-top:6px;max-height:220px;overflow:auto"><table class="rpt"><thead><tr><th class="l">거래처</th><th>월</th><th>전체</th><th>마켓+에피다·보자기</th><th>차이</th><th></th></tr></thead><tbody>
+      ${xs.slice(0,80).map(x=>`<tr><td class="l">${esc(x.name)}</td><td>${x.m}월</td><td>${fmt(x.all)}</td><td>${fmt(x.sum)}</td><td class="buy-warn">${fmt(x.all-x.sum)}</td><td><button class="btn btn-sm" data-nm="${esc(x.name)}" data-m="${x.m}" onclick="buyStatFix(this.dataset.nm,+this.dataset.m)">맞추기</button></td></tr>`).join("")}
+      </tbody></table></div></div>`;
+  }else{
+    html+=`<div class="footnote" style="margin-top:10px;color:#2F6B3F">✓ 크로스체크 통과 — 전체 = 마켓 + 에피다·보자기 (모든 달)</div>`;
+  }
+  html+=`</div>`;
+  el.innerHTML=html;
+  buyFlushLabel();
+}
+function buyStatYearSel(y){window.__buy.ui.statYear=y;renderBuyStat();}
+function buyStatScopeSel(sc){window.__buy.ui.statScope=sc;renderBuyStat();}
+let buyQTimer=null;
+function buyStatQ(v){window.__buy.ui.q=v;clearTimeout(buyQTimer);buyQTimer=setTimeout(renderBuyStat,250);}
+function buyStatCell(td,sc,ri,m){
+  if(td.querySelector("input"))return;
+  const y=buyStatCurY(),r=bd().stat[y].scopes[sc].rows[ri];
+  const cur=r.m[String(m)];
+  td.innerHTML=`<input type="number" value="${cur!=null?cur:""}">`;
+  const inp=td.querySelector("input");
+  inp.focus();inp.select&&inp.select();
+  let done=false;
+  const commit=(go)=>{
+    if(done)return;done=true;
+    const v=inp.value;
+    const d=bd().stat[y];
+    if(v==="")delete r.m[String(m)];else r.m[String(m)]=Number(v);
+    d.savedAt=Date.now();buyMark("stat_"+y);
+    renderBuyStat();
+    if(go){
+      const tb=document.querySelector("#tab-buystat tbody");
+      if(tb){const tr=tb.rows;for(let i=0;i<tr.length;i++){/* 다음 행 같은 열 */}}
+    }
+  };
+  inp.addEventListener("blur",()=>commit(false));
+  inp.addEventListener("keydown",(e)=>{
+    if(e.key==="Enter"){e.preventDefault();const tr=td.parentElement;const ci=td.cellIndex;commit(false);
+      const tb=document.querySelector("#tab-buystat tbody");
+      if(tb){const idx=[...tb.rows].indexOf(tr);const nx=tb.rows[idx+1];if(nx&&nx.cells[ci])nx.cells[ci].click();}}
+    else if(e.key==="Escape"){done=true;renderBuyStat();}
+  });
+}
+function buyStatMeta(td,sc,ri,field){
+  if(td.querySelector("input"))return;
+  const y=buyStatCurY(),r=bd().stat[y].scopes[sc].rows[ri];
+  const cur=r[field]||"";
+  td.innerHTML=`<input type="text" value="${esc(cur)}" style="width:120px">`;
+  const inp=td.querySelector("input");
+  inp.focus();
+  let done=false;
+  const commit=()=>{
+    if(done)return;done=true;
+    const v=inp.value.trim();
+    const d=bd().stat[y];
+    if(field==="name"&&!v){renderBuyStat();return;}
+    if(field==="name"&&v!==r.name&&confirm(`'${r.name}' → '${v}' 이름을 바꿀까요?\n(다른 시트의 같은 거래처도 같이 바꿔요)`)){
+      const old=r.name;
+      for(const s2 of ["all","market","insa"])d.scopes[s2].rows.forEach(rr=>{if(rr.name===old)rr.name=v;});
+    }else if(field!=="name")r[field]=v;
+    d.savedAt=Date.now();buyMark("stat_"+y);renderBuyStat();
+  };
+  inp.addEventListener("blur",commit);
+  inp.addEventListener("keydown",(e)=>{if(e.key==="Enter"){e.preventDefault();commit();}else if(e.key==="Escape"){done=true;renderBuyStat();}});
+}
+function buyStatAddVendor(){
+  const y=buyStatCurY();
+  openModal("새 거래처 추가",
+    `<div style="line-height:2.1">거래처명 <input type="text" id="buyNewVName" style="width:160px"><br>
+     품목 <input type="text" id="buyNewVItem" style="width:160px"><br>
+     <label><input type="checkbox" id="buyNewVAll" checked> 전체·마켓·에피다보자기 세 시트에 모두 추가</label></div>`,
+    `<button class="btn" onclick="closeModal()">취소</button><button class="btn btn-primary" onclick="buyStatAddVendorGo()">추가</button>`);
+}
+function buyStatAddVendorGo(){
+  const y=buyStatCurY(),d=bd().stat[y];
+  const nm=document.getElementById("buyNewVName").value.trim();
+  const it=document.getElementById("buyNewVItem").value.trim();
+  const all=document.getElementById("buyNewVAll").checked;
+  if(!nm){toast("거래처명을 입력해 주세요",true);return;}
+  if(all)for(const sc of ["all","market","insa"])buyEnsureRow(y,sc,nm,it);
+  else buyEnsureRow(y,window.__buy.ui.statScope,nm,it);
+  d.savedAt=Date.now();buyMark("stat_"+y);
+  closeModal();window.__buy.ui.q=nm;renderBuyStat();
+}
+function buyStatAddMonth(){
+  const y=buyStatCurY(),d=bd().stat[y];
+  const ms=d.months||[];
+  const nx=(ms.length?Math.max(...ms):0)+1;
+  if(nx>12){toast("12월까지 다 있어요. 다음 해는 1월 반영 때 자동으로 만들어져요");return;}
+  ms.push(nx);d.months=ms;d.labels[String(nx)]=nx+"월";
+  d.savedAt=Date.now();buyMark("stat_"+y);renderBuyStat();
+  toast(nx+"월 열을 추가했어요");
+}
+/* ---------- 반영 (월마감 → 매입현황) ---------- */
+function buyStatEnsureYear(y){
+  const D=bd();
+  if(D.stat[y])return D.stat[y];
+  const ys=buyStatYears();
+  const base=ys.length?D.stat[ys[0]]:null;
+  const cp=(sc)=>({rows:base?base.scopes[sc].rows.filter(r=>r.name).map(r=>({item:r.item||"",name:r.name,m:{}})):[]});
+  D.stat[y]={labels:{},months:[],scopes:{all:cp("all"),market:cp("market"),insa:cp("insa")},savedAt:Date.now()};
+  buyMark("stat_"+y);
+  return D.stat[y];
+}
+function buyApplyOpen(){
+  const D=bd(),key=buyCloseCur();
+  if(!key)return;
+  const doc=D.close[key];
+  const y="20"+key.slice(0,2),m=+key.slice(2);
+  buyStatEnsureYear(y);
+  /* 거래처 집계(부서별) */
+  const agg={},order=[];
+  doc.groups.forEach(g=>{
+    const isM=g.dept.indexOf("마켓")>=0;
+    g.rows.forEach(r=>{
+      if(!r.name||!r.amt)return;
+      if(!agg[r.name]){agg[r.name]={total:0,market:0,insa:0,unconf:false};order.push(r.name);}
+      agg[r.name].total+=r.amt;
+      if(isM)agg[r.name].market+=r.amt;else agg[r.name].insa+=r.amt;
+      if(!r.ok)agg[r.name].unconf=true;
+    });
+  });
+  if(!order.length){toast("반영할 금액이 없어요",true);return;}
+  const names=buyVendorNames(y);
+  const dl=`<datalist id="buyVList">${names.map(n=>`<option value="${esc(n)}">`).join("")}</datalist>`;
+  const map=D.vendorMap||{};
+  const guess=(nm)=>{
+    if(map[nm]&&names.includes(map[nm]))return map[nm];
+    if(names.includes(nm))return nm;
+    const norm=(x)=>String(x).replace(/\(주\)|（주）|㈜|주식회사/g,"").replace(/[\s()（）]/g,"");
+    const nn=norm(nm);
+    let hit=names.find(n=>norm(n)===nn);
+    if(hit)return hit;
+    hit=names.find(n=>{const m2=norm(n);return m2.indexOf(nn)===0||nn.indexOf(m2)===0;});
+    if(hit)return hit;
+    /* 최장 공통 접두(2자 이상) — 예: 강순용버섯 → 강순용명품버섯 */
+    let best=null,bl=1;
+    for(const n of names){const m2=norm(n);let l=0;while(l<nn.length&&l<m2.length&&nn[l]===m2[l])l++;if(l>bl||(l===bl&&best&&n.length<best.length)){bl=l;best=n;}}
+    return (bl>=2&&best)?best:nm;
+  };
+  let rowsHtml=order.map((nm,i)=>{
+    const a=agg[nm];
+    return `<tr data-nm="${esc(nm)}">
+      <td class="l">${esc(nm)}${a.unconf?' <span class="buy-warn" title="미확인 금액 포함">⚠</span>':""}</td>
+      <td style="text-align:right">${fmt(a.total)}</td>
+      <td><input type="text" list="buyVList" id="bapT${i}" value="${esc(guess(nm))}" style="width:140px"></td>
+      <td><input type="number" id="bapM${i}" value="${a.market||""}" style="width:100px;text-align:right"></td>
+      <td><input type="number" id="bapI${i}" value="${a.insa||""}" style="width:100px;text-align:right"></td>
+    </tr>`;
+  }).join("");
+  const unconfN=order.filter(nm=>agg[nm].unconf).length;
+  openModal(`${buyKeyLabel(key)} → 매입현황 ${y}년 ${m}월 반영`,
+    `${dl}<div class="footnote" style="margin-bottom:6px">마켓·에피다보자기 금액을 나눠 적으면 <b>전체(꽃밥이야기)는 자동으로 두 값의 합</b>으로 들어가요.
+     같은 매입현황 거래처로 여러 줄을 보내면 합쳐져요. 이미 ${m}월 값이 있으면 덮어써요.${unconfN?`<br><span class="buy-warn">⚠ 미확인 금액 ${unconfN}곳이 포함돼 있어요.</span>`:""}</div>
+     <div class="table-wrap" style="max-height:380px;overflow:auto"><table class="rpt buy-tbl"><thead><tr><th class="l">월마감 거래처</th><th>금액</th><th class="l">매입현황 거래처</th><th>마켓</th><th>에피다+보자기</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>`,
+    `<button class="btn" onclick="closeModal()">취소</button><button class="btn btn-primary" onclick="buyApplyGo('${key}')">반영하기</button>`);
+  window.__buyApplyOrder=order;
+}
+function buyApplyGo(key){
+  const D=bd();
+  const y="20"+key.slice(0,2),m=+key.slice(2),mk=String(m);
+  const d=buyStatEnsureYear(y);
+  const order=window.__buyApplyOrder||[];
+  /* 대상별 합산 */
+  const tgt={};
+  let bad=0;
+  order.forEach((nm,i)=>{
+    const tEl=document.getElementById("bapT"+i);
+    if(!tEl)return;
+    const t=tEl.value.trim()||nm;
+    const mv=Number(document.getElementById("bapM"+i).value||0);
+    const iv=Number(document.getElementById("bapI"+i).value||0);
+    if(!mv&&!iv)return;
+    if(!tgt[t])tgt[t]={market:0,insa:0};
+    tgt[t].market+=mv;tgt[t].insa+=iv;
+    if(t!==nm)D.vendorMap[nm]=t;
+  });
+  if(!Object.keys(tgt).length){toast("반영할 금액이 없어요",true);return;}
+  if(!(d.months||[]).includes(m)){d.months=[...(d.months||[]),m].sort((a,b)=>a-b);d.labels[mk]=d.labels[mk]||m+"월";}
+  for(const t in tgt){
+    const v=tgt[t];
+    const rm=buyEnsureRow(y,"market",t,""),ri=buyEnsureRow(y,"insa",t,""),ra=buyEnsureRow(y,"all",t,"");
+    if(v.market)rm.m[mk]=v.market;else delete rm.m[mk];
+    if(v.insa)ri.m[mk]=v.insa;else delete ri.m[mk];
+    const s=v.market+v.insa;
+    if(s)ra.m[mk]=s;else delete ra.m[mk];
+    if(!ra.item&&(rm.item||ri.item))ra.item=rm.item||ri.item;
+  }
+  d.savedAt=Date.now();
+  buyMark("stat_"+y);buyMark("vendorMap");
+  closeModal();
+  window.__buy.ui.sub="stat";window.__buy.ui.statYear=y;window.__buy.ui.statScope="all";window.__buy.ui.q="";
+  renderBuy();
+  const xs=buyXchecks(y).filter(x=>x.m===m);
+  toast(Object.keys(tgt).length+"개 거래처를 "+m+"월에 반영했어요"+(xs.length?" · 크로스체크 "+xs.length+"건 확인 필요":" · 크로스체크 통과 ✓"));
+}
+</script>
+<script>
+/* === buy3.js — 엑셀 생성/패치/다운로드 + 매입탭 렌더 === */
+"use strict";
+/* ---------- 원본 워크북 캐시 ---------- */
+async function buyGetWb(which){
+  const B=window.__buy,D=bd();
+  const f=which==="close"?D.files.close:D.files.stat;
+  if(!f||!f.b64)return null;
+  const ck=which==="close"?"wbClose":"wbStat";
+  if(B[ck]&&B[ck].__b64tag===f.up)return B[ck];
+  const wb=await pumParse(buyB64Buf(f.b64));
+  wb.__b64tag=f.up;
+  B[ck]=wb;
+  return wb;
+}
+/* 원본 zip에서 시트이름→raw xml 매핑 */
+async function buyRawSheets(b64){
+  const oz=await JSZip.loadAsync(buyB64Buf(b64));
+  const par=new DOMParser();
+  const wbd=par.parseFromString(await oz.file("xl/workbook.xml").async("string"),"application/xml");
+  const rld=par.parseFromString(await oz.file("xl/_rels/workbook.xml.rels").async("string"),"application/xml");
+  const rid2t={};[...rld.getElementsByTagName("Relationship")].forEach(r=>rid2t[r.getAttribute("Id")]=r.getAttribute("Target"));
+  const names=[],raw={};
+  for(const sh of wbd.getElementsByTagName("sheet")){
+    const nm=sh.getAttribute("name");
+    const rid=sh.getAttribute("r:id")||sh.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships","id");
+    let tg=rid2t[rid]||"";if(tg.charAt(0)==="/")tg=tg.slice(1);else if(tg.indexOf("xl/")!==0)tg="xl/"+tg;
+    const file=oz.file(tg);
+    if(!file)continue;
+    names.push(nm);
+    raw[nm]=await file.async("string");
+  }
+  const gf=async(p)=>{const f=oz.file(p);return f?await f.async("string"):null;};
+  return {names:names,raw:raw,styles:await gf("xl/styles.xml"),theme:await gf("xl/theme/theme1.xml"),sst:await gf("xl/sharedStrings.xml")};
+}
+function buyStripRid(xml){return xml.replace(/(<pageSetup[^>]*?)\s+r:id="[^"]*"/g,"$1");}
+function buyGrab(xml,re){const m=xml.match(re);return m?m[0].replace(/\s+(?!xml:)[A-Za-z0-9]+:[A-Za-z0-9]+="[^"]*"/g,""):"";}
+function buyColsOf(xml){
+  /* raw cols → {idx:widthAttrStr} */
+  const out={};
+  const cols=xml.match(/<col [^>]*\/>/g)||[];
+  for(const c of cols){
+    const mn=+(c.match(/min="(\d+)"/)||[])[1],mx=+(c.match(/max="(\d+)"/)||[])[1];
+    const w=(c.match(/width="([\d.]+)"/)||[])[1];
+    if(!mn||!w)continue;
+    for(let i=mn;i<=Math.min(mx,40);i++)out[i]=w;
+  }
+  return out;
+}
+function buyRowHt(xml,r){const m=xml.match(new RegExp('<row r="'+r+'"[^>]*?ht="([\\d.]+)"'));return m?m[1]:null;}
+/* ---------- 스타일 컨텍스트(노랑 xf 추가) ---------- */
+function buyStyleCtx(stylesXml){return {xml:stylesXml,memo:{}};}
+function buyEnsureYellow(ctx,baseS){
+  if(baseS==null)return null;
+  if(ctx.memo["y"+baseS]!=null)return ctx.memo["y"+baseS];
+  let xml=ctx.xml;
+  /* 노랑 fill 찾기/추가 */
+  let fillId=-1;
+  const fillsM=xml.match(/<fills count="(\d+)">([\s\S]*?)<\/fills>/);
+  if(!fillsM)return baseS;
+  const fillEls=fillsM[2].match(/<fill>[\s\S]*?<\/fill>/g)||[];
+  fillEls.forEach((f,i)=>{if(fillId<0&&/FF(FF)?FF00/i.test(f))fillId=i;});
+  if(fillId<0){
+    fillId=fillEls.length;
+    const nf='<fill><patternFill patternType="solid"><fgColor rgb="FFFFFF00"/><bgColor indexed="64"/></patternFill></fill>';
+    xml=xml.replace(fillsM[0],'<fills count="'+(fillEls.length+1)+'">'+fillsM[2]+nf+"</fills>");
+  }
+  /* base xf 복제 + fill 교체 */
+  const cxM=xml.match(/<cellXfs count="(\d+)">([\s\S]*?)<\/cellXfs>/);
+  if(!cxM)return baseS;
+  const xfEls=cxM[2].match(/<xf [^>]*?(?:\/>|>[\s\S]*?<\/xf>)/g)||[];
+  if(baseS>=xfEls.length)return baseS;
+  let nx=xfEls[baseS];
+  if(/fillId="\d+"/.test(nx))nx=nx.replace(/fillId="\d+"/,'fillId="'+fillId+'"');
+  else nx=nx.replace(/<xf /,'<xf fillId="'+fillId+'" ');
+  if(!/applyFill="1"/.test(nx))nx=nx.replace(/<xf /,'<xf applyFill="1" ');
+  const newIdx=xfEls.length;
+  xml=xml.replace(/<cellXfs count="\d+">/,'<cellXfs count="'+(newIdx+1)+'">').replace(/<\/cellXfs>/,nx+"</cellXfs>");
+  ctx.xml=xml;
+  ctx.memo["y"+baseS]=newIdx;
+  return newIdx;
+}
+/* ---------- 셀 XML 헬퍼 ---------- */
+const buyCell={
+  n:(ref,s,v)=>v==null?'<c r="'+ref+'"'+(s!=null?' s="'+s+'"':"")+"/>":'<c r="'+ref+'"'+(s!=null?' s="'+s+'"':"")+"><v>"+v+"</v></c>",
+  t:(ref,s,v)=>!v?'<c r="'+ref+'"'+(s!=null?' s="'+s+'"':"")+"/>":'<c r="'+ref+'"'+(s!=null?' s="'+s+'"':"")+' t="inlineStr"><is><t xml:space="preserve">'+buyX(v)+"</t></is></c>",
+  f:(ref,s,f)=>'<c r="'+ref+'"'+(s!=null?' s="'+s+'"':"")+"><f>"+buyX(f)+"</f></c>"
+};
+function buyXmlSetNum(xml,ref,val){
+  const re=new RegExp('<c r="'+ref+'"([^>]*?)(?:/>|>[\\s\\S]*?</c>)');
+  if(!re.test(xml))return null;
+  return xml.replace(re,(m0,attrs)=>{
+    attrs=attrs.replace(/\s+t="[^"]*"/,"");
+    return val==null?'<c r="'+ref+'"'+attrs+"/>":'<c r="'+ref+'"'+attrs+"><v>"+val+"</v></c>";
+  });
+}
+function buyXmlSetS(xml,ref,s){
+  if(s==null)return xml;
+  const re=new RegExp('(<c r="'+ref+'")([^>]*)');
+  if(!re.test(xml))return null;
+  return xml.replace(re,(m0,p,attrs)=>{
+    if(/ s="\d+"/.test(attrs))attrs=attrs.replace(/ s="\d+"/,' s="'+s+'"');
+    else attrs=' s="'+s+'"'+attrs;
+    return p+attrs;
+  });
+}
+/* ---------- 월마감: 시트 스캔(참조 포함) ---------- */
+function buyCloseScan(sh,yset){
+  const C=sh.cells||{};
+  const gv=(ref)=>{const c=C[ref];return c?c.v:"";};
+  let tot=0;
+  for(let r=3;r<=sh.maxR;r++){if(String(gv("A"+r)).trim()==="합계"){tot=r;break;}}
+  if(!tot)return null;
+  const anchors=[];
+  for(let r=3;r<tot;r++){const c=C["D"+r];if(c&&c.typ==="str"&&String(c.v).trim()&&!sh.covered["D"+r])anchors.push({r:r,dept:String(c.v).trim()});}
+  if(!anchors.length)return null;
+  const groups=[];
+  for(let i=0;i<anchors.length;i++){
+    const a=anchors[i],end=(i+1<anchors.length?anchors[i+1].r:tot)-1;
+    const rows=[];
+    for(let r=a.r;r<=end;r++){
+      const nm=String(gv("B"+r)).trim();
+      const ac=C["C"+r];
+      const amt=(ac&&ac.v!==""&&ac.typ==="num")?Number(ac.v):null;
+      if(!nm&&amt==null)continue;
+      const fc=C["F"+r];
+      const memo=(fc&&fc.typ==="str"&&!fc.f)?String(fc.v):"";
+      const okY=!((ac&&yset[ac.s])||(C["B"+r]&&yset[C["B"+r].s]));
+      rows.push({r:r,name:nm,amt:amt,ok:okY,memo:memo,s:{b:C["B"+r]?C["B"+r].s:null,c:ac?ac.s:null}});
+    }
+    groups.push({dept:a.dept,a:a.r,end:end,rows:rows});
+  }
+  let payDate="";
+  const a3=C["A3"];
+  if(a3){payDate=a3.typ==="num"&&a3.v!==""?buySerIso(a3.v):String(a3.v);}
+  return {tot:tot,groups:groups,payDate:payDate};
+}
+/* ---------- 월마감: 템플릿 역할 스타일 ---------- */
+function buyCloseTpl(wb,rawMap,yset){
+  const sheets=wb.sheets.filter(s=>/^\d{4}$/.test(s.name)).sort((a,b)=>b.name.localeCompare(a.name));
+  const t={s:{},colsXml:"",fmtPr:"",ht1:null,htTot:null};
+  const cnt={};
+  for(const sh of sheets){
+    const sc=buyCloseScan(sh,yset);
+    if(!sc)continue;
+    const C=sh.cells;
+    const S2=(ref)=>C[ref]?C[ref].s:null;
+    if(t.s.title==null){
+      t.s.title=S2("A1");t.s.date=S2("A3");
+      t.s.titleRow=["A1","B1","C1","D1","E1"].map(S2);
+      t.s.h=["A2","B2","C2","D2","E2","F2"].map(S2);
+      const a0=sc.groups[0];
+      t.s.dept=S2("D"+a0.a);t.s.gsum=S2("E"+a0.a);
+      t.s.tot=["A","B","C","D","E","F"].map(cc=>S2(cc+sc.tot));
+      const raw=rawMap[sh.name]||"";
+      t.colsXml=buyGrab(raw,/<cols>[\s\S]*?<\/cols>/);
+      t.fmtPr=buyGrab(raw,/<sheetFormatPr[^>]*\/>/);
+      t.ht1=buyRowHt(raw,"1");t.htTot=buyRowHt(raw,String(sc.tot));
+    }
+    for(const g of sc.groups)for(const r of g.rows){
+      const kb=(yset[r.s.b]?"yb":"nb")+"|"+r.s.b,kc=(yset[r.s.c]?"yc":"nc")+"|"+r.s.c;
+      cnt[kb]=(cnt[kb]||0)+1;cnt[kc]=(cnt[kc]||0)+1;
+    }
+    /* F 데이터 스타일: 비고 텍스트가 있는 셀 */
+    if(t.s.memo==null)for(const g of sc.groups)for(const r of g.rows)if(r.memo){const c=sh.cells["F"+r.r];if(c&&c.s!=null){t.s.memo=c.s;break;}}
+  }
+  const pick=(pfx)=>{let best=null,bn=-1;for(const k in cnt){if(k.indexOf(pfx)===0&&cnt[k]>bn){bn=cnt[k];best=k.split("|")[1];}}return best!=null?+best:null;};
+  t.s.name=pick("nb");t.s.amt=pick("nc");
+  t.s.nameY=pick("yb");t.s.amtY=pick("yc");
+  if(t.s.memo==null)t.s.memo=t.s.h[5]!=null?t.s.name:t.s.name;
+  return t;
+}
+/* ---------- 월마감: 시트 생성 ---------- */
+function buyCloseGen(doc,key,tpl,ctx){
+  const y="20"+key.slice(0,2),m=+key.slice(2);
+  const S2=tpl.s;
+  const nameY=S2.nameY!=null?S2.nameY:buyEnsureYellow(ctx,S2.name);
+  const amtY=S2.amtY!=null?S2.amtY:buyEnsureYellow(ctx,S2.amt);
+  let rows="",merges=[];
+  const rX=(r,cells,ht)=>'<row r="'+r+'"'+(ht?' ht="'+ht+'" customHeight="1"':"")+">"+cells.join("")+"</row>";
+  merges.push("A1:E1");
+  const tr=S2.titleRow&&S2.titleRow[0]!=null?S2.titleRow:[S2.title,S2.title,S2.title,S2.title,S2.title];
+  rows+=rX(1,["A","B","C","D","E"].map((cc,i)=>buyCell.t(cc+"1",tr[i]!=null?tr[i]:S2.title,i===0?y+"년 "+m+"월 월마감 거래처 리스트":"")),tpl.ht1);
+  merges.push("D2:E2");
+  rows+=rX(2,[buyCell.t("A2",S2.h[0],"결제예정일자"),buyCell.t("B2",S2.h[1],"거래처"),buyCell.t("C2",S2.h[2],"금액"),buyCell.t("D2",S2.h[3],"부서"),buyCell.t("E2",S2.h[4],"")]);
+  let r=3;
+  const grs=doc.groups.map(g=>({dept:g.dept,rows:g.rows.filter(rr=>rr.name||rr.amt!=null)}));
+  const tot=3+grs.reduce((a,g)=>a+Math.max(g.rows.length,1),0);
+  for(const g of grs){
+    const a=r,end=r+Math.max(g.rows.length,1)-1;
+    if(end>a){merges.push("D"+a+":D"+end);merges.push("E"+a+":E"+end);}
+    const list=g.rows.length?g.rows:[{name:"",amt:null,ok:true,memo:""}];
+    list.forEach((row,i)=>{
+      const cells=[];
+      if(r===3)cells.push(/^\d{4}-\d{2}-\d{2}$/.test(doc.payDate||"")?buyCell.n("A3",S2.date,buyIsoSer(doc.payDate)):buyCell.t("A3",S2.date,doc.payDate||""));
+      else cells.push(buyCell.t("A"+r,S2.date,""));
+      cells.push(buyCell.t("B"+r,row.ok?S2.name:nameY,row.name));
+      cells.push(buyCell.n("C"+r,row.ok?S2.amt:amtY,row.amt));
+      if(i===0){cells.push(buyCell.t("D"+r,S2.dept,g.dept));cells.push(buyCell.f("E"+r,S2.gsum,"SUM(C"+a+":C"+end+")"));}
+      else{cells.push(buyCell.t("D"+r,S2.dept,""));cells.push(buyCell.t("E"+r,S2.gsum,""));}
+      if(row.memo)cells.push(buyCell.t("F"+r,S2.memo,row.memo));
+      rows+=rX(r,cells);
+      r++;
+    });
+  }
+  merges.push("A3:A"+(tot-1));
+  merges.push("A"+tot+":B"+tot);
+  rows+=rX(tot,[buyCell.t("A"+tot,S2.tot[0],"합계"),buyCell.t("B"+tot,S2.tot[1],""),buyCell.f("C"+tot,S2.tot[2],"SUM(C3:C"+(tot-1)+")"),buyCell.t("D"+tot,S2.tot[3],""),buyCell.f("E"+tot,S2.tot[4],"SUM(E3:E"+(tot-1)+")")],tpl.htTot);
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+(tpl.fmtPr||"")+(tpl.colsXml||"")+"<sheetData>"+rows+"</sheetData><mergeCells count=\""+merges.length+'">'+merges.map(x=>'<mergeCell ref="'+x+'"/>').join("")+"</mergeCells></worksheet>";
+}
+/* ---------- 월마감: 원본 대비 → verbatim/patch/gen ---------- */
+function buyCloseSheetXml(key,rawMap,wb,yset,tpl,ctx){
+  const D=bd(),cur=D.close[key];
+  const sh=wb?wb.sheets.find(s=>s.name===key):null;
+  const raw=rawMap&&rawMap[key];
+  if(!sh||!raw)return buyCloseGen(cur,key,tpl,ctx);
+  const sc=buyCloseScan(sh,yset);
+  if(!sc)return buyCloseGen(cur,key,tpl,ctx);
+  /* 구조 비교 */
+  const og=sc.groups,cg=cur.groups;
+  let same=og.length===cg.length;
+  if(same)for(let i=0;i<og.length&&same;i++){
+    const orows=og[i].rows,crows=cg[i].rows;
+    if(og[i].dept!==cg[i].dept||orows.length!==crows.length){same=false;break;}
+    for(let j=0;j<orows.length;j++)if(orows[j].name!==crows[j].name||(orows[j].memo||"")!==(crows[j].memo||"")){same=false;break;}
+  }
+  if(!same)return buyCloseGen(cur,key,tpl,ctx);
+  /* 값·확인 패치 */
+  let xml=raw,changed=false;
+  for(let i=0;i<og.length;i++)for(let j=0;j<og[i].rows.length;j++){
+    const o=og[i].rows[j],c=cg[i].rows[j];
+    if((o.amt==null?null:o.amt)!==(c.amt==null?null:c.amt)){
+      const nx=buyXmlSetNum(xml,"C"+o.r,c.amt);
+      if(nx==null)return buyCloseGen(cur,key,tpl,ctx);
+      xml=nx;changed=true;
+    }
+    if(!!o.ok!==!!c.ok){
+      const bS=c.ok?tpl.s.name:(tpl.s.nameY!=null?tpl.s.nameY:buyEnsureYellow(ctx,tpl.s.name));
+      const cS=c.ok?tpl.s.amt:(tpl.s.amtY!=null?tpl.s.amtY:buyEnsureYellow(ctx,tpl.s.amt));
+      let nx=buyXmlSetS(xml,"B"+o.r,bS);
+      if(nx!=null)xml=nx;
+      nx=buyXmlSetS(xml,"C"+o.r,cS);
+      if(nx!=null)xml=nx;
+      changed=true;
+    }
+  }
+  if((sc.payDate||"")!==(cur.payDate||"")){
+    const ser=buyIsoSer(cur.payDate||"");
+    if(ser!=null){const nx=buyXmlSetNum(xml,"A3",ser);if(nx!=null){xml=nx;changed=true;}}
+  }
+  return buyStripRid(xml);
+}
+/* ---------- 공용 zip 조립 ---------- */
+async function buyMakeXlsx(sheetList,styles,theme,sst,fileName){
+  const zip=new JSZip();
+  const n=sheetList.length;
+  let ct='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>';
+  if(theme)ct+='<Override PartName="/xl/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>';
+  if(sst)ct+='<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>';
+  for(let i=1;i<=n;i++)ct+='<Override PartName="/xl/worksheets/sheet'+i+'.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>';
+  ct+="</Types>";
+  zip.file("[Content_Types].xml",ct);
+  zip.file("_rels/.rels",'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
+  let wbx='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>';
+  let rel='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">';
+  sheetList.forEach((s2,i)=>{
+    wbx+='<sheet name="'+buyX(s2.name)+'" sheetId="'+(i+1)+'" r:id="rId'+(i+1)+'"/>';
+    rel+='<Relationship Id="rId'+(i+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet'+(i+1)+'.xml"/>';
+    zip.file("xl/worksheets/sheet"+(i+1)+".xml",s2.xml);
+  });
+  wbx+="</sheets><calcPr fullCalcOnLoad=\"1\"/></workbook>";
+  rel+='<Relationship Id="rId'+(n+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>';
+  if(theme)rel+='<Relationship Id="rId'+(n+2)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="theme/theme1.xml"/>';
+  if(sst)rel+='<Relationship Id="rId'+(n+3)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>';
+  rel+="</Relationships>";
+  zip.file("xl/workbook.xml",wbx);
+  zip.file("xl/_rels/workbook.xml.rels",rel);
+  zip.file("xl/styles.xml",styles);
+  if(theme)zip.file("xl/theme/theme1.xml",theme);
+  if(sst)zip.file("xl/sharedStrings.xml",sst);
+  const blob=await zip.generateAsync({type:"blob",compression:"DEFLATE",mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=fileName;
+  document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},2000);
+}
+const BUY_FALLBACK_STYLES='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="176" formatCode="_-* #,##0_-;\\-* #,##0_-;_-* &quot;-&quot;_-;_-@_-"/></numFmts><fonts count="2"><font><sz val="11"/><name val="맑은 고딕"/></font><font><b/><sz val="11"/><name val="맑은 고딕"/></font></fonts><fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFFF00"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFD9E1F2"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"/><right style="thin"/><top style="thin"/><bottom style="thin"/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="6"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/><xf numFmtId="0" fontId="1" fillId="3" borderId="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="1" applyBorder="1"/><xf numFmtId="176" fontId="0" fillId="0" borderId="1" applyNumberFormat="1" applyBorder="1"/><xf numFmtId="0" fontId="0" fillId="2" borderId="1" applyFill="1" applyBorder="1"/><xf numFmtId="176" fontId="0" fillId="2" borderId="1" applyNumberFormat="1" applyFill="1" applyBorder="1"/></cellXfs></styleSheet>';
+const BUY_FALLBACK_TPL={s:{title:1,date:2,h:[1,1,1,1,1,1],dept:2,gsum:3,name:2,amt:3,nameY:4,amtY:5,memo:2,tot:[1,1,3,1,3,1]},colsXml:'<cols><col min="1" max="1" width="11.6" customWidth="1"/><col min="2" max="2" width="16" customWidth="1"/><col min="3" max="3" width="14" customWidth="1"/><col min="4" max="4" width="13.6" customWidth="1"/><col min="6" max="6" width="11.9" customWidth="1"/></cols>',fmtPr:"",ht1:"32.25",htTot:"17.25"};
+/* ---------- 월마감 다운로드 ---------- */
+async function buyCloseDl(){
+  try{
+    const D=bd(),B=window.__buy;
+    const year=B.ui.closeDlYear;
+    const yy=String(year).slice(2);
+    const keys=Object.keys(D.close).filter(k=>k.slice(0,2)===yy).sort();
+    if(!keys.length){toast(year+"년 데이터가 없어요",true);return;}
+    let rawMap=null,wb=null,styles=BUY_FALLBACK_STYLES,theme=null,sst=null,tpl=BUY_FALLBACK_TPL,yset={};
+    if(D.files.close&&D.files.close.b64){
+      const rs=await buyRawSheets(D.files.close.b64);
+      rawMap=rs.raw;styles=rs.styles||styles;theme=rs.theme;sst=rs.sst;
+      wb=await buyGetWb("close");
+      yset=buyYellowSet(wb.styles);
+      tpl=buyCloseTpl(wb,rawMap,yset);
+      if(tpl.s.title==null)tpl=BUY_FALLBACK_TPL;
+    }
+    const ctx=buyStyleCtx(styles);
+    const list=keys.slice().reverse().map(k=>({name:k,xml:buyCloseSheetXml(k,rawMap,wb,yset,tpl,ctx)}));
+    await buyMakeXlsx(list,ctx.xml,theme,sst,"월마감결제_"+year+".xlsx");
+    toast(year+"년 월마감결제 엑셀("+list.length+"개 달)을 내려받았어요");
+  }catch(e){console.error(e);toast(e.message||"다운로드 실패",true);}
+}
+/* ---------- 매입현황: 템플릿 ---------- */
+function buyStatTpl(wb,rawMap,y,sc){
+  const want=buyScopeSheet(y,sc);
+  let sh=wb?wb.sheets.find(s2=>s2.name===want):null;
+  if(!sh&&wb){
+    const cand=wb.sheets.filter(s2=>{
+      if(sc==="all")return /^\d{4}$/.test(s2.name);
+      if(sc==="market")return /^\d{4}마켓$/.test(s2.name);
+      return /^\d{4}인사동\+보자기$/.test(s2.name);
+    }).sort((a,b)=>b.name.localeCompare(a.name));
+    sh=cand[0]||null;
+  }
+  if(!sh)return null;
+  const C=sh.cells;
+  const S2=(ref)=>C[ref]?C[ref].s:null;
+  const gv=(ref)=>{const c=C[ref];return c?String(c.v).trim():"";};
+  /* 계 열 찾기 */
+  let sumCol=null;
+  for(let ci=3;ci<=sh.maxC+1;ci++){const col=payIdxCol(ci);if(gv(col+"1")==="계"){sumCol=ci;break;}}
+  if(!sumCol)sumCol=sh.maxC;
+  let tot=0;
+  for(let r2=2;r2<=sh.maxR;r2++)if(gv("A"+r2)==="합계"){tot=r2;break;}
+  if(!tot)tot=sh.maxR;
+  const mCol=payIdxCol(3),tCol=payIdxCol(sumCol),kCol=payIdxCol(sumCol+1);
+  const raw=rawMap[sh.name]||"";
+  const cw=buyColsOf(raw);
+  const t={
+    h:{a:S2("A1"),b:S2("B1"),m:S2(mCol+"1"),t:S2(tCol+"1")},
+    r2:{a:S2("A2"),b:S2("B2"),m:S2(mCol+"2"),t:S2(tCol+"2")},
+    r3:{a:S2("A3")!=null?S2("A3"):S2("A2"),b:S2("B3")!=null?S2("B3"):S2("B2"),m:S2(mCol+"3")!=null?S2(mCol+"3"):S2(mCol+"2"),t:S2(tCol+"3")!=null?S2(tCol+"3"):S2(tCol+"2")},
+    tt:{a:S2("A"+tot),b:S2("B"+tot),m:S2(mCol+tot),t:S2(tCol+tot),k:S2(kCol+tot)},
+    mergeTot:!!(sh.merges&&sh.merges["A"+tot]),
+    w:{a:cw[1],b:cw[2],m:cw[3],t:cw[sumCol],k:cw[sumCol+1]},
+    fmtPr:buyGrab(raw,/<sheetFormatPr[^>]*\/>/),
+    ht1:buyRowHt(raw,"1"),htTot:buyRowHt(raw,String(tot))
+  };
+  return t;
+}
+function buyStatGen(ydoc,y,sc,uptoM,tpl){
+  const ms=(ydoc.months||[]).filter(m=>m<=uptoM).sort((a,b)=>b-a);
+  const rows0=(ydoc.scopes[sc].rows||[]).filter(r=>r.name);
+  const nM=ms.length;
+  const tColI=3+nM,kColI=tColI+1;
+  const tCol=payIdxCol(tColI),kCol=payIdxCol(kColI);
+  const lastM=payIdxCol(2+nM);
+  let cols="<cols>";
+  const wAdd=(i,w)=>{if(w)cols+='<col min="'+i+'" max="'+i+'" width="'+w+'" customWidth="1"/>';};
+  wAdd(1,tpl.w.a);wAdd(2,tpl.w.b);
+  if(tpl.w.m)cols+='<col min="3" max="'+(2+Math.max(nM,1))+'" width="'+tpl.w.m+'" customWidth="1"/>';
+  wAdd(tColI,tpl.w.t);wAdd(kColI,tpl.w.k);
+  cols+="</cols>";
+  let rows="";
+  const rX=(r,cells,ht)=>'<row r="'+r+'"'+(ht?' ht="'+ht+'" customHeight="1"':"")+">"+cells.join("")+"</row>";
+  /* header */
+  const hc=[buyCell.t("A1",tpl.h.a,"품목"),buyCell.t("B1",tpl.h.b,"거래처명")];
+  ms.forEach((m,i)=>hc.push(buyCell.t(payIdxCol(3+i)+"1",tpl.h.m,(ydoc.labels||{})[String(m)]||m+"월")));
+  hc.push(buyCell.t(tCol+"1",tpl.h.t,"계"));
+  rows+=rX(1,hc,tpl.ht1);
+  let r=2;
+  for(const row of rows0){
+    const st=r===2?tpl.r2:tpl.r3;
+    const cells=[buyCell.t("A"+r,st.a,row.item||""),buyCell.t("B"+r,st.b,row.name)];
+    ms.forEach((m,i)=>{const v=row.m[String(m)];cells.push(buyCell.n(payIdxCol(3+i)+r,st.m,v!=null?v:null));});
+    cells.push(nM?buyCell.f(tCol+r,st.t,"SUM(C"+r+":"+lastM+r+")"):buyCell.n(tCol+r,st.t,null));
+    rows+=rX(r,cells);
+    r++;
+  }
+  const tot=r;
+  const tc=[buyCell.t("A"+tot,tpl.tt.a,"합계"),buyCell.t("B"+tot,tpl.tt.b,"")];
+  ms.forEach((m,i)=>{const col=payIdxCol(3+i);tc.push(buyCell.f(col+tot,tpl.tt.m,"SUM("+col+"2:"+col+(tot-1)+")"));});
+  tc.push(buyCell.f(tCol+tot,tpl.tt.t,"SUM("+tCol+"2:"+tCol+(tot-1)+")"));
+  if(nM)tc.push(buyCell.f(kCol+tot,tpl.tt.k,"SUM(C"+tot+":"+lastM+tot+")"));
+  rows+=rX(tot,tc,tpl.htTot);
+  const merges=tpl.mergeTot?'<mergeCells count="1"><mergeCell ref="A'+tot+":B"+tot+'"/></mergeCells>':"";
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+(tpl.fmtPr||"")+cols+"<sheetData>"+rows+"</sheetData>"+merges+"</worksheet>";
+}
+const BUY_FALLBACK_STPL={h:{a:1,b:1,m:1,t:1},r2:{a:2,b:2,m:3,t:3},r3:{a:2,b:2,m:3,t:3},tt:{a:1,b:1,m:3,t:3,k:3},mergeTot:true,w:{a:"11.8",b:"20.9",m:"9.5",t:"13.4",k:"11.4"},fmtPr:"",ht1:"17.25",htTot:"17.25"};
+/* ---------- 매입현황 다운로드 ---------- */
+async function buyStatDl(){
+  try{
+    const D=bd(),B=window.__buy;
+    const y=buyStatCurY();
+    if(!y)return;
+    const upto=+B.ui.statDlM||12;
+    const ydoc=D.stat[y];
+    let rawMap=null,wb=null,styles=BUY_FALLBACK_STYLES,theme=null,sst=null;
+    let names=[];
+    if(D.files.stat&&D.files.stat.b64){
+      const rs=await buyRawSheets(D.files.stat.b64);
+      rawMap=rs.raw;styles=rs.styles||styles;theme=rs.theme;sst=rs.sst;names=rs.names;
+      wb=await buyGetWb("stat");
+    }
+    const targets=["all","market","insa"].map(sc=>buyScopeSheet(y,sc));
+    const list=[];
+    const genFor=(sc)=>{
+      const tpl=(wb?buyStatTpl(wb,rawMap,y,sc):null)||BUY_FALLBACK_STPL;
+      return buyStatGen(ydoc,y,sc,upto,tpl);
+    };
+    if(names.length){
+      let inserted=false;
+      for(const nm of names){
+        const ti=targets.indexOf(nm);
+        if(ti>=0){list.push({name:nm,xml:genFor(["all","market","insa"][ti])});inserted=true;continue;}
+        /* 다른 연도라도 웹에서 고친 게 있으면 다시 생성 */
+        const m2=nm.match(/^(\d{4})(마켓|인사동\+보자기)?$/);
+        const y2=m2?m2[1]:null,sc2=m2?(m2[2]==="마켓"?"market":m2[2]?"insa":"all"):null;
+        if(y2&&D.stat[y2]&&D.stat[y2].dirty){
+          const tpl2=(wb?buyStatTpl(wb,rawMap,y2,sc2):null)||BUY_FALLBACK_STPL;
+          list.push({name:nm,xml:buyStatGen(D.stat[y2],y2,sc2,12,tpl2)});
+        }
+        else list.push({name:nm,xml:buyStripRid(rawMap[nm])});
+      }
+      if(!inserted)["all","market","insa"].forEach((sc,i)=>list.splice(i,0,{name:targets[i],xml:genFor(sc)}));
+    }else{
+      ["all","market","insa"].forEach((sc,i)=>list.push({name:targets[i],xml:genFor(sc)}));
+    }
+    await buyMakeXlsx(list,styles,theme,sst,"매입현황_"+y+"-"+String(upto).padStart(2,"0")+".xlsx");
+    toast(y+"년 "+upto+"월까지 반영된 매입현황 엑셀을 내려받았어요");
+  }catch(e){console.error(e);toast(e.message||"다운로드 실패",true);}
+}
+/* ---------- 매입탭 렌더 ---------- */
+function renderBuy(){
+  const el=document.getElementById("tab-buy");
+  if(!el)return;
+  if(!document.getElementById("buySubtabs"))el.innerHTML='<div class="subtabs" id="buySubtabs" style="margin-bottom:10px"></div><div id="tab-buyclose"></div><div id="tab-buystat" class="hidden"></div>';
+  const sub=window.__buy.ui.sub||"close";
+  document.getElementById("buySubtabs").innerHTML=[["close","월마감결제"],["stat","매입현황"]].map(([k,n])=>'<button class="subtab '+(k===sub?"active":"")+'" onclick="setBuySub(\''+k+'\')">'+n+"</button>").join("");
+  document.getElementById("tab-buyclose").classList.toggle("hidden",sub!=="close");
+  document.getElementById("tab-buystat").classList.toggle("hidden",sub!=="stat");
+  if(sub==="close")renderBuyClose();else renderBuyStat();
+}
+window.setBuySub=function(k){window.__buy.ui.sub=k;renderBuy();};
+window.renderBuy=renderBuy;window.buyPick=buyPick;window.buyCloseSel=buyCloseSel;window.buyCloseDate=buyCloseDate;window.buyCloseEdit=buyCloseEdit;window.buyCloseOk=buyCloseOk;window.buyCloseAdd=buyCloseAdd;window.buyCloseDel=buyCloseDel;window.buyNewMonth=buyNewMonth;window.buyNewMonthGo=buyNewMonthGo;window.buyApplyOpen=buyApplyOpen;window.buyApplyGo=buyApplyGo;window.buyCloseDl=buyCloseDl;window.buyStatYearSel=buyStatYearSel;window.buyStatScopeSel=buyStatScopeSel;window.buyStatQ=buyStatQ;window.buyStatCell=buyStatCell;window.buyStatMeta=buyStatMeta;window.buyStatAddVendor=buyStatAddVendor;window.buyStatAddVendorGo=buyStatAddVendorGo;window.buyStatAddMonth=buyStatAddMonth;window.buyStatFix=buyStatFix;window.buyStatFixAll=buyStatFixAll;window.buyStatDl=buyStatDl;
+</script>
+
 <script>
 /* === main.js === */
 /* ===== 앱 시작 ===== */
@@ -8745,6 +9798,7 @@ async function showApp() {
       <div id="tab-manage" class="hidden"></div>
     </section>
     <section id="tab-pnl" class="tab-panel hidden"></section>
+    <section id="tab-buy" class="tab-panel hidden"></section>
     <section id="tab-pay" class="tab-panel hidden"></section>
     <section id="tab-jagum" class="tab-panel hidden"></section>
     <section id="tab-settings" class="tab-panel hidden"></section>`;
