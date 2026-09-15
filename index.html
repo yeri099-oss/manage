@@ -9145,6 +9145,7 @@ function renderBuyStat(){
       <span id="buyCloudSt" class="footnote" style="margin-left:auto"></span></div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0">
       <input type="text" id="buyStatQIn" placeholder="🔍 거래처 검색" value="${esc(q)}" style="border:1px solid var(--line,#ddd);border-radius:8px;padding:5px 9px;width:170px" autocomplete="off">
+      <button class="btn btn-primary btn-sm" onclick="buyQuickOpen()">📝 매입건 추가</button>
       <button class="btn btn-sm" onclick="buyStatAddVendor()">＋ 새 거래처</button>
       <button class="btn btn-sm" onclick="buyStatAddMonth()">＋ 월 추가</button>
       <button class="btn btn-sm" onclick="buyUnifyOpen()">🔗 이름 통일</button>
@@ -10120,6 +10121,128 @@ function buyStatCleanEmpty(){
 window.buyStatDelRow=buyStatDelRow;window.buyStatCleanEmpty=buyStatCleanEmpty;
 window.buyXcCell=buyXcCell;
 window.buyUnifyOpen=buyUnifyOpen;window.buyUnifyApply=buyUnifyApply;
+</script>
+<script>
+/* === buy6.js — 매입건 간편입력 창 === */
+"use strict";
+function buyQuickOpen(){
+  const y=buyStatCurY();if(!y)return;
+  const d=bd().stat[y];
+  const ms=(d.months||[]).slice().sort((a,b)=>b-a);
+  const defM=ms.length?ms[0]:new Date().getMonth()+1;
+  window.__buyQuick={y:y,m:defM,items:[]};
+  let ov=document.getElementById("buyQuickOv");
+  if(!ov){ov=document.createElement("div");ov.id="buyQuickOv";document.body.appendChild(ov);}
+  ov.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px";
+  const names=buyVendorNames(y);
+  ov.innerHTML=`<div style="background:var(--card,#fff);border-radius:14px;max-width:720px;width:100%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.25)">
+    <div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line,#eee)">
+      <b style="font-size:16px">📝 매입건 추가</b>
+      <select id="bqY" onchange="buyQuickYm()" style="font:inherit;padding:4px 6px;border:1px solid var(--line,#ddd);border-radius:6px">${buyStatYears().map(yy=>`<option ${yy===y?"selected":""}>${yy}</option>`).join("")}</select>
+      <select id="bqM" onchange="buyQuickYm()" style="font:inherit;padding:4px 6px;border:1px solid var(--line,#ddd);border-radius:6px">${Array.from({length:12},(_,i)=>12-i).map(m2=>`<option value="${m2}" ${m2===defM?"selected":""}>${m2}월</option>`).join("")}</select>
+      <span style="margin-left:auto"></span>
+      <button class="btn btn-sm" onclick="buyQuickClose()">✕ 닫기</button>
+    </div>
+    <div style="padding:12px 18px;border-bottom:1px solid var(--line,#eee)">
+      <datalist id="bqVList">${names.map(n=>`<option value="${esc(n)}">`).join("")}</datalist>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+        <input type="text" id="bqName" list="bqVList" placeholder="거래처" autocomplete="off" style="flex:1;min-width:150px;border:1px solid var(--line,#ddd);border-radius:8px;padding:8px 10px;font-size:14px">
+        <select id="bqSc" style="font:inherit;font-size:14px;padding:8px;border:1px solid var(--line,#ddd);border-radius:8px">
+          <option value="market">마켓</option><option value="insa">피다·보자기</option>
+        </select>
+        <input type="text" id="bqAmt" inputmode="numeric" placeholder="매입금액" style="width:130px;text-align:right;border:1px solid var(--line,#ddd);border-radius:8px;padding:8px 10px;font-size:14px">
+        <button class="btn btn-primary" onclick="buyQuickAdd()">추가 ↵</button>
+      </div>
+      <div class="footnote" id="bqHint" style="margin-top:4px">금액 칸에서 Enter를 치면 줄이 추가되고 다음 거래처를 바로 칠 수 있어요. 없는 거래처는 자동으로 새로 만들어져요.</div>
+    </div>
+    <div style="flex:1;overflow:auto;padding:6px 18px">
+      <table class="rpt buy-tbl" style="width:100%"><thead><tr><th class="l">거래처</th><th style="width:110px">사업장</th><th style="width:120px">금액</th><th style="width:120px">기존 값</th><th style="width:34px"></th></tr></thead>
+      <tbody id="bqList"><tr id="bqEmpty"><td colspan="5" class="l" style="color:var(--sub,#888);padding:14px 6px">아직 추가한 건이 없어요</td></tr></tbody></table>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;padding:12px 18px;border-top:1px solid var(--line,#eee)">
+      <span id="bqTot" class="footnote"></span>
+      <span style="margin-left:auto"></span>
+      <button class="btn btn-primary" onclick="buyQuickApply()">✅ 모두 반영</button>
+    </div>
+  </div>`;
+  const amt=document.getElementById("bqAmt"),nm=document.getElementById("bqName");
+  amt.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.isComposing){e.preventDefault();buyQuickAdd();}});
+  nm.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.isComposing){e.preventDefault();document.getElementById("bqSc").focus();}});
+  document.getElementById("bqSc").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();amt.focus();}});
+  buyQuickTot();
+  setTimeout(()=>nm.focus(),50);
+}
+function buyQuickClose(){const ov=document.getElementById("buyQuickOv");if(ov)ov.remove();window.__buyQuick=null;}
+function buyQuickYm(){
+  const Q=window.__buyQuick;if(!Q)return;
+  Q.y=document.getElementById("bqY").value;
+  Q.m=+document.getElementById("bqM").value;
+  buyQuickList();
+}
+function buyQuickCurVal(name,sc){
+  const Q=window.__buyQuick;
+  const r=buyFindRow(Q.y,sc,name);
+  return r&&r.m[String(Q.m)]!=null?r.m[String(Q.m)]:null;
+}
+function buyQuickAdd(){
+  const Q=window.__buyQuick;if(!Q)return;
+  const nm=document.getElementById("bqName"),sc=document.getElementById("bqSc").value,amtEl=document.getElementById("bqAmt");
+  const name=nm.value.trim();
+  const n=String(amtEl.value).replace(/[,\s원]/g,"");
+  const amt=Number(n);
+  if(!name){nm.focus();return;}
+  if(n===""||isNaN(amt)||!amt){amtEl.focus();return;}
+  const ex=Q.items.find(it=>it.name===name&&it.sc===sc);
+  if(ex)ex.amt+=amt;else Q.items.push({name:name,sc:sc,amt:amt});
+  nm.value="";amtEl.value="";
+  buyQuickList();
+  nm.focus();
+}
+function buyQuickDel(i){const Q=window.__buyQuick;Q.items.splice(i,1);buyQuickList();}
+function buyQuickList(){
+  const Q=window.__buyQuick;if(!Q)return;
+  const tb=document.getElementById("bqList");if(!tb)return;
+  const scL={market:"마켓",insa:"피다·보자기"};
+  tb.innerHTML=Q.items.length?Q.items.map((it,i)=>{
+    const cur=buyQuickCurVal(it.name,it.sc);
+    const isNew=!buyVendorNames(Q.y).includes(it.name);
+    return `<tr><td class="l">${esc(it.name)}${isNew?' <span class="unit" style="color:#2F6B3F">새 거래처</span>':""}</td><td>${scL[it.sc]}</td><td style="text-align:right"><b>${fmt(it.amt)}</b></td><td style="text-align:right;color:var(--sub,#888)">${cur!=null?fmt(cur)+" → 교체":""}</td><td style="text-align:center"><button class="btn btn-sm" style="padding:0 6px" onclick="buyQuickDel(${i})">×</button></td></tr>`;
+  }).join(""):`<tr id="bqEmpty"><td colspan="5" class="l" style="color:var(--sub,#888);padding:14px 6px">아직 추가한 건이 없어요</td></tr>`;
+  buyQuickTot();
+}
+function buyQuickTot(){
+  const Q=window.__buyQuick;if(!Q)return;
+  const el=document.getElementById("bqTot");if(!el)return;
+  const tm=Q.items.filter(x=>x.sc==="market").reduce((a,b)=>a+b.amt,0);
+  const ti=Q.items.filter(x=>x.sc==="insa").reduce((a,b)=>a+b.amt,0);
+  el.innerHTML=`${Q.items.length}건 · 마켓 <b>${fmt(tm)}</b> · 피다·보자기 <b>${fmt(ti)}</b> · 전체 반영 <b>${fmt(tm+ti)}</b>원 (${Q.y}년 ${Q.m}월)`;
+}
+function buyQuickApply(){
+  const Q=window.__buyQuick;if(!Q||!Q.items.length){toast("추가한 건이 없어요",true);return;}
+  const y=Q.y,m=Q.m,mk=String(m);
+  const d=bd().stat[y]||buyStatEnsureYear(y);
+  if(!(d.months||[]).includes(m)){d.months=[...(d.months||[]),m].sort((a,b)=>a-b);d.labels=d.labels||{};d.labels[mk]=d.labels[mk]||m+"월";}
+  const touched=new Set();
+  for(const it of Q.items){
+    const r=buyEnsureRow(y,it.sc,it.name,"");
+    r.m[mk]=it.amt;
+    touched.add(it.name);
+  }
+  /* 전체 = 마켓+피다 합 */
+  touched.forEach(nm=>{
+    const rm=buyFindRow(y,"market",nm),ri=buyFindRow(y,"insa",nm);
+    const ra=buyEnsureRow(y,"all",nm,(rm&&rm.item)||(ri&&ri.item)||"");
+    const v=((rm&&rm.m[mk])||0)+((ri&&ri.m[mk])||0);
+    if(v)ra.m[mk]=v;else delete ra.m[mk];
+  });
+  d.savedAt=Date.now();buyMark("stat_"+y);
+  const n=Q.items.length;
+  buyQuickClose();
+  window.__buy.ui.statYear=y;window.__buy.ui.statScope="all";
+  renderBuyStat();
+  toast(n+"건을 "+y+"년 "+m+"월에 반영했어요 — 전체(꽃밥이야기)는 합으로 자동 입력 ✓");
+}
+window.buyQuickOpen=buyQuickOpen;window.buyQuickClose=buyQuickClose;window.buyQuickYm=buyQuickYm;window.buyQuickAdd=buyQuickAdd;window.buyQuickDel=buyQuickDel;window.buyQuickApply=buyQuickApply;
 </script>
 
 <script>
