@@ -9127,7 +9127,7 @@ function renderBuyStat(){
       ${BUY_SCOPES.map(([k,n])=>`<span class="buy-chip ${k===sc?"on":""}" onclick="buyStatScopeSel('${k}')">${n}</span>`).join("")}
       <span id="buyCloudSt" class="footnote" style="margin-left:auto"></span></div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0">
-      <input type="text" placeholder="🔍 거래처 검색" value="${esc(q)}" style="border:1px solid var(--line,#ddd);border-radius:8px;padding:5px 9px;width:170px" oninput="buyStatQ(this.value)">
+      <input type="text" id="buyStatQIn" placeholder="🔍 거래처 검색" value="${esc(q)}" style="border:1px solid var(--line,#ddd);border-radius:8px;padding:5px 9px;width:170px" autocomplete="off">
       <button class="btn btn-sm" onclick="buyStatAddVendor()">＋ 새 거래처</button>
       <button class="btn btn-sm" onclick="buyStatAddMonth()">＋ 월 추가</button>
       <button class="btn btn-sm" onclick="buyUnifyOpen()">🔗 이름 통일</button>
@@ -9160,15 +9160,24 @@ function renderBuyStat(){
     html+=`<div class="footnote" style="margin-top:10px;color:#2F6B3F">✓ 크로스체크 통과 — 전체 = 마켓 + 피다·보자기 (모든 달)</div>`;
   }
   html+=`</div>`;
+  const hadFocus=document.activeElement&&document.activeElement.id==="buyStatQIn";
   el.innerHTML=html;
   const ub=document.getElementById("buyUnifyBox");
   if(ub&&typeof buyUnifyBoxHtml==="function")ub.innerHTML=buyUnifyBoxHtml();
+  const se=document.getElementById("buyStatQIn");
+  if(se){
+    se.addEventListener("input",function(e){window.__buy.ui.q=se.value;if(e.isComposing)return;buyStatQKick();});
+    se.addEventListener("compositionend",function(){window.__buy.ui.q=se.value;buyStatQKick();});
+    se.addEventListener("keydown",function(e){if(e.key==="Escape"){se.value="";window.__buy.ui.q="";buyStatQKick();}});
+    if(hadFocus){se.focus();try{se.setSelectionRange(se.value.length,se.value.length);}catch(e2){}}
+  }
   buyFlushLabel();
 }
+function buyStatQKick(){clearTimeout(buyQTimer);buyQTimer=setTimeout(renderBuyStat,300);}
 function buyStatYearSel(y){window.__buy.ui.statYear=y;renderBuyStat();}
 function buyStatScopeSel(sc){window.__buy.ui.statScope=sc;renderBuyStat();}
 let buyQTimer=null;
-function buyStatQ(v){window.__buy.ui.q=v;clearTimeout(buyQTimer);buyQTimer=setTimeout(renderBuyStat,250);}
+function buyStatQ(v){window.__buy.ui.q=v;buyStatQKick();}
 function buyStatCell(td,sc,ri,m){
   if(td.querySelector("input"))return;
   const y=buyStatCurY(),r=bd().stat[y].scopes[sc].rows[ri];
