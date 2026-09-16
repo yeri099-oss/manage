@@ -8730,6 +8730,7 @@ async function removeChannel(kind, name) {
 .buy-chip{display:inline-block;padding:2px 10px;border-radius:20px;border:1px solid var(--line,#ddd);cursor:pointer;font-size:12.5px;margin-right:4px;background:var(--card,#fff)}
 .buy-chip.on{background:#2F6B3F;color:#fff;border-color:#2F6B3F}
 .buy-warn{color:#b3261e;font-weight:600}
+.buy-tbl th.bdel,.buy-tbl td.bdel{position:sticky;right:0;z-index:2;background:var(--surface-1,#fff);box-shadow:-4px 0 5px -3px rgba(0,0,0,.15);text-align:center}
 td.bchunk{background:#f2f6f2 !important;text-align:right;vertical-align:middle;border-left:2px solid #dfe7df;min-width:104px;padding:4px 8px}
 </style>
 <script>
@@ -9131,7 +9132,7 @@ function renderBuyStatCore(){
     const mIn=ms.map(m=>`<td><input type="text" inputmode="numeric" style="width:76px;text-align:right" value="${dr.m[String(m)]?fmt(dr.m[String(m)]):""}" onchange="buyDraftSet('${m}',this.value)" onkeydown="buyDraftKey(event,this)"></td>`).join("");
     body+=`<tr class="bdraft" style="background:#eefbee"><td><input type="text" style="width:76px" placeholder="품목" value="${esc(dr.item)}" onchange="buyDraftSet('item',this.value)" onkeydown="buyDraftKey(event,this)"></td>
       <td><input type="text" id="bdName" style="width:120px" placeholder="거래처명" value="${esc(dr.name)}" onchange="buyDraftSet('name',this.value)" onkeydown="buyDraftKey(event,this)"></td>
-      ${mIn}<td id="bdSum" style="text-align:right"><b>${dSum?fmt(dSum):""}</b></td><td></td></tr>`;
+      ${mIn}<td id="bdSum" style="text-align:right"><b>${dSum?fmt(dSum):""}</b></td><td class="bdel" style="background:#eefbee"></td></tr>`;
     body+=`<tr style="background:#eefbee"><td colspan="${ms.length+4}" class="l" style="padding:6px 8px">
       ${sc==="all"?`마켓/식당 배분: <select onchange="buyDraftSet('alloc',this.value)" style="font:inherit;font-size:12.5px;padding:3px 6px;border:1px solid var(--line,#ddd);border-radius:6px">
         <option value="market" ${dr.alloc==="market"?"selected":""}>마켓에 전액</option>
@@ -9151,7 +9152,7 @@ function renderBuyStatCore(){
     let flag="";
     if(sc==="all"){const bad=xs.some(x=>x.name===r.name);if(bad)flag=` <span class="buy-warn" title="마켓+피다·보자기 합과 달라요">⚠</span>`;}
     body+=`<tr data-nm="${esc(r.name)}"><td class="l bmeta" onclick="buyStatMeta(this,'${sc}',${ri},'item')">${esc(r.item||"")}</td>
-      <td class="l bmeta" onclick="buyStatMeta(this,'${sc}',${ri},'name')"><b>${esc(r.name)}</b>${flag}</td>${tds}<td style="text-align:right"><b>${fmt(sum)}</b></td></tr>`;
+      <td class="l bmeta" onclick="buyStatMeta(this,'${sc}',${ri},'name')"><b>${esc(r.name)}</b>${flag}</td>${tds}<td style="text-align:right"><b>${fmt(sum)}</b></td><td class="bdel"><button class="btn btn-sm" style="padding:0 7px;font-size:12px" title="이 시트에서 삭제" onclick="buyStatDelRow('${sc}',${ri})">×</button></td></tr>`;
   });
   const totTds=ms.map(m=>`<td style="text-align:right"><b>${fmt(totals[m]||0)}</b></td>`).join("");
   let html=`<div class="card"><div class="card-title" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">매입현황
@@ -9173,9 +9174,9 @@ function renderBuyStatCore(){
     </div>
     <div class="footnote">칸을 누르면 바로 고칠 수 있어요(Enter = 아래 칸으로) · 품목/거래처명도 눌러서 수정 · 선결제·바로결제는 검색해서 직접 기입</div>
     <div id="buyUnifyBox"></div>
-    <div class="table-wrap" style="margin-top:6px;max-height:560px;overflow:auto"><table class="rpt buy-tbl"><thead><tr><th class="l" style="min-width:80px">품목</th><th class="l" style="min-width:130px">거래처명</th>${mCols}<th style="min-width:90px">계</th><th style="width:34px"></th></tr></thead>
+    <div class="table-wrap" style="margin-top:6px;max-height:560px;overflow:auto"><table class="rpt buy-tbl"><thead><tr><th class="l" style="min-width:80px">품목</th><th class="l" style="min-width:130px">거래처명</th>${mCols}<th style="min-width:90px">계</th><th class="bdel" style="width:34px"></th></tr></thead>
     <tbody>${body}</tbody>
-    <tfoot><tr style="background:#eef3ee"><td class="l"><b>합계${q?" (검색결과)":""}</b></td><td></td>${totTds}<td style="text-align:right"><b>${fmt(grand)}</b></td><td></td></tr></tfoot></table></div>`;
+    <tfoot><tr style="background:#eef3ee"><td class="l"><b>합계${q?" (검색결과)":""}</b></td><td></td>${totTds}<td style="text-align:right"><b>${fmt(grand)}</b></td><td class="bdel" style="background:#eef3ee"></td></tr></tfoot></table></div>`;
   /* 크로스체크 */
   if(xs.length){
     html+=`<div style="margin-top:12px;padding:10px;border:1.5px solid #e5b7b3;border-radius:10px;max-width:680px">
