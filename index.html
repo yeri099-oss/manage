@@ -5330,12 +5330,12 @@ window.jgPasteFlow=function(){
     let filled=0;
     for(const i in inc){set("jg-inc"+i,inc[i]);filled++;}
     for(const i in dec){set("jg-dec"+i,dec[i]);filled++;}
-    /* 기초잔액: 자동값과 다르면 수동칸 채움 */
-    const auto=jgBase(S.ui.jagumEdit);
+    /* 기초잔액: 표의 값을 항상 그대로 채우고, 직전 반월 잔액과는 기초잔액 칸 아래에서 대조 */
     let baseNote="";
     if(base!=null){
-      if(auto==null||Math.abs(auto-base)>2){set("jg-base-manual",base);baseNote=`기초잔액 ${fmt(base)} 입력됨${auto!=null?` (자동 연결값 ${fmt(auto)}과 달라 직접 지정)`:""}<br>`;}
-      else baseNote=`기초잔액은 자동 연결값(${fmt(auto)})과 일치 — 비워둠<br>`;
+      set("jg-base-manual",base);
+      if(typeof jgBaseChkUpd==="function")jgBaseChkUpd();
+      baseNote=`기초잔액 ${fmt(base)} 자동 입력 — 직전 반월 잔액과의 대조는 기초잔액 칸 아래에서 확인하세요<br>`;
     }
     /* 기말 검산 (미배정분 포함: 어디에 넣든 합계는 같음) */
     let endNote="";
