@@ -5150,6 +5150,7 @@ window.jgOpenForm=function(){
   const y=document.getElementById("jgY").value,m=document.getElementById("jgM").value,h=document.getElementById("jgH").value;
   const dd=h==="15"?"15":String(jgLastDay(y,m)).padStart(2,"0");
   S.ui.jagumEdit=`${y}-${String(m).padStart(2,"0")}-${dd}`;
+  S.ui.jgCmpA=`${y}-${String(m).padStart(2,"0")}`;S.ui.jgCmpB=null;/* 보는 달=입력 달, 비교=자동(전달) */
   renderJagum();
 };
 window.jgCloseForm=function(){S.ui.jagumEdit=null;renderJagum();};
@@ -5179,6 +5180,7 @@ window.jgSave=function(){
     doc.periods[k]=p;
     queueSave("jagum",y);
     S.ui.jagumEdit=null;
+    S.ui.jgCmpA=full.slice(0,7);S.ui.jgCmpB=null;/* 저장한 달을 바로 보여줌 */
     toast(`${jgLabel(full)} 자금 현황을 저장했어요`);
     renderJagum();
   }catch(e){console.error(e);toast(e.message||"저장 실패",true);}
@@ -5373,6 +5375,7 @@ function jgFormHtml(full){
   JG_DEC.forEach((a,i)=>h+=row(a,inp("jg-dec"+i,p.dec?.[i],null)));
   h+=`</div><div style="font-weight:700;font-size:13px;margin:12px 0 4px">기초잔액 <span class="unit">비워두면 직전 반월의 잔액(${autoBase!=null?fmt(autoBase)+"원":"없음"})을 자동으로 써요</span></div>`;
   h+=row("기초잔액 (직접 지정 시만)",`<input class="cell-in" id="jg-base-manual" inputmode="numeric" value="${p.base!=null?fmt(p.base):""}" style="width:140px;text-align:right">`);
+  h+=`<div style="position:sticky;bottom:0;margin-top:14px;padding:10px 2px;background:var(--surface-1,#fff);border-top:1px solid rgba(0,0,0,0.12);display:flex;gap:8px;justify-content:flex-end;z-index:5"><button class="btn btn-sm" onclick="jgCloseForm()">닫기</button><button class="btn btn-sm btn-primary" onclick="jgSave()">💾 저장</button></div>`;
   h+=`</div>`;
   return h;
 }
@@ -10384,7 +10387,16 @@ function buySplitOpen(nm,m){
     const d2=tot-gm-gi;
     el.innerHTML=d2===0?'<span style="color:#2F6B3F">✓ 합이 전체와 맞아요 ('+fmt(tot)+')</span>':'<span class="buy-warn">전체 '+fmt(tot)+' 대비 '+(d2>0?fmt(d2)+" 남음":fmt(-d2)+" 초과")+"</span>";
   };
-  ["bspM","bspI"].forEach(id=>{const el=document.getElementById(id);el.addEventListener("input",upd);el.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.isComposing){e.preventDefault();buySplitGo();}});});
+  /* 한쪽을 입력하면 다른 쪽은 전체−입력값으로 자동 채움 */
+  const comp=(id)=>{
+    const a=document.getElementById("bspM"),b=document.getElementById("bspI");
+    const el=id==="bspM"?a:b, other=id==="bspM"?b:a;
+    const n=Number(String(el.value).replace(/[,\s]/g,""))||0;
+    const rem=tot-n;
+    other.value=rem>0?fmt(rem):"";
+    upd();
+  };
+  ["bspM","bspI"].forEach(id=>{const el=document.getElementById(id);el.addEventListener("input",()=>comp(id));el.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.isComposing){e.preventDefault();buySplitGo();}});});
   upd();
   setTimeout(()=>{const el=document.getElementById("bspM");if(el){el.focus();el.select&&el.select();}},60);
 }
