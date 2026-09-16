@@ -9088,6 +9088,12 @@ function buyStatFixAll(){
 }
 /* ---------- 매입현황 렌더 ---------- */
 function renderBuyStat(){
+  /* innerHTML 교체 중 blur→commit이 재진입하면 DOM 오류 — 렌더 중엔 다음 틱으로 미룸 */
+  if(window.__buyRendering){clearTimeout(window.__buyRerenderT);window.__buyRerenderT=setTimeout(renderBuyStat,0);return;}
+  window.__buyRendering=1;
+  try{renderBuyStatCore();}finally{window.__buyRendering=0;}
+}
+function renderBuyStatCore(){
   const el=document.getElementById("tab-buystat");
   if(!el)return;
   const D=bd(),B=window.__buy;
@@ -9135,7 +9141,7 @@ function renderBuyStat(){
     grand+=sum;
     let flag="";
     if(sc==="all"){const bad=xs.some(x=>x.name===r.name);if(bad)flag=` <span class="buy-warn" title="마켓+피다·보자기 합과 달라요">⚠</span>`;}
-    body+=`<tr><td class="l bmeta" onclick="buyStatMeta(this,'${sc}',${ri},'item')">${esc(r.item||"")}</td>
+    body+=`<tr data-nm="${esc(r.name)}"><td class="l bmeta" onclick="buyStatMeta(this,'${sc}',${ri},'item')">${esc(r.item||"")}</td>
       <td class="l bmeta" onclick="buyStatMeta(this,'${sc}',${ri},'name')"><b>${esc(r.name)}</b>${flag}</td>${tds}<td style="text-align:right"><b>${fmt(sum)}</b></td></tr>`;
   });
   const totTds=ms.map(m=>`<td style="text-align:right"><b>${fmt(totals[m]||0)}</b></td>`).join("");
@@ -9205,8 +9211,8 @@ function buyStatCell(td,sc,ri,m){
   const inp=td.querySelector("input");
   inp.focus();inp.select&&inp.select();
   let done=false;
-  const commit=(go)=>{
-    if(done)return;done=true;
+  const commit=(viaEnter)=>{
+    if(done)return false;done=true;
     const v=String(inp.value).replace(/[,\s]/g,"");
     const d=bd().stat[y];
     const n2=Number(v);
@@ -9214,18 +9220,26 @@ function buyStatCell(td,sc,ri,m){
     if(v===""||isNaN(n2))delete r.m[String(m)];else r.m[String(m)]=n2;
     d.savedAt=Date.now();buyMark("stat_"+y);
     renderBuyStat();
-    /* 전체 탭에서 값을 넣고 확정하면 항상 배분 창 — 같은 금액을 다시 쳐도 현재 분배를 보여줌 */
-    if(sc==="all"&&v!==""&&!isNaN(n2)&&n2)buySplitOpen(r.name,m);
-    if(go){
-      const tb=document.querySelector("#tab-buystat tbody");
-      if(tb){const tr=tb.rows;for(let i=0;i<tr.length;i++){/* 다음 행 같은 열 */}}
-    }
+    /* 전체 탭: Enter로 확정하면 항상 배분 창(같은 금액 재입력=현재 분배 확인), 다른 곳 클릭(blur)은 값이 바뀐 때만 */
+    if(sc==="all"&&v!==""&&!isNaN(n2)&&n2&&(viaEnter||n2!==prev)){buySplitOpen(r.name,m);return true;}
+    return false;
   };
   inp.addEventListener("blur",()=>commit(false));
   inp.addEventListener("keydown",(e)=>{
-    if(e.key==="Enter"){e.preventDefault();const tr=td.parentElement;const ci=td.cellIndex;commit(false);
-      const tb=document.querySelector("#tab-buystat tbody");
-      if(tb){const idx=[...tb.rows].indexOf(tr);const nx=tb.rows[idx+1];if(nx&&nx.cells[ci])nx.cells[ci].click();}}
+    if(e.key==="Enter"&&!e.isComposing){
+      e.preventDefault();
+      const ci=td.cellIndex;
+      const opened=commit(true);
+      if(!opened){/* 새로 그려진 표에서 같은 거래처 행을 찾아 아래 칸으로 */
+        const tb=document.querySelector("#tab-buystat tbody");
+        if(tb){
+          const rows2=[...tb.rows].filter(t2=>t2.dataset&&t2.dataset.nm);
+          const i2=rows2.findIndex(t2=>t2.dataset.nm===r.name);
+          const nx=i2>=0?rows2[i2+1]:null;
+          if(nx&&nx.cells[ci])nx.cells[ci].click();
+        }
+      }
+    }
     else if(e.key==="Escape"){done=true;renderBuyStat();}
   });
 }
