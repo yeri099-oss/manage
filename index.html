@@ -478,7 +478,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v214</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -1125,7 +1125,7 @@ async function loadAllData() {
   jobs.push(fsCol("config").doc("epidaDrink").get().then((d) => { S.data.epidaDrink = d.data() || { add: [], remove: [] }; }).catch(() => {}));
   jobs.push(fsCol("payMonthly").get().then((snap)=>{const out={},files={};snap.forEach((d)=>{if(d.id.indexOf("file_")===0)files[d.id.slice(5)]=d.data();else if(d.id==="acctConfig")S.data.payAcct=d.data().acctOf||{};else if(d.id==="taxConfig")S.data.payTax=d.data()||{byName:{}};else if(d.id==="taxTable")S.data.payTaxTable=d.data()||null;else out[d.id]=d.data();});S.data.payMonthly=out;S.data.payFiles=files;}).catch(()=>{S.data.payMonthly=S.data.payMonthly||{};S.data.payFiles=S.data.payFiles||{};S.data.payAcct=S.data.payAcct||{};}));
   jobs.push(fsCol("config").doc("bojagiPosMap").get().then((d) => { S.data.bojagiPosMap = (d.data() || {}).map || {}; }).catch(() => {}));
-  jobs.push(fsCol("buy").get().then((snap)=>{const B={files:{},close:{},stat:{},vendorMap:{}};snap.forEach((d)=>{const id=d.id;if(id==="file_close")B.files.close=d.data();else if(id==="file_stat")B.files.stat=d.data();else if(id.indexOf("close_")===0)B.close[id.slice(6)]=d.data();else if(id.indexOf("stat_")===0)B.stat[id.slice(5)]=d.data();else if(id==="vendorMap"){B.vendorMap=(d.data()||{}).map||{};B.vendorSkip=(d.data()||{}).skip||{};}});S.data.buy=B;}).catch(()=>{S.data.buy=S.data.buy||{files:{},close:{},stat:{},vendorMap:{}};}));
+  if(S.user&&S.user.role==="admin")jobs.push(fsCol("buy").get().then((snap)=>{const B={files:{},close:{},stat:{},vendorMap:{}};snap.forEach((d)=>{const id=d.id;if(id==="file_close")B.files.close=d.data();else if(id==="file_stat")B.files.stat=d.data();else if(id.indexOf("close_")===0)B.close[id.slice(6)]=d.data();else if(id.indexOf("stat_")===0)B.stat[id.slice(5)]=d.data();else if(id==="vendorMap"){B.vendorMap=(d.data()||{}).map||{};B.vendorSkip=(d.data()||{}).skip||{};}});S.data.buy=B;}).catch(()=>{S.data.buy=S.data.buy||{files:{},close:{},stat:{},vendorMap:{}};}));
   await Promise.all(jobs);
   pnlNormalizeKeys();
 }
@@ -5192,6 +5192,7 @@ window.jgSave=function(){
     doc.periods=doc.periods||{};
     doc.periods[k]=p;
     queueSave("jagum",y);
+    flushSaves().then(()=>{const t=document.getElementById("toast");if(t)t.textContent=jgLabel(full)+" 자금 현황을 서버에 저장했어요 ✓";});/* 즉시 서버 기록 */
     S.ui.jagumEdit=null;
     S.ui.jgCmpA=full.slice(0,7);S.ui.jgCmpB=null;/* 저장한 달을 바로 보여줌 */
     toast(`${jgLabel(full)} 자금 현황을 저장했어요`);
@@ -5202,7 +5203,7 @@ window.jgDelete=function(){
   const full=S.ui.jagumEdit;if(!full)return;
   if(!confirm(`${jgLabel(full)} 입력을 삭제할까요?`))return;
   const y=full.slice(0,4),k=full.slice(5);
-  if(S.data.jagum[y]?.periods){delete S.data.jagum[y].periods[k];queueSave("jagum",y);}
+  if(S.data.jagum[y]?.periods){delete S.data.jagum[y].periods[k];queueSave("jagum",y);flushSaves();}
   S.ui.jagumEdit=null;renderJagum();
 };
 window.jgPasteFill=function(){
@@ -5695,9 +5696,9 @@ function renderJagum(){
   const yrsOpt=[];for(let y=now.getFullYear()+1;y>=now.getFullYear()-1;y--)yrsOpt.push(y);
   const ctl=isAd?`<div class="card"><div class="card-title">반월 선택 <span class="unit">매월 1일(전월 후반)·16일(당월 전반) 보고</span></div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:4px 2px">
-      <select id="jgY" class="ctl">${(()=>{const d=now.getDate();const defY=(d<16&&now.getMonth()===0)?now.getFullYear()-1:now.getFullYear();return yrsOpt.map(y=>`<option ${y===defY?"selected":""}>${y}</option>`).join("");})()}</select>년
-      <select id="jgM" class="ctl">${(()=>{const d=now.getDate();const defM=d>=16?now.getMonth()+1:(now.getMonth()===0?12:now.getMonth());return MONTHS.map(m=>`<option value="${m}" ${Number(m)===defM?"selected":""}>${m}</option>`).join("");})()}</select>월
-      <select id="jgH" class="ctl"><option value="15" ${now.getDate()>=16?"selected":""}>전반 (1~15일)</option><option value="end" ${now.getDate()<16?"selected":""}>후반 (16~말일)</option></select>
+      <select id="jgY" class="ctl" onchange="if(S.ui.jagumEdit)jgOpenForm()">${(()=>{const d=now.getDate();const defY=(d<16&&now.getMonth()===0)?now.getFullYear()-1:now.getFullYear();return yrsOpt.map(y=>`<option ${y===defY?"selected":""}>${y}</option>`).join("");})()}</select>년
+      <select id="jgM" class="ctl" onchange="if(S.ui.jagumEdit)jgOpenForm()">${(()=>{const d=now.getDate();const defM=d>=16?now.getMonth()+1:(now.getMonth()===0?12:now.getMonth());return MONTHS.map(m=>`<option value="${m}" ${Number(m)===defM?"selected":""}>${m}</option>`).join("");})()}</select>월
+      <select id="jgH" class="ctl" onchange="if(S.ui.jagumEdit)jgOpenForm()"><option value="15" ${now.getDate()>=16?"selected":""}>전반 (1~15일)</option><option value="end" ${now.getDate()<16?"selected":""}>후반 (16~말일)</option></select>
       <button class="btn btn-sm btn-primary" onclick="jgOpenForm()">✏️ 입력 · 수정</button>
       ${(Object.keys(JG_SEED).some(k=>!jgGet(k))||Object.keys(JG_BS_SEED).some(ym=>!jgBsGet(ym)))?`<button class="btn btn-sm" onclick="jgImportSeed()">📚 엑셀 과거 자료 불러오기</button>`:""}
 
@@ -5804,6 +5805,7 @@ window.jgBsSave=function(){
     doc.bs=doc.bs||{};
     doc.bs[m]=b;
     queueSave("jagum",y);
+    flushSaves();
     S.ui.jgBsEdit=null;
     toast(`${y}년 ${Number(m)}월 재무상태표를 저장했어요`);
     renderJagum();
@@ -7991,7 +7993,9 @@ const RENDERERS = {
 };
 function switchTab(tab) {
   if(["monthly","daily","market","bojagi","agency"].includes(tab)){S.ui.salesSub=tab;tab="sales";}
+  if(["buy","pay","settings","confirmapp"].includes(tab)&&(!S.user||S.user.role!=="admin"))tab="home";
   S.ui.tab = tab;
+  try{history.replaceState(null,"","#"+tab);}catch(e){}
   document.querySelectorAll(".tabbar .tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
   document.querySelectorAll(".tab-panel").forEach((p) => p.classList.toggle("hidden", p.id !== "tab-" + tab));
   RENDERERS[tab]?.();
@@ -9901,6 +9905,7 @@ async function buyStatDl(){
 function renderBuy(){
   const el=document.getElementById("tab-buy");
   if(!el)return;
+  if(typeof S==="undefined"||!S.user||S.user.role!=="admin"){el.innerHTML='<div class="card">관리자만 볼 수 있어요.</div>';return;}
   if(!document.getElementById("buySubtabs"))el.innerHTML='<div class="subtabs" id="buySubtabs" style="margin-bottom:10px"></div><div id="tab-buyclose"></div><div id="tab-buystat" class="hidden"></div>';
   const sub=window.__buy.ui.sub||"close";
   document.getElementById("buySubtabs").innerHTML=[["close","월마감결제"],["stat","매입현황"]].map(([k,n])=>'<button class="subtab '+(k===sub?"active":"")+'" onclick="setBuySub(\''+k+'\')">'+n+"</button>").join("");
@@ -10490,8 +10495,22 @@ async function showApp() {
     return;
   }
   if (S.ui.pwWarn && S.user.role === "admin") document.getElementById("pw-warn").classList.remove("hidden");
-  switchTab(S.ui.tab || "home");
+  switchTab(deepLinkTab() || S.ui.tab || "home");
 }
+function deepLinkTab(){
+  try{
+    let h=decodeURIComponent((location.hash||"").replace(/^#/,"")).trim();
+    if(!h)return null;
+    const KO={"요약":"home","자금일보":"jagum","자금":"jagum","매출비교":"compare","매출현황":"sales","매출":"sales","월별손익":"pnl","손익":"pnl","매입":"buy","급여":"pay","설정":"settings","매출확정":"confirmapp"};
+    if(KO[h])h=KO[h];
+    const OK=["home","jagum","compare","sales","pnl","buy","pay","settings","confirmapp","monthly","daily","market","bojagi","agency"];
+    if(OK.indexOf(h)<0)return null;
+    const ADMIN=["buy","pay","settings","confirmapp"];
+    if(ADMIN.indexOf(h)>=0&&(!S.user||S.user.role!=="admin"))return null;
+    return h;
+  }catch(e){return null;}
+}
+window.addEventListener("hashchange",()=>{const t=deepLinkTab();if(t&&S.user&&!document.getElementById("app").classList.contains("hidden"))switchTab(t);});
 document.addEventListener("DOMContentLoaded", () => {
   // 탭
   document.querySelectorAll(".tabbar .tab").forEach((b) => {
