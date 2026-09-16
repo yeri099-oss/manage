@@ -10256,7 +10256,23 @@ function buySplitOpen(nm,m){
   const tot=(ra&&ra.m[mk])||0;
   if(!tot)return;
   const rm=buyFindRow(y,"market",nm),ri=buyFindRow(y,"insa",nm);
-  const vm=(rm&&rm.m[mk])||0,vi=(ri&&ri.m[mk])||0;
+  let vm=(rm&&rm.m[mk])||0,vi=(ri&&ri.m[mk])||0;
+  let hint="";
+  if(!vm&&!vi){
+    /* 지난달 배분 비율로 미리 채움 */
+    const d0=bd().stat[y];
+    const past=(d0.months||[]).filter(x=>x!==m).sort((a,b)=>b-a);
+    for(const pm of past){
+      const pk=String(pm);
+      const am=(rm&&rm.m[pk])||0,ai=(ri&&ri.m[pk])||0;
+      if(am+ai>0){
+        if(!ai){vm=tot;vi=0;hint=pm+"월처럼 마켓 전액으로 미리 채웠어요";}
+        else if(!am){vm=0;vi=tot;hint=pm+"월처럼 피다·보자기 전액으로 미리 채웠어요";}
+        else{vm=Math.round(tot*am/(am+ai));vi=tot-vm;hint=pm+"월 배분 비율로 미리 나눠뒀어요 — 필요하면 고치세요";}
+        break;
+      }
+    }
+  }
   window.__buySplit={nm:nm,m:m,tot:tot};
   openModal("'"+nm+"' "+m+"월 "+fmt(tot)+"원 — 사업장 배분",
     `<div style="line-height:2.2">
@@ -10266,6 +10282,7 @@ function buySplitOpen(nm,m){
       <button class="btn btn-sm" onclick="buySplitQuick('i')">피다·보자기 전액</button>
       <button class="btn btn-sm" onclick="buySplitQuick('h')">반반</button>
       <div id="bspChk" style="margin-top:6px;font-size:13px"></div>
+      ${hint?`<div class="footnote" style="color:#2F6B3F">💡 ${hint}</div>`:""}
     </div>`,
     `<button class="btn" onclick="closeModal()">배분 안 함 (전체만 저장)</button><button class="btn btn-primary" onclick="buySplitGo()">저장</button>`);
   const upd=()=>{
