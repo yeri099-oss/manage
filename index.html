@@ -5154,6 +5154,19 @@ window.jgOpenForm=function(){
   renderJagum();
 };
 window.jgCloseForm=function(){S.ui.jagumEdit=null;renderJagum();};
+window.__jgPrevEnd=null;
+function jgBaseChkTxt(n,prevEnd){
+  if(prevEnd==null)return n==null?"":"직전 반월 자료가 없어 대조할 수 없어요";
+  if(n==null)return `비워두면 직전 반월 잔액 ${fmt(prevEnd)}원을 그대로 써요 — 이카운트 이월잔액과 대조하려면 위 붙여넣기로 채우세요`;
+  return n===prevEnd?`<span style="color:#2F6B3F;font-weight:600">✓ 직전 반월 잔액(${fmt(prevEnd)}원)과 일치해요</span>`:`<span style="color:#b3261e;font-weight:600">⚠ 직전 반월 잔액 ${fmt(prevEnd)}원과 ${fmt(Math.abs(n-prevEnd))}원 차이 — 원인을 확인하세요</span>`;
+}
+window.jgBaseChkUpd=function(){
+  const el=document.getElementById("jg-base-manual"),box=document.getElementById("jgBaseChk");
+  if(!el||!box)return;
+  const t=String(el.value||"").replace(/[,\s원]/g,"");
+  const n=t===""?null:Number(t);
+  box.innerHTML=jgBaseChkTxt(n==null||isNaN(n)?null:n,window.__jgPrevEnd);
+};
 window.jgSave=function(){
   try{
     const full=S.ui.jagumEdit;if(!full)return;
@@ -5206,7 +5219,7 @@ window.jgPasteFill=function(){
       for(let i=0;i<list.length;i++)if(!used.has(i)&&(core(list[i]).indexOf(c)>=0||c.indexOf(core(list[i]))>=0))return i;
       return -1;
     };
-    let cash=null;const acc={},dep={};const skipped=[];let section=null;let filled=0;
+    let cash=null;const acc={},dep={};const skipped=[];let section=null;let filled=0;let baseSum=0,baseCnt=0;
     for(const line of txt.split(/\r?\n/)){
       const cs=line.split("\t").map(x=>x.trim());
       if(cs.length<2)continue;
@@ -5215,12 +5228,14 @@ window.jgPasteFill=function(){
       let lastIdx=-1;for(let i=cs.length-1;i>=0;i--)if(nums[i]!=null){lastIdx=i;break;}
       if(lastIdx<0)continue;
       const val=nums[lastIdx];
+      let firstIdx=-1;for(let i=0;i<cs.length;i++)if(nums[i]!=null){firstIdx=i;break;}
+      const bval=(firstIdx>=0&&firstIdx!==lastIdx)?nums[firstIdx]:null;/* 이월잔액 */
       const labels=cs.filter((v,i)=>nums[i]==null&&v!==""&&i<lastIdx);
       const joined=labels.join(" ").replace(/\s+/g," ").trim();
       const lab0=labels[0]||"";
       if(/합계$/.test(joined.replace(/\s/g,"")))break;
       if(/계$/.test(joined.replace(/\s/g,"")))continue;
-      if(lab0==="현금"){cash=val;filled++;continue;}
+      if(lab0==="현금"){cash=val;filled++;if(bval!=null){baseSum+=bval;baseCnt++;}continue;}
       if(lab0==="보통예금")section="acc";
       else if(/^정기예/.test(lab0))section="dep";
       else if(labels.length>1&&lab0!=="보통예금"&&!/^정기예/.test(lab0))section="skip:"+lab0;
@@ -5228,11 +5243,11 @@ window.jgPasteFill=function(){
       if(!biz)continue;
       if(section==="acc"){
         const i=findSlot(JG_ACC,accUsed,biz);
-        if(i>=0){acc[i]=val;accUsed.add(i);filled++;}
+        if(i>=0){acc[i]=val;accUsed.add(i);filled++;if(bval!=null){baseSum+=bval;baseCnt++;}}
         else skipped.push(biz);
       }else if(section==="dep"){
         const i=findSlot(JG_DEP,depUsed,biz);
-        if(i>=0){dep[i]=val;depUsed.add(i);filled++;}
+        if(i>=0){dep[i]=val;depUsed.add(i);filled++;if(bval!=null){baseSum+=bval;baseCnt++;}}
         else skipped.push(biz);
       }else if(section&&section.indexOf("skip:")===0){
         skipped.push(section.slice(5)+" · "+biz);
@@ -5242,7 +5257,8 @@ window.jgPasteFill=function(){
     set("jg-cash",cash);
     for(const i in acc)set("jg-acc"+i,acc[i]);
     for(const i in dep)set("jg-dep"+i,dep[i]);
-    if(msg)msg.innerHTML=`✅ ${filled}칸 채움 (금일잔액 기준)`+(skipped.length?`<br>⚠ 양식에 없어 건너뜀: ${skipped.map(esc).join(", ")}`:"");
+    if(baseCnt>0){const bEl=document.getElementById("jg-base-manual");if(bEl)bEl.value=fmt(baseSum);if(typeof jgBaseChkUpd==="function")jgBaseChkUpd();}
+    if(msg)msg.innerHTML=`✅ ${filled}칸 채움 (금일잔액 기준)`+(baseCnt?` · 기초잔액 ${fmt(baseSum)} (이월잔액 합) 자동 입력`:"")+(skipped.length?`<br>⚠ 양식에 없어 건너뜀: ${skipped.map(esc).join(", ")}`:"");
     toast(`잔액 ${filled}칸을 채웠어요 — 확인 후 저장을 눌러주세요`);
   }catch(e){console.error(e);toast(e.message||"붙여넣기 해석 실패",true);}
 };
@@ -5373,8 +5389,11 @@ function jgFormHtml(full){
   JG_INC.forEach((a,i)=>h+=row(a,inp("jg-inc"+i,p.inc?.[i],null)));
   h+=`</div><div style="font-weight:700;font-size:13px;margin:12px 0 4px">증감 내역 — 감소</div><div style="display:flex;flex-wrap:wrap;gap:8px 24px">`;
   JG_DEC.forEach((a,i)=>h+=row(a,inp("jg-dec"+i,p.dec?.[i],null)));
-  h+=`</div><div style="font-weight:700;font-size:13px;margin:12px 0 4px">기초잔액 <span class="unit">비워두면 직전 반월의 잔액(${autoBase!=null?fmt(autoBase)+"원":"없음"})을 자동으로 써요</span></div>`;
-  h+=row("기초잔액 (직접 지정 시만)",`<input class="cell-in" id="jg-base-manual" inputmode="numeric" value="${p.base!=null?fmt(p.base):""}" style="width:140px;text-align:right">`);
+  const prevEnd=before.length?jgEnding(before[before.length-1]):null;
+  window.__jgPrevEnd=prevEnd;
+  h+=`</div><div style="font-weight:700;font-size:13px;margin:12px 0 4px">기초잔액 <span class="unit">위 📋 붙여넣기가 이카운트 이월잔액 합으로 채워줘요 — 직전 반월 잔액과 일치하는지 여기서 바로 대조돼요</span></div>`;
+  h+=row("기초잔액",`<input class="cell-in" id="jg-base-manual" inputmode="numeric" value="${p.base!=null?fmt(p.base):""}" style="width:140px;text-align:right" oninput="jgBaseChkUpd()">`);
+  h+=`<div id="jgBaseChk" class="footnote" style="margin:4px 0 0 158px">${jgBaseChkTxt(p.base!=null?Number(p.base):null,prevEnd)}</div>`;
   h+=`<div style="position:sticky;bottom:0;margin-top:14px;padding:10px 2px;background:var(--surface-1,#fff);border-top:1px solid rgba(0,0,0,0.12);display:flex;gap:8px;justify-content:flex-end;z-index:5"><button class="btn btn-sm" onclick="jgCloseForm()">닫기</button><button class="btn btn-sm btn-primary" onclick="jgSave()">💾 저장</button></div>`;
   h+=`</div>`;
   return h;
@@ -5676,9 +5695,9 @@ function renderJagum(){
   const yrsOpt=[];for(let y=now.getFullYear()+1;y>=now.getFullYear()-1;y--)yrsOpt.push(y);
   const ctl=isAd?`<div class="card"><div class="card-title">반월 선택 <span class="unit">매월 1일(전월 후반)·16일(당월 전반) 보고</span></div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:4px 2px">
-      <select id="jgY" class="ctl">${yrsOpt.map(y=>`<option ${y===now.getFullYear()?"selected":""}>${y}</option>`).join("")}</select>년
-      <select id="jgM" class="ctl">${MONTHS.map(m=>`<option value="${m}" ${Number(m)===(now.getDate()<=16?now.getMonth():now.getMonth()+1)?"selected":""}>${m}</option>`).join("")}</select>월
-      <select id="jgH" class="ctl"><option value="15" ${now.getDate()>16?"":"selected"}>전반 (1~15일)</option><option value="end" ${now.getDate()>16?"selected":""}>후반 (16~말일)</option></select>
+      <select id="jgY" class="ctl">${(()=>{const d=now.getDate();const defY=(d<16&&now.getMonth()===0)?now.getFullYear()-1:now.getFullYear();return yrsOpt.map(y=>`<option ${y===defY?"selected":""}>${y}</option>`).join("");})()}</select>년
+      <select id="jgM" class="ctl">${(()=>{const d=now.getDate();const defM=d>=16?now.getMonth()+1:(now.getMonth()===0?12:now.getMonth());return MONTHS.map(m=>`<option value="${m}" ${Number(m)===defM?"selected":""}>${m}</option>`).join("");})()}</select>월
+      <select id="jgH" class="ctl"><option value="15" ${now.getDate()>=16?"selected":""}>전반 (1~15일)</option><option value="end" ${now.getDate()<16?"selected":""}>후반 (16~말일)</option></select>
       <button class="btn btn-sm btn-primary" onclick="jgOpenForm()">✏️ 입력 · 수정</button>
       ${(Object.keys(JG_SEED).some(k=>!jgGet(k))||Object.keys(JG_BS_SEED).some(ym=>!jgBsGet(ym)))?`<button class="btn btn-sm" onclick="jgImportSeed()">📚 엑셀 과거 자료 불러오기</button>`:""}
 
