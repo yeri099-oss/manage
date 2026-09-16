@@ -9210,9 +9210,16 @@ function buyStatCell(td,sc,ri,m){
     const v=String(inp.value).replace(/[,\s]/g,"");
     const d=bd().stat[y];
     const n2=Number(v);
+    const prev=r.m[String(m)];
     if(v===""||isNaN(n2))delete r.m[String(m)];else r.m[String(m)]=n2;
     d.savedAt=Date.now();buyMark("stat_"+y);
     renderBuyStat();
+    /* 전체 탭에서 값을 넣으면 사업장 배분 창 (이미 합이 맞으면 생략) */
+    if(sc==="all"&&v!==""&&!isNaN(n2)&&n2&&n2!==prev){
+      const rm=buyFindRow(y,"market",r.name),ri2=buyFindRow(y,"insa",r.name);
+      const cs=((rm&&rm.m[String(m)])||0)+((ri2&&ri2.m[String(m)])||0);
+      if(cs!==n2)buySplitOpen(r.name,m);
+    }
     if(go){
       const tb=document.querySelector("#tab-buystat tbody");
       if(tb){const tr=tb.rows;for(let i=0;i<tr.length;i++){/* 다음 행 같은 열 */}}
@@ -10242,6 +10249,59 @@ function buyQuickApply(){
   renderBuyStat();
   toast(n+"건을 "+y+"년 "+m+"월에 반영했어요 — 전체(꽃밥이야기)는 합으로 자동 입력 ✓");
 }
+/* ---------- 전체 입력 후 사업장 배분 창 ---------- */
+function buySplitOpen(nm,m){
+  const y=buyStatCurY(),mk=String(m);
+  const ra=buyFindRow(y,"all",nm);
+  const tot=(ra&&ra.m[mk])||0;
+  if(!tot)return;
+  const rm=buyFindRow(y,"market",nm),ri=buyFindRow(y,"insa",nm);
+  const vm=(rm&&rm.m[mk])||0,vi=(ri&&ri.m[mk])||0;
+  window.__buySplit={nm:nm,m:m,tot:tot};
+  openModal("'"+nm+"' "+m+"월 "+fmt(tot)+"원 — 사업장 배분",
+    `<div style="line-height:2.2">
+      마켓 <input id="bspM" type="text" inputmode="numeric" style="width:120px;text-align:right;font-size:14px;padding:6px" value="${vm?fmt(vm):""}">
+      &nbsp;피다·보자기 <input id="bspI" type="text" inputmode="numeric" style="width:120px;text-align:right;font-size:14px;padding:6px" value="${vi?fmt(vi):""}"><br>
+      <button class="btn btn-sm" onclick="buySplitQuick('m')">마켓 전액</button>
+      <button class="btn btn-sm" onclick="buySplitQuick('i')">피다·보자기 전액</button>
+      <button class="btn btn-sm" onclick="buySplitQuick('h')">반반</button>
+      <div id="bspChk" style="margin-top:6px;font-size:13px"></div>
+    </div>`,
+    `<button class="btn" onclick="closeModal()">배분 안 함 (전체만 저장)</button><button class="btn btn-primary" onclick="buySplitGo()">저장</button>`);
+  const upd=()=>{
+    const gm=Number(String(document.getElementById("bspM").value).replace(/[,\s]/g,""))||0;
+    const gi=Number(String(document.getElementById("bspI").value).replace(/[,\s]/g,""))||0;
+    const el=document.getElementById("bspChk");
+    const d2=tot-gm-gi;
+    el.innerHTML=d2===0?'<span style="color:#2F6B3F">✓ 합이 전체와 맞아요 ('+fmt(tot)+')</span>':'<span class="buy-warn">전체 '+fmt(tot)+' 대비 '+(d2>0?fmt(d2)+" 남음":fmt(-d2)+" 초과")+"</span>";
+  };
+  ["bspM","bspI"].forEach(id=>{const el=document.getElementById(id);el.addEventListener("input",upd);el.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.isComposing){e.preventDefault();buySplitGo();}});});
+  upd();
+  setTimeout(()=>{const el=document.getElementById("bspM");if(el){el.focus();el.select&&el.select();}},60);
+}
+function buySplitQuick(k){
+  const T=window.__buySplit;if(!T)return;
+  const a=document.getElementById("bspM"),b=document.getElementById("bspI");
+  if(k==="m"){a.value=fmt(T.tot);b.value="";}
+  else if(k==="i"){a.value="";b.value=fmt(T.tot);}
+  else{const h=Math.round(T.tot/2);a.value=fmt(h);b.value=fmt(T.tot-h);}
+  a.dispatchEvent(new Event("input"));
+}
+function buySplitGo(){
+  const T=window.__buySplit;if(!T)return;
+  const y=buyStatCurY(),mk=String(T.m),d=bd().stat[y];
+  const gm=Number(String(document.getElementById("bspM").value).replace(/[,\s]/g,""))||0;
+  const gi=Number(String(document.getElementById("bspI").value).replace(/[,\s]/g,""))||0;
+  const rm=buyEnsureRow(y,"market",T.nm,""),ri=buyEnsureRow(y,"insa",T.nm,"");
+  if(gm)rm.m[mk]=gm;else delete rm.m[mk];
+  if(gi)ri.m[mk]=gi;else delete ri.m[mk];
+  d.savedAt=Date.now();buyMark("stat_"+y);
+  closeModal();window.__buySplit=null;
+  renderBuyStat();
+  const diff=T.tot-gm-gi;
+  toast(diff===0?"'"+T.nm+"' 배분 완료 — 크로스체크 통과 ✓":"'"+T.nm+"' 배분 저장 — 전체와 "+fmt(Math.abs(diff))+"원 차이가 크로스체크에 떠요");
+}
+window.buySplitOpen=buySplitOpen;window.buySplitQuick=buySplitQuick;window.buySplitGo=buySplitGo;
 window.buyQuickOpen=buyQuickOpen;window.buyQuickClose=buyQuickClose;window.buyQuickYm=buyQuickYm;window.buyQuickAdd=buyQuickAdd;window.buyQuickDel=buyQuickDel;window.buyQuickApply=buyQuickApply;
 </script>
 
