@@ -9214,12 +9214,8 @@ function buyStatCell(td,sc,ri,m){
     if(v===""||isNaN(n2))delete r.m[String(m)];else r.m[String(m)]=n2;
     d.savedAt=Date.now();buyMark("stat_"+y);
     renderBuyStat();
-    /* 전체 탭에서 값을 넣으면 사업장 배분 창 (이미 합이 맞으면 생략) */
-    if(sc==="all"&&v!==""&&!isNaN(n2)&&n2&&n2!==prev){
-      const rm=buyFindRow(y,"market",r.name),ri2=buyFindRow(y,"insa",r.name);
-      const cs=((rm&&rm.m[String(m)])||0)+((ri2&&ri2.m[String(m)])||0);
-      if(cs!==n2)buySplitOpen(r.name,m);
-    }
+    /* 전체 탭에서 값을 넣고 확정하면 항상 배분 창 — 같은 금액을 다시 쳐도 현재 분배를 보여줌 */
+    if(sc==="all"&&v!==""&&!isNaN(n2)&&n2)buySplitOpen(r.name,m);
     if(go){
       const tb=document.querySelector("#tab-buystat tbody");
       if(tb){const tr=tb.rows;for(let i=0;i<tr.length;i++){/* 다음 행 같은 열 */}}
