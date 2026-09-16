@@ -1125,7 +1125,7 @@ async function loadAllData() {
   jobs.push(fsCol("config").doc("epidaDrink").get().then((d) => { S.data.epidaDrink = d.data() || { add: [], remove: [] }; }).catch(() => {}));
   jobs.push(fsCol("payMonthly").get().then((snap)=>{const out={},files={};snap.forEach((d)=>{if(d.id.indexOf("file_")===0)files[d.id.slice(5)]=d.data();else if(d.id==="acctConfig")S.data.payAcct=d.data().acctOf||{};else if(d.id==="taxConfig")S.data.payTax=d.data()||{byName:{}};else if(d.id==="taxTable")S.data.payTaxTable=d.data()||null;else out[d.id]=d.data();});S.data.payMonthly=out;S.data.payFiles=files;}).catch(()=>{S.data.payMonthly=S.data.payMonthly||{};S.data.payFiles=S.data.payFiles||{};S.data.payAcct=S.data.payAcct||{};}));
   jobs.push(fsCol("config").doc("bojagiPosMap").get().then((d) => { S.data.bojagiPosMap = (d.data() || {}).map || {}; }).catch(() => {}));
-  jobs.push(fsCol("buy").get().then((snap)=>{const B={files:{},close:{},stat:{},vendorMap:{}};snap.forEach((d)=>{const id=d.id;if(id==="file_close")B.files.close=d.data();else if(id==="file_stat")B.files.stat=d.data();else if(id.indexOf("close_")===0)B.close[id.slice(6)]=d.data();else if(id.indexOf("stat_")===0)B.stat[id.slice(5)]=d.data();else if(id==="vendorMap")B.vendorMap=(d.data()||{}).map||{};});S.data.buy=B;}).catch(()=>{S.data.buy=S.data.buy||{files:{},close:{},stat:{},vendorMap:{}};}));
+  jobs.push(fsCol("buy").get().then((snap)=>{const B={files:{},close:{},stat:{},vendorMap:{}};snap.forEach((d)=>{const id=d.id;if(id==="file_close")B.files.close=d.data();else if(id==="file_stat")B.files.stat=d.data();else if(id.indexOf("close_")===0)B.close[id.slice(6)]=d.data();else if(id.indexOf("stat_")===0)B.stat[id.slice(5)]=d.data();else if(id==="vendorMap"){B.vendorMap=(d.data()||{}).map||{};B.vendorSkip=(d.data()||{}).skip||{};}});S.data.buy=B;}).catch(()=>{S.data.buy=S.data.buy||{files:{},close:{},stat:{},vendorMap:{}};}));
   await Promise.all(jobs);
   pnlNormalizeKeys();
 }
@@ -8736,7 +8736,7 @@ td.bchunk{background:#f2f6f2 !important;text-align:right;vertical-align:middle;b
 /* === buy.js — 매입 탭 (월마감결제 · 매입현황) === */
 "use strict";
 window.__buy=window.__buy||{ui:{sub:"close",closeKey:null,statYear:null,statScope:"all",q:"",editM:null},dirty:{},saveTimer:null,wbClose:null,wbStat:null};
-function bd(){S.data.buy=S.data.buy||{files:{},close:{},stat:{},vendorMap:{}};S.data.buy.files=S.data.buy.files||{};S.data.buy.close=S.data.buy.close||{};S.data.buy.stat=S.data.buy.stat||{};S.data.buy.vendorMap=S.data.buy.vendorMap||{};return S.data.buy;}
+function bd(){S.data.buy=S.data.buy||{files:{},close:{},stat:{},vendorMap:{}};S.data.buy.files=S.data.buy.files||{};S.data.buy.close=S.data.buy.close||{};S.data.buy.stat=S.data.buy.stat||{};S.data.buy.vendorMap=S.data.buy.vendorMap||{};S.data.buy.vendorSkip=S.data.buy.vendorSkip||{};return S.data.buy;}
 function buyB64Buf(b64){const bin=atob(b64);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u.buffer;}
 const buyX=(t)=>String(t==null?"":t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 function buySerIso(n){const d=new Date(Math.round((Number(n)-25569)*86400000));return d.getUTCFullYear()+"-"+String(d.getUTCMonth()+1).padStart(2,"0")+"-"+String(d.getUTCDate()).padStart(2,"0");}
@@ -8752,7 +8752,7 @@ async function buyFlush(){
     for(const id of ids){
       try{
         let data=null;
-        if(id==="vendorMap")data={map:JSON.parse(JSON.stringify(D.vendorMap))};
+        if(id==="vendorMap")data={map:JSON.parse(JSON.stringify(D.vendorMap)),skip:JSON.parse(JSON.stringify(D.vendorSkip||{}))};
         else if(id.indexOf("close_")===0)data=JSON.parse(JSON.stringify(D.close[id.slice(6)]||null));
         else if(id.indexOf("stat_")===0)data=JSON.parse(JSON.stringify(D.stat[id.slice(5)]||null));
         else if(id==="file_close")data=JSON.parse(JSON.stringify(D.files.close));
@@ -8890,6 +8890,10 @@ function buyGroupSum(g){return g.rows.reduce((a,r)=>a+(r.amt||0),0);}
 function renderBuyClose(){
   const el=document.getElementById("tab-buyclose");
   if(!el)return;
+  const __sy=window.scrollY;
+  const __sc=[...el.querySelectorAll(".table-wrap")].map(w=>[w.scrollTop,w.scrollLeft]);
+  const __restore=()=>{const ws=[...el.querySelectorAll(".table-wrap")];ws.forEach((w,i)=>{if(__sc[i]){w.scrollTop=__sc[i][0];w.scrollLeft=__sc[i][1];}});window.scrollTo(0,__sy);};
+  setTimeout(__restore,0);
   const D=bd(),B=window.__buy;
   const key=buyCloseCur();
   const upBtn=`<button class="btn btn-sm" onclick="document.getElementById('buyFileClose').click()">📂 월마감 엑셀 ${D.files.close?"교체":"올리기"}</button>
@@ -9091,7 +9095,12 @@ function renderBuyStat(){
   /* innerHTML 교체 중 blur→commit이 재진입하면 DOM 오류 — 렌더 중엔 다음 틱으로 미룸 */
   if(window.__buyRendering){clearTimeout(window.__buyRerenderT);window.__buyRerenderT=setTimeout(renderBuyStat,0);return;}
   window.__buyRendering=1;
+  const sy=window.scrollY;
+  const sc0=[...document.querySelectorAll("#tab-buystat .table-wrap")].map(w=>[w.scrollTop,w.scrollLeft]);
   try{renderBuyStatCore();}finally{window.__buyRendering=0;}
+  const ws=[...document.querySelectorAll("#tab-buystat .table-wrap")];
+  ws.forEach((w,i)=>{if(sc0[i]){w.scrollTop=sc0[i][0];w.scrollLeft=sc0[i][1];}});
+  window.scrollTo(0,sy);
 }
 function renderBuyStatCore(){
   const el=document.getElementById("tab-buystat");
@@ -9156,6 +9165,7 @@ function renderBuyStatCore(){
       <button class="btn btn-sm" onclick="buyStatAddMonth()">＋ 월 추가</button>
       <button class="btn btn-sm" onclick="buyUnifyOpen()">🔗 이름 통일</button>
       <button class="btn btn-sm" onclick="buyStatCleanEmpty()">🧹 빈 거래처 정리</button>
+      <button class="btn btn-sm" onclick="buySkipOpen()">🚫 제외 목록</button>
       <span style="margin-left:auto"></span>
       <select onchange="window.__buy.ui.statDlM=this.value">${ms.map(m=>`<option value="${m}" ${m===dlM?"selected":""}>${m}월까지</option>`).join("")}</select>
       <button class="btn" onclick="buyStatDl()">📥 엑셀 받기</button>
@@ -9371,7 +9381,10 @@ function buyApplyOpen(){
       if(!r.ok&&!agg[r.name].unconf){agg[r.name].unconf=true;unconfN++;}
     });
   });
-  if(!order.length){toast("반영할 금액이 없어요",true);return;}
+  const skip=D.vendorSkip||{};
+  const skipped=order.filter(nm=>skip[nm]);
+  const order2=order.filter(nm=>!skip[nm]);
+  if(!order2.length){toast(order.length?"반영 제외 거래처만 있어요 — 반영할 금액이 없어요":"반영할 금액이 없어요",true);return;}
   const d=D.stat[y];
   const names=buyVendorNames(y);
   const map=D.vendorMap||{};
@@ -9390,7 +9403,7 @@ function buyApplyOpen(){
   };
   /* 대상별 합산 */
   const tgt={};
-  order.forEach(nm=>{
+  order2.forEach(nm=>{
     const t=guess(nm);
     if(!tgt[t])tgt[t]={market:0,insa:0,from:[]};
     tgt[t].market+=agg[nm].market;tgt[t].insa+=agg[nm].insa;tgt[t].from.push(nm);
@@ -9401,6 +9414,7 @@ function buyApplyOpen(){
   const msg=buyKeyLabel(key)+" 금액을 매입현황 "+y+"년 "+m+"월에 바로 반영할까요?\n부서 기준으로 마켓 / 피다+보자기에 나눠 넣고, 전체(꽃밥이야기)는 두 값의 합으로 들어가요."
     +(hasOld?"\n※ 이미 있는 "+m+"월 값은 덮어써요.":"")
     +(unconfN?"\n⚠ 미확인(노란 줄) 금액 "+unconfN+"곳이 포함돼 있어요.":"")
+    +(skipped.length?"\n🚫 반영 제외 "+skipped.length+"곳 건너뜀: "+skipped.slice(0,6).join(", ")+(skipped.length>6?" 외":""):"")
     +"\n\n반영 후 매입현황 칸에서 바로 고칠 수 있어요.";
   if(!confirm(msg))return;
   if(!(d.months||[]).includes(m)){d.months=[...(d.months||[]),m].sort((a,b)=>a-b);d.labels[mk]=d.labels[mk]||m+"월";}
@@ -10113,14 +10127,81 @@ function buyStatDelRow(sc,ri){
   const y=buyStatCurY(),d=bd().stat[y];
   const rows=d.scopes[sc].rows;
   const r=rows[ri];if(!r)return;
-  const tot=Object.values(r.m||{}).reduce((a,b)=>a+(b||0),0);
-  const scL={all:"전체(꽃밥이야기)",market:"마켓",insa:"피다·보자기"}[sc];
-  const msg=tot?`'${r.name}'을(를) ${scL} 시트에서 지울까요?\n이 시트의 ${y}년 금액 ${fmt(tot)}원도 같이 지워져요. (다른 시트는 그대로)`:`'${r.name}'을(를) ${scL} 시트에서 지울까요? (금액 없음, 다른 시트는 그대로)`;
-  if(!confirm(msg))return;
-  rows.splice(ri,1);
-  d.savedAt=Date.now();buyMark("stat_"+y);
-  renderBuyStat();
+  if(sc!=="all"){
+    const tot=Object.values(r.m||{}).reduce((a,b)=>a+(b||0),0);
+    const scL={market:"마켓",insa:"피다·보자기"}[sc];
+    const msg=tot?`'${r.name}'을(를) ${scL} 시트에서 지울까요?\n이 시트의 ${y}년 금액 ${fmt(tot)}원도 같이 지워져요. (다른 시트는 그대로)`:`'${r.name}'을(를) ${scL} 시트에서 지울까요? (금액 없음, 다른 시트는 그대로)`;
+    if(!confirm(msg))return;
+    rows.splice(ri,1);
+    d.savedAt=Date.now();buyMark("stat_"+y);
+    renderBuyStat();
+    return;
+  }
+  /* 전체 시트: 옵션 모달 (세 시트 삭제 + 반영 제외) */
+  const nm=r.name;
+  const t=(s2)=>{const rr=buyFindRow(y,s2,nm);return rr?Object.values(rr.m||{}).reduce((a,b)=>a+(b||0),0):null;};
+  window.__buyDel={nm:nm};
+  openModal("'"+nm+"' 삭제",
+    `<div style="line-height:2.1">${y}년 금액 — 전체 <b>${fmt(t("all")||0)}</b> · 마켓 ${t("market")!=null?fmt(t("market")):"없음"} · 피다·보자기 ${t("insa")!=null?fmt(t("insa")):"없음"}<br>
+     <label><input type="checkbox" id="bdSkip" checked> 앞으로 월마감결제 → 매입현황 반영에서도 <b>제외</b> (다음 달에 다시 안 생기게)</label>
+     <div class="footnote">월마감결제 쪽에는 그대로 남아요 — 결제는 하지만 상품 매입이 아닌 거래처(꽃바다 등)에 쓰세요. 제외 목록은 🚫 버튼에서 언제든 해제할 수 있어요.</div></div>`,
+    `<button class="btn" onclick="closeModal()">취소</button>
+     <button class="btn" onclick="buyDelGo('one')">전체 시트에서만 삭제</button>
+     <button class="btn btn-primary" onclick="buyDelGo('all3')">세 시트 모두 삭제</button>`);
 }
+function buyDelGo(mode){
+  const T=window.__buyDel;if(!T)return;
+  const y=buyStatCurY(),d=bd().stat[y],D=bd();
+  const scopes=mode==="all3"?["all","market","insa"]:["all"];
+  for(const s2 of scopes){
+    const rows=d.scopes[s2].rows;
+    const i=rows.findIndex(x=>x.name===T.nm);
+    if(i>=0)rows.splice(i,1);
+  }
+  const cb=document.getElementById("bdSkip");
+  if(cb&&cb.checked){
+    D.vendorSkip[T.nm]=1;
+    for(const k in D.vendorMap)if(D.vendorMap[k]===T.nm)D.vendorSkip[k]=1;
+    buyMark("vendorMap");
+  }
+  d.savedAt=Date.now();buyMark("stat_"+y);
+  closeModal();window.__buyDel=null;
+  renderBuyStat();
+  toast("'"+T.nm+"' 삭제"+((cb&&cb.checked)?" · 앞으로 반영에서도 제외돼요":""));
+}
+function buySkipOpen(){
+  const D=bd();
+  const names=Object.keys(D.vendorSkip||{}).sort((a,b)=>a.localeCompare(b,"ko"));
+  openModal("🚫 반영 제외 거래처",
+    names.length?`<div class="footnote" style="margin-bottom:6px">월마감결제에는 있지만 매입현황 반영에서 건너뛰는 거래처예요. ✕를 누르면 다시 반영돼요.</div>
+    <div style="line-height:2.2">${names.map(n=>`<span style="display:inline-block;margin:2px 6px 2px 0;padding:3px 10px;border:1px solid var(--line,#ddd);border-radius:14px">${esc(n)} <a href="#" data-nm="${esc(n)}" onclick="buySkipRemove(this.dataset.nm);return false" style="color:#b3261e;text-decoration:none;font-weight:700">✕</a></span>`).join("")}</div>`
+    :`<div class="footnote">아직 제외한 거래처가 없어요. 매입현황 전체 시트에서 거래처 ×를 누르면 "반영 제외"를 걸 수 있어요.</div>`,
+    `<button class="btn" onclick="closeModal()">닫기</button>`);
+}
+function buySkipRemove(nm){
+  delete bd().vendorSkip[nm];
+  buyMark("vendorMap");
+  buySkipOpen();
+  toast("'"+nm+"' 제외를 해제했어요 — 다음 반영부터 다시 들어가요");
+}
+window.buyDelGo=buyDelGo;window.buySkipOpen=buySkipOpen;window.buySkipRemove=buySkipRemove;
+/* ---------- 공통 키: Esc=창 닫기, 금액칸 + = ×1000 (5+ → 5,000) ---------- */
+document.addEventListener("keydown",function(e){
+  if(e.key==="Escape"){
+    const ov=document.getElementById("buyQuickOv");
+    if(ov){buyQuickClose();return;}
+    const mb=document.getElementById("modal-backdrop");
+    if(mb&&!mb.classList.contains("hidden"))closeModal();
+    return;
+  }
+  if(e.key==="+"){
+    const el=e.target;
+    if(!el||el.tagName!=="INPUT"||el.getAttribute("inputmode")!=="numeric")return;
+    e.preventDefault();
+    const n=Number(String(el.value).replace(/[,\s]/g,""))||0;
+    if(n){el.value=fmt(n*1000);el.dispatchEvent(new Event("input",{bubbles:true}));}
+  }
+},true);
 function buyStatCleanEmpty(){
   const y=buyStatCurY(),d=bd().stat[y];
   const sc=window.__buy.ui.statScope;
