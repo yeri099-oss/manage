@@ -478,7 +478,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v214</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v215</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -8768,8 +8768,13 @@ function buyB64Buf(b64){const bin=atob(b64);const u=new Uint8Array(bin.length);f
 const buyX=(t)=>String(t==null?"":t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 function buySerIso(n){const d=new Date(Math.round((Number(n)-25569)*86400000));return d.getUTCFullYear()+"-"+String(d.getUTCMonth()+1).padStart(2,"0")+"-"+String(d.getUTCDate()).padStart(2,"0");}
 function buyIsoSer(s){const m=String(s).match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);if(!m)return null;return Date.UTC(+m[1],+m[2]-1,+m[3])/86400000+25569;}
-const BUY_SCOPES=[["all","전체(꽃밥이야기)"],["market","꽃밥마켓"],["insa","피다+보자기"]];
-function buyScopeSheet(y,sc){return sc==="all"?String(y):sc==="market"?y+"마켓":y+"인사동+보자기";}
+const BUY_SC_LABEL={all:"전체(꽃밥이야기)",market:"꽃밥마켓",insa:"피다+보자기",pida:"꽃밥에피다",bojagi:"보자기꽃밥"};
+const BUY_SC_SHORT={all:"전체",market:"마켓",insa:"피다·보자기",pida:"피다",bojagi:"보자기"};
+function buySplitYear(y){const d=bd().stat[y];return !!(d&&d.scopes&&d.scopes.pida);}
+function buyBizKeys(y){return buySplitYear(y)?["market","pida","bojagi"]:["market","insa"];}
+function buyScopeKeys(y){return ["all"].concat(buyBizKeys(y));}
+function buyBizLabel(y){return buyBizKeys(y).map(sc=>BUY_SC_SHORT[sc]).join("+");}
+function buyScopeSheet(y,sc){return sc==="all"?String(y):sc==="market"?y+"마켓":sc==="pida"?y+"피다":sc==="bojagi"?y+"보자기":y+"인사동+보자기";}
 /* ---------- 저장 ---------- */
 function buyMark(id){const B=window.__buy;B.dirty[id]=1;if(id.indexOf("stat_")===0){const d=bd().stat[id.slice(5)];if(d)d.dirty=1;}const st=document.getElementById("buyCloudSt");if(st)st.textContent="☁ 저장 중…";clearTimeout(B.saveTimer);B.saveTimer=setTimeout(buyFlush,1200);}
 async function buyFlush(){
@@ -8887,11 +8892,17 @@ async function buyPick(which,inp){
         if(!shAll)continue;
         const shM=wb.sheets.find(s=>s.name===y+"마켓");
         const shI=wb.sheets.find(s=>s.name===y+"인사동+보자기");
+        const shP=wb.sheets.find(s=>s.name===y+"피다");
+        const shB=wb.sheets.find(s=>s.name===y+"보자기");
         const pAll=buyStatFromSheet(shAll);
         const pM=shM?buyStatFromSheet(shM):{rows:[],labels:{},months:[]};
         const pI=shI?buyStatFromSheet(shI):{rows:[],labels:{},months:[]};
-        const months=[...new Set([...pAll.months,...pM.months,...pI.months])].sort((a,b)=>a-b);
-        years[y]={labels:Object.assign({},pM.labels,pI.labels,pAll.labels),months:months,scopes:{all:{rows:pAll.rows},market:{rows:pM.rows},insa:{rows:pI.rows}},savedAt:Date.now()};
+        const pP=shP?buyStatFromSheet(shP):null;
+        const pB=shB?buyStatFromSheet(shB):null;
+        const months=[...new Set([...pAll.months,...pM.months,...pI.months,...(pP?pP.months:[]),...(pB?pB.months:[])])].sort((a,b)=>a-b);
+        const scopes=(pP||pB)?{all:{rows:pAll.rows},market:{rows:pM.rows},pida:{rows:pP?pP.rows:[]},bojagi:{rows:pB?pB.rows:[]}}:{all:{rows:pAll.rows},market:{rows:pM.rows},insa:{rows:pI.rows}};
+        years[y]={labels:Object.assign({},pM.labels,pI.labels,(pP?pP.labels:{}),(pB?pB.labels:{}),pAll.labels),months:months,scopes:scopes,savedAt:Date.now()};
+        if(pP||pB)years[y].split=1;
       }
       if(!Object.keys(years).length){toast("연도 시트(예: 2026, 2026마켓)를 찾지 못했어요",true);return;}
       const exist=Object.keys(years).filter(k=>D.stat[k]);
@@ -9061,8 +9072,83 @@ function buyStatMonths(y){const d=bd().stat[y];return d?(d.months||[]).slice().s
 function buyVendorNames(y){
   const d=bd().stat[y];if(!d)return[];
   const set=new Set();
-  for(const sc of ["all","market","insa"])(d.scopes[sc].rows||[]).forEach(r=>set.add(r.name));
+  for(const sc of buyScopeKeys(y))(d.scopes[sc].rows||[]).forEach(r=>set.add(r.name));
   return [...set].sort((a,b)=>a.localeCompare(b,"ko"));
+}
+/* 월마감 이름 → 매입현황 이름 추측 (반영·자동분리 공용) */
+function buyGuessTo(nm,names,map){
+  if(map[nm]&&names.includes(map[nm]))return map[nm];
+  if(names.includes(nm))return nm;
+  const norm=(x)=>String(x).replace(/\(주\)|（주）|㈜|주식회사/g,"").replace(/[\s()（）]/g,"");
+  const nn=norm(nm);
+  let hit=names.find(n=>norm(n)===nn);
+  if(hit)return hit;
+  hit=names.find(n=>{const m2=norm(n);return m2.indexOf(nn)===0||nn.indexOf(m2)===0;});
+  if(hit)return hit;
+  let best=null,bl=1;
+  for(const n of names){const m2=norm(n);let l=0;while(l<nn.length&&l<m2.length&&nn[l]===m2[l])l++;if(l>bl||(l===bl&&best&&n.length<best.length)){bl=l;best=n;}}
+  return (bl>=2&&best)?best:nm;
+}
+/* ---------- 피다/보자기 분리 마이그레이션 (2026~) ---------- */
+function buySplitEnsure(y){
+  const D=bd(),d=D.stat[y];
+  if(!d||+y<2026||!d.scopes||!d.scopes.insa||d.scopes.pida)return null;
+  const insaRows=d.scopes.insa.rows||[];
+  const names=buyVendorNames(y);
+  const map=D.vendorMap||{};
+  /* 월별 월마감결제 집계: 매입현황 이름 기준 {인사동합,보자기합} */
+  const aggCache={};
+  const aggOf=(m)=>{
+    if(aggCache[m])return aggCache[m];
+    const key=String(+y-2000).padStart(2,"0")+String(m).padStart(2,"0");
+    const doc=D.close[key];
+    const out={};
+    if(doc&&doc.groups)doc.groups.forEach(g=>{
+      const kind=g.dept.indexOf("마켓")>=0?null:(g.dept.indexOf("보자기")>=0?"b":"i");
+      if(!kind)return;
+      g.rows.forEach(r=>{
+        if(!r.name||!r.amt)return;
+        const t=buyGuessTo(r.name,names,map);
+        const o=(out[t]=out[t]||{i:0,b:0});
+        if(kind==="i")o.i+=r.amt;else o.b+=r.amt;
+      });
+    });
+    return aggCache[m]=out;
+  };
+  const rep={vendors:insaRows.length,exact:0,ratio:0,solo:0,un:[]};
+  const P=[],Bj=[];
+  for(const r of insaRows){
+    const rp={item:r.item||"",name:r.name,m:{}},rb={item:r.item||"",name:r.name,m:{}};
+    if(r._from){rp._from=r._from;rb._from=r._from;}
+    for(const k in r.m){
+      const v=r.m[k];if(!v)continue;
+      const ag=aggOf(+k);
+      let ca=ag[r.name];
+      if(!ca){/* 이름 변형: 같은 정규화/접두 규칙으로 한 번 더 매칭 */
+        const k2=buyGuessTo(r.name,Object.keys(ag),{});
+        if(k2!==r.name)ca=ag[k2];
+      }
+      if(ca&&(ca.i||ca.b)){
+        if(!ca.b){rp.m[k]=v;rep.solo++;}
+        else if(!ca.i){rb.m[k]=v;rep.solo++;}
+        else if(ca.i+ca.b===v){rp.m[k]=ca.i;rb.m[k]=ca.b;rep.exact++;}
+        else{const pi=Math.round(v*ca.i/(ca.i+ca.b));if(pi)rp.m[k]=pi;if(v-pi)rb.m[k]=v-pi;rep.ratio++;}
+      }else{
+        /* 전체 시트에 같은 이름이 없으면 값이 안 보이게 되므로 피다에 두고 크로스체크로 노출 */
+        if(!(d.scopes.all.rows||[]).some(x=>x.name===r.name))rp.m[k]=v;
+        rep.un.push({name:r.name,m:+k,amt:v});
+      }
+    }
+    P.push(rp);Bj.push(rb);
+  }
+  d.insaBak={rows:insaRows,at:Date.now()};/* 백업 — 되돌리기용 */
+  delete d.scopes.insa;
+  d.scopes.pida={rows:P};
+  d.scopes.bojagi={rows:Bj};
+  d.split=1;d.dirty=1;
+  d.savedAt=Date.now();buyMark("stat_"+y);
+  if(window.__buy.ui.statScope==="insa")window.__buy.ui.statScope="all";
+  return rep;
 }
 function buyFindRow(y,sc,name){const d=bd().stat[y];if(!d)return null;return (d.scopes[sc].rows||[]).find(r=>r.name===name)||null;}
 function buyEnsureRow(y,sc,name,item){
@@ -9079,42 +9165,42 @@ function buyEnsureRow(y,sc,name,item){
 function buyXchecks(y){
   const d=bd().stat[y];if(!d)return[];
   const out=[];
+  const bks=buyBizKeys(y);
   const names=new Set();
-  for(const sc of ["all","market","insa"])d.scopes[sc].rows.forEach(r=>names.add(r.name));
+  for(const sc of buyScopeKeys(y))d.scopes[sc].rows.forEach(r=>names.add(r.name));
   for(const nm of names){
-    const ra=buyFindRow(y,"all",nm),rm=buyFindRow(y,"market",nm),ri=buyFindRow(y,"insa",nm);
+    const ra=buyFindRow(y,"all",nm);
+    const brs=bks.map(sc=>buyFindRow(y,sc,nm));
     for(const m of d.months||[]){
       const k=String(m);
       const va=ra&&ra.m[k]!=null?ra.m[k]:0;
-      const vm=rm&&rm.m[k]!=null?rm.m[k]:0;
-      const vi=ri&&ri.m[k]!=null?ri.m[k]:0;
-      const vs=vm+vi;
-      if(va!==vs&&(va||vs))out.push({name:nm,m:m,all:va,sum:vs,market:vm,insa:vi});
+      const per={};let vs=0;
+      bks.forEach((sc,i)=>{const v=brs[i]&&brs[i].m[k]!=null?brs[i].m[k]:0;per[sc]=v;vs+=v;});
+      if(va!==vs&&(va||vs))out.push(Object.assign({name:nm,m:m,all:va,sum:vs},per));
     }
   }
   out.sort((a,b)=>b.m-a.m||a.name.localeCompare(b.name,"ko"));
   return out;
 }
+function buyBizFix1(y,nm,m){
+  const mk=String(m);
+  let vs=0,item="";
+  for(const sc of buyBizKeys(y)){const r=buyFindRow(y,sc,nm);if(r){if(r.m[mk]!=null)vs+=r.m[mk];if(!item&&r.item)item=r.item;}}
+  const ra=buyEnsureRow(y,"all",nm,item);
+  if(vs)ra.m[mk]=vs;else delete ra.m[mk];
+}
 function buyStatFix(nm,m){
   const y=buyStatCurY(),d=bd().stat[y];
-  const rm=buyFindRow(y,"market",nm),ri=buyFindRow(y,"insa",nm);
-  const vs=(rm&&rm.m[String(m)]!=null?rm.m[String(m)]:0)+(ri&&ri.m[String(m)]!=null?ri.m[String(m)]:0);
-  const ra=buyEnsureRow(y,"all",nm,(rm&&rm.item)||(ri&&ri.item)||"");
-  if(vs)ra.m[String(m)]=vs;else delete ra.m[String(m)];
+  buyBizFix1(y,nm,m);
   d.savedAt=Date.now();buyMark("stat_"+y);renderBuyStat();
 }
 function buyStatFixAll(){
   const y=buyStatCurY();
   const xs=buyXchecks(y);
   if(!xs.length)return;
-  if(!confirm(xs.length+"건 모두 '전체 = 마켓+피다·보자기 합'으로 맞출까요?"))return;
+  if(!confirm(xs.length+"건 모두 '전체 = "+buyBizLabel(y)+" 합'으로 맞출까요?"))return;
   const d=bd().stat[y];
-  for(const x of xs){
-    const rm=buyFindRow(y,"market",x.name),ri=buyFindRow(y,"insa",x.name);
-    const vs=(rm&&rm.m[String(x.m)]!=null?rm.m[String(x.m)]:0)+(ri&&ri.m[String(x.m)]!=null?ri.m[String(x.m)]:0);
-    const ra=buyEnsureRow(y,"all",x.name,(rm&&rm.item)||(ri&&ri.item)||"");
-    if(vs)ra.m[String(x.m)]=vs;else delete ra.m[String(x.m)];
-  }
+  for(const x of xs)buyBizFix1(y,x.name,x.m);
   d.savedAt=Date.now();buyMark("stat_"+y);renderBuyStat();
 }
 /* ---------- 매입현황 렌더 ---------- */
@@ -9141,8 +9227,10 @@ function renderBuyStatCore(){
       <div class="footnote" style="margin:8px 0">쓰시던 <b>매입현황 엑셀</b>(연도·마켓·인사동+보자기 시트)을 한 번만 올려주세요.</div>${upBtn}</div>`;
     return;
   }
+  const mig=buySplitEnsure(y);/* 2026~ 피다/보자기 분리 (1회) */
   const d=D.stat[y];
   const ms=buyStatMonths(y);
+  if(!d.scopes[B.ui.statScope])B.ui.statScope="all";
   const sc=B.ui.statScope;
   const rows=d.scopes[sc].rows||[];
   const q=(B.ui.q||"").trim();
@@ -9160,12 +9248,10 @@ function renderBuyStatCore(){
       <td><input type="text" id="bdName" style="width:120px" placeholder="거래처명" value="${esc(dr.name)}" onchange="buyDraftSet('name',this.value)" onkeydown="buyDraftKey(event,this)"></td>
       ${mIn}<td id="bdSum" style="text-align:right"><b>${dSum?fmt(dSum):""}</b></td><td class="bdel" style="background:#eefbee"></td></tr>`;
     body+=`<tr style="background:#eefbee"><td colspan="${ms.length+4}" class="l" style="padding:6px 8px">
-      ${sc==="all"?`마켓/식당 배분: <select onchange="buyDraftSet('alloc',this.value)" style="font:inherit;font-size:12.5px;padding:3px 6px;border:1px solid var(--line,#ddd);border-radius:6px">
-        <option value="market" ${dr.alloc==="market"?"selected":""}>마켓에 전액</option>
-        <option value="insa" ${dr.alloc==="insa"?"selected":""}>피다·보자기에 전액</option>
-        <option value="half" ${dr.alloc==="half"?"selected":""}>반반</option>
+      ${sc==="all"?`사업장 배분: <select onchange="buyDraftSet('alloc',this.value)" style="font:inherit;font-size:12.5px;padding:3px 6px;border:1px solid var(--line,#ddd);border-radius:6px">
+        ${buyBizKeys(y).map(k2=>`<option value="${k2}" ${dr.alloc===k2?"selected":""}>${BUY_SC_SHORT[k2]}에 전액</option>`).join("")}
         <option value="later" ${dr.alloc==="later"?"selected":""}>나중에 크로스체크에서 나누기</option>
-      </select> <span class="unit">전체(꽃밥이야기)에 적은 금액이 선택한 곳에도 같이 들어가요</span> `:`<span class="unit">이 시트에 추가돼요 — 전체(꽃밥이야기)에는 마켓+피다·보자기 합으로 자동 반영</span> `}
+      </select> <span class="unit">전체(꽃밥이야기)에 적은 금액이 선택한 곳에도 같이 들어가요</span> `:`<span class="unit">이 시트에 추가돼요 — 전체(꽃밥이야기)에는 ${buyBizLabel(y)} 합으로 자동 반영</span> `}
       <button class="btn btn-primary btn-sm" onclick="buyDraftSave()">✅ 추가</button>
       <button class="btn btn-sm" onclick="buyDraftCancel()">취소</button></td></tr>`;
   }
@@ -9176,14 +9262,14 @@ function renderBuyStatCore(){
     const tds=ms.map(m=>{const v=r.m[String(m)];if(v!=null){sum+=v;totals[m]=(totals[m]||0)+v;}return `<td class="bsc" onclick="buyStatCell(this,'${sc}',${ri},${m})">${v!=null?fmt(v):""}</td>`;}).join("");
     grand+=sum;
     let flag="";
-    if(sc==="all"){const bad=xs.some(x=>x.name===r.name);if(bad)flag=` <span class="buy-warn" title="마켓+피다·보자기 합과 달라요">⚠</span>`;}
+    if(sc==="all"){const bad=xs.some(x=>x.name===r.name);if(bad)flag=` <span class="buy-warn" title="${buyBizLabel(y)} 합과 달라요">⚠</span>`;}
     body+=`<tr data-nm="${esc(r.name)}"><td class="l bmeta" onclick="buyStatMeta(this,'${sc}',${ri},'item')">${esc(r.item||"")}</td>
       <td class="l bmeta" onclick="buyStatMeta(this,'${sc}',${ri},'name')"><b>${esc(r.name)}</b>${flag}</td>${tds}<td style="text-align:right"><b>${fmt(sum)}</b></td><td class="bdel"><button class="btn btn-sm" style="padding:0 7px;font-size:12px" title="이 시트에서 삭제" onclick="buyStatDelRow('${sc}',${ri})">×</button></td></tr>`;
   });
   const totTds=ms.map(m=>`<td style="text-align:right"><b>${fmt(totals[m]||0)}</b></td>`).join("");
   let html=`<div class="card"><div class="card-title" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">매입현황
       <select onchange="buyStatYearSel(this.value)">${buyStatYears().map(yy=>`<option ${yy===y?"selected":""}>${yy}</option>`).join("")}</select>
-      ${BUY_SCOPES.map(([k,n])=>`<span class="buy-chip ${k===sc?"on":""}" onclick="buyStatScopeSel('${k}')">${n}</span>`).join("")}
+      ${buyScopeKeys(y).map(k=>`<span class="buy-chip ${k===sc?"on":""}" onclick="buyStatScopeSel('${k}')">${BUY_SC_LABEL[k]}</span>`).join("")}
       <span id="buyCloudSt" class="footnote" style="margin-left:auto"></span></div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0">
       <input type="text" id="buyStatQIn" placeholder="🔍 거래처 검색" value="${esc(q)}" style="border:1px solid var(--line,#ddd);border-radius:8px;padding:5px 9px;width:170px" autocomplete="off">
@@ -9205,21 +9291,21 @@ function renderBuyStatCore(){
     <tfoot><tr style="background:#eef3ee"><td class="l"><b>합계${q?" (검색결과)":""}</b></td><td></td>${totTds}<td style="text-align:right"><b>${fmt(grand)}</b></td><td class="bdel" style="background:#eef3ee"></td></tr></tfoot></table></div>`;
   /* 크로스체크 */
   if(xs.length){
-    html+=`<div style="margin-top:12px;padding:10px;border:1.5px solid #e5b7b3;border-radius:10px;max-width:680px">
-      <b class="buy-warn">⚠ 크로스체크 ${xs.length}건</b> <span class="unit">전체(꽃밥이야기) ≠ 마켓 + 피다·보자기</span>
+    const bks=buyBizKeys(y);
+    html+=`<div style="margin-top:12px;padding:10px;border:1.5px solid #e5b7b3;border-radius:10px;max-width:740px">
+      <b class="buy-warn">⚠ 크로스체크 ${xs.length}건</b> <span class="unit">전체(꽃밥이야기) ≠ ${buyBizLabel(y)}</span>
       <button class="btn btn-sm" style="margin-left:8px" onclick="buyStatFixAll()">모두 합으로 맞추기</button>
-      <div class="footnote" style="margin-top:4px">전체·마켓·피다·보자기 칸을 눌러 바로 고칠 수 있어요. "맞추기"는 전체를 마켓+피다·보자기 합으로 바꿔요.</div>
-      <div class="table-wrap" style="margin-top:6px;max-height:260px;overflow:auto"><table class="rpt"><thead><tr><th class="l">거래처</th><th>월</th><th>전체</th><th>마켓</th><th>피다·보자기</th><th>차이</th><th></th></tr></thead><tbody>
+      <div class="footnote" style="margin-top:4px">전체·${bks.map(k=>BUY_SC_SHORT[k]).join("·")} 칸을 눌러 바로 고칠 수 있어요. "맞추기"는 전체를 ${buyBizLabel(y)} 합으로 바꿔요.</div>
+      <div class="table-wrap" style="margin-top:6px;max-height:260px;overflow:auto"><table class="rpt"><thead><tr><th class="l">거래처</th><th>월</th><th>전체</th>${bks.map(k=>`<th>${BUY_SC_SHORT[k]}</th>`).join("")}<th>차이</th><th></th></tr></thead><tbody>
       ${xs.slice(0,80).map(x=>`<tr data-nm="${esc(x.name)}" data-m="${x.m}">
         <td class="l">${esc(x.name)}</td><td>${x.m}월</td>
         <td class="bsc" onclick="buyXcCell(this,'all')">${fmt(x.all)}</td>
-        <td class="bsc" onclick="buyXcCell(this,'market')">${x.market?fmt(x.market):""}</td>
-        <td class="bsc" onclick="buyXcCell(this,'insa')">${x.insa?fmt(x.insa):""}</td>
+        ${bks.map(k=>`<td class="bsc" onclick="buyXcCell(this,'${k}')">${x[k]?fmt(x[k]):""}</td>`).join("")}
         <td class="buy-warn">${fmt(x.all-x.sum)}</td>
         <td><button class="btn btn-sm" onclick="buyStatFix(this.closest('tr').dataset.nm,+this.closest('tr').dataset.m)">맞추기</button></td></tr>`).join("")}
       </tbody></table></div></div>`;
   }else{
-    html+=`<div class="footnote" style="margin-top:10px;color:#2F6B3F">✓ 크로스체크 통과 — 전체 = 마켓 + 피다·보자기 (모든 달)</div>`;
+    html+=`<div class="footnote" style="margin-top:10px;color:#2F6B3F">✓ 크로스체크 통과 — 전체 = ${buyBizLabel(y)} (모든 달)</div>`;
   }
   html+=`</div>`;
   const hadFocus=document.activeElement&&document.activeElement.id==="buyStatQIn";
@@ -9233,8 +9319,20 @@ function renderBuyStatCore(){
     se.addEventListener("keydown",function(e){if(e.key==="Escape"){se.value="";window.__buy.ui.q="";buyStatQKick();}});
     if(hadFocus){se.focus();try{se.setSelectionRange(se.value.length,se.value.length);}catch(e2){}}
   }
+  if(mig)setTimeout(()=>buySplitReport(y,mig),50);
   buyFlushLabel();
 }
+function buySplitReport(y,rep){
+  const done=rep.exact+rep.ratio+rep.solo;
+  openModal("🏬 "+y+"년 피다/보자기 분리 완료",
+    `<div style="line-height:1.9">피다·보자기로 묶여 있던 시트를 <b>꽃밥에피다</b>와 <b>보자기꽃밥</b> 두 시트로 나눴어요.<br>
+     거래처 ${rep.vendors}곳은 두 시트에 그대로 유지했고, 이미 입력돼 있던 금액 ${done+rep.un.length}칸 중 <b>${done}칸</b>은 월마감결제의 인사동/보자기 그룹 금액 그대로 자동 분리했어요.
+     ${rep.ratio?`<span class="unit">(그중 ${rep.ratio}칸은 금액이 달라 월마감 비율로 나눔)</span>`:""}<br>
+     ${rep.un.length?`<b class="buy-warn">⚠ ${rep.un.length}칸</b>은 월마감 기록이 없어 못 나눴어요 — 아래 <b>크로스체크</b>에 떠 있으니 피다/보자기 칸에 나눠 적어주세요.<br><span class="unit">${rep.un.slice(0,8).map(u=>esc(u.name)+" "+u.m+"월").join(", ")}${rep.un.length>8?" 외 "+(rep.un.length-8)+"칸":""}</span>`:`✓ 모든 금액이 나뉘어 크로스체크도 통과예요.`}
+     <div class="footnote" style="margin-top:6px">나누기 전 합산 데이터는 백업해뒀어요. 이상하면 말씀해 주세요 — 되돌릴 수 있어요.</div></div>`,
+    `<button class="btn btn-primary" onclick="closeModal()">확인</button>`);
+}
+window.buySplitReport=buySplitReport;
 function buyStatQKick(){clearTimeout(buyQTimer);buyQTimer=setTimeout(renderBuyStat,300);}
 function buyStatYearSel(y){window.__buy.ui.statYear=y;renderBuyStat();}
 function buyStatScopeSel(sc){window.__buy.ui.statScope=sc;renderBuyStat();}
@@ -9295,11 +9393,11 @@ function buyStatMeta(td,sc,ri,field){
     if(field==="name"&&!v){renderBuyStat();return;}
     if(field==="name"&&v!==r.name){
       const old=r.name;
-      const exists=["all","market","insa"].some(s2=>d.scopes[s2].rows.some(x=>x.name===v));
-      const q2=exists?`'${old}'을(를) 기존 거래처 '${v}'에 합칠까요?\n(세 시트 모두, 월별 금액은 더해져요)`:`'${old}' → '${v}' 이름을 바꿀까요?\n(세 시트 모두 같이 바꿔요)`;
+      const exists=buyScopeKeys(y).some(s2=>d.scopes[s2].rows.some(x=>x.name===v));
+      const q2=exists?`'${old}'을(를) 기존 거래처 '${v}'에 합칠까요?\n(모든 시트에서, 월별 금액은 더해져요)`:`'${old}' → '${v}' 이름을 바꿀까요?\n(모든 시트에서 같이 바꿔요)`;
       if(confirm(q2)){
         const from=r._from||old;
-        for(const s2 of ["all","market","insa"]){
+        for(const s2 of buyScopeKeys(y)){
           const rows2=d.scopes[s2].rows;
           const rr=rows2.find(x=>x.name===old);
           if(!rr)continue;
@@ -9345,12 +9443,12 @@ function buyDraftSave(){
   if(buyFindRow(y,sc,dr.name)){toast("'"+dr.name+"'은(는) 이미 있어요 — 표에서 그 행에 바로 적어주세요",true);B.ui.q=dr.name;B.ui.draft=null;renderBuyStat();return;}
   const mk=(o)=>{for(const k in o)if(o[k])return true;return false;};
   const put=(sc2,mObj)=>{const r=buyEnsureRow(y,sc2,dr.name,dr.item);if(dr.item&&!r.item)r.item=dr.item;for(const k in mObj)if(mObj[k])r.m[k]=(r.m[k]||0)+mObj[k];};
+  const bks=buyBizKeys(y);
   if(sc==="all"){
     put("all",dr.m);
     if(mk(dr.m)){
-      if(dr.alloc==="market")put("market",dr.m);
-      else if(dr.alloc==="insa")put("insa",dr.m);
-      else if(dr.alloc==="half"){
+      if(bks.includes(dr.alloc))put(dr.alloc,dr.m);
+      else if(dr.alloc==="half"&&!buySplitYear(y)){
         const a={},b={};
         for(const k in dr.m){a[k]=Math.round(dr.m[k]/2);b[k]=dr.m[k]-a[k];}
         put("market",a);put("insa",b);
@@ -9358,16 +9456,16 @@ function buyDraftSave(){
     }
   }else{
     put(sc,dr.m);
-    /* 전체 = 마켓+피다 합으로 갱신 */
-    const rm=buyFindRow(y,"market",dr.name),ri2=buyFindRow(y,"insa",dr.name);
+    /* 전체 = 사업장 합으로 갱신 */
+    const brs=bks.map(s2=>buyFindRow(y,s2,dr.name));
     const ra=buyEnsureRow(y,"all",dr.name,dr.item);
-    const ms=new Set([...(rm?Object.keys(rm.m):[]),...(ri2?Object.keys(ri2.m):[])]);
-    ms.forEach(k=>{const v2=((rm&&rm.m[k])||0)+((ri2&&ri2.m[k])||0);if(v2)ra.m[k]=v2;else delete ra.m[k];});
+    const ms=new Set([].concat(...brs.map(r2=>r2?Object.keys(r2.m):[])));
+    ms.forEach(k=>{let v2=0;brs.forEach(r2=>{if(r2&&r2.m[k])v2+=r2.m[k];});if(v2)ra.m[k]=v2;else delete ra.m[k];});
   }
   d.savedAt=Date.now();buyMark("stat_"+y);
   B.ui.draft=null;B.ui.q=dr.name;
   renderBuyStat();
-  toast("'"+dr.name+"'을(를) 추가했어요"+(sc==="all"&&dr.alloc==="later"&&mk(dr.m)?" — 크로스체크에서 마켓/피다·보자기로 나눠 적어주세요":""));
+  toast("'"+dr.name+"'을(를) 추가했어요"+(sc==="all"&&dr.alloc==="later"&&mk(dr.m)?" — 크로스체크에서 "+buyBizLabel(y)+"로 나눠 적어주세요":""));
 }
 function buyDraftCancel(){window.__buy.ui.draft=null;renderBuyStat();}
 function buyStatAddMonth(){
@@ -9385,8 +9483,12 @@ function buyStatEnsureYear(y){
   if(D.stat[y])return D.stat[y];
   const ys=buyStatYears();
   const base=ys.length?D.stat[ys[0]]:null;
-  const cp=(sc)=>({rows:base?base.scopes[sc].rows.filter(r=>r.name).map(r=>({item:r.item||"",name:r.name,m:{}})):[]});
-  D.stat[y]={labels:{},months:[],scopes:{all:cp("all"),market:cp("market"),insa:cp("insa")},savedAt:Date.now()};
+  const cp=(sc,alt)=>{const src=base?(base.scopes[sc]||(alt&&base.scopes[alt])):null;return {rows:src?src.rows.filter(r=>r.name).map(r=>({item:r.item||"",name:r.name,m:{}})):[]};};
+  if(+y>=2026){/* 2026부터는 피다/보자기 분리 구조 */
+    D.stat[y]={labels:{},months:[],scopes:{all:cp("all"),market:cp("market"),pida:cp("pida","insa"),bojagi:cp("bojagi","insa")},split:1,savedAt:Date.now()};
+  }else{
+    D.stat[y]={labels:{},months:[],scopes:{all:cp("all"),market:cp("market"),insa:cp("insa")},savedAt:Date.now()};
+  }
   buyMark("stat_"+y);
   return D.stat[y];
 }
@@ -9396,15 +9498,17 @@ function buyApplyOpen(){
   const doc=D.close[key];
   const y="20"+key.slice(0,2),m=+key.slice(2),mk=String(m);
   buyStatEnsureYear(y);
+  buySplitEnsure(y);
+  const bks=buyBizKeys(y);
   /* 거래처 집계(부서별) */
   const agg={},order=[];
   let unconfN=0;
   doc.groups.forEach(g=>{
-    const isM=g.dept.indexOf("마켓")>=0;
+    const dk=g.dept.indexOf("마켓")>=0?"market":(bks.includes("bojagi")?(g.dept.indexOf("보자기")>=0?"bojagi":"pida"):"insa");
     g.rows.forEach(r=>{
       if(!r.name||!r.amt)return;
-      if(!agg[r.name]){agg[r.name]={market:0,insa:0,unconf:false};order.push(r.name);}
-      if(isM)agg[r.name].market+=r.amt;else agg[r.name].insa+=r.amt;
+      if(!agg[r.name]){agg[r.name]={unconf:false};bks.forEach(k2=>agg[r.name][k2]=0);order.push(r.name);}
+      agg[r.name][dk]+=r.amt;
       if(!r.ok&&!agg[r.name].unconf){agg[r.name].unconf=true;unconfN++;}
     });
   });
@@ -9415,30 +9519,19 @@ function buyApplyOpen(){
   const d=D.stat[y];
   const names=buyVendorNames(y);
   const map=D.vendorMap||{};
-  const guess=(nm)=>{
-    if(map[nm]&&names.includes(map[nm]))return map[nm];
-    if(names.includes(nm))return nm;
-    const norm=(x)=>String(x).replace(/\(주\)|（주）|㈜|주식회사/g,"").replace(/[\s()（）]/g,"");
-    const nn=norm(nm);
-    let hit=names.find(n=>norm(n)===nn);
-    if(hit)return hit;
-    hit=names.find(n=>{const m2=norm(n);return m2.indexOf(nn)===0||nn.indexOf(m2)===0;});
-    if(hit)return hit;
-    let best=null,bl=1;
-    for(const n of names){const m2=norm(n);let l=0;while(l<nn.length&&l<m2.length&&nn[l]===m2[l])l++;if(l>bl||(l===bl&&best&&n.length<best.length)){bl=l;best=n;}}
-    return (bl>=2&&best)?best:nm;
-  };
+  const guess=(nm)=>buyGuessTo(nm,names,map);
   /* 대상별 합산 */
   const tgt={};
   order2.forEach(nm=>{
     const t=guess(nm);
-    if(!tgt[t])tgt[t]={market:0,insa:0,from:[]};
-    tgt[t].market+=agg[nm].market;tgt[t].insa+=agg[nm].insa;tgt[t].from.push(nm);
+    if(!tgt[t]){tgt[t]={from:[]};bks.forEach(k2=>tgt[t][k2]=0);}
+    bks.forEach(k2=>{tgt[t][k2]+=agg[nm][k2];});
+    tgt[t].from.push(nm);
   });
   /* 덮어쓰기 여부 확인 */
   let hasOld=false;
   for(const t in tgt){const ra=buyFindRow(y,"all",t);if(ra&&ra.m[mk]!=null){hasOld=true;break;}}
-  const msg=buyKeyLabel(key)+" 금액을 매입현황 "+y+"년 "+m+"월에 바로 반영할까요?\n부서 기준으로 마켓 / 피다+보자기에 나눠 넣고, 전체(꽃밥이야기)는 두 값의 합으로 들어가요."
+  const msg=buyKeyLabel(key)+" 금액을 매입현황 "+y+"년 "+m+"월에 바로 반영할까요?\n부서 기준으로 "+bks.map(k2=>BUY_SC_SHORT[k2]).join(" / ")+"에 나눠 넣고, 전체(꽃밥이야기)는 그 합으로 들어가요."
     +(hasOld?"\n※ 이미 있는 "+m+"월 값은 덮어써요.":"")
     +(unconfN?"\n⚠ 미확인(노란 줄) 금액 "+unconfN+"곳이 포함돼 있어요.":"")
     +(skipped.length?"\n🚫 반영 제외 "+skipped.length+"곳 건너뜀: "+skipped.slice(0,6).join(", ")+(skipped.length>6?" 외":""):"")
@@ -9448,14 +9541,14 @@ function buyApplyOpen(){
   let newN=0;
   for(const t in tgt){
     const v=tgt[t];
-    const isNew=!buyFindRow(y,"all",t)&&!buyFindRow(y,"market",t)&&!buyFindRow(y,"insa",t);
-    const rm=buyEnsureRow(y,"market",t,""),ri=buyEnsureRow(y,"insa",t,""),ra=buyEnsureRow(y,"all",t,"");
-    if(isNew){newN++;const from=v.from[0];rm._from=from;ri._from=from;ra._from=from;}
-    if(v.market)rm.m[mk]=v.market;else delete rm.m[mk];
-    if(v.insa)ri.m[mk]=v.insa;else delete ri.m[mk];
-    const sum2=v.market+v.insa;
+    const isNew=!buyScopeKeys(y).some(s2=>buyFindRow(y,s2,t));
+    const brs=bks.map(s2=>buyEnsureRow(y,s2,t,""));
+    const ra=buyEnsureRow(y,"all",t,"");
+    if(isNew){newN++;const from=v.from[0];brs.forEach(r2=>r2._from=from);ra._from=from;}
+    let sum2=0;
+    bks.forEach((s2,i)=>{const a=v[s2];if(a){brs[i].m[mk]=a;sum2+=a;}else delete brs[i].m[mk];});
     if(sum2)ra.m[mk]=sum2;else delete ra.m[mk];
-    if(!ra.item&&(rm.item||ri.item))ra.item=rm.item||ri.item;
+    if(!ra.item){const it=brs.map(r2=>r2.item).find(x=>x);if(it)ra.item=it;}
     v.from.forEach(nm=>{if(nm!==t)D.vendorMap[nm]=t;});
   }
   d.savedAt=Date.now();
@@ -9789,7 +9882,7 @@ function buyStatTpl(wb,rawMap,y,sc){
     const cand=wb.sheets.filter(s2=>{
       if(sc==="all")return /^\d{4}$/.test(s2.name);
       if(sc==="market")return /^\d{4}마켓$/.test(s2.name);
-      return /^\d{4}인사동\+보자기$/.test(s2.name);
+      return /^\d{4}(인사동\+보자기|피다|보자기)$/.test(s2.name);/* 피다/보자기는 기존 인사동+보자기 서식을 물려받음 */
     }).sort((a,b)=>b.name.localeCompare(a.name));
     sh=cand[0]||null;
   }
@@ -9873,29 +9966,51 @@ async function buyStatDl(){
       rawMap=rs.raw;styles=rs.styles||styles;theme=rs.theme;sst=rs.sst;names=rs.names;
       wb=await buyGetWb("stat");
     }
-    const targets=["all","market","insa"].map(sc=>buyScopeSheet(y,sc));
+    const scKeys=buyScopeKeys(y);
+    const targets=scKeys.map(sc=>buyScopeSheet(y,sc));
     const list=[];
     const genFor=(sc)=>{
       const tpl=(wb?buyStatTpl(wb,rawMap,y,sc):null)||BUY_FALLBACK_STPL;
       return buyStatGen(ydoc,y,sc,upto,tpl);
     };
+    const scOfSheet=(sfx)=>sfx==="마켓"?"market":sfx==="피다"?"pida":sfx==="보자기"?"bojagi":sfx?"insa":"all";
     if(names.length){
-      let inserted=false;
+      const pushed=new Set();
       for(const nm of names){
         const ti=targets.indexOf(nm);
-        if(ti>=0){list.push({name:nm,xml:genFor(["all","market","insa"][ti])});inserted=true;continue;}
+        if(ti>=0){list.push({name:nm,xml:genFor(scKeys[ti])});pushed.add(scKeys[ti]);continue;}
+        const m2=nm.match(/^(\d{4})(마켓|인사동\+보자기|피다|보자기)?$/);
+        const y2=m2?m2[1]:null,sc2=m2?scOfSheet(m2[2]):null;
+        /* 분리 연도의 옛 인사동+보자기 시트 자리엔 피다/보자기 두 시트를 넣음 */
+        if(y2===y&&sc2==="insa"&&buySplitYear(y)){
+          if(!pushed.has("pida")){list.push({name:buyScopeSheet(y,"pida"),xml:genFor("pida")});pushed.add("pida");}
+          if(!pushed.has("bojagi")){list.push({name:buyScopeSheet(y,"bojagi"),xml:genFor("bojagi")});pushed.add("bojagi");}
+          continue;
+        }
         /* 다른 연도라도 웹에서 고친 게 있으면 다시 생성 */
-        const m2=nm.match(/^(\d{4})(마켓|인사동\+보자기)?$/);
-        const y2=m2?m2[1]:null,sc2=m2?(m2[2]==="마켓"?"market":m2[2]?"insa":"all"):null;
         if(y2&&D.stat[y2]&&D.stat[y2].dirty){
+          const d2=D.stat[y2];
+          if(sc2==="insa"&&!d2.scopes.insa){/* 분리된 연도의 옛 시트명 */
+            list.push({name:buyScopeSheet(y2,"pida"),xml:buyStatGen(d2,y2,"pida",12,(wb?buyStatTpl(wb,rawMap,y2,"pida"):null)||BUY_FALLBACK_STPL)});
+            list.push({name:buyScopeSheet(y2,"bojagi"),xml:buyStatGen(d2,y2,"bojagi",12,(wb?buyStatTpl(wb,rawMap,y2,"bojagi"):null)||BUY_FALLBACK_STPL)});
+            continue;
+          }
+          if(!d2.scopes[sc2]){list.push({name:nm,xml:buyStripRid(rawMap[nm])});continue;}
           const tpl2=(wb?buyStatTpl(wb,rawMap,y2,sc2):null)||BUY_FALLBACK_STPL;
-          list.push({name:nm,xml:buyStatGen(D.stat[y2],y2,sc2,12,tpl2)});
+          list.push({name:nm,xml:buyStatGen(d2,y2,sc2,12,tpl2)});
         }
         else list.push({name:nm,xml:buyStripRid(rawMap[nm])});
       }
-      if(!inserted)["all","market","insa"].forEach((sc,i)=>list.splice(i,0,{name:targets[i],xml:genFor(sc)}));
+      /* 파일에 아직 없는 대상 시트(첫 다운로드의 피다/보자기 등)는 순서대로 삽입 */
+      scKeys.forEach((sc,i)=>{
+        if(pushed.has(sc))return;
+        const prev=i>0?targets.slice(0,i).reverse().map(t2=>list.findIndex(x=>x.name===t2)).find(ix=>ix>=0):-1;
+        const at=prev!=null&&prev>=0?prev+1:list.length;
+        list.splice(at,0,{name:targets[i],xml:genFor(sc)});
+        pushed.add(sc);
+      });
     }else{
-      ["all","market","insa"].forEach((sc,i)=>list.push({name:targets[i],xml:genFor(sc)}));
+      scKeys.forEach((sc,i)=>list.push({name:targets[i],xml:genFor(sc)}));
     }
     await buyMakeXlsx(list,styles,theme,sst,"매입현황_"+y+"-"+String(upto).padStart(2,"0")+".xlsx");
     toast(y+"년 "+upto+"월까지 반영된 매입현황 엑셀을 내려받았어요");
@@ -10020,7 +10135,7 @@ function buyUnifyNorm(x){return String(x).replace(/\(주\)|（주）|㈜|주식�
 function buyUnifySuggest(y){
   const d=bd().stat[y];if(!d)return[];
   const info={};/* name -> {scopes:{}, tot} */
-  for(const sc of ["all","market","insa"])(d.scopes[sc].rows||[]).forEach(r=>{
+  for(const sc of buyScopeKeys(y))(d.scopes[sc].rows||[]).forEach(r=>{
     if(!r.name)return;
     const o=(info[r.name]=info[r.name]||{scopes:{},tot:0});
     o.scopes[sc]=1;
@@ -10047,7 +10162,7 @@ function buyUnifySuggest(y){
     if(g.length<2)continue;
     /* 같은 시트에 두 변형이 공존하면 주의 표시(기본 체크 해제) */
     let coexist=false;
-    for(const sc of ["all","market","insa"]){
+    for(const sc of buyScopeKeys(y)){
       if(g.filter(nm=>info[nm].scopes[sc]).length>1){coexist=true;break;}
     }
     /* 기본 이름: 전체 시트에 있는 변형(여럿이면 합계 큰 쪽), 없으면 합계 큰 쪽 */
@@ -10070,8 +10185,8 @@ function buyUnifyBoxHtml(){
     const y=buyStatCurY();
     const gs=buyUnifySuggest(y);
     window.__buyUnify=gs;
-    if(!gs.length)return `<div style="margin:8px 0;padding:10px;border:1px solid var(--line,#ddd);border-radius:10px;max-width:680px"><b>🔗 이름 통일</b><div class="footnote" style="margin-top:4px">비슷한 이름의 거래처를 못 찾았어요 — 이미 잘 통일돼 있어요. 개별로 바꾸려면 표에서 거래처명을 눌러 고치면 세 시트에 같이 적용돼요.</div></div>`;
-    const scL={all:"전체",market:"마켓",insa:"피다·보자기"};
+    if(!gs.length)return `<div style="margin:8px 0;padding:10px;border:1px solid var(--line,#ddd);border-radius:10px;max-width:680px"><b>🔗 이름 통일</b><div class="footnote" style="margin-top:4px">비슷한 이름의 거래처를 못 찾았어요 — 이미 잘 통일돼 있어요. 개별로 바꾸려면 표에서 거래처명을 눌러 고치면 모든 시트에 같이 적용돼요.</div></div>`;
+    const scL=BUY_SC_SHORT;
     const rows=gs.map((g,i)=>{
       const chips=g.names.map((nm,j)=>`<span style="display:inline-block;margin:1px 4px 1px 0;padding:1px 8px;border:1px solid var(--line,#ddd);border-radius:12px;font-size:12px">${esc(nm)} <span style="color:var(--sub,#888)">${g.scopesOf[j].map(sc2=>scL[sc2]).join("·")}</span></span>`).join("");
       return `<tr>
@@ -10080,7 +10195,7 @@ function buyUnifyBoxHtml(){
         <td><input type="text" id="bunT${i}" value="${esc(g.def)}" style="width:150px"></td></tr>`;
     }).join("");
     return `<div style="margin:8px 0;padding:10px;border:1px solid var(--line,#ddd);border-radius:10px;max-width:760px">
-      <b>🔗 이름 통일</b> <span class="unit">비슷한 이름을 묶었어요 — 쓸 이름을 정하고 적용하면 세 시트 모두 그 이름으로 바뀌고 금액이 합쳐져요</span>
+      <b>🔗 이름 통일</b> <span class="unit">비슷한 이름을 묶었어요 — 쓸 이름을 정하고 적용하면 모든 시트에서 그 이름으로 바뀌고 금액이 합쳐져요</span>
       <div class="table-wrap" style="margin-top:6px;max-height:340px;overflow:auto"><table class="rpt buy-tbl"><thead><tr><th style="width:36px">적용</th><th class="l">묶인 이름 (쓰는 시트)</th><th style="width:160px">통일할 이름</th></tr></thead><tbody>${rows}</tbody></table></div>
       <div style="margin-top:8px"><button class="btn btn-primary btn-sm" onclick="buyUnifyApply()">✅ 선택한 ${gs.length}묶음 중 체크된 것 통일하기</button>
       <button class="btn btn-sm" onclick="buyUnifyOpen()">닫기</button></div>
@@ -10099,7 +10214,7 @@ function buyUnifyApply(){
     if(!cb||!cb.checked||!ti)return;
     const T=ti.value.trim();
     if(!T)return;
-    for(const sc of ["all","market","insa"]){
+    for(const sc of buyScopeKeys(y)){
       const rows=d.scopes[sc].rows;
       const matches=rows.filter(r=>g.names.includes(r.name));
       if(!matches.length)continue;
@@ -10157,7 +10272,7 @@ function buyStatDelRow(sc,ri){
   const r=rows[ri];if(!r)return;
   if(sc!=="all"){
     const tot=Object.values(r.m||{}).reduce((a,b)=>a+(b||0),0);
-    const scL={market:"마켓",insa:"피다·보자기"}[sc];
+    const scL=BUY_SC_SHORT[sc];
     const msg=tot?`'${r.name}'을(를) ${scL} 시트에서 지울까요?\n이 시트의 ${y}년 금액 ${fmt(tot)}원도 같이 지워져요. (다른 시트는 그대로)`:`'${r.name}'을(를) ${scL} 시트에서 지울까요? (금액 없음, 다른 시트는 그대로)`;
     if(!confirm(msg))return;
     rows.splice(ri,1);
@@ -10170,17 +10285,17 @@ function buyStatDelRow(sc,ri){
   const t=(s2)=>{const rr=buyFindRow(y,s2,nm);return rr?Object.values(rr.m||{}).reduce((a,b)=>a+(b||0),0):null;};
   window.__buyDel={nm:nm};
   openModal("'"+nm+"' 삭제",
-    `<div style="line-height:2.1">${y}년 금액 — 전체 <b>${fmt(t("all")||0)}</b> · 마켓 ${t("market")!=null?fmt(t("market")):"없음"} · 피다·보자기 ${t("insa")!=null?fmt(t("insa")):"없음"}<br>
+    `<div style="line-height:2.1">${y}년 금액 — 전체 <b>${fmt(t("all")||0)}</b>${buyBizKeys(y).map(s3=>` · ${BUY_SC_SHORT[s3]} ${t(s3)!=null?fmt(t(s3)):"없음"}`).join("")}<br>
      <label><input type="checkbox" id="bdSkip" checked> 앞으로 월마감결제 → 매입현황 반영에서도 <b>제외</b> (다음 달에 다시 안 생기게)</label>
      <div class="footnote">월마감결제 쪽에는 그대로 남아요 — 결제는 하지만 상품 매입이 아닌 거래처(꽃바다 등)에 쓰세요. 제외 목록은 🚫 버튼에서 언제든 해제할 수 있어요.</div></div>`,
     `<button class="btn" onclick="closeModal()">취소</button>
      <button class="btn" onclick="buyDelGo('one')">전체 시트에서만 삭제</button>
-     <button class="btn btn-primary" onclick="buyDelGo('all3')">세 시트 모두 삭제</button>`);
+     <button class="btn btn-primary" onclick="buyDelGo('all3')">모든 시트에서 삭제</button>`);
 }
 function buyDelGo(mode){
   const T=window.__buyDel;if(!T)return;
   const y=buyStatCurY(),d=bd().stat[y],D=bd();
-  const scopes=mode==="all3"?["all","market","insa"]:["all"];
+  const scopes=mode==="all3"?buyScopeKeys(y):["all"];
   for(const s2 of scopes){
     const rows=d.scopes[s2].rows;
     const i=rows.findIndex(x=>x.name===T.nm);
@@ -10233,7 +10348,7 @@ document.addEventListener("keydown",function(e){
 function buyStatCleanEmpty(){
   const y=buyStatCurY(),d=bd().stat[y];
   const sc=window.__buy.ui.statScope;
-  const scL={all:"전체(꽃밥이야기)",market:"마켓",insa:"피다·보자기"}[sc];
+  const scL=BUY_SC_LABEL[sc];
   const rows=d.scopes[sc].rows;
   const empty=rows.filter(r=>!Object.values(r.m||{}).some(v=>v));
   if(!empty.length){toast(scL+" 시트에 금액이 전부 빈 거래처가 없어요");return;}
@@ -10274,7 +10389,7 @@ function buyQuickOpen(){
       <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
         <input type="text" id="bqName" list="bqVList" placeholder="거래처" autocomplete="off" style="flex:1;min-width:150px;border:1px solid var(--line,#ddd);border-radius:8px;padding:8px 10px;font-size:14px">
         <select id="bqSc" style="font:inherit;font-size:14px;padding:8px;border:1px solid var(--line,#ddd);border-radius:8px">
-          <option value="market">마켓</option><option value="insa">피다·보자기</option>
+          ${buyBizKeys(y).map(k2=>`<option value="${k2}">${BUY_SC_SHORT[k2]}</option>`).join("")}
         </select>
         <input type="text" id="bqAmt" inputmode="numeric" placeholder="매입금액" style="width:130px;text-align:right;border:1px solid var(--line,#ddd);border-radius:8px;padding:8px 10px;font-size:14px">
         <button class="btn btn-primary" onclick="buyQuickAdd()">추가 ↵</button>
@@ -10301,7 +10416,17 @@ function buyQuickOpen(){
 function buyQuickClose(){const ov=document.getElementById("buyQuickOv");if(ov)ov.remove();window.__buyQuick=null;}
 function buyQuickYm(){
   const Q=window.__buyQuick;if(!Q)return;
-  Q.y=document.getElementById("bqY").value;
+  const newY=document.getElementById("bqY").value;
+  if(newY!==Q.y&&Q.items.length&&buySplitYear(newY)!==buySplitYear(Q.y)){
+    toast("사업장 구분이 다른 연도예요 — 먼저 반영하거나 줄을 지우고 연도를 바꿔주세요",true);
+    document.getElementById("bqY").value=Q.y;
+    return;
+  }
+  if(newY!==Q.y){
+    Q.y=newY;
+    const sel=document.getElementById("bqSc");
+    if(sel)sel.innerHTML=buyBizKeys(Q.y).map(k2=>`<option value="${k2}">${BUY_SC_SHORT[k2]}</option>`).join("");
+  }
   Q.m=+document.getElementById("bqM").value;
   buyQuickList();
 }
@@ -10328,7 +10453,7 @@ function buyQuickDel(i){const Q=window.__buyQuick;Q.items.splice(i,1);buyQuickLi
 function buyQuickList(){
   const Q=window.__buyQuick;if(!Q)return;
   const tb=document.getElementById("bqList");if(!tb)return;
-  const scL={market:"마켓",insa:"피다·보자기"};
+  const scL=BUY_SC_SHORT;
   tb.innerHTML=Q.items.length?Q.items.map((it,i)=>{
     const cur=buyQuickCurVal(it.name,it.sc);
     const isNew=!buyVendorNames(Q.y).includes(it.name);
@@ -10339,14 +10464,16 @@ function buyQuickList(){
 function buyQuickTot(){
   const Q=window.__buyQuick;if(!Q)return;
   const el=document.getElementById("bqTot");if(!el)return;
-  const tm=Q.items.filter(x=>x.sc==="market").reduce((a,b)=>a+b.amt,0);
-  const ti=Q.items.filter(x=>x.sc==="insa").reduce((a,b)=>a+b.amt,0);
-  el.innerHTML=`${Q.items.length}건 · 마켓 <b>${fmt(tm)}</b> · 피다·보자기 <b>${fmt(ti)}</b> · 전체 반영 <b>${fmt(tm+ti)}</b>원 (${Q.y}년 ${Q.m}월)`;
+  const bks=buyBizKeys(Q.y);
+  let tot=0;
+  const parts=bks.map(k2=>{const s2=Q.items.filter(x=>x.sc===k2).reduce((a,b)=>a+b.amt,0);tot+=s2;return `${BUY_SC_SHORT[k2]} <b>${fmt(s2)}</b>`;});
+  el.innerHTML=`${Q.items.length}건 · ${parts.join(" · ")} · 전체 반영 <b>${fmt(tot)}</b>원 (${Q.y}년 ${Q.m}월)`;
 }
 function buyQuickApply(){
   const Q=window.__buyQuick;if(!Q||!Q.items.length){toast("추가한 건이 없어요",true);return;}
   const y=Q.y,m=Q.m,mk=String(m);
   const d=bd().stat[y]||buyStatEnsureYear(y);
+  buySplitEnsure(y);
   if(!(d.months||[]).includes(m)){d.months=[...(d.months||[]),m].sort((a,b)=>a-b);d.labels=d.labels||{};d.labels[mk]=d.labels[mk]||m+"월";}
   const touched=new Set();
   for(const it of Q.items){
@@ -10354,13 +10481,8 @@ function buyQuickApply(){
     r.m[mk]=it.amt;
     touched.add(it.name);
   }
-  /* 전체 = 마켓+피다 합 */
-  touched.forEach(nm=>{
-    const rm=buyFindRow(y,"market",nm),ri=buyFindRow(y,"insa",nm);
-    const ra=buyEnsureRow(y,"all",nm,(rm&&rm.item)||(ri&&ri.item)||"");
-    const v=((rm&&rm.m[mk])||0)+((ri&&ri.m[mk])||0);
-    if(v)ra.m[mk]=v;else delete ra.m[mk];
-  });
+  /* 전체 = 사업장 합 */
+  touched.forEach(nm=>{buyBizFix1(y,nm,m);});
   d.savedAt=Date.now();buyMark("stat_"+y);
   const n=Q.items.length;
   buyQuickClose();
@@ -10374,76 +10496,93 @@ function buySplitOpen(nm,m){
   const ra=buyFindRow(y,"all",nm);
   const tot=(ra&&ra.m[mk])||0;
   if(!tot)return;
-  const rm=buyFindRow(y,"market",nm),ri=buyFindRow(y,"insa",nm);
-  let vm=(rm&&rm.m[mk])||0,vi=(ri&&ri.m[mk])||0;
+  const bks=buyBizKeys(y);
+  const rowsB=bks.map(sc=>buyFindRow(y,sc,nm));
+  const vals={};bks.forEach((sc,i2)=>{vals[sc]=(rowsB[i2]&&rowsB[i2].m[mk])||0;});
   let hint="";
-  if(!vm&&!vi){
+  if(!bks.some(sc=>vals[sc])){
     /* 지난달 배분 비율로 미리 채움 */
     const d0=bd().stat[y];
     const past=(d0.months||[]).filter(x=>x!==m).sort((a,b)=>b-a);
     for(const pm of past){
       const pk=String(pm);
-      const am=(rm&&rm.m[pk])||0,ai=(ri&&ri.m[pk])||0;
-      if(am+ai>0){
-        if(!ai){vm=tot;vi=0;hint=pm+"월처럼 마켓 전액으로 미리 채웠어요";}
-        else if(!am){vm=0;vi=tot;hint=pm+"월처럼 피다·보자기 전액으로 미리 채웠어요";}
-        else{vm=Math.round(tot*am/(am+ai));vi=tot-vm;hint=pm+"월 배분 비율로 미리 나눠뒀어요 — 필요하면 고치세요";}
+      const pv={};let ps=0;
+      bks.forEach((sc,i2)=>{const v=(rowsB[i2]&&rowsB[i2].m[pk])||0;pv[sc]=v;ps+=v;});
+      if(ps>0){
+        const nz=bks.filter(sc=>pv[sc]);
+        if(nz.length===1){vals[nz[0]]=tot;hint=pm+"월처럼 "+BUY_SC_SHORT[nz[0]]+" 전액으로 미리 채웠어요";}
+        else{
+          let acc=0;
+          nz.forEach((sc,i3)=>{if(i3===nz.length-1)vals[sc]=tot-acc;else{const v=Math.round(tot*pv[sc]/ps);vals[sc]=v;acc+=v;}});
+          hint=pm+"월 배분 비율로 미리 나눠뒀어요 — 필요하면 고치세요";
+        }
         break;
       }
     }
   }
-  window.__buySplit={nm:nm,m:m,tot:tot};
+  window.__buySplit={nm:nm,m:m,tot:tot,bks:bks};
+  const inRow=bks.map(sc=>`${BUY_SC_SHORT[sc]} <input id="bsp_${sc}" type="text" inputmode="numeric" style="width:110px;text-align:right;font-size:14px;padding:6px" value="${vals[sc]?fmt(vals[sc]):""}">`).join(" &nbsp;");
+  const qBtns=bks.map(sc=>`<button class="btn btn-sm" onclick="buySplitQuick('${sc}')">${BUY_SC_SHORT[sc]} 전액</button>`).join(" ")+(bks.length===2?` <button class="btn btn-sm" onclick="buySplitQuick('h')">반반</button>`:"");
   openModal("'"+nm+"' "+m+"월 "+fmt(tot)+"원 — 사업장 배분",
     `<div style="line-height:2.2">
-      마켓 <input id="bspM" type="text" inputmode="numeric" style="width:120px;text-align:right;font-size:14px;padding:6px" value="${vm?fmt(vm):""}">
-      &nbsp;피다·보자기 <input id="bspI" type="text" inputmode="numeric" style="width:120px;text-align:right;font-size:14px;padding:6px" value="${vi?fmt(vi):""}"><br>
-      <button class="btn btn-sm" onclick="buySplitQuick('m')">마켓 전액</button>
-      <button class="btn btn-sm" onclick="buySplitQuick('i')">피다·보자기 전액</button>
-      <button class="btn btn-sm" onclick="buySplitQuick('h')">반반</button>
+      ${inRow}<br>
+      ${qBtns}
       <div id="bspChk" style="margin-top:6px;font-size:13px"></div>
       ${hint?`<div class="footnote" style="color:#2F6B3F">💡 ${hint}</div>`:""}
     </div>`,
     `<button class="btn" onclick="closeModal()">배분 안 함 (전체만 저장)</button><button class="btn btn-primary" onclick="buySplitGo()">저장</button>`);
+  const gv=(sc)=>Number(String(document.getElementById("bsp_"+sc).value).replace(/[,\s]/g,""))||0;
   const upd=()=>{
-    const gm=Number(String(document.getElementById("bspM").value).replace(/[,\s]/g,""))||0;
-    const gi=Number(String(document.getElementById("bspI").value).replace(/[,\s]/g,""))||0;
+    const sum=bks.reduce((a,sc)=>a+gv(sc),0);
     const el=document.getElementById("bspChk");
-    const d2=tot-gm-gi;
+    const d2=tot-sum;
     el.innerHTML=d2===0?'<span style="color:#2F6B3F">✓ 합이 전체와 맞아요 ('+fmt(tot)+')</span>':'<span class="buy-warn">전체 '+fmt(tot)+' 대비 '+(d2>0?fmt(d2)+" 남음":fmt(-d2)+" 초과")+"</span>";
   };
-  /* 한쪽을 입력하면 다른 쪽은 전체−입력값으로 자동 채움 */
-  const comp=(id)=>{
-    const a=document.getElementById("bspM"),b=document.getElementById("bspI");
-    const el=id==="bspM"?a:b, other=id==="bspM"?b:a;
-    const n=Number(String(el.value).replace(/[,\s]/g,""))||0;
-    const rem=tot-n;
-    other.value=rem>0?fmt(rem):"";
+  /* 나머지 한 칸이 비어 있으면 전체−입력 합으로 자동 채움 */
+  const comp=(sc)=>{
+    const others=bks.filter(k2=>k2!==sc);
+    const empt=others.filter(k2=>String(document.getElementById("bsp_"+k2).value).trim()==="");
+    if(empt.length===1){
+      const rem=tot-bks.filter(k2=>k2!==empt[0]).reduce((a,k2)=>a+gv(k2),0);
+      document.getElementById("bsp_"+empt[0]).value=rem>0?fmt(rem):"";
+    }
     upd();
   };
-  ["bspM","bspI"].forEach(id=>{const el=document.getElementById(id);el.addEventListener("input",()=>comp(id));el.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.isComposing){e.preventDefault();buySplitGo();}});});
+  bks.forEach(sc=>{const el=document.getElementById("bsp_"+sc);el.addEventListener("input",()=>comp(sc));el.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.isComposing){e.preventDefault();buySplitGo();}});});
   upd();
-  setTimeout(()=>{const el=document.getElementById("bspM");if(el){el.focus();el.select&&el.select();}},60);
+  setTimeout(()=>{const el=document.getElementById("bsp_"+bks[0]);if(el){el.focus();el.select&&el.select();}},60);
 }
 function buySplitQuick(k){
   const T=window.__buySplit;if(!T)return;
-  const a=document.getElementById("bspM"),b=document.getElementById("bspI");
-  if(k==="m"){a.value=fmt(T.tot);b.value="";}
-  else if(k==="i"){a.value="";b.value=fmt(T.tot);}
-  else{const h=Math.round(T.tot/2);a.value=fmt(h);b.value=fmt(T.tot-h);}
-  a.dispatchEvent(new Event("input"));
+  const els=T.bks.map(sc=>document.getElementById("bsp_"+sc));
+  if(k==="h"&&T.bks.length===2){
+    const h=Math.round(T.tot/2);
+    els[0].value=fmt(h);els[1].value=fmt(T.tot-h);
+  }else{
+    T.bks.forEach((sc,i2)=>{els[i2].value=sc===k?fmt(T.tot):"";});
+  }
+  const ev=document.getElementById("bspChk");
+  if(ev){/* upd만 트리거: input 이벤트는 자동 보완을 부르므로 값 직접 계산 */
+    const gv=(sc)=>Number(String(document.getElementById("bsp_"+sc).value).replace(/[,\s]/g,""))||0;
+    const sum=T.bks.reduce((a,sc)=>a+gv(sc),0);
+    const d2=T.tot-sum;
+    ev.innerHTML=d2===0?'<span style="color:#2F6B3F">✓ 합이 전체와 맞아요 ('+fmt(T.tot)+')</span>':'<span class="buy-warn">전체 '+fmt(T.tot)+' 대비 '+(d2>0?fmt(d2)+" 남음":fmt(-d2)+" 초과")+"</span>";
+  }
 }
 function buySplitGo(){
   const T=window.__buySplit;if(!T)return;
   const y=buyStatCurY(),mk=String(T.m),d=bd().stat[y];
-  const gm=Number(String(document.getElementById("bspM").value).replace(/[,\s]/g,""))||0;
-  const gi=Number(String(document.getElementById("bspI").value).replace(/[,\s]/g,""))||0;
-  const rm=buyEnsureRow(y,"market",T.nm,""),ri=buyEnsureRow(y,"insa",T.nm,"");
-  if(gm)rm.m[mk]=gm;else delete rm.m[mk];
-  if(gi)ri.m[mk]=gi;else delete ri.m[mk];
+  let sum=0;
+  for(const sc of T.bks){
+    const g=Number(String(document.getElementById("bsp_"+sc).value).replace(/[,\s]/g,""))||0;
+    const r=buyEnsureRow(y,sc,T.nm,"");
+    if(g)r.m[mk]=g;else delete r.m[mk];
+    sum+=g;
+  }
   d.savedAt=Date.now();buyMark("stat_"+y);
   closeModal();window.__buySplit=null;
   renderBuyStat();
-  const diff=T.tot-gm-gi;
+  const diff=T.tot-sum;
   toast(diff===0?"'"+T.nm+"' 배분 완료 — 크로스체크 통과 ✓":"'"+T.nm+"' 배분 저장 — 전체와 "+fmt(Math.abs(diff))+"원 차이가 크로스체크에 떠요");
 }
 window.buySplitOpen=buySplitOpen;window.buySplitQuick=buySplitQuick;window.buySplitGo=buySplitGo;
