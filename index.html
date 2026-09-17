@@ -478,7 +478,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v215</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v216</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -9276,6 +9276,7 @@ function renderBuyStatCore(){
       <button class="btn btn-primary btn-sm" onclick="buyQuickOpen()">📝 매입건 추가</button>
       <button class="btn btn-sm" onclick="buyStatAddVendor()">＋ 새 거래처</button>
       <button class="btn btn-sm" onclick="buyStatAddMonth()">＋ 월 추가</button>
+      ${buySplitYear(y)?`<button class="btn btn-sm" onclick="buyMkOpen()">🧾 마켓 매입 가져오기</button>`:""}
       <button class="btn btn-sm" onclick="buyUnifyOpen()">🔗 이름 통일</button>
       <button class="btn btn-sm" onclick="buyStatCleanEmpty()">🧹 빈 거래처 정리</button>
       <button class="btn btn-sm" onclick="buySkipOpen()">🚫 제외 목록</button>
@@ -10585,6 +10586,86 @@ function buySplitGo(){
   const diff=T.tot-sum;
   toast(diff===0?"'"+T.nm+"' 배분 완료 — 크로스체크 통과 ✓":"'"+T.nm+"' 배분 저장 — 전체와 "+fmt(Math.abs(diff))+"원 차이가 크로스체크에 떠요");
 }
+/* ---------- 마켓 매입 가져오기 (매출확정 ② 꽃밥 세금계산서 → 매입현황 피다/보자기) ---------- */
+function buyMkNum(v){const n=Number(String(v==null?"":v).replace(/[,\s원]/g,""));return isNaN(n)?0:n;}
+async function buyMkOpen(){
+  const y=buyStatCurY();if(!y)return;
+  if(!buySplitYear(y)){toast("피다/보자기가 분리된 연도에서만 쓸 수 있어요",true);return;}
+  if(!window.__cfmApp){toast("매출확정 모듈을 찾지 못했어요 — 새로고침 후 다시 해보세요",true);return;}
+  const d=bd().stat[y];
+  const allNames=(d.scopes.all.rows||[]).map(r=>r.name).filter(Boolean);
+  let vd=d.mkVendor&&allNames.includes(d.mkVendor)?d.mkVendor:null;
+  if(!vd)vd=allNames.find(n=>{const nn=buyUnifyNorm(n);return nn.indexOf("꽃밥이야기")>=0||nn.indexOf("꽃밥마켓")>=0;})||allNames[0]||"";
+  openModal("🧾 마켓 매입 가져오기",
+    `<div class="footnote" style="margin-bottom:6px">매출확정 <b>② 꽃밥(세금계산서)</b>의 발행 대상 <b>계</b> 금액을 가져와요 — 인사동 → <b>꽃밥에피다</b>, 보자기 → <b>보자기꽃밥</b> 시트. 전체(꽃밥이야기)는 합으로 자동 갱신돼요.</div>
+     <div style="margin-bottom:8px">매입현황 거래처: <select id="bmkVd" onchange="buyMkVendorSel(this.value)" style="font:inherit;font-size:13px;padding:4px 6px;border:1px solid var(--line,#ddd);border-radius:6px">${allNames.map(n=>`<option ${n===vd?"selected":""}>${esc(n)}</option>`).join("")}</select></div>
+     <div id="bmkBody" class="footnote">매출확정에서 월별 금액을 불러오는 중…</div>`,
+    `<button class="btn" onclick="closeModal()">닫기</button>
+     <button class="btn btn-primary" onclick="buyMkApply()">✅ 체크한 달 가져오기</button>`);
+  window.__buyMk={y:y,vd:vd,rows:[]};
+  const out=[];
+  for(let m=12;m>=1;m--){/* 확정에만 있는 달도 목록에 — 가져오면 월 열이 추가됨 */
+    const ym=String(+y-2000).padStart(2,"0")+String(m).padStart(2,"0");
+    let mm=null;
+    try{mm=await buyJsEnsure(ym);}catch(e){}
+    const mb=(mm&&mm.members)||null;
+    const row={m:m,has:!!mb,insa:mb?buyMkNum(mb.insadongGye):0,boja:mb?buyMkNum(mb.bojagiGye):0,siksa:mb?buyMkNum(mb.siksaGye):0,noCol:!(d.months||[]).includes(m)};
+    if(row.noCol&&!(row.insa||row.boja))continue;/* 양쪽 다 없는 달은 생략 */
+    out.push(row);
+  }
+  const T=window.__buyMk;
+  if(!T||T.y!==y)return;/* 모달이 닫혔으면 중단 */
+  T.rows=out;
+  buyMkFill();
+}
+function buyMkFill(){
+  const T=window.__buyMk;if(!T)return;
+  const box=document.getElementById("bmkBody");if(!box)return;
+  const y=T.y,vd=T.vd,mk2=(m)=>String(m);
+  const cur=(sc,m)=>{const r=buyFindRow(y,sc,vd);return r&&r.m[mk2(m)]!=null?r.m[mk2(m)]:null;};
+  let anySiksa=false;
+  const tr=T.rows.map((x,i)=>{
+    const cp=cur("pida",x.m),cb=cur("bojagi",x.m);
+    let st,chk;
+    if(!x.has||(!x.insa&&!x.boja)){st='<span class="unit">확정에 값 없음</span>';chk=false;}
+    else if((cp||0)===x.insa&&(cb||0)===x.boja){st='<span style="color:#2F6B3F">✓ 일치</span>';chk=false;}
+    else{st=`<span class="buy-warn">⚠ 차이 ${fmt(Math.abs(((cp||0)+(cb||0))-(x.insa+x.boja)))}원</span>`;chk=true;}
+    if(x.siksa)anySiksa=true;
+    return `<tr><td style="text-align:center"><input type="checkbox" id="bmk${i}" ${chk?"checked":""} ${(!x.has||(!x.insa&&!x.boja))?"disabled":""}></td>
+      <td><b>${x.m}월</b>${x.noCol?' <span class="unit">(월 열 새로 추가)</span>':""}</td>
+      <td style="text-align:right">${x.has?fmt(x.insa):"—"}</td><td style="text-align:right">${x.has?fmt(x.boja):"—"}</td>
+      <td style="text-align:right;color:var(--sub,#888)">${cp!=null?fmt(cp):""}</td><td style="text-align:right;color:var(--sub,#888)">${cb!=null?fmt(cb):""}</td>
+      <td>${st}</td></tr>`;
+  }).join("");
+  box.className="";
+  box.innerHTML=`<div class="table-wrap" style="max-height:320px;overflow:auto"><table class="rpt"><thead><tr><th style="width:36px">가져오기</th><th>월</th><th>확정 인사동<br>→피다</th><th>확정 보자기<br>→보자기</th><th>현재 피다</th><th>현재 보자기</th><th>대조</th></tr></thead><tbody>${tr}</tbody></table></div>
+    ${anySiksa?`<div class="footnote buy-warn" style="margin-top:4px">⚠ 확정에 '식사' 항목 금액이 있는 달이 있어요 — 식사분은 가져오지 않으니 필요하면 직접 더해주세요.</div>`:""}
+    <div class="footnote" style="margin-top:4px">이 창은 대조용으로도 써요 — ✓ 일치면 가져올 필요 없어요. 가져오면 그 달의 '${esc(T.vd)}' 피다/보자기 값을 확정 금액으로 덮어써요.</div>`;
+}
+function buyMkVendorSel(v){const T=window.__buyMk;if(!T)return;T.vd=v;const d=bd().stat[T.y];d.mkVendor=v;buyMark("stat_"+T.y);buyMkFill();}
+function buyMkApply(){
+  const T=window.__buyMk;if(!T||!T.rows.length){closeModal();return;}
+  const y=T.y,vd=T.vd,d=bd().stat[y];
+  let n=0;
+  T.rows.forEach((x,i)=>{
+    const cb=document.getElementById("bmk"+i);
+    if(!cb||!cb.checked||cb.disabled)return;
+    const mk2=String(x.m);
+    if(!(d.months||[]).includes(x.m)){d.months=[...(d.months||[]),x.m].sort((a,b)=>a-b);d.labels=d.labels||{};d.labels[mk2]=d.labels[mk2]||x.m+"월";}
+    const rp=buyEnsureRow(y,"pida",vd,""),rb=buyEnsureRow(y,"bojagi",vd,"");
+    if(x.insa)rp.m[mk2]=x.insa;else delete rp.m[mk2];
+    if(x.boja)rb.m[mk2]=x.boja;else delete rb.m[mk2];
+    buyBizFix1(y,vd,x.m);/* 전체 = 사업장 합 */
+    n++;
+  });
+  if(!n){toast("체크된 달이 없어요",true);return;}
+  d.mkVendor=vd;
+  d.savedAt=Date.now();buyMark("stat_"+y);
+  closeModal();window.__buyMk=null;
+  renderBuyStat();
+  toast(n+"개 달의 마켓 매입을 '"+vd+"'에 가져왔어요 — 전체는 합으로 갱신 ✓");
+}
+window.buyMkOpen=buyMkOpen;window.buyMkFill=buyMkFill;window.buyMkVendorSel=buyMkVendorSel;window.buyMkApply=buyMkApply;
 window.buySplitOpen=buySplitOpen;window.buySplitQuick=buySplitQuick;window.buySplitGo=buySplitGo;
 window.buyQuickOpen=buyQuickOpen;window.buyQuickClose=buyQuickClose;window.buyQuickYm=buyQuickYm;window.buyQuickAdd=buyQuickAdd;window.buyQuickDel=buyQuickDel;window.buyQuickApply=buyQuickApply;
 </script>
