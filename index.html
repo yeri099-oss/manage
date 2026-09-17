@@ -478,7 +478,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v218</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v219</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -6620,36 +6620,50 @@ function payAutoFill(){
         /* 임원 일급(⚙ 사원 설정 지정): 시간 칸의 숫자를 '일수'로 보고
            휴일 1일 = ROUND(월급여÷241.6×14) 로 수당 칸 자동 기입 */
         {
+          const hEd0=(P.edits||{})["휴일근무수당"]||{};
+          const hTxt=(ref)=>{const e9=hEd0[ref];if(e9!==undefined)return String(e9).trim();const c9=hd.cells[ref];return c9&&c9.typ==="str"?String(c9.v).trim():"";};
           let subR=null;
           for(let r0=1;r0<=6&&!subR;r0++)for(let c0=4;c0<=hd.maxC;c0++){
-            const h0=hd.cells[payIdxCol(c0)+r0];
-            if(h0&&h0.typ==="str"&&String(h0.v).trim()==="시간"){subR=r0;break;}
+            const t9=hTxt(payIdxCol(c0)+r0);
+            if(t9==="시간"||t9==="일수"){subR=r0;break;}
           }
           const timeCols=[];
           if(subR)for(let c0=4;c0<hd.maxC;c0++){
-            const h0=hd.cells[payIdxCol(c0)+subR];
-            if(h0&&h0.typ==="str"&&String(h0.v).trim()==="시간")timeCols.push(c0);
+            const t9=hTxt(payIdxCol(c0)+subR);
+            if(t9==="시간"||t9==="일수")timeCols.push(c0);
+          }
+          /* '일급' 헤더가 있으면 모든 직원: 수당 = 일급 × 일수(시간 칸을 일수로 해석) */
+          let dCol=null;
+          for(let r0=1;r0<=6&&!dCol;r0++)for(let c0=2;c0<=hd.maxC;c0++){
+            if(hTxt(payIdxCol(c0)+r0)==="일급"){dCol=payIdxCol(c0);break;}
           }
           const byT=((S.data.payTax||{}).byName)||{};
-          const hEd0=(P.edits||{})["휴일근무수당"]||{};
+          const hv0=payMkVal(hd,hEd0);
           for(let r=3;r<=hd.maxR;r++){
             const a0=hd.cells["A"+r];
             if(a0&&a0.typ==="str"&&String(a0.v).trim()==="계")break;
             const nb0=hd.cells["B"+r];
             if(!nb0||nb0.typ!=="str")continue;
             const n0=String(nb0.v).replace(/\s+/g,"");
+            if(!n0||n0==="성명")continue;
             const cfg0=byT[n0];
-            if(!cfg0||!cfg0.exec)continue;
-            /* 월급여: 휴일 시트 C열, 없으면 상용직급여 급여 열 */
-            let mw=0;
-            const cCell=hd.cells["C"+r];
-            if(cCell&&cCell.typ==="num"&&cCell.v!=="")mw=Number(cCell.v);
-            if(!mw){
-              const emp0=em.rows.find(x=>x.name.replace(/\s+/g,"")===n0);
-              if(emp0)mw=em.val(em.cm.pay+emp0.r);
+            /* 일급 정하기: ① 일급 열 값 ② 임원(⚙ 설정)은 월급여÷241.6×14 */
+            let daily=0;
+            if(dCol){const dv=hv0(dCol+r);if(dv>0)daily=Math.round(dv);}
+            if(!daily&&cfg0&&cfg0.exec){
+              let mw=0;
+              const cCell=hd.cells["C"+r];
+              if(cCell&&cCell.typ==="num"&&cCell.v!=="")mw=Number(cCell.v);
+              const cEd9=hEd0["C"+r];
+              if(cEd9!==undefined&&cEd9!==""&&!isNaN(Number(String(cEd9).replace(/,/g,""))))mw=Number(String(cEd9).replace(/,/g,""));
+              if(!mw){
+                const emp0=em.rows.find(x=>x.name.replace(/\s+/g,"")===n0);
+                if(emp0)mw=em.val(em.cm.pay+emp0.r);
+              }
+              if(!mw)continue;
+              daily=Math.round(mw/241.6*14);
             }
-            if(!mw)continue;
-            const daily=Math.round(mw/241.6*14);
+            if(!daily)continue;
             for(const c0 of timeCols){
               const tRef=payIdxCol(c0)+r,pRef=payIdxCol(c0+1)+r;
               const tCell=hd.cells[tRef];
@@ -6658,7 +6672,6 @@ function payAutoFill(){
               let days=0;
               if(tEd!==undefined&&tEd!=="")days=Number(tEd)||0;
               else if(tCell&&tCell.typ==="num"&&tCell.v!=="")days=Number(tCell.v)||0;
-              const pCell=hd.cells[pRef];
               if(days>0)payEdit("휴일근무수당",pRef,Math.round(daily*days),true);
               else{
                 const asP=((P.autoSet||{})["휴일근무수당"]||{})[pRef];
