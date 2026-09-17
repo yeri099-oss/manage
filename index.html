@@ -478,7 +478,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v216</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v217</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -7210,12 +7210,14 @@ function payCellEdit(el){
   {
     const sh0=paySheetByName(shName);
     const c0=sh0?sh0.cells[ref]:null;
-    if(t===""&&c0&&typeof c0.f==="string"){
+    if(t===""&&((c0&&typeof c0.f==="string")||((window.__pay.edits||{})[shName]||{})[ref]!==undefined)){
       const P0=window.__pay;
       if(((P0.edits||{})[shName]||{})[ref]!==undefined){
+        const wasManual=!(((P0.autoSet||{})[shName]||{})[ref]);
         delete P0.edits[shName][ref];
         if((P0.autoSet||{})[shName])delete P0.autoSet[shName][ref];
         paySchedSave();
+        if(wasManual&&!(c0&&typeof c0.f==="string"))toast("원래 값으로 되돌렸어요 — 이 칸은 다시 자동 반영을 따라가요");
       }
       renderPay();
       return;
