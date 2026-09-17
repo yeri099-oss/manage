@@ -478,7 +478,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v217</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v218</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -6804,6 +6804,40 @@ function payAutoFill(){
         const spec=Math.round(P.bjSpecialSum||0);
         af("인건비현황","F"+mrow,bonusAll-sb-spec);          /* 상여금(월분) */
         if(P.epc||spec)af("인건비현황","G"+mrow,sb+spec);    /* 특별상여금(명절 등) */
+        /* 기타 = 시급직급여의 파출(북촌·인사동 등) 지급총액 합 */
+        try{
+          const hs2=paySheetByName("시급직급여");
+          if(hs2){
+            const hv2=payMkVal(hs2,(P.edits||{})["시급직급여"]);
+            let pCol=null,pHdr=0;
+            for(let r0=1;r0<=6&&!pCol;r0++)for(let c0=2;c0<=hs2.maxC;c0++){
+              const h0=hs2.cells[payIdxCol(c0)+r0];
+              if(h0&&h0.typ==="str"&&String(h0.v).replace(/\s+/g,"")==="지급총액"){pCol=payIdxCol(c0);pHdr=r0;break;}
+            }
+            if(pCol){
+              let pach=0,pn=0;
+              for(let r0=pHdr+1;r0<=hs2.maxR;r0++){
+                const b0=hs2.cells["B"+r0];
+                const nm0=b0&&b0.typ==="str"?String(b0.v).replace(/\s+/g,""):"";
+                if(nm0.indexOf("파출")>=0){pach+=hv2(pCol+r0);pn++;}
+              }
+              if(pn){
+                let gCol=null;
+                for(let r0=1;r0<=lb.maxR&&!gCol;r0++){
+                  let hasGita=null,hasPay=false;
+                  for(let c0=2;c0<=lb.maxC;c0++){
+                    const h0=lb.cells[payIdxCol(c0)+r0];
+                    const t0=h0&&h0.typ==="str"?String(h0.v).replace(/\s+/g,""):"";
+                    if(t0==="기타")hasGita=payIdxCol(c0);
+                    if(t0==="급여")hasPay=true;
+                  }
+                  if(hasGita&&hasPay)gCol=hasGita;
+                }
+                if(gCol)af("인건비현황",gCol+mrow,Math.round(pach));
+              }
+            }
+          }
+        }catch(e2){console.warn("파출 기타",e2);}
       }
     }
   }catch(e){console.warn("autofill",e);}
