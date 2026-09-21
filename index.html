@@ -478,7 +478,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v222</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v223</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -7802,7 +7802,8 @@ function renderPay(){
     const chipList=wb.sheets.filter(x=>x.name!=="퇴직금").concat(wb.sheets.filter(x=>x.name==="퇴직금"));
     const chips=chipList.map(s=>`<button class="paychip${s.name===active?" on":""}" onclick="window.__pay.sheet='${esc(s.name)}';renderPay()">${esc(s.name)}${(P.edits||{})[s.name]&&Object.keys(P.edits[s.name]).length?" ✎":""}</button>`).join("")
       +`<button class="paychip${active==="__cfg"?" on":""}" style="border-style:dashed" onclick="window.__pay.sheet='__cfg';renderPay()">⚙ 사원 설정</button>`
-      +`<button class="paychip${active==="__ecount"?" on":""}" style="border-style:dashed" onclick="window.__pay.sheet='__ecount';renderPay()">🧾 이카운트 입력</button>`;
+      +`<button class="paychip${active==="__ecount"?" on":""}" style="border-style:dashed" onclick="window.__pay.sheet='__ecount';renderPay()">🧾 이카운트 입력</button>`
+      +(active==="상용직급여"?`<button class="paychip" style="border-style:dashed;margin-left:6px" onclick="payPasteOpen()">📋 최종 표 붙여넣어 대조</button>`:"");
     let body="";
     if(active==="__cfg"){
       const em=payEmpRows();
@@ -10855,6 +10856,83 @@ window.payEcBody=function(){
     <div class="footnote" style="margin-top:8px">예수금(4대보험) 세 줄은 사업장 구분 없이 꽃밥이야기로 한 번에 넣는 방식 그대로예요. 국민건강 줄은 건강보험+장기요양보험 합이에요. 시급직·용역직은 이 전표에 포함되지 않아요.</div>
   </div>`;
 };
+/* === 상용직급여 최종 표 붙여넣기 → 차이 확인·반영 === */
+const PPST_COLS=[["급여","pay"],["제수당","alw"],["상여금","bon"],["특별상여금","sbon"],["지급총액","tot"],["소득세","tax"],["지방소득세","ltax"],["국민연금","np"],["건강보험","hi"],["장기요양보험","ltc"],["고용보험","ei"],["기지급액","pre"],["공제총액","ded"],["실지급액","net"]];
+function ppstParse(text){
+  const lines=String(text||"").split(/\r?\n/).map(l=>l.split("\t"));
+  let hi=-1,cols=null;
+  for(let i=0;i<lines.length;i++){const t=lines[i].map(x=>String(x).replace(/\s+/g,""));const c0=t.indexOf("사원명");if(c0>=0){hi=i;cols={};t.forEach((h,ci)=>{const m=PPST_COLS.find(([n])=>n===h);if(m)cols[m[1]]=ci;});cols.name=c0;break;}}
+  if(hi<0)throw new Error("'사원명' 머리글이 있는 줄을 찾지 못했어요 — 표 전체(머리글 포함)를 복사해서 붙여넣어 주세요");
+  const num=v=>{const t=String(v==null?"":v).replace(/[,\s원]/g,"");if(t===""||t==="-")return null;const n=Number(t);return isNaN(n)?null:Math.round(n);};
+  const rows=[];
+  for(let i=hi+1;i<lines.length;i++){
+    const c=lines[i];const nm=String(c[cols.name]||"").trim();
+    if(!nm||nm==="소계"||nm==="합계"||nm.indexOf("소계")>=0||nm.indexOf("합계")>=0)continue;
+    const o={name:nm,v:{}};
+    for(const k in cols){if(k==="name")continue;o.v[k]=num(c[cols[k]]);}
+    rows.push(o);
+  }
+  return {rows,cols};
+}
+window.payPasteOpen=function(){
+  openModal("📋 상용직급여 최종 표 대조",
+    `<div class="footnote" style="margin-bottom:6px">엑셀에서 상용직급여 표(머리글 포함, 소계·합계 줄이 섞여 있어도 돼요)를 복사해 붙여넣으세요. 앱의 현재 값과 사람별·항목별로 비교해서 다른 칸만 보여줘요.</div>
+     <textarea id="ppstTa" style="width:100%;min-height:160px;font-size:12px;border:1px solid var(--line,#ddd);border-radius:8px;padding:8px" placeholder="사원명\t급여\t제수당\t상여금\t지급총액\t소득세 …"></textarea>
+     <div id="ppstOut" style="margin-top:8px"></div>`,
+    `<button class="btn" onclick="closeModal()">닫기</button><button class="btn" onclick="payPasteCheck()">🔍 대조하기</button><button class="btn btn-primary" id="ppstApply" onclick="payPasteApply()" disabled>✅ 다른 칸 모두 반영</button>`);
+  setTimeout(()=>{const t=document.getElementById("ppstTa");if(t)t.focus();},60);
+};
+function ppstDiff(){
+  const ta=document.getElementById("ppstTa");
+  const parsed=ppstParse(ta?ta.value:"");
+  const em=payEmpRows();if(!em)throw new Error("상용직급여 시트가 없어요");
+  const cm=em.cm,V=em.val,sh=em.sheet;
+  const byName={};em.rows.forEach(r=>byName[r.name.replace(/\s+/g,"")]=r);
+  const diffs=[],missing=[],same=[];
+  const label=Object.fromEntries(PPST_COLS.map(([n,k])=>[k,n]));
+  for(const p of parsed.rows){
+    const row=byName[p.name.replace(/\s+/g,"")];
+    if(!row){missing.push(p.name);continue;}
+    let any=false;
+    for(const k in p.v){
+      const col=cm[k];if(!col)continue;
+      const ref=col+row.r;
+      const cell=sh.cells[ref];
+      const isF=!!(cell&&typeof cell.f==="string");
+      const cur=Math.round(V(ref)||0);
+      const nv=p.v[k]==null?0:p.v[k];
+      if(cur!==nv){any=true;diffs.push({name:p.name,k,label:label[k],ref,cur,nv,isF});}
+    }
+    if(!any)same.push(p.name);
+  }
+  const notInPaste=em.rows.filter(r=>!parsed.rows.some(p=>p.name.replace(/\s+/g,"")===r.name.replace(/\s+/g,""))).map(r=>r.name);
+  return {diffs,missing,same,notInPaste,n:parsed.rows.length};
+}
+window.payPasteCheck=function(){
+  const out=document.getElementById("ppstOut");
+  try{
+    const D=ppstDiff();window.__ppst=D;
+    const inputDiffs=D.diffs.filter(d=>!d.isF),calcDiffs=D.diffs.filter(d=>d.isF);
+    let h=`<div class="footnote">붙여넣은 ${D.n}명 중 <b>${D.same.length}명</b>은 전부 일치, <b>${[...new Set(D.diffs.map(d=>d.name))].length}명</b>에서 차이 ${D.diffs.length}칸</div>`;
+    if(D.missing.length)h+=`<div style="margin:6px 0;padding:6px 10px;background:#FDF6EC;border:1px solid #E8C88A;border-radius:8px"><b>⚠ 앱 시트에 없는 사람:</b> ${D.missing.map(esc).join(", ")} — 엑셀에서 줄을 추가한 뒤 다시 올려주세요 (여기서는 반영 못 해요)</div>`;
+    if(D.notInPaste.length)h+=`<div style="margin:6px 0;padding:6px 10px;background:#FDF6EC;border:1px solid #E8C88A;border-radius:8px"><b>⚠ 붙여넣은 표에 없는 사람(앱에만 있음):</b> ${D.notInPaste.map(esc).join(", ")}</div>`;
+    if(inputDiffs.length){
+      h+=`<div class="table-wrap" style="max-height:300px"><table class="rpt" style="font-size:12.5px"><thead><tr><th class="l">사원</th><th class="l">항목</th><th>앱 현재</th><th>최종 표</th><th>차이</th></tr></thead><tbody>${inputDiffs.map(d=>`<tr><td class="l">${esc(d.name)}</td><td class="l">${esc(d.label)}</td><td style="text-align:right">${fmt(d.cur)}</td><td style="text-align:right"><b>${fmt(d.nv)}</b></td><td style="text-align:right;color:#b45309">${fmt(d.nv-d.cur)}</td></tr>`).join("")}</tbody></table></div>`;
+    }else h+=`<div style="color:#2F6B3F;margin-top:6px">✓ 입력 칸은 전부 일치해요</div>`;
+    if(calcDiffs.length)h+=`<div class="footnote" style="margin-top:6px">수식 칸(지급총액·공제총액·실지급액) 차이 ${calcDiffs.length}건은 위 입력 칸을 반영하면 자동으로 따라와요.</div>`;
+    out.innerHTML=h;
+    const b=document.getElementById("ppstApply");if(b){b.disabled=!inputDiffs.length;b.textContent=inputDiffs.length?`✅ ${inputDiffs.length}칸 반영`:"반영할 차이 없음";}
+  }catch(e){out.innerHTML=`<div class="buy-warn">${esc(e.message||String(e))}</div>`;}
+};
+window.payPasteApply=function(){
+  const D=window.__ppst;if(!D)return;
+  const list=D.diffs.filter(d=>!d.isF);if(!list.length)return;
+  for(const d of list)payEdit("상용직급여",d.ref,d.nv===0?"":d.nv);
+  paySchedSave();closeModal();window.__ppst=null;
+  window.__pay.sheet="상용직급여";renderPay();
+  toast(list.length+"칸을 최종 표 값으로 반영했어요 (노란 테두리 = 직접 수정)");
+};
+
 </script>
 
 <script>
