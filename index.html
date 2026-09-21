@@ -478,7 +478,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v219</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v221</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -6867,6 +6867,11 @@ function payApplyEpc(){
     if(!e)continue;
     used.add(e.name);
     const vals={};
+    /* 지급 항목: 직원 줄 위치가 달라도 이름으로 매칭해 전부 가져옴 */
+    vals[cmE.pay]=e.pay;
+    vals[cmE.alw]=(e.sudang||0)+(e.yeoncha||0);
+    if(cmE.sbon){vals[cmE.bon]=e.bonus1;vals[cmE.sbon]=e.sbonus;}
+    else vals[cmE.bon]=(e.bonus1||0)+(e.sbonus||0);
     vals[cmE.tax]=e.tax;vals[cmE.ltax]=e.ltax;vals[cmE.np]=e.pension;vals[cmE.hi]=e.health;vals[cmE.ltc]=e.care;vals[cmE.ei]=e.employ;
     for(const col in vals)payEdit("상용직급여",col+row.r,Math.round(vals[col]));
     matched.push(row.name);
@@ -6880,7 +6885,7 @@ function payApplyEpc(){
   }
   const notFound=P.epc.emps.filter(e=>!used.has(e.name)).map(e=>e.name+"("+(e.dept||"?")+")");
   P.result={matched:matched,notFound:notFound,mismatch:mismatch};
-  toast("상용직 "+matched.length+"명 공제내역 반영됨");
+  toast("상용직 "+matched.length+"명 급여·수당·상여·공제 전 항목 반영됨");
 }
 /* ---------- 상여금 시트 열 구조 (월 열 + 앱에서 추가한 특별상여 열) ---------- */
 function payBjCols(){
@@ -7712,7 +7717,7 @@ function renderPay(){
       </div>
       <div style="flex:1;min-width:260px;border:1px dashed rgba(0,0,0,.2);border-radius:10px;padding:10px 12px">
         <div style="font-weight:700;font-size:13.5px">② 이카운트 급여대장 (.xlsx · EPC001E)</div>
-        <div class="footnote" style="margin:4px 0 6px">올리면 상용직급여 시트의 공제 6칸이 자동으로 채워져요 (화면에 따로 안 보여요)</div>
+        <div class="footnote" style="margin:4px 0 6px">올리면 상용직급여 시트에 급여·제수당(연차 포함)·상여금·공제까지 전 항목이 이름 매칭으로 채워져요</div>
         <input type="file" accept=".xlsx" onchange="payPick('epc',this)">
         <div class="footnote" style="margin-top:4px">${epc?`✅ ${epc.emps.length}명 반영${epc.ym?` (${epc.ym.y}년 ${epc.ym.m}월)`:""}`:"— 아직"}${epc&&epc.ym&&ym&&(String(epc.ym.y)!==String(ym.y)||String(epc.ym.m)!==String(ym.m))?`<br><b style="color:#b45309">⚠ 이카운트는 ${epc.ym.y}년 ${epc.ym.m}월 자료인데 지금 급여품의는 ${ym.y}년 ${ym.m}월이에요</b>`:""}</div>
       </div>
@@ -12697,7 +12702,7 @@ function refreshValidWarns(){
 
 /* ============ 확정 탭 ============ */
 const CF_ROWS=[
-  ["마켓포스 카드","3"],["마켓포스 현금","4"],["마켓포스 외상 <span class=\"tag\">배분</span>","5"],["마켓포스 포인트 <span class=\"tag\">배분</span>","6"],["마켓포스 제로페이·기타수단 <span class=\"tag\">배분</span>","7"],
+  ["마켓포스 카드","3"],["마켓포스 현금","4"],["마켓포스 외상","5",{only:["F"]}],["마켓포스 포인트","6",{only:["F"]}],["마켓포스 제로페이·기타수단 <span class=\"tag\">배분</span>","7"],
   ["소계","8","sub"],["꽃밥 (세금계산서)","9"],["기타(세금계산서)","10"],["마켓포스매출 계","11","sub"],
   ["SP"],
   ["보자기포스 현금","12"],["보자기포스 카드","13"],["키오스크","14"],["소계","15","sub"],["계","16","tot"],
@@ -12740,9 +12745,6 @@ function cfmVerifyHtml(m){
       '보자기 계 + 온라인 계 + 마켓 계 ↔ 위쪽 표의 계 — 나눈 걸 다시 합쳐 확인');
   add('국세청 카드+현영+소매 = 전체 합계',
       V.F17+V.F18+V.F19, V.F16, '카드로 잡힌 것, 현금영수증, 소매(나머지)를 합치면 전체와 같아야 해요');
-  add('세금계산서 면세가 외상 쪽 면세 안에 들어가나',
-      Math.min(I.kb.m,V.E5+V.E6+V.E7), I.kb.m,
-      '세금계산서(계좌이체=외상)의 면세 ↔ 외상·포인트·기타수단에 배분된 면세 — 왼쪽이 작으면 포스가 외상 면세를 덜 잡은 거예요',0- -2);
   add('보자기 계 = 보자기 실제 매출',
       V.F26, V.F15, '사업부 나누기의 보자기 계 ↔ 보자기포스 소계(현금+카드+키오스크) — 예전 엑셀에선 보자기포스 카드가 이중으로 들어가 달랐어요');
   add('마켓 계 + 온라인 계 = 마켓포스매출 계',
@@ -12814,7 +12816,7 @@ function renderConfirm(){
     h+=`<tr${cls}><td class="lb">${lb}</td>${cell("B")}${cell("C")}${cell("D")}${cell("E")}${cell("F")}</tr>`;
   }
   h+=`</table>
-  <div class="hint">제로페이·기타수단은 마켓 비율(또는 입력한 부가세×11)로, 외상·포인트는 소계에서 카드·현금·기타수단을 뺀 <b>나머지</b>로 과세/면세를 나눠 보여줘요('배분' 표시). 이제 카드부터 제로페이까지 다섯 행을 세로로 더하면 각 열이 소계와 정확히 맞아요.</div>
+  <div class="hint">제로페이·기타수단은 마켓 비율(또는 입력한 부가세×11)로 과세/면세를 나눠요. 외상·포인트는 기존 엑셀처럼 <b>계만</b> 표시해요 — 과세·면세 몫은 소계에 이미 들어 있어서 계산에는 영향이 없어요.</div>
   ${(()=>{const I=deriveInputs(m);return (I.estCapped&&m.nts.cardGong==null)?`<div class="hint">ℹ️ 국세청 카드의 면세 몫을 남은 면세(${fmt(I.availMyeon)}원)까지로 제한했어요 — 국세청 카드매출에는 외상 상환처럼 이번 달 매출이 아닌 과세 금액이 껴 있어서, 비율로만 나누면 면세가 실제보다 커지기 때문이에요. 그래서 소매 면세는 0으로 표시됩니다 (소매 합계는 그대로예요).</div>`:'';})()}
   <table class="cf" style="margin-top:12px;max-width:520px"><tr><th>판매수수료 배분</th><th>금액</th></tr>
     <tr><td class="lb">마켓포스 카드 몫</td><td>${fmt(V.N17)}</td></tr>
@@ -12837,7 +12839,7 @@ function renderConfirm(){
   <div class="hint">${m.nts.zeropayVat==null
     ?`배분 기준: <b>마켓 비율 추정</b> — 마켓포스 매출의 과세 비중 ${(()=>{const a=deriveInputs(m).tot,t=a.g+a.v+a.m;return t>0?Math.round((a.g+a.v)/t*1000)/10:0;})()}%로 과세/면세를 나눠요. (④ 국세청의 '부가세 합' 칸을 채우면 부가세×11로 정확 배분)`
     :`배분 기준: <b>부가세 직접입력(정확)</b> — 과세 = 부가세 ${fmt(m.nts.zeropayVat)} × 11.`}
-  국세청 줄은 '국세청 카드 과세분'을 <b>직접 입력</b>했을 때 그 위에 보태지는 값이에요. 지금처럼 <b>추정</b> 모드일 땐 국세청 카드 총액(제로페이 포함)을 통째로 비율 배분하므로 따로 보태지 않아요. 확정 엑셀에도 제로페이·외상·포인트의 배분값이 그대로 내려가요.</div>
+  국세청 줄은 '국세청 카드 과세분'을 <b>직접 입력</b>했을 때 그 위에 보태지는 값이에요. 지금처럼 <b>추정</b> 모드일 땐 국세청 카드 총액(제로페이 포함)을 통째로 비율 배분하므로 따로 보태지 않아요. 확정 엑셀에서 외상·포인트는 기존 양식처럼 계만 내려가고, 제로페이 배분값은 그대로 내려가요.</div>
   <div style="margin-top:14px" class="flex"><button class="btn" id="btnVerify">🔍 검증하기</button><button class="btn" id="btnXlsx">📥 이 달 확정 엑셀 다운로드</button><span class="hint">검증하기 = 붙여넣은 자료끼리 교차 확인 + 숫자 계산 과정 풀이</span></div>
   <div id="cfmVfy"></div>
   <div class="err" id="xlsxErr" style="display:none"></div></div>`;
@@ -13050,9 +13052,11 @@ async function exportXlsx(){
     v.textContent=Number.isInteger(val)?String(val):String(Math.round(val*10000)/10000);
     cel.appendChild(v);
   }
+  const BLANK_CELLS=["B5","C5","D5","E5","B6","C6","D6","E6"];/* 외상·포인트는 기존 엑셀처럼 계만 */
   for(const addr of INPUT_CELLS){
     const cel=ensureCell(addr);
     for(const f of[...cel.getElementsByTagName("f")])cel.removeChild(f);
+    if(BLANK_CELLS.includes(addr)){for(const v of[...cel.getElementsByTagName("v")])cel.removeChild(v);cel.removeAttribute("t");continue;}
     setV(cel,V[addr]!==undefined?V[addr]:0);
   }
   for(const addr in V){
