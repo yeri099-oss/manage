@@ -478,7 +478,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v221</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v222</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -1123,7 +1123,7 @@ async function loadAllData() {
   jobs.push(fsCol("config").doc("bojagiDrinkItems").get().then((d) => { S.data.drinkItems = d.data()?.items || []; }));
   jobs.push(db.collection("salesStatus_months").get().then((snap) => { S.cfmYms = []; snap.forEach((d) => S.cfmYms.push(d.id)); }).catch(() => {}));
   jobs.push(fsCol("config").doc("epidaDrink").get().then((d) => { S.data.epidaDrink = d.data() || { add: [], remove: [] }; }).catch(() => {}));
-  jobs.push(fsCol("payMonthly").get().then((snap)=>{const out={},files={};snap.forEach((d)=>{if(d.id.indexOf("file_")===0)files[d.id.slice(5)]=d.data();else if(d.id==="acctConfig")S.data.payAcct=d.data().acctOf||{};else if(d.id==="taxConfig")S.data.payTax=d.data()||{byName:{}};else if(d.id==="taxTable")S.data.payTaxTable=d.data()||null;else out[d.id]=d.data();});S.data.payMonthly=out;S.data.payFiles=files;}).catch(()=>{S.data.payMonthly=S.data.payMonthly||{};S.data.payFiles=S.data.payFiles||{};S.data.payAcct=S.data.payAcct||{};}));
+  jobs.push(fsCol("payMonthly").get().then((snap)=>{const out={},files={};snap.forEach((d)=>{if(d.id.indexOf("file_")===0)files[d.id.slice(5)]=d.data();else if(d.id==="acctConfig")S.data.payAcct=d.data().acctOf||{};else if(d.id==="taxConfig")S.data.payTax=d.data()||{byName:{}};else if(d.id==="taxTable")S.data.payTaxTable=d.data()||null;else if(d.id==="bizConfig")S.data.payBiz=d.data()||{bizOf:{}};else out[d.id]=d.data();});S.data.payMonthly=out;S.data.payFiles=files;}).catch(()=>{S.data.payMonthly=S.data.payMonthly||{};S.data.payFiles=S.data.payFiles||{};S.data.payAcct=S.data.payAcct||{};}));
   jobs.push(fsCol("config").doc("bojagiPosMap").get().then((d) => { S.data.bojagiPosMap = (d.data() || {}).map || {}; }).catch(() => {}));
   if(S.user&&S.user.role==="admin")jobs.push(fsCol("buy").get().then((snap)=>{const B={files:{},close:{},stat:{},vendorMap:{}};snap.forEach((d)=>{const id=d.id;if(id==="file_close")B.files.close=d.data();else if(id==="file_stat")B.files.stat=d.data();else if(id.indexOf("close_")===0)B.close[id.slice(6)]=d.data();else if(id.indexOf("stat_")===0)B.stat[id.slice(5)]=d.data();else if(id==="vendorMap"){B.vendorMap=(d.data()||{}).map||{};B.vendorSkip=(d.data()||{}).skip||{};}});S.data.buy=B;}).catch(()=>{S.data.buy=S.data.buy||{files:{},close:{},stat:{},vendorMap:{}};}));
   await Promise.all(jobs);
@@ -7801,7 +7801,8 @@ function renderPay(){
     const active=P.sheet||wb.sheets[0].name;
     const chipList=wb.sheets.filter(x=>x.name!=="퇴직금").concat(wb.sheets.filter(x=>x.name==="퇴직금"));
     const chips=chipList.map(s=>`<button class="paychip${s.name===active?" on":""}" onclick="window.__pay.sheet='${esc(s.name)}';renderPay()">${esc(s.name)}${(P.edits||{})[s.name]&&Object.keys(P.edits[s.name]).length?" ✎":""}</button>`).join("")
-      +`<button class="paychip${active==="__cfg"?" on":""}" style="border-style:dashed" onclick="window.__pay.sheet='__cfg';renderPay()">⚙ 사원 설정</button>`;
+      +`<button class="paychip${active==="__cfg"?" on":""}" style="border-style:dashed" onclick="window.__pay.sheet='__cfg';renderPay()">⚙ 사원 설정</button>`
+      +`<button class="paychip${active==="__ecount"?" on":""}" style="border-style:dashed" onclick="window.__pay.sheet='__ecount';renderPay()">🧾 이카운트 입력</button>`;
     let body="";
     if(active==="__cfg"){
       const em=payEmpRows();
@@ -7831,6 +7832,8 @@ function renderPay(){
         <span class="footnote">${T?`✅ 간이세액표 ${T.rows}개 구간 저장됨${T.savedAt?` (${new Date(T.savedAt).getFullYear()}.${new Date(T.savedAt).getMonth()+1} 업로드)`:""}${T.savedAt&&(Date.now()-T.savedAt>426*24*3600*1000)?` <b style="color:#b45309">— 1년 넘게 지났어요. 매년 3월 초 국세청 개정 여부를 확인하고 새 표를 올려주세요.</b>`:""}`:`⚠ 간이세액표 미등록 — 소득세는 실측 기준 추정치(±수천 원). 홈택스에서 근로소득 간이세액표 엑셀을 받아 올리면 정확해져요.`} <span style="color:var(--sub)">간이세액표는 보통 세법 개정에 맞춰 1~2년마다 2월 말 개정(3월 1일 시행)돼요 — 매년 3월 초에 한 번 확인하면 충분해요.</span></span>
       </div>
       <div class="table-wrap"><table class="rpt" style="font-size:12.5px"><thead><tr><th class="l">사원</th><th>국민연금</th><th>건강보험</th><th>장기요양</th><th>고용보험</th><th>가족수(자녀 포함 전체)</th><th>8~20세 자녀</th><th>세액표</th><th>임원 일급</th><th>기준 실측(총액→소득세)</th></tr></thead><tbody>${rows3}</tbody></table></div>`;
+    }else if(active==="__ecount"){
+      body=(typeof payEcBody==="function")?payEcBody():"";
     }else{
       const sh=wb.sheets.find(s=>s.name===active)||wb.sheets[0];
       const edits=(P.edits||{})[sh.name]||{};
@@ -10722,6 +10725,136 @@ function buyMkApply(){
 window.buyMkOpen=buyMkOpen;window.buyMkFill=buyMkFill;window.buyMkVendorSel=buyMkVendorSel;window.buyMkApply=buyMkApply;
 window.buySplitOpen=buySplitOpen;window.buySplitQuick=buySplitQuick;window.buySplitGo=buySplitGo;
 window.buyQuickOpen=buyQuickOpen;window.buyQuickClose=buyQuickClose;window.buyQuickYm=buyQuickYm;window.buyQuickAdd=buyQuickAdd;window.buyQuickDel=buyQuickDel;window.buyQuickApply=buyQuickApply;
+</script>
+
+<script>
+/* === pay_ecount.js — 급여탭 '이카운트 입력' 전표 화면 (상용직급여 기준) === */
+"use strict";
+const PEC_BIZ=[["mk","꽃밥마켓"],["ep","꽃밥에피다"],["bj","보자기꽃밥"]];
+const PEC_LABEL={mk:"꽃밥마켓",ep:"꽃밥에피다",bj:"보자기꽃밥",all:"꽃밥이야기"};
+function pecCfg(){S.data.payBiz=S.data.payBiz||{bizOf:{},eiMult:1.8};S.data.payBiz.bizOf=S.data.payBiz.bizOf||{};if(!(S.data.payBiz.eiMult>0))S.data.payBiz.eiMult=1.8;return S.data.payBiz;}
+async function pecSave(){
+  const c=pecCfg();
+  if(typeof IS_DEMO!=="undefined"&&IS_DEMO)return;
+  try{await fsCol("payMonthly").doc("bizConfig").set({bizOf:c.bizOf,eiMult:c.eiMult,savedAt:Date.now()});}
+  catch(e){console.error(e);toast("사업장 설정 저장 실패: "+(e.message||""),true);}
+}
+/* 휴일근무수당 시트의 부서 그룹 라벨 → 사업장 기본값 */
+function pecHolDept(){
+  const out={};
+  const hs=(typeof paySheetByName==="function")?paySheetByName("휴일근무수당"):null;
+  if(!hs)return out;
+  let curL=null;
+  for(let r=2;r<=hs.maxR;r++){
+    const a=hs.cells["A"+r];
+    if(a&&a.typ==="str"){const t=String(a.v).trim();if(t&&t!=="부서명"&&t!=="계"&&t.indexOf("휴일근무")<0)curL=t;}
+    const b=hs.cells["B"+r];
+    if(b&&b.typ==="str"&&curL){const n=String(b.v).replace(/\s+/g,"");if(n&&n!=="성명")out[n]=curL;}
+  }
+  return out;
+}
+function pecGuess(name){
+  const n=String(name||"").replace(/\s+/g,"");
+  const P=window.__pay||{};
+  if(P.epc){const e=P.epc.emps.find(x=>x.name.replace(/\s+/g,"")===n);
+    if(e){const d=e.dept||"";if(d.indexOf("마켓")>=0)return "mk";if(d.indexOf("피다")>=0||d.indexOf("인사동")>=0)return "ep";if(d.indexOf("보자기")>=0)return "bj";if(d.indexOf("꽃밥이야기")>=0)return "mk";}}
+  const hd=pecHolDept()[n];
+  if(hd){if(hd.indexOf("마켓")>=0)return "mk";if(hd.indexOf("인사동")>=0||hd.indexOf("피다")>=0)return "ep";if(hd.indexOf("보자기")>=0)return "bj";}
+  return null;
+}
+function pecBizOf(name){const c=pecCfg();const n=String(name||"").replace(/\s+/g,"");return c.bizOf[n]||null;}
+window.pecSetBiz=function(name,biz){const c=pecCfg();const n=String(name||"").replace(/\s+/g,"");if(biz)c.bizOf[n]=biz;else delete c.bizOf[n];pecSave();renderPay();};
+window.pecSetMult=function(v){const n=Number(String(v).replace(/[^\d.]/g,""));if(!(n>0))return;pecCfg().eiMult=n;pecSave();renderPay();};
+window.pecAutoAll=function(){const em=payEmpRows();if(!em)return;const c=pecCfg();let n=0;for(const row of em.rows){const g=pecGuess(row.name);if(g){c.bizOf[row.name.replace(/\s+/g,"")]=g;n++;}}pecSave();renderPay();toast(n+"명의 사업장을 이카운트/휴일근무 자료 기준으로 채웠어요");};
+/* 집계 */
+function pecCalc(){
+  const em=payEmpRows();if(!em)return null;
+  const cm=em.cm,V=em.val;
+  const g=(c)=>c?Math.round(V(c)):0;
+  const per=[];const un=[];
+  const sum={mk:{},ep:{},bj:{},all:{}};
+  const F=["pay","alw","bon","tot","tax","ltax","np","hi","ltc","ei","ded","net"];
+  for(const k in sum)F.forEach(f=>sum[k][f]=0);
+  for(const row of em.rows){
+    const r=row.r;
+    const x={name:row.name,biz:pecBizOf(row.name)||pecGuess(row.name),auto:!pecBizOf(row.name),
+      pay:g(cm.pay+r),alw:g(cm.alw+r),bon:g(cm.bon+r)+(cm.sbon?g(cm.sbon+r):0),tot:g(cm.tot+r),
+      tax:g(cm.tax+r),ltax:g(cm.ltax+r),np:g(cm.np+r),hi:g(cm.hi+r),ltc:g(cm.ltc+r),ei:g(cm.ei+r),ded:g(cm.ded+r),net:g(cm.net+r)};
+    per.push(x);
+    if(!x.biz){un.push(x.name);continue;}
+    F.forEach(f=>{sum[x.biz][f]+=x[f];sum.all[f]+=x[f];});
+  }
+  const mult=pecCfg().eiMult;
+  const emp={};/* 사용자부담(복리후생비) */
+  for(const k of ["mk","ep","bj","all"]){const s=sum[k];emp[k]={np:s.np,hl:s.hi+s.ltc,ei:Math.round(s.ei*mult),tot:0};emp[k].tot=emp[k].np+emp[k].hl+emp[k].ei;}
+  return {per,un,sum,emp,mult,cm};
+}
+function pecYm(){const ym=payYm();return ym?String(ym.y).slice(2)+String(ym.m).padStart(2,"0"):"";}
+function pecRows(C){
+  const ym=pecYm();
+  const rows=[];/* {grp,code,acct,sub,dr,cr,memo,biz} */
+  const add=(grp,code,acct,sub,dr,cr,memo,biz)=>{if(!(dr||cr))return;rows.push({grp,code,acct,sub,dr,cr,memo:memo+" "+ym,biz:PEC_LABEL[biz]});};
+  const B=["mk","ep","bj"];
+  B.forEach(b=>add("3차","8029","직원급여(판)","",C.sum[b].pay,0,"직원급여",b));
+  B.forEach(b=>add("3차","8049","제수당(판)","",C.sum[b].alw,0,"제수당",b));
+  B.forEach(b=>add("3차","8039","상여금(판)","",C.sum[b].bon,0,"상여금",b));
+  B.forEach(b=>add("4대","2547","예수금(원천세)","95164 국세",0,C.sum[b].tax,"소득세",b));
+  B.forEach(b=>add("4대","2547","예수금(원천세)","95165 지방세",0,C.sum[b].ltax,"소득세",b));
+  add("4대","2548","예수금(4대보험)","95150 국민연금",0,C.sum.all.np,"국민연금","all");
+  add("4대","2548","예수금(4대보험)","95151 국민건강",0,C.sum.all.hi+C.sum.all.ltc,"국민건강","all");
+  add("4대","2548","예수금(4대보험)","95149 고용보험",0,C.sum.all.ei,"고용보험","all");
+  B.forEach(b=>add("4대","2540","미지급급여","",0,C.sum[b].net,"직원급여",b));
+  const rows2=[];
+  const add2=(grp,code,acct,sub,dr,cr,memo,biz)=>{if(!(dr||cr))return;rows2.push({grp,code,acct,sub,dr,cr,memo:memo,biz:PEC_LABEL[biz]});};
+  B.forEach(b=>add2("3차","8109","복리후생비(4대보험 사용자부담)","",C.emp[b].tot,0,"4대보험 사용자부담",b));
+  add2("4대","2548","예수금(4대보험)","95150 국민연금",0,C.emp.all.np,"4대보험 사용자부담","all");
+  add2("4대","2548","예수금(4대보험)","95151 국민건강",0,C.emp.all.hl,"4대보험 사용자부담","all");
+  add2("4대","2548","예수금(4대보험)","95149 고용보험",0,C.emp.all.ei,"4대보험 사용자부담","all");
+  return {rows,rows2};
+}
+function pecTable(list,title){
+  let dr=0,cr=0;
+  const tr=list.map((x,i)=>{dr+=x.dr;cr+=x.cr;return `<tr><td style="color:var(--sub)">${i+1}</td><td>${x.grp}</td><td class="l">${x.code} ${esc(x.acct)}</td><td class="l">${esc(x.sub)}</td><td class="l">${esc(x.memo)}</td><td style="text-align:right">${x.dr?"<b>"+fmt(x.dr)+"</b>":""}</td><td style="text-align:right">${x.cr?"<b>"+fmt(x.cr)+"</b>":""}</td><td class="l">${esc(x.biz)}</td></tr>`;}).join("");
+  const ok=dr===cr;
+  return `<div style="font-weight:700;margin:12px 0 4px">${title} <span class="unit">차변 ${fmt(dr)} / 대변 ${fmt(cr)} ${ok?'<span style="color:#2F6B3F">✓ 일치</span>':'<span class="buy-warn">⚠ '+fmt(Math.abs(dr-cr))+'원 차이</span>'}</span></div>
+  <div class="table-wrap"><table class="rpt" style="font-size:12.5px"><thead><tr><th style="width:28px"></th><th>구분</th><th class="l">계정</th><th class="l">보조</th><th class="l">적요</th><th>차변</th><th>대변</th><th class="l">사업장</th></tr></thead><tbody>${tr}</tbody>
+  <tfoot><tr class="total"><td colspan="5" class="l"><b>합계</b></td><td style="text-align:right"><b>${fmt(dr)}</b></td><td style="text-align:right"><b>${fmt(cr)}</b></td><td></td></tr></tfoot></table></div>`;
+}
+window.pecCopy=function(which){
+  const C=pecCalc();if(!C)return;
+  const R=pecRows(C);const list=which===2?R.rows2:R.rows;
+  const txt=["구분\t계정코드\t계정\t보조\t적요\t차변\t대변\t사업장"].concat(list.map(x=>[x.grp,x.code,x.acct,x.sub,x.memo,x.dr||"",x.cr||"",x.biz].join("\t"))).join("\n");
+  navigator.clipboard.writeText(txt).then(()=>toast("전표 "+list.length+"줄을 복사했어요 — 엑셀·메모에 붙여넣을 수 있어요")).catch(()=>toast("복사 실패",true));
+};
+window.payEcBody=function(){
+  const C=pecCalc();
+  if(!C)return `<div class="card"><div class="footnote">상용직급여 시트를 찾지 못했어요. 급여품의 파일을 먼저 올려주세요.</div></div>`;
+  const ym=payYm();
+  const cfg=pecCfg();
+  /* 사업장 매핑 표 */
+  const mapRows=C.per.map(x=>`<tr${x.biz?"":' style="background:#FDF6EC"'}><td class="l">${esc(x.name)}${x.auto&&x.biz?' <span class="unit" style="color:#2F6B3F">자동</span>':""}${!x.biz?' <span class="buy-warn">미지정</span>':""}</td>
+    <td><select onchange="pecSetBiz('${esc(x.name)}',this.value)" style="font:inherit;font-size:12.5px;padding:3px 6px;border:1px solid var(--line,#ddd);border-radius:6px"><option value="" ${!x.biz?"selected":""}>— 선택 —</option>${PEC_BIZ.map(([k,n])=>`<option value="${k}" ${x.biz===k?"selected":""}>${n}</option>`).join("")}</select></td>
+    <td style="text-align:right">${fmt(x.pay)}</td><td style="text-align:right">${fmt(x.net)}</td></tr>`).join("");
+  /* 사업장별 집계 표 */
+  const cols=[["pay","급여"],["alw","제수당"],["bon","상여금"],["tot","지급총액"],["tax","소득세"],["ltax","지방소득세"],["np","국민연금"],["hi","건강보험"],["ltc","장기요양"],["ei","고용보험"],["ded","공제총액"],["net","실지급액"]];
+  const sumRows=["mk","ep","bj","all"].map(k=>`<tr${k==="all"?' class="total"':""}><td class="l"><b>${PEC_LABEL[k]}</b></td>${cols.map(([f])=>`<td style="text-align:right">${fmt(C.sum[k][f])}</td>`).join("")}</tr>`).join("");
+  const R=pecRows(C);
+  const empRows=["mk","ep","bj","all"].map(k=>`<tr${k==="all"?' class="total"':""}><td class="l"><b>${PEC_LABEL[k]}</b></td><td style="text-align:right">${fmt(C.emp[k].np)}</td><td style="text-align:right">${fmt(C.emp[k].hl)}</td><td style="text-align:right">${fmt(C.emp[k].ei)}</td><td style="text-align:right"><b>${fmt(C.emp[k].tot)}</b></td></tr>`).join("");
+  return `<div class="card"><div class="card-head"><div class="card-title">🧾 이카운트 전표 입력용${ym?` — ${ym.y}년 ${ym.m}월 (${pecYm()})`:""} <span class="unit">상용직급여 시트 기준 · 수정하면 바로 다시 계산돼요</span></div></div>
+    ${C.un.length?`<div style="margin:6px 0 10px;padding:8px 12px;background:#FDF6EC;border:1px solid #E8C88A;border-radius:10px"><b>⚠ 사업장 미지정 ${C.un.length}명:</b> ${C.un.map(esc).join(", ")} — 아래 표에서 골라주세요 (미지정 인원은 전표 합계에서 빠져요)</div>`:""}
+    <details ${C.un.length?"open":""} style="margin-bottom:10px"><summary style="cursor:pointer;font-weight:700">사원별 사업장 (${C.per.length}명) <span class="unit">이카운트 급여대장·휴일근무 자료로 자동 추정 — 한 번 고르면 계속 기억돼요</span> <button class="btn btn-sm" onclick="event.preventDefault();pecAutoAll()">자동 추정으로 다시 채우기</button></summary>
+      <div class="table-wrap" style="margin-top:6px"><table class="rpt" style="font-size:12.5px;max-width:560px"><thead><tr><th class="l">사원</th><th>사업장</th><th>급여</th><th>실지급액</th></tr></thead><tbody>${mapRows}</tbody></table></div></details>
+    <div style="font-weight:700;margin:6px 0 4px">사업장별 집계 <span class="unit">사진의 재배열 표와 같은 값</span></div>
+    <div class="table-wrap"><table class="rpt" style="font-size:12px"><thead><tr><th class="l">사업장</th>${cols.map(([,n])=>`<th>${n}</th>`).join("")}</tr></thead><tbody>${sumRows}</tbody></table></div>
+    <div style="font-weight:700;margin:12px 0 4px">4대보험 사용자부담 (복리후생비) <span class="unit">국민연금 + (건강+장기) + 고용보험 × <input type="text" inputmode="decimal" value="${cfg.eiMult}" onchange="pecSetMult(this.value)" style="width:48px;text-align:right;padding:2px 4px;border:1px solid var(--line,#ddd);border-radius:6px"></span></div>
+    <div class="table-wrap"><table class="rpt" style="font-size:12.5px;max-width:620px"><thead><tr><th class="l">사업장</th><th>국민연금</th><th>건강+장기</th><th>고용보험 사용자</th><th>복리후생비</th></tr></thead><tbody>${empRows}</tbody></table></div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:14px;flex-wrap:wrap"><b>전표 ① 급여</b><button class="btn btn-sm" onclick="pecCopy(1)">📄 표 복사</button></div>
+    ${pecTable(R.rows,"급여 전표")}
+    <div style="display:flex;gap:8px;align-items:center;margin-top:14px;flex-wrap:wrap"><b>전표 ② 4대보험 사용자부담</b><button class="btn btn-sm" onclick="pecCopy(2)">📄 표 복사</button></div>
+    ${pecTable(R.rows2,"사용자부담 전표")}
+    <div class="footnote" style="margin-top:8px">예수금(4대보험) 세 줄은 사업장 구분 없이 꽃밥이야기로 한 번에 넣는 방식 그대로예요. 국민건강 줄은 건강보험+장기요양보험 합이에요. 시급직·용역직은 이 전표에 포함되지 않아요.</div>
+  </div>`;
+};
 </script>
 
 <script>
