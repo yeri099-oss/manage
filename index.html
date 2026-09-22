@@ -478,7 +478,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v228</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v230</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -9068,7 +9068,6 @@ function renderBuyClose(){
       <span style="margin-right:16px">총 합계 <b style="font-size:15px">${fmt(total)}</b>원</span>
       ${unconf?`<span class="buy-warn">미확인 ${unconf}건</span>`:`<span style="color:#2F6B3F">모두 확인됨 ✓</span>`}
     </div>
-    <div id="buyJsBox" style="margin-top:14px"></div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;align-items:center">
       <button class="btn btn-primary" onclick="buyApplyOpen()">📤 매입현황에 바로 반영</button>
       <span style="margin-left:auto"></span>
@@ -9080,7 +9079,6 @@ function renderBuyClose(){
   </div>`;
   el.innerHTML=html;
   buyFlushLabel();
-  buyJsRender(key);
 }
 function buyFlushLabel(){const st=document.getElementById("buyCloudSt");if(st&&!Object.keys(window.__buy.dirty).length)st.textContent=IS_DEMO?"미리보기 모드(저장 안 됨)":"";}
 function buyCloseSel(k){window.__buy.ui.closeKey=k;renderBuyClose();}
@@ -10106,12 +10104,13 @@ function renderBuy(){
   const el=document.getElementById("tab-buy");
   if(!el)return;
   if(typeof S==="undefined"||!S.user||S.user.role!=="admin"){el.innerHTML='<div class="card">관리자만 볼 수 있어요.</div>';return;}
-  if(!document.getElementById("buySubtabs"))el.innerHTML='<div class="subtabs" id="buySubtabs" style="margin-bottom:10px"></div><div id="tab-buyclose"></div><div id="tab-buystat" class="hidden"></div>';
+  if(!document.getElementById("buySubtabs"))el.innerHTML='<div class="subtabs" id="buySubtabs" style="margin-bottom:10px"></div><div id="tab-buyclose"></div><div id="tab-buystat" class="hidden"></div><div id="tab-buyjs" class="hidden"></div>';
   const sub=window.__buy.ui.sub||"close";
-  document.getElementById("buySubtabs").innerHTML=[["close","월마감결제"],["stat","매입현황"]].map(([k,n])=>'<button class="subtab '+(k===sub?"active":"")+'" onclick="setBuySub(\''+k+'\')">'+n+"</button>").join("");
+  document.getElementById("buySubtabs").innerHTML=[["close","월마감결제"],["stat","매입현황"],["js","매입정산"]].map(([k,n])=>'<button class="subtab '+(k===sub?"active":"")+'" onclick="setBuySub(\''+k+'\')">'+n+"</button>").join("");
   document.getElementById("tab-buyclose").classList.toggle("hidden",sub!=="close");
   document.getElementById("tab-buystat").classList.toggle("hidden",sub!=="stat");
-  if(sub==="close")renderBuyClose();else renderBuyStat();
+  document.getElementById("tab-buyjs").classList.toggle("hidden",sub!=="js");
+  if(sub==="close")renderBuyClose();else if(sub==="js")renderBuyJs();else renderBuyStat();
 }
 window.setBuySub=function(k){window.__buy.ui.sub=k;renderBuy();};
 window.renderBuy=renderBuy;window.buyPick=buyPick;window.buyCloseSel=buyCloseSel;window.buyCloseDate=buyCloseDate;window.buyCloseEdit=buyCloseEdit;window.buyCloseOk=buyCloseOk;window.buyCloseAdd=buyCloseAdd;window.buyCloseDel=buyCloseDel;window.buyNewMonth=buyNewMonth;window.buyNewMonthGo=buyNewMonthGo;window.buyApplyOpen=buyApplyOpen;window.buyCloseDl=buyCloseDl;window.buyStatYearSel=buyStatYearSel;window.buyStatScopeSel=buyStatScopeSel;window.buyStatQ=buyStatQ;window.buyStatCell=buyStatCell;window.buyStatMeta=buyStatMeta;window.buyStatAddVendor=buyStatAddVendor;window.buyDraftSet=buyDraftSet;window.buyDraftKey=buyDraftKey;window.buyDraftSave=buyDraftSave;window.buyDraftCancel=buyDraftCancel;window.buyStatAddMonth=buyStatAddMonth;window.buyStatFix=buyStatFix;window.buyStatFixAll=buyStatFixAll;window.buyStatDl=buyStatDl;
@@ -10133,6 +10132,26 @@ async function buyJsEnsure(ym){
   try{const loc=JSON.parse(localStorage.getItem("ssv2_months")||"{}");if(loc[ym]){A.MONTHS[ym]=A.migrate(loc[ym]);return A.MONTHS[ym];}}catch(e){}
   return null;
 }
+function buyJsCur(){
+  const B=window.__buy;
+  if(!B.ui.jsKey){const c=buyCloseKeys();if(c.length)B.ui.jsKey=buyCloseCur()||c[0];else{const d=new Date();d.setMonth(d.getMonth()-1);B.ui.jsKey=String(d.getFullYear()).slice(2)+String(d.getMonth()+1).padStart(2,"0");}}
+  return B.ui.jsKey;
+}
+window.buyJsSel=function(y,m){window.__buy.ui.jsKey=String(y).slice(2)+String(m).padStart(2,"0");renderBuyJs();};
+function renderBuyJs(){
+  const el=document.getElementById("tab-buyjs");if(!el)return;
+  const key=buyJsCur();const y=2000+Number(key.slice(0,2)),mo=Number(key.slice(2));
+  const now=new Date();const years=[];for(let yy=2024;yy<=now.getFullYear()+1;yy++)years.push(yy);
+  el.innerHTML=`<div class="card"><div class="card-head"><div class="card-title">⑨ 매입정산 <span class="unit">매출확정과 같은 저장소 — 여기 적으면 매출확정 ⑨에도 그대로 반영돼요</span></div>
+      <div class="card-actions"><select class="ctl" onchange="buyJsSel(this.value,${mo})">${years.map(yy=>`<option ${yy===y?"selected":""}>${yy}</option>`).join("")}</select>
+      <select class="ctl" onchange="buyJsSel(${y},this.value)">${Array.from({length:12},(_,i)=>`<option value="${i+1}" ${i+1===mo?"selected":""}>${i+1}월</option>`).join("")}</select></div></div>
+    <div style="font-weight:700;font-size:15px;margin:2px 0 8px">${y}년 ${mo}월분</div>
+    <div id="buyJsBox"></div>
+    <div class="footnote" style="margin-top:8px">꽃밥마켓(자동)은 매출확정 회원분석 '보자기' 계 값이라 매출확정을 먼저 마치면 채워져요. 아래 전표는 보자기 합계(꽃밥마켓 자동 + 항목)를 그대로 써요.</div>
+  </div>`;
+  buyJsRender(key);
+}
+window.renderBuyJs=renderBuyJs;
 function buyJsSched(ym){
   const st=document.getElementById("buyJsSt");if(st)st.textContent="☁ 저장 중…";
   clearTimeout(buyJsTimer);buyJsTimer=setTimeout(()=>buyJsSaveNow(ym),1200);
@@ -10156,7 +10175,7 @@ async function buyJsRender(ym){
   if(!window.__cfmApp||!ym){box.innerHTML="";return;}
   box.innerHTML='<div class="footnote">⑨ 매입정산 불러오는 중…</div>';
   const m=await buyJsEnsure(ym);
-  if(buyCloseCur()!==ym)return;
+  if(buyJsCur()!==ym)return;
   const box2=document.getElementById("buyJsBox");if(!box2)return;
   if(!m){
     box2.innerHTML=`<div style="padding:10px;border:1px dashed var(--line,#ccc);border-radius:10px;max-width:640px"><b>⑨ 매입정산</b> <span class="unit">매출확정 연동</span><div class="footnote" style="margin:6px 0">매출확정에 ${buyKeyLabel(ym)} 달이 아직 없어요. 지금 만들어서 매입정산부터 적어둘 수 있어요.</div><button class="btn btn-sm" onclick="buyJsCreate('${ym}')">이 달 만들고 입력하기</button></div>`;
@@ -10170,22 +10189,50 @@ async function buyJsRender(ym){
     <td><button class="btn btn-sm" style="padding:1px 7px" onclick="buyJsDel('${ym}','${key}',${i})">×</button></td></tr>`).join("");
   const sb=m.buyBojagi.reduce((a,b)=>a+(b.amt||0),0);
   const sp=m.buyPida.reduce((a,b)=>a+(b.amt||0),0);
-  box2.innerHTML=`<div style="padding:10px;border:1px solid var(--line,#ddd);border-radius:10px;max-width:640px">
-    <b>⑨ 매입정산</b> <span class="unit">매출확정과 같은 저장소 — 여기 적으면 매출확정 ⑨에도 그대로 반영돼요</span> <span id="buyJsSt" class="footnote" style="float:right"></span>
-    <table class="rpt buy-tbl" style="max-width:460px;margin-top:8px"><thead><tr><th class="l">보자기 매입정산</th><th style="width:130px">금액</th><th style="width:30px"></th></tr></thead><tbody>
+  box2.innerHTML=`<div style="max-width:640px">
+    <span id="buyJsSt" class="footnote" style="float:right"></span>
+    <table class="rpt buy-tbl" style="max-width:460px;margin:8px 0 0 0"><thead><tr><th class="l">보자기 매입정산</th><th style="width:130px">금액</th><th style="width:30px"></th></tr></thead><tbody>
       <tr><td class="l" style="color:var(--sub,#777)">꽃밥마켓 (자동)</td><td style="text-align:right">${fmt(gye)}</td><td></td></tr>
       ${rows(m.buyBojagi,"buyBojagi")}
       <tr><td colspan="3"><button class="btn btn-sm" onclick="buyJsAdd('${ym}','buyBojagi')">＋ 항목 추가</button></td></tr>
       <tr style="background:#eef3ee"><td class="l"><b>합계 (꽃밥마켓+항목)</b></td><td style="text-align:right"><b>${fmt(gye+sb)}</b></td><td></td></tr>
     </tbody></table>
-    <table class="rpt buy-tbl" style="max-width:460px;margin-top:10px"><thead><tr><th class="l">피다 매입정산</th><th style="width:130px">금액</th><th style="width:30px"></th></tr></thead><tbody>
+    <table class="rpt buy-tbl" style="max-width:460px;margin:14px 0 0 0"><thead><tr><th class="l">피다 매입정산</th><th style="width:130px">금액</th><th style="width:30px"></th></tr></thead><tbody>
       ${rows(m.buyPida,"buyPida")}
       <tr><td colspan="3"><button class="btn btn-sm" onclick="buyJsAdd('${ym}','buyPida')">＋ 항목 추가</button></td></tr>
       <tr style="background:#eef3ee"><td class="l"><b>합계</b></td><td style="text-align:right"><b>${fmt(sp)}</b></td><td></td></tr>
     </tbody></table>
-    <div class="footnote" style="margin-top:6px">합계가 이카운트에 한 번에 입력하는 금액이에요. 꽃밥마켓(자동)은 매출확정 회원분석 '보자기' 계 값이에요.</div>
-  </div>`;
+  </div>
+  ${buyJsVoucherHtml(ym,gye+sb,sp)}`;
 }
+/* 이카운트 전표: 1469 상품 / 거래처 95263 매입(손익)정산 — 보자기 +, 피다 − (피다 정산이 있으면 반대 짝 한 줄 더) */
+function buyJsVoucherRows(ym,bj,pd){
+  const rows=[];
+  const add=(dr,biz,blk)=>rows.push({grp:"3차",code:"1469",acct:"상품",sub:"95263 매입(손익)정산",dr,cr:0,memo:"매입정산",biz,blk});
+  if(bj){add(bj,"보자기꽃밥","bj");add(-bj,"꽃밥에피다","bj");}
+  if(pd){add(pd,"꽃밥에피다","pd");add(-pd,"보자기꽃밥","pd");}
+  return rows;
+}
+function buyJsVoucherHtml(ym,bj,pd){
+  const rows=buyJsVoucherRows(ym,bj,pd);
+  if(!rows.length)return `<div class="footnote" style="margin-top:12px">금액이 들어오면 아래에 이카운트 전표(1469 상품 / 매입(손익)정산)가 만들어져요.</div>`;
+  const fmtS=(n)=>n<0?"−"+fmt(-n):fmt(n);
+  const tr=rows.map((x,i)=>{const nb=i>0&&rows[i-1].blk!==x.blk;return `<tr${nb?' style="border-top:2.5px solid #555"':""}><td style="color:var(--sub)">${i+1}</td><td>${x.grp}</td><td class="l">${x.code} ${esc(x.acct)}</td><td class="l">${esc(x.sub)}</td><td style="text-align:right"><b>${fmtS(x.dr)}</b></td><td></td><td class="l">${esc(x.memo)}</td><td class="l">${esc(x.biz)}</td></tr>`;}).join("");
+  const sum=rows.reduce((a,x)=>a+x.dr,0);
+  return `<div style="display:flex;gap:8px;align-items:center;margin-top:16px;flex-wrap:wrap"><b>🧾 이카운트 전표 — 매입정산</b><button class="btn btn-sm" onclick="buyJsCopy('${ym}')">📄 표 복사</button><span class="unit">보자기 합계는 보자기꽃밥 +, 꽃밥에피다 − 로 한 번에</span></div>
+  <div class="table-wrap" style="margin-top:4px"><table class="rpt" style="font-size:12.5px;max-width:760px;margin:0"><thead><tr><th style="width:28px"></th><th>구분</th><th class="l">계정</th><th class="l">보조(거래처)</th><th>차변</th><th>대변</th><th class="l">적요</th><th class="l">사업장</th></tr></thead><tbody>${tr}</tbody>
+  <tfoot><tr class="total" style="border-top:2.5px solid #555"><td colspan="4" class="l"><b>합계</b></td><td style="text-align:right"><b>${fmtS(sum)}</b></td><td style="text-align:right"><b>0</b></td><td></td><td></td></tr></tfoot></table></div>
+  <div class="footnote" style="margin-top:6px">차변 합이 0이 되는 정산 전표예요(대변 없음). 꽃밥마켓이 꽃밥에피다 앞으로 발행한 계산서에 섞인 보자기꽃밥 몫과, 거래처가 꽃밥에피다 이름으로 발행했지만 보자기꽃밥이 매입한 금액을 보자기꽃밥으로 옮기는 내용이에요.</div>`;
+}
+window.buyJsCopy=function(ym){
+  const M=buyJsMonths();const m=M&&M[ym];if(!m)return;
+  const gye=(m.members&&m.members.bojagiGye)||0;
+  const bj=gye+(m.buyBojagi||[]).reduce((a,b)=>a+(b.amt||0),0);
+  const pd=(m.buyPida||[]).reduce((a,b)=>a+(b.amt||0),0);
+  const rows=buyJsVoucherRows(ym,bj,pd);
+  const txt=["구분\t계정코드\t계정\t거래처\t차변\t대변\t적요\t부서"].concat(rows.map(x=>[x.grp,x.code,x.acct,x.sub,x.dr,"",x.memo,x.biz].join("\t"))).join("\n");
+  navigator.clipboard.writeText(txt).then(()=>toast("전표 "+rows.length+"줄을 복사했어요")).catch(()=>toast("복사 실패",true));
+};
 function buyJsCreate(ym){
   const A=window.__cfmApp;if(!A)return;
   if(!A.MONTHS[ym])A.MONTHS[ym]=A.migrate({});
@@ -11025,7 +11072,7 @@ const EXP_ITEMS=[
   {k:"labor",  n:"인건비",     sub:[["pnl","손익"],["ins","4대보험"],["yong","용역"]],go:"pay",goN:"급여"},
   {k:"welfare",n:"복리후생비", sub:[["emp","4대보험 사용자정산"]],                 go:"pay",goN:"급여 › 이카운트 입력"},
   {k:"card",   n:"법인카드",   sub:[]},
-  {k:"buy",    n:"매입정산",   sub:[["bojagi","보자기"]],                          go:"buy",goN:"매입"},
+  {k:"buy",    n:"매입정산",   sub:[["bojagi","보자기"]],                          go:"buy",goN:"매입 › 매입정산",goSub:"js"},
   {k:"point",  n:"포인트 사용/적립",sub:[]},
   {k:"stock",  n:"재고",       sub:[]},
   {k:"fee",    n:"판매수수료", sub:[]},
@@ -11089,7 +11136,7 @@ function renderExpense(){
   let total=0,done=0;
   const rows=EXP_ITEMS.map((it,i)=>{
     const d=expItemDone(mo,it);total+=d.t;done+=d.n;
-    const go=it.go?`<a href="#${it.go}" onclick="event.preventDefault();switchTab('${it.go}')" class="unit" style="color:var(--accent,#2F6B3F);text-decoration:none;white-space:nowrap">↗ ${esc(it.goN)}</a>`:"";
+    const go=it.go?`<a href="#${it.go}" onclick="event.preventDefault();${it.goSub?`window.__buy.ui.sub='${it.goSub}';`:""}switchTab('${it.go}')" class="unit" style="color:var(--accent,#2F6B3F);text-decoration:none;white-space:nowrap">↗ ${esc(it.goN)}</a>`:"";
     const head=`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:700;font-size:14px;${d.all?"color:var(--ink-muted);text-decoration:line-through":""}">
         <input type="checkbox" ${d.all?"checked":""} ${d.some&&!d.all?'style="outline:2px solid #E8C88A;outline-offset:1px"':""} onchange="expToggleItem('${ym.key}','${it.k}')" style="width:18px;height:18px;accent-color:#2F6B3F"> ${i+1}. ${esc(it.n)}${it.sub.length?` <span class="unit">${d.n}/${d.t}</span>`:""}
