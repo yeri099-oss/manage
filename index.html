@@ -478,7 +478,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v224</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v225</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -7149,9 +7149,11 @@ function payPnlImport(){
     if(!payPnlImport._pm){
       const pm={};
       const nm2={"소득세":"tax","지방소득세":"ltax","국민연금":"np","건강보험":"hi","장기요양보험":"ltc","고용보험":"ei","급여":"pay","제수당":"alw","상여금":"bon","특별상여금":"sbon","지급총액":"tot","기지급액":"pre","공제총액":"ded","실지급액":"net"};
+      const hTxt=(ref)=>{const e9=ed[ref];if(e9!==undefined)return String(e9).replace(/\s+/g,"");const c9=pn.cells[ref];return c9&&c9.typ==="str"?String(c9.v).replace(/\s+/g,""):"";};
+      let hRow=1;
+      for(let r9=1;r9<=6;r9++){let hit=false;for(let c9=1;c9<=Math.min(pn.maxC,6);c9++){if(hTxt(payIdxCol(c9)+r9)==="사원명"){hit=true;break;}}if(hit){hRow=r9;break;}}
       for(let c=2;c<=pn.maxC;c++){
-        const h=pn.cells[payIdxCol(c)+"1"];
-        const k2=h&&h.typ==="str"?nm2[String(h.v).trim()]:null;
+        const k2=nm2[hTxt(payIdxCol(c)+hRow)];
         if(k2&&!pm[k2])pm[k2]=payIdxCol(c);
       }
       pm.tax=pm.tax||"F";pm.ltax=pm.ltax||"G";pm.np=pm.np||"H";pm.hi=pm.hi||"I";pm.ltc=pm.ltc||"J";pm.ei=pm.ei||"K";
@@ -7995,8 +7997,8 @@ function renderPay(){
       }
       if(sh.name==="손익"){
         pnlCtl=`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
-          <button class="btn btn-sm btn-primary" onclick="payPnlImport()">📥 상용직급여에서 공제 가져오기</button>
-          <span class="footnote">A열에 사람 이름을 순서대로 적은 뒤 누르면 소득세·지방소득세·국민연금·건강보험·장기요양·고용보험이 이름 매칭으로 채워지고, <b>4대보험 시트도 같은 자리에</b>(장기요양과 고용 사이 빈칸 유지) 같이 채워져요.</span>
+          <button class="btn btn-sm btn-primary" onclick="payPnlImport()">🔄 상용직급여에서 지금 다시 채우기</button>
+          <span class="footnote">상용직급여가 바뀌면 이 시트는 <b>자동으로</b> 따라와요 — A열 이름을 기준으로 급여·제수당·상여금·지급총액·공제·실지급액이 채워지고(초록), <b>4대보험 시트도 같은 줄에</b>(장기요양과 고용 사이 빈칸 유지) 같이 채워져요. 사람이 바뀌면 A열 이름만 고치세요. 이 버튼은 지금 당장 한 번 더 채우고 싶을 때 눌러요(직접 고친 노란 칸도 덮어써요).</span>
         </div>`;
       }
       if(sh.name==="상여금"){
