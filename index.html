@@ -478,7 +478,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v230</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v231</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -11074,8 +11074,8 @@ const EXP_ITEMS=[
   {k:"card",   n:"법인카드",   sub:[]},
   {k:"buy",    n:"매입정산",   sub:[["bojagi","보자기"]],                          go:"buy",goN:"매입 › 매입정산",goSub:"js"},
   {k:"point",  n:"포인트 사용/적립",sub:[]},
-  {k:"stock",  n:"재고",       sub:[]},
-  {k:"fee",    n:"판매수수료", sub:[]},
+  {k:"stock",  n:"재고",       sub:[],                                            go:"expense",goN:"재고 입력",expSub:"stock"},
+  {k:"fee",    n:"판매수수료", sub:[],                                            go:"expense",goN:"판매수수료",expSub:"fee"},
   {k:"rent",   n:"지급임차료", sub:[["paper","종이세금계산서 고화자"]]}
 ];
 function expData(){
@@ -11085,7 +11085,7 @@ function expData(){
   S.data.buy.expense.months=S.data.buy.expense.months||{};
   return S.data.buy.expense;
 }
-window.__exp=window.__exp||{ui:{y:null,m:null},timer:null};
+window.__exp=window.__exp||{ui:{y:null,m:null,sub:"check"},timer:null};
 function expYm(){
   const u=window.__exp.ui;
   if(!u.y){const d=new Date();d.setMonth(d.getMonth()-1);u.y=d.getFullYear();u.m=d.getMonth()+1;}/* 기본=지난달(마감 대상) */
@@ -11129,6 +11129,15 @@ function renderExpense(){
   const el=document.getElementById("tab-expense");
   if(!el)return;
   if(typeof S==="undefined"||!S.user||S.user.role!=="admin"){el.innerHTML='<div class="card">관리자만 볼 수 있어요.</div>';return;}
+  if(!document.getElementById("expSubtabs"))el.innerHTML='<div class="subtabs" id="expSubtabs" style="margin-bottom:10px"></div><div id="tab-expcheck"></div><div id="tab-expstock" class="hidden"></div><div id="tab-expfee" class="hidden"></div>';
+  const sub=window.__exp.ui.sub||"check";
+  document.getElementById("expSubtabs").innerHTML=[["check","체크리스트"],["stock","재고"],["fee","판매수수료"]].map(([k,n])=>'<button class="subtab '+(k===sub?"active":"")+'" onclick="setExpSub(\''+k+'\')">'+n+"</button>").join("");
+  ["check","stock","fee"].forEach(k=>document.getElementById("tab-exp"+k).classList.toggle("hidden",k!==sub));
+  if(sub==="check")renderExpCheck();else renderExpMisc(sub);
+}
+window.setExpSub=function(k){window.__exp.ui.sub=k;if(typeof S!=="undefined"&&S.ui&&S.ui.tab!=="expense")switchTab("expense");renderExpense();};
+function renderExpCheck(){
+  const el=document.getElementById("tab-expcheck");if(!el)return;
   const D=expData();const ym=expYm();const mo=expMonth(ym.key);
   const now=new Date();
   const years=[];for(let y=2025;y<=now.getFullYear()+1;y++)years.push(y);
@@ -11136,7 +11145,7 @@ function renderExpense(){
   let total=0,done=0;
   const rows=EXP_ITEMS.map((it,i)=>{
     const d=expItemDone(mo,it);total+=d.t;done+=d.n;
-    const go=it.go?`<a href="#${it.go}" onclick="event.preventDefault();${it.goSub?`window.__buy.ui.sub='${it.goSub}';`:""}switchTab('${it.go}')" class="unit" style="color:var(--accent,#2F6B3F);text-decoration:none;white-space:nowrap">↗ ${esc(it.goN)}</a>`:"";
+    const go=it.go?`<a href="#${it.go}" onclick="event.preventDefault();${it.goSub?`window.__buy.ui.sub='${it.goSub}';`:""}${it.expSub?`setExpSub('${it.expSub}');return;`:""}switchTab('${it.go}')" class="unit" style="color:var(--accent,#2F6B3F);text-decoration:none;white-space:nowrap">↗ ${esc(it.goN)}</a>`:"";
     const head=`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:700;font-size:14px;${d.all?"color:var(--ink-muted);text-decoration:line-through":""}">
         <input type="checkbox" ${d.all?"checked":""} ${d.some&&!d.all?'style="outline:2px solid #E8C88A;outline-offset:1px"':""} onchange="expToggleItem('${ym.key}','${it.k}')" style="width:18px;height:18px;accent-color:#2F6B3F"> ${i+1}. ${esc(it.n)}${it.sub.length?` <span class="unit">${d.n}/${d.t}</span>`:""}
@@ -11172,6 +11181,54 @@ function renderExpense(){
   <div class="card"><div class="card-head"><div class="card-title">${ym.y}년 연간 현황 <span class="unit">칸을 누르면 그 달로 이동해요</span></div></div>${yTable}</div>`;
 }
 window.renderExpense=renderExpense;
+/* === 재고 · 판매수수료 — 매출확정 ⑧(misc) 같은 저장소 === */
+const EXP_MISC={
+  stock:{title:"📦 재고 (부가세 제외)",unit:"매출확정 ⑧ 재고 칸과 같은 저장소 — 매출확정 화면에선 입력하지 않고 여기서만 적어요",rows:[["jaegoMarket","마켓"],["jaegoBojagi","보자기"],["jaegoPida","피다"]],sumLabel:"합계"},
+  fee:{title:"💳 판매수수료",unit:"매출확정 ⑧ 판매수수료와 같은 저장소 — 여기서 고치면 매출확정에도 그대로 반영돼요",rows:[["feeMarket","마켓"],["feeBojagi","보자기"],["feePida","피다"]],sumLabel:"합계 (꽃밥이야기 여신금융 = 마켓+보자기)",sumFn:(mi)=>(mi.feeMarket||0)+(mi.feeBojagi||0),extra:"꽃밥이야기(여신금융 합계)는 마켓+보자기예요. 매출확정에서 합계를 넣으면 매출 비율로 자동 배분되고, 여기서는 사업장별 금액을 직접 고쳐요. 출처: 여신금융 → 월별매입내역 → 수수료계"}
+};
+async function renderExpMisc(kind){
+  const el=document.getElementById("tab-exp"+kind);if(!el)return;
+  const cfg=EXP_MISC[kind];const ym=expYm();
+  const now=new Date();const years=[];for(let y=2025;y<=now.getFullYear()+1;y++)years.push(y);
+  const head=`<div class="card"><div class="card-head"><div class="card-title">${cfg.title} <span class="unit">${cfg.unit}</span></div>
+    <div class="card-actions"><select class="ctl" onchange="expSel(this.value,${ym.m})">${years.map(y=>`<option ${y===ym.y?"selected":""}>${y}</option>`).join("")}</select>
+    <select class="ctl" onchange="expSel(${ym.y},this.value)">${Array.from({length:12},(_,i)=>`<option value="${i+1}" ${i+1===ym.m?"selected":""}>${i+1}월</option>`).join("")}</select></div></div>
+    <div style="font-weight:700;font-size:15px;margin:2px 0 8px">${ym.y}년 ${ym.m}월분</div>`;
+  if(!window.__cfmApp||typeof buyJsEnsure!=="function"){el.innerHTML=head+`<div class="footnote">매출확정 모듈을 찾지 못했어요.</div></div>`;return;}
+  el.innerHTML=head+`<div class="footnote">불러오는 중…</div></div>`;
+  const m=await buyJsEnsure(ym.key);
+  const cur=expYm();if(cur.key!==ym.key||window.__exp.ui.sub!==kind)return;
+  if(!m){el.innerHTML=head+`<div style="padding:10px;border:1px dashed var(--line,#ccc);border-radius:10px;max-width:520px"><div class="footnote">매출확정에 ${ym.y}년 ${ym.m}월 달이 아직 없어요. 지금 만들어서 여기부터 적어둘 수 있어요.</div><button class="btn btn-sm" style="margin-top:6px" onclick="buyJsCreate('${ym.key}');setTimeout(renderExpense,300)">이 달 만들고 입력하기</button></div></div>`;return;}
+  m.misc=m.misc||{};
+  const sum=cfg.sumFn?cfg.sumFn(m.misc):cfg.rows.reduce((a,[k])=>a+(m.misc[k]||0),0);
+  const trs=cfg.rows.map(([k,n])=>`<tr><td class="l">${n}</td><td><input type="text" inputmode="numeric" value="${m.misc[k]?fmt(m.misc[k]):""}" onchange="expMiscEdit('${ym.key}','${k}',this.value,'${kind}')" style="width:140px;text-align:right;font:inherit;font-size:13px;padding:4px 6px;border:1px solid var(--line,#ddd);border-radius:6px"></td></tr>`).join("");
+  /* 연간 표 (메모리에 있는 달만) */
+  const M=window.__cfmApp.MONTHS||{};
+  const yTr=cfg.rows.map(([k,n])=>`<tr><td class="l" style="white-space:nowrap">${n}</td>${Array.from({length:12},(_,i)=>{const key=String(ym.y).slice(2)+String(i+1).padStart(2,"0");const mm=M[key];const v=mm&&mm.misc?mm.misc[k]||0:null;return `<td style="text-align:right;cursor:pointer;${i+1===ym.m?"background:#F4F9F4":""}" onclick="expSel(${ym.y},${i+1})">${v==null?'<span style="color:#ccc">–</span>':v?fmt(v):'<span style="color:#ccc">0</span>'}</td>`;}).join("")}</tr>`).join("");
+  const yTot=`<tr class="total"><td class="l"><b>${cfg.sumFn?"마켓+보자기":"합계"}</b></td>${Array.from({length:12},(_,i)=>{const key=String(ym.y).slice(2)+String(i+1).padStart(2,"0");const mm=M[key];if(!mm||!mm.misc)return '<td style="text-align:right;color:#ccc">–</td>';const t=cfg.sumFn?cfg.sumFn(mm.misc):cfg.rows.reduce((a,[k])=>a+(mm.misc[k]||0),0);return `<td style="text-align:right"><b>${fmt(t)}</b></td>`;}).join("")}</tr>`;
+  el.innerHTML=head+`<span id="expMiscSt" class="footnote" style="float:right"></span>
+    <table class="rpt" style="max-width:360px;margin:0"><thead><tr><th class="l">사업장</th><th>금액</th></tr></thead><tbody>${trs}
+      <tr style="background:#eef3ee"><td class="l"><b>${cfg.sumLabel}</b></td><td style="text-align:right"><b>${fmt(sum)}</b></td></tr></tbody></table>
+    ${cfg.extra?`<div class="footnote" style="margin-top:8px">${cfg.extra}</div>`:""}
+  </div>
+  <div class="card"><div class="card-head"><div class="card-title">${ym.y}년 월별 <span class="unit">매출확정에 있는 달만 보여요 · 칸을 누르면 그 달로</span> <button class="btn btn-sm" onclick="expMiscLoadYear(${ym.y})">이 해 전체 불러오기</button></div></div>
+    <div class="table-wrap"><table class="rpt" style="font-size:12.5px"><thead><tr><th class="l">사업장</th>${Array.from({length:12},(_,i)=>`<th>${i+1}월</th>`).join("")}</tr></thead><tbody>${yTr}${yTot}</tbody></table></div></div>`;
+}
+window.expMiscEdit=function(key,k,v,kind){
+  const A=window.__cfmApp;const m=A&&A.MONTHS[key];if(!m)return;
+  m.misc=m.misc||{};
+  const n=String(v).replace(/[,\s원]/g,"");const n2=n===""?0:Number(n);
+  m.misc[k]=isNaN(n2)?0:Math.round(n2);
+  const st=document.getElementById("expMiscSt");if(st)st.textContent="☁ 저장 중…";
+  clearTimeout(window.__exp.miscTimer);
+  window.__exp.miscTimer=setTimeout(async()=>{await buyJsSaveNow(key);const st2=document.getElementById("expMiscSt");if(st2)st2.textContent=(typeof IS_DEMO!=="undefined"&&IS_DEMO)?"미리보기(저장 안 됨)":"☁ 저장됨 ✓";},800);
+  renderExpMisc(kind);
+};
+window.expMiscLoadYear=async function(y){
+  const ks=Array.from({length:12},(_,i)=>String(y).slice(2)+String(i+1).padStart(2,"0"));
+  await Promise.all(ks.map(k=>buyJsEnsure(k)));
+  renderExpense();
+};
 </script>
 
 <script>
