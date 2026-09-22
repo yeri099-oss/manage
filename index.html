@@ -478,7 +478,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v223</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v224</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -7131,7 +7131,8 @@ function payPnlImport(){
   if(!pn||!em){toast("손익 또는 상용직급여 시트를 찾지 못했어요",true);return;}
   const bo=paySheetByName("4대보험");
   const ed=(P.edits||{})["손익"]||{};
-  const put=(sh2,ref,v)=>{payEdit(sh2,ref,v===0?"":Math.round(v));};
+  const autoMode=!!payPnlImport._auto;
+  const put=(sh2,ref,v)=>{payEdit(sh2,ref,v===0?"":Math.round(v),autoMode);};
   payPnlImport._pm=null;
   let n=0;const miss=[];
   for(let r=2;r<=pn.maxR;r++){
@@ -7142,11 +7143,12 @@ function payPnlImport(){
     const emp=em.rows.find(x=>x.name.replace(/\s+/g,"")===nm.replace(/\s+/g,""));
     if(!emp){miss.push(nm);continue;}
     const cmL=em.cm;
-    const V={tax:em.val(cmL.tax+emp.r),ltax:em.val(cmL.ltax+emp.r),np:em.val(cmL.np+emp.r),hi:em.val(cmL.hi+emp.r),ltc:em.val(cmL.ltc+emp.r),ei:em.val(cmL.ei+emp.r)};
+    const V={tax:em.val(cmL.tax+emp.r),ltax:em.val(cmL.ltax+emp.r),np:em.val(cmL.np+emp.r),hi:em.val(cmL.hi+emp.r),ltc:em.val(cmL.ltc+emp.r),ei:em.val(cmL.ei+emp.r),
+      pay:em.val(cmL.pay+emp.r),alw:em.val(cmL.alw+emp.r),bon:em.val(cmL.bon+emp.r),sbon:cmL.sbon?em.val(cmL.sbon+emp.r):0,tot:em.val(cmL.tot+emp.r),pre:cmL.pre?em.val(cmL.pre+emp.r):0,ded:em.val(cmL.ded+emp.r),net:em.val(cmL.net+emp.r)};
     /* 손익 시트 자체 헤더로 열 찾기 */
     if(!payPnlImport._pm){
       const pm={};
-      const nm2={"소득세":"tax","지방소득세":"ltax","국민연금":"np","건강보험":"hi","장기요양보험":"ltc","고용보험":"ei"};
+      const nm2={"소득세":"tax","지방소득세":"ltax","국민연금":"np","건강보험":"hi","장기요양보험":"ltc","고용보험":"ei","급여":"pay","제수당":"alw","상여금":"bon","특별상여금":"sbon","지급총액":"tot","기지급액":"pre","공제총액":"ded","실지급액":"net"};
       for(let c=2;c<=pn.maxC;c++){
         const h=pn.cells[payIdxCol(c)+"1"];
         const k2=h&&h.typ==="str"?nm2[String(h.v).trim()]:null;
@@ -7158,6 +7160,13 @@ function payPnlImport(){
     const pm=payPnlImport._pm;
     put("손익",pm.tax+r,V.tax);put("손익",pm.ltax+r,V.ltax);put("손익",pm.np+r,V.np);
     put("손익",pm.hi+r,V.hi);put("손익",pm.ltc+r,V.ltc);put("손익",pm.ei+r,V.ei);
+    /* 손익 시트에 급여·수당·상여·지급총액·공제총액·실지급액 열이 있으면 같이 채움 (상여금 열만 있고 특별상여 열이 없으면 합쳐서) */
+    for(const k of ["pay","alw","bon","sbon","tot","pre","ded","net"]){
+      if(!pm[k])continue;
+      let v2=V[k];
+      if(k==="bon"&&!pm.sbon)v2=(V.bon||0)+(V.sbon||0);
+      put("손익",pm[k]+r,v2||0);
+    }
     if(bo){
       /* 4대보험 시트: 같은 행 번호에 A국민 B건강 C장기 (D는 빈칸 유지) E고용 */
       put("4대보험","A"+r,V.np);
@@ -7167,11 +7176,20 @@ function payPnlImport(){
     }
     n++;
   }
-  paySchedSave();
-  renderPay();
-  toast(n+"명 공제를 가져왔어요"+(miss.length?" · 상용직급여에 없는 이름: "+miss.join(", "):""));
+  if(!autoMode){
+    paySchedSave();
+    renderPay();
+    toast(n+"명 급여·수당·공제 전 항목을 가져왔어요"+(miss.length?" · 상용직급여에 없는 이름: "+miss.join(", "):""));
+  }
 }
 window.payPnlImport=payPnlImport;
+/* 상용직급여가 바뀔 때마다 손익·4대보험을 자동으로 따라가게 (자동 칸 = 초록, 직접 고친 칸은 안 덮음) */
+function payPnlAuto(){
+  const P=window.__pay;if(!P||!P.wb)return;
+  if(!paySheetByName("손익"))return;
+  try{payPnlImport._auto=true;payPnlImport();}catch(e){console.warn("손익 자동",e);}finally{payPnlImport._auto=false;}
+}
+window.payPnlAuto=payPnlAuto;
 /* ---------- 엔터로 아래 칸 이동 ---------- */
 function payKeyDown(e,el){
   if(e.key==="Enter"){
@@ -7365,6 +7383,7 @@ function paySchedSave(){
   const P=window.__pay;
   if(!P.wb)return;
   payAutoFill();
+  if(typeof payPnlAuto==="function")payPnlAuto();
   P.cloudState="saving";
   const st=document.getElementById("payCloudSt");
   if(st)st.textContent="☁ 저장 중…";
