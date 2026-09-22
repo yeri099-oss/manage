@@ -478,7 +478,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v227</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v228</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -490,6 +490,7 @@ window.FIREBASE_CONFIG = {
     <button class="tab" data-tab="pnl">월별손익</button>
     <button class="tab admin-only" data-tab="buy">매입</button>
     <button class="tab admin-only" data-tab="pay">급여</button>
+    <button class="tab admin-only" data-tab="expense">비용정리</button>
     <button class="tab admin-only" data-tab="settings">설정</button>
     <div id="sideSubs"></div>
   </nav>
@@ -510,6 +511,7 @@ window.FIREBASE_CONFIG = {
     <section id="tab-pnl" class="tab-panel hidden"></section>
     <section id="tab-buy" class="tab-panel hidden"></section>
     <section id="tab-pay" class="tab-panel hidden"></section>
+    <section id="tab-expense" class="tab-panel hidden"></section>
     <section id="tab-jagum" class="tab-panel hidden"></section>
     <section id="tab-settings" class="tab-panel hidden"></section>
   </main>
@@ -1125,7 +1127,7 @@ async function loadAllData() {
   jobs.push(fsCol("config").doc("epidaDrink").get().then((d) => { S.data.epidaDrink = d.data() || { add: [], remove: [] }; }).catch(() => {}));
   jobs.push(fsCol("payMonthly").get().then((snap)=>{const out={},files={};snap.forEach((d)=>{if(d.id.indexOf("file_")===0)files[d.id.slice(5)]=d.data();else if(d.id==="acctConfig")S.data.payAcct=d.data().acctOf||{};else if(d.id==="taxConfig")S.data.payTax=d.data()||{byName:{}};else if(d.id==="taxTable")S.data.payTaxTable=d.data()||null;else if(d.id==="bizConfig")S.data.payBiz=d.data()||{bizOf:{}};else out[d.id]=d.data();});S.data.payMonthly=out;S.data.payFiles=files;}).catch(()=>{S.data.payMonthly=S.data.payMonthly||{};S.data.payFiles=S.data.payFiles||{};S.data.payAcct=S.data.payAcct||{};}));
   jobs.push(fsCol("config").doc("bojagiPosMap").get().then((d) => { S.data.bojagiPosMap = (d.data() || {}).map || {}; }).catch(() => {}));
-  if(S.user&&S.user.role==="admin")jobs.push(fsCol("buy").get().then((snap)=>{const B={files:{},close:{},stat:{},vendorMap:{}};snap.forEach((d)=>{const id=d.id;if(id==="file_close")B.files.close=d.data();else if(id==="file_stat")B.files.stat=d.data();else if(id.indexOf("close_")===0)B.close[id.slice(6)]=d.data();else if(id.indexOf("stat_")===0)B.stat[id.slice(5)]=d.data();else if(id==="vendorMap"){B.vendorMap=(d.data()||{}).map||{};B.vendorSkip=(d.data()||{}).skip||{};}});S.data.buy=B;}).catch(()=>{S.data.buy=S.data.buy||{files:{},close:{},stat:{},vendorMap:{}};}));
+  if(S.user&&S.user.role==="admin")jobs.push(fsCol("buy").get().then((snap)=>{const B={files:{},close:{},stat:{},vendorMap:{}};snap.forEach((d)=>{const id=d.id;if(id==="file_close")B.files.close=d.data();else if(id==="file_stat")B.files.stat=d.data();else if(id.indexOf("close_")===0)B.close[id.slice(6)]=d.data();else if(id.indexOf("stat_")===0)B.stat[id.slice(5)]=d.data();else if(id==="vendorMap"){B.vendorMap=(d.data()||{}).map||{};B.vendorSkip=(d.data()||{}).skip||{};}else if(id==="expenseCheck"){B.expense=d.data()||{months:{}};}});S.data.buy=B;}).catch(()=>{S.data.buy=S.data.buy||{files:{},close:{},stat:{},vendorMap:{}};}));
   await Promise.all(jobs);
   pnlNormalizeKeys();
 }
@@ -8071,11 +8073,11 @@ window.payRecordMonth=payRecordMonth;window.paySummaryCopy=paySummaryCopy;
 window.payPick=payPick;window.payDownload=payDownload;window.payCellEdit=payCellEdit;
 const RENDERERS = {
   home: () => renderHome(),
-  compare: renderCompare, sales: renderSales, pnl: renderPnl, jagum: renderJagum, pay: renderPay, buy: () => renderBuy(), settings: () => renderSettings(),
+  compare: renderCompare, sales: renderSales, pnl: renderPnl, jagum: renderJagum, pay: renderPay, buy: () => renderBuy(), expense: () => renderExpense(), settings: () => renderSettings(),
 };
 function switchTab(tab) {
   if(["monthly","daily","market","bojagi","agency"].includes(tab)){S.ui.salesSub=tab;tab="sales";}
-  if(["buy","pay","settings","confirmapp"].includes(tab)&&(!S.user||S.user.role!=="admin"))tab="home";
+  if(["buy","pay","expense","settings","confirmapp"].includes(tab)&&(!S.user||S.user.role!=="admin"))tab="home";
   S.ui.tab = tab;
   try{history.replaceState(null,"","#"+tab);}catch(e){}
   document.querySelectorAll(".tabbar .tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
@@ -11016,6 +11018,116 @@ window.payPasteApply=function(){
 </script>
 
 <script>
+/* === expense.js — '비용정리' 탭: 매출확정 후 이카운트 비용 입력 월별 체크리스트 (관리자 전용, salesApp_buy/expenseCheck) === */
+"use strict";
+const EXP_ITEMS=[
+  {k:"sales",  n:"매출전표",   sub:[],                                            go:"confirmapp",goN:"매출확정"},
+  {k:"labor",  n:"인건비",     sub:[["pnl","손익"],["ins","4대보험"],["yong","용역"]],go:"pay",goN:"급여"},
+  {k:"welfare",n:"복리후생비", sub:[["emp","4대보험 사용자정산"]],                 go:"pay",goN:"급여 › 이카운트 입력"},
+  {k:"card",   n:"법인카드",   sub:[]},
+  {k:"buy",    n:"매입정산",   sub:[["bojagi","보자기"]],                          go:"buy",goN:"매입"},
+  {k:"point",  n:"포인트 사용/적립",sub:[]},
+  {k:"stock",  n:"재고",       sub:[]},
+  {k:"fee",    n:"판매수수료", sub:[]},
+  {k:"rent",   n:"지급임차료", sub:[["paper","종이세금계산서 고화자"]]}
+];
+function expData(){
+  if(typeof S==="undefined")return null;
+  S.data.buy=S.data.buy||{files:{},close:{},stat:{},vendorMap:{}};
+  S.data.buy.expense=S.data.buy.expense||{months:{}};
+  S.data.buy.expense.months=S.data.buy.expense.months||{};
+  return S.data.buy.expense;
+}
+window.__exp=window.__exp||{ui:{y:null,m:null},timer:null};
+function expYm(){
+  const u=window.__exp.ui;
+  if(!u.y){const d=new Date();d.setMonth(d.getMonth()-1);u.y=d.getFullYear();u.m=d.getMonth()+1;}/* 기본=지난달(마감 대상) */
+  return {y:u.y,m:u.m,key:String(u.y).slice(2)+String(u.m).padStart(2,"0")};
+}
+function expMonth(key){const D=expData();D.months[key]=D.months[key]||{chk:{},memo:{}};D.months[key].chk=D.months[key].chk||{};D.months[key].memo=D.months[key].memo||{};return D.months[key];}
+function expKeys(it){return it.sub.length?it.sub.map(([sk])=>it.k+"."+sk):[it.k];}
+function expItemDone(mo,it){const ks=expKeys(it);const n=ks.filter(k=>mo.chk[k]).length;return {n,t:ks.length,all:n===ks.length,some:n>0};}
+function expSave(){
+  const D=expData();if(!D)return;
+  if(typeof IS_DEMO!=="undefined"&&IS_DEMO)return;
+  clearTimeout(window.__exp.timer);
+  window.__exp.timer=setTimeout(async()=>{
+    try{await fsCol("buy").doc("expenseCheck").set({months:D.months,savedAt:Date.now()});}
+    catch(e){console.error(e);toast("비용정리 저장 실패: "+(e.message||""),true);}
+  },600);
+}
+window.expToggle=function(key,k,on){
+  const mo=expMonth(key);
+  if(on===undefined)on=!mo.chk[k];
+  if(on)mo.chk[k]=Date.now();else delete mo.chk[k];
+  expSave();renderExpense();
+};
+window.expToggleItem=function(key,ik){
+  const it=EXP_ITEMS.find(x=>x.k===ik);if(!it)return;
+  const mo=expMonth(key);const d=expItemDone(mo,it);
+  const on=!d.all;
+  expKeys(it).forEach(k=>{if(on)mo.chk[k]=mo.chk[k]||Date.now();else delete mo.chk[k];});
+  expSave();renderExpense();
+};
+window.expMemo=function(key,ik,v){const mo=expMonth(key);v=String(v||"").trim();if(v)mo.memo[ik]=v;else delete mo.memo[ik];expSave();};
+window.expSel=function(y,m){window.__exp.ui.y=Number(y);window.__exp.ui.m=Number(m);renderExpense();};
+window.expReset=function(key){
+  const mo=expMonth(key);const n=Object.keys(mo.chk).length;
+  if(!n){toast("체크된 항목이 없어요");return;}
+  if(!confirm("이 달 체크 "+n+"개를 모두 지울까요? (메모는 남아요)"))return;
+  mo.chk={};expSave();renderExpense();
+};
+function expFmtDate(ts){if(!ts||ts===true)return "";const d=new Date(ts);return (d.getMonth()+1)+"/"+d.getDate();}
+function renderExpense(){
+  const el=document.getElementById("tab-expense");
+  if(!el)return;
+  if(typeof S==="undefined"||!S.user||S.user.role!=="admin"){el.innerHTML='<div class="card">관리자만 볼 수 있어요.</div>';return;}
+  const D=expData();const ym=expYm();const mo=expMonth(ym.key);
+  const now=new Date();
+  const years=[];for(let y=2025;y<=now.getFullYear()+1;y++)years.push(y);
+  /* 이번 달 체크리스트 */
+  let total=0,done=0;
+  const rows=EXP_ITEMS.map((it,i)=>{
+    const d=expItemDone(mo,it);total+=d.t;done+=d.n;
+    const go=it.go?`<a href="#${it.go}" onclick="event.preventDefault();switchTab('${it.go}')" class="unit" style="color:var(--accent,#2F6B3F);text-decoration:none;white-space:nowrap">↗ ${esc(it.goN)}</a>`:"";
+    const head=`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:700;font-size:14px;${d.all?"color:var(--ink-muted);text-decoration:line-through":""}">
+        <input type="checkbox" ${d.all?"checked":""} ${d.some&&!d.all?'style="outline:2px solid #E8C88A;outline-offset:1px"':""} onchange="expToggleItem('${ym.key}','${it.k}')" style="width:18px;height:18px;accent-color:#2F6B3F"> ${i+1}. ${esc(it.n)}${it.sub.length?` <span class="unit">${d.n}/${d.t}</span>`:""}
+      </label>${go}
+      <input type="text" value="${esc(mo.memo[it.k]||"")}" placeholder="메모 (금액·전표번호 등)" onchange="expMemo('${ym.key}','${it.k}',this.value)" style="flex:1;min-width:160px;font:inherit;font-size:12.5px;padding:4px 8px;border:1px solid var(--line,#ddd);border-radius:6px;background:${mo.memo[it.k]?"#FFFBEA":"#fff"}">
+    </div>`;
+    const subs=it.sub.length?`<div style="display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 0 30px">${it.sub.map(([sk,sn])=>{const k=it.k+"."+sk;const on=!!mo.chk[k];return `<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;${on?"color:var(--ink-muted);text-decoration:line-through":""}"><input type="checkbox" ${on?"checked":""} onchange="expToggle('${ym.key}','${k}')" style="width:16px;height:16px;accent-color:#2F6B3F"> ${esc(sn)}${on?` <span class="unit">${expFmtDate(mo.chk[k])}</span>`:""}</label>`;}).join("")}</div>`
+      :(d.all?`<div class="unit" style="margin:2px 0 0 30px">${expFmtDate(mo.chk[it.k])} 완료</div>`:"");
+    return `<div style="padding:10px 4px;border-top:1px solid var(--line,#eee);${d.all?"background:#F4F9F4":""}">${head}${subs}</div>`;
+  }).join("");
+  const pct=total?Math.round(done/total*100):0;
+  const allDone=total&&done===total;
+  /* 연간 현황 표 */
+  const yTable=`<div class="table-wrap"><table class="rpt" style="font-size:12.5px"><thead><tr><th class="l" style="position:sticky;left:0;background:var(--bg-card,#fff)">항목</th>${Array.from({length:12},(_,i)=>{const m=i+1;const sel=ym.y===Number(ym.y)&&m===ym.m;return `<th style="cursor:pointer;${sel?"background:#E8F3E8":""}" onclick="expSel(${ym.y},${m})">${m}월</th>`;}).join("")}</tr></thead><tbody>
+    ${EXP_ITEMS.map((it,i)=>`<tr><td class="l" style="position:sticky;left:0;background:var(--bg-card,#fff);white-space:nowrap">${i+1}. ${esc(it.n)}${it.sub.length?` <span class="unit">${it.sub.map(x=>x[1]).join(", ")}</span>`:""}</td>${Array.from({length:12},(_,j)=>{const m=j+1;const key=String(ym.y).slice(2)+String(m).padStart(2,"0");const mm=(D.months[key]||{chk:{}});mm.chk=mm.chk||{};const d=expItemDone(mm,it);const sel=m===ym.m;const memo=(mm.memo||{})[it.k];return `<td title="${esc(memo||"")}" onclick="expSel(${ym.y},${m})" style="cursor:pointer;text-align:center;${sel?"background:#F4F9F4;":""}${d.all?"color:#2F6B3F;font-weight:700":d.some?"color:#b45309":"color:#ccc"}">${d.all?"✓":d.some?d.n+"/"+d.t:"–"}${memo?'<span style="color:#C9A227"> •</span>':""}</td>`;}).join("")}</tr>`).join("")}
+    <tr class="total"><td class="l" style="position:sticky;left:0;background:var(--bg-card,#fff)"><b>완료</b></td>${Array.from({length:12},(_,j)=>{const m=j+1;const key=String(ym.y).slice(2)+String(m).padStart(2,"0");const mm=(D.months[key]||{chk:{}});mm.chk=mm.chk||{};let t=0,n=0;EXP_ITEMS.forEach(it=>{const d=expItemDone(mm,it);t+=d.t;n+=d.n;});const c=EXP_ITEMS.filter(it=>expItemDone(mm,it).all).length;return `<td style="text-align:center;${c===EXP_ITEMS.length?"color:#2F6B3F":n?"color:#b45309":"color:#ccc"}"><b>${n?c+"/"+EXP_ITEMS.length:"–"}</b></td>`;}).join("")}</tr>
+  </tbody></table></div>`;
+  el.innerHTML=`<div class="card">
+    <div class="card-head"><div class="card-title">🧾 비용정리 체크리스트 <span class="unit">매출확정 후 이카운트에 넣을 항목을 달마다 확인해요 · 체크는 바로 저장돼요</span></div>
+      <div class="card-actions">
+        <select class="ctl" onchange="expSel(this.value,${ym.m})">${years.map(y=>`<option ${y===ym.y?"selected":""}>${y}</option>`).join("")}</select>
+        <select class="ctl" onchange="expSel(${ym.y},this.value)">${Array.from({length:12},(_,i)=>`<option value="${i+1}" ${i+1===ym.m?"selected":""}>${i+1}월</option>`).join("")}</select>
+        <button class="btn btn-sm" onclick="expReset('${ym.key}')">체크 모두 지우기</button>
+      </div></div>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:4px 0 10px">
+      <b style="font-size:16px">${ym.y}년 ${ym.m}월분</b>
+      <div style="flex:1;min-width:160px;max-width:360px;height:10px;background:#eee;border-radius:6px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${allDone?"#2F6B3F":"#7FB58F"};transition:width .2s"></div></div>
+      <span class="unit">${done}/${total} 항목 ${allDone?'<b style="color:#2F6B3F">✓ 이 달 비용정리 끝!</b>':""}</span>
+    </div>
+    <div>${rows}</div>
+    <div class="footnote" style="margin-top:8px">큰 항목을 체크하면 아래 세부 항목이 같이 체크돼요(세부만 따로 체크하면 큰 항목은 n/t로 보여요). 메모 칸엔 금액이나 전표번호처럼 나중에 다시 볼 것을 적어두세요 — 연간 표에서 노란 점(•)으로 표시돼요.</div>
+  </div>
+  <div class="card"><div class="card-head"><div class="card-title">${ym.y}년 연간 현황 <span class="unit">칸을 누르면 그 달로 이동해요</span></div></div>${yTable}</div>`;
+}
+window.renderExpense=renderExpense;
+</script>
+
+<script>
 /* === main.js === */
 /* ===== 앱 시작 ===== */
 "use strict";
@@ -11049,6 +11161,7 @@ async function showApp() {
     <section id="tab-pnl" class="tab-panel hidden"></section>
     <section id="tab-buy" class="tab-panel hidden"></section>
     <section id="tab-pay" class="tab-panel hidden"></section>
+    <section id="tab-expense" class="tab-panel hidden"></section>
     <section id="tab-jagum" class="tab-panel hidden"></section>
     <section id="tab-settings" class="tab-panel hidden"></section>`;
   document.getElementById("tab-home").innerHTML = `<div class="loading"><span class="spin"></span><br>데이터를 불러오는 중…</div>`;
@@ -11066,11 +11179,11 @@ function deepLinkTab(){
   try{
     let h=decodeURIComponent((location.hash||"").replace(/^#/,"")).trim();
     if(!h)return null;
-    const KO={"요약":"home","자금일보":"jagum","자금":"jagum","매출비교":"compare","매출현황":"sales","매출":"sales","월별손익":"pnl","손익":"pnl","매입":"buy","급여":"pay","설정":"settings","매출확정":"confirmapp"};
+    const KO={"요약":"home","자금일보":"jagum","자금":"jagum","매출비교":"compare","매출현황":"sales","매출":"sales","월별손익":"pnl","손익":"pnl","매입":"buy","급여":"pay","비용정리":"expense","비용":"expense","설정":"settings","매출확정":"confirmapp"};
     if(KO[h])h=KO[h];
-    const OK=["home","jagum","compare","sales","pnl","buy","pay","settings","confirmapp","monthly","daily","market","bojagi","agency"];
+    const OK=["home","jagum","compare","sales","pnl","buy","pay","expense","settings","confirmapp","monthly","daily","market","bojagi","agency"];
     if(OK.indexOf(h)<0)return null;
-    const ADMIN=["buy","pay","settings","confirmapp"];
+    const ADMIN=["buy","pay","expense","settings","confirmapp"];
     if(ADMIN.indexOf(h)>=0&&(!S.user||S.user.role!=="admin"))return null;
     return h;
   }catch(e){return null;}
