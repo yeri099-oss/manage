@@ -478,7 +478,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v231</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v232</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -11210,10 +11210,31 @@ async function renderExpMisc(kind){
     <table class="rpt" style="max-width:360px;margin:0"><thead><tr><th class="l">사업장</th><th>금액</th></tr></thead><tbody>${trs}
       <tr style="background:#eef3ee"><td class="l"><b>${cfg.sumLabel}</b></td><td style="text-align:right"><b>${fmt(sum)}</b></td></tr></tbody></table>
     ${cfg.extra?`<div class="footnote" style="margin-top:8px">${cfg.extra}</div>`:""}
+    ${kind==="fee"?expFeeVoucherHtml(ym.key,m.misc):""}
   </div>
   <div class="card"><div class="card-head"><div class="card-title">${ym.y}년 월별 <span class="unit">매출확정에 있는 달만 보여요 · 칸을 누르면 그 달로</span> <button class="btn btn-sm" onclick="expMiscLoadYear(${ym.y})">이 해 전체 불러오기</button></div></div>
     <div class="table-wrap"><table class="rpt" style="font-size:12.5px"><thead><tr><th class="l">사업장</th>${Array.from({length:12},(_,i)=>`<th>${i+1}월</th>`).join("")}</tr></thead><tbody>${yTr}${yTot}</tbody></table></div></div>`;
 }
+/* 판매수수료 이카운트 전표: 3차 8399 판매수수료(판) 차변 / 4대 1089 외상매출금 대변 — 거래처 1234 신용카드, 적요 '카드매출 수수료', 사업장별 */
+function expFeeVoucherRows(mi){
+  const B=[["feeMarket","꽃밥마켓"],["feeBojagi","보자기꽃밥"],["feePida","꽃밥에피다"]];
+  const rows=[];
+  B.forEach(([k,n])=>{const v=mi[k]||0;if(v)rows.push({grp:"3차",code:"8399",acct:"판매수수료(판)",sub:"1234 신용카드",dr:v,cr:0,memo:"카드매출 수수료",biz:n,blk:"8399"});});
+  B.forEach(([k,n])=>{const v=mi[k]||0;if(v)rows.push({grp:"4대",code:"1089",acct:"외상매출금",sub:"1234 신용카드",dr:0,cr:v,memo:"카드매출 수수료",biz:n,blk:"1089"});});
+  return rows;
+}
+function expFeeVoucherHtml(key,mi){
+  const rows=expFeeVoucherRows(mi);
+  if(!rows.length)return `<div class="footnote" style="margin-top:12px">금액이 들어오면 아래에 이카운트 전표(8399 판매수수료 / 1089 외상매출금)가 만들어져요.</div>`;
+  const tbl=(typeof pecTable==="function")?pecTable(rows,"판매수수료 전표"):"";
+  return `<div style="display:flex;gap:8px;align-items:center;margin-top:16px;flex-wrap:wrap"><b>🧾 이카운트 전표 — 판매수수료</b><button class="btn btn-sm" onclick="expFeeCopy('${key}')">📄 표 복사</button><span class="unit">사업장별 8399 차변 3줄 + 1089 외상매출금 대변 3줄, 거래처 1234 신용카드</span></div>${tbl}`;
+}
+window.expFeeCopy=function(key){
+  const A=window.__cfmApp;const m=A&&A.MONTHS[key];if(!m)return;
+  const rows=expFeeVoucherRows(m.misc||{});
+  const txt=["구분\t계정코드\t계정\t거래처\t차변\t대변\t적요\t부서"].concat(rows.map(x=>[x.grp,x.code,x.acct,x.sub,x.dr||"",x.cr||"",x.memo,x.biz].join("\t"))).join("\n");
+  navigator.clipboard.writeText(txt).then(()=>toast("전표 "+rows.length+"줄을 복사했어요")).catch(()=>toast("복사 실패",true));
+};
 window.expMiscEdit=function(key,k,v,kind){
   const A=window.__cfmApp;const m=A&&A.MONTHS[key];if(!m)return;
   m.misc=m.misc||{};
