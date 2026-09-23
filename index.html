@@ -478,7 +478,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v235</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v236</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -11473,6 +11473,7 @@ window.cardCapture=async function(mode){
 };
 function renderExpCard(){
   const el=document.getElementById("tab-expcard");if(!el)return;
+  if(window.__exp.ui.cardDirName===undefined&&window.showDirectoryPicker){window.__exp.ui.cardDirName=null;cardDirGet().then(h=>{if(h){window.__exp.ui.cardDirName=h.name;if(window.__exp.ui.sub==="card")renderExpCard();}});}
   const ym=expYm();const doc=cardStore()[ym.key];
   const now=new Date();const years=[];for(let y=2025;y<=now.getFullYear()+1;y++)years.push(y);
   const up=`<button class="btn btn-sm ${doc?"":"btn-primary"}" onclick="document.getElementById('cardFile').click()">📂 법인카드 엑셀 ${doc?"다시 올리기":"올리기"}</button><input type="file" id="cardFile" accept=".xlsx" style="display:none" onchange="cardPick(this)">`;
@@ -11527,7 +11528,7 @@ function renderExpCard(){
     <details style="margin-top:12px"><summary style="cursor:pointer;font-weight:700">계정 코드표 <span class="unit">엑셀 계정 → 이카운트 코드·계정명 (한 번 고치면 기억)</span></summary><div style="margin-top:6px">${codeTbl}</div></details>
   </div>
   <div class="card"><div class="card-head"><div class="card-title">엑셀 내역 <span class="unit">탭을 눌러 사용자별로 보기 · 계정 칸을 바꾸면 집계·전표에 바로 반영돼요(노란색=바꾼 칸)</span></div>
-    <div class="card-actions"><button class="btn btn-sm btn-primary" onclick="cardTaxDl('${ym.key}')">📥 세무사무소용 엑셀 받기</button></div></div>
+    <div class="card-actions"><button class="btn btn-sm btn-primary" onclick="cardTaxDl('${ym.key}')">📥 세무사무소용 엑셀 받기</button>${window.showDirectoryPicker?`<button class="btn btn-sm" onclick="cardChangeDir()" title="엑셀을 저장할 폴더">📁 ${window.__exp.ui.cardDirName?esc(window.__exp.ui.cardDirName)+" 폴더":"저장 폴더 정하기"}</button>`:""}</div></div>
     <div class="footnote" style="margin:-4px 0 4px">세무사무소용 엑셀: 사용자별 탭(날짜순, 세부 내역 빼고 계정은 비고 칸) + 합 계 + 원본 ${esc(doc.raw?doc.raw.name:"승인내역")} 탭</div>
     ${sheetTabs}${detail}</div>`;
 }
@@ -11583,6 +11584,45 @@ async function cardBuildXlsx(sheets){
   return await zip.generateAsync({type:"blob",mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
 }
 function cardTaxAcct(r){const a=cardEff(r);return a==="소모품(비품)"?"비품":a==="(미분류)"?"":a;}
+/* ---- 저장 폴더 기억 (크롬·엣지: 처음 한 번 폴더를 고르면 다음부터 그 폴더에 바로 저장) ---- */
+function cardIdb(){return new Promise((res,rej)=>{const r=indexedDB.open("salesApp_fs",1);r.onupgradeneeded=()=>r.result.createObjectStore("h");r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
+async function cardDirGet(){try{const db=await cardIdb();return await new Promise(res=>{const t=db.transaction("h").objectStore("h").get("cardTaxDir");t.onsuccess=()=>res(t.result||null);t.onerror=()=>res(null);});}catch(e){return null;}}
+async function cardDirSet(h){try{const db=await cardIdb();await new Promise(res=>{const t=db.transaction("h","readwrite");t.objectStore("h").put(h,"cardTaxDir");t.oncomplete=res;t.onerror=res;});}catch(e){}}
+async function cardDirDel(){try{const db=await cardIdb();await new Promise(res=>{const t=db.transaction("h","readwrite");t.objectStore("h").delete("cardTaxDir");t.oncomplete=res;t.onerror=res;});}catch(e){}}
+async function cardPickDir(){
+  const h=await window.showDirectoryPicker({id:"cardTax",mode:"readwrite",startIn:"desktop"});
+  await cardDirSet(h);window.__exp.ui.cardDirName=h.name;return h;
+}
+window.cardChangeDir=async function(){
+  if(!window.showDirectoryPicker){toast("이 브라우저는 폴더 지정을 지원하지 않아요 — 크롬이나 엣지에서 써주세요",true);return;}
+  try{const h=await cardPickDir();toast("저장 폴더를 '"+h.name+"'(으)로 정했어요");renderExpense();}catch(e){if(e&&e.name!=="AbortError")toast("폴더 지정 실패: "+(e.message||e),true);}
+};
+async function cardSaveToDir(blob,fname){
+  if(!window.showDirectoryPicker)return false;/* 지원 안 하면 일반 다운로드 */
+  try{
+    let h=await cardDirGet();
+    if(h){
+      let perm=await h.queryPermission({mode:"readwrite"});
+      if(perm!=="granted")perm=await h.requestPermission({mode:"readwrite"});
+      if(perm!=="granted")h=null;
+    }
+    if(!h){
+      if(!confirm("저장할 폴더를 한 번만 골라주세요.\n(바탕 화면 → 한가람 → 법인카드)\n\n다음부터는 그 폴더에 바로 저장돼요."))return true;
+      h=await cardPickDir();
+    }
+    let exists=false;try{await h.getFileHandle(fname);exists=true;}catch(e){}
+    if(exists&&!confirm("'"+h.name+"' 폴더에 "+fname+" 이(가) 이미 있어요. 새 파일로 바꿀까요?"))return true;
+    const fh=await h.getFileHandle(fname,{create:true});
+    const w=await fh.createWritable();await w.write(blob);await w.close();
+    window.__exp.ui.cardDirName=h.name;
+    toast("'"+h.name+"' 폴더에 "+fname+" 을 저장했어요 ✓");
+    renderExpense();
+    return true;
+  }catch(e){
+    if(e&&e.name==="AbortError")return true;/* 폴더 선택 취소 */
+    console.error(e);toast("폴더 저장이 안 돼서 일반 다운로드로 받을게요",true);return false;
+  }
+}
 window.cardTaxDl=async function(key){
   const doc=cardStore()[key];if(!doc)return;
   try{
@@ -11603,8 +11643,10 @@ window.cardTaxDl=async function(key){
       out.push({name:doc.raw.name||"승인내역",cols:[],rows:rr});
     }
     const blob=await cardBuildXlsx(out);
-    const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=key+"_법인카드.xlsx";document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},800);
-    toast(key+"_법인카드.xlsx 를 받았어요");
+    const fname=key+"_법인카드.xlsx";
+    if(await cardSaveToDir(blob,fname))return;
+    const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=fname;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},800);
+    toast(fname+" 를 받았어요");
   }catch(e){console.error(e);toast("엑셀 만들기 실패: "+(e.message||e),true);}
 };
 </script>
