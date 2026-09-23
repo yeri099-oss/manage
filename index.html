@@ -478,7 +478,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v236</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v237</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -11368,12 +11368,19 @@ window.cardPick=async function(inp){
     let key=cardMonthKey(P.sheets);
     if(!key){const m=/(\d{4})/.exec(f.name);key=m?m[1]:expYm().key;}
     const B=cardStore();
-    if(B[key]&&!confirm("20"+key.slice(0,2)+"년 "+Number(key.slice(2))+"월 법인카드 자료가 이미 있어요. 새 파일로 바꿀까요?\n(행별로 바꿔둔 계정은 초기화돼요)"))return;
+    let kept=0;
+    if(B[key]){
+      if(!confirm("20"+key.slice(0,2)+"년 "+Number(key.slice(2))+"월 법인카드 자료가 이미 있어요. 새 파일로 바꿀까요?\n(행별로 바꿔둔 계정은 같은 건이면 그대로 유지돼요)"))return;
+      const ov={};const cnt={};
+      B[key].sheets.forEach(sh=>sh.rows.forEach(r=>{if(r.ov==null&&r.fitOv==null)return;const k0=sh.name+"|"+r.d+"|"+r.m+"|"+r.a;cnt[k0]=(cnt[k0]||0)+1;ov[k0+"|"+cnt[k0]]={ov:r.ov,fitOv:r.fitOv};}));
+      const c2={};
+      P.sheets.forEach(sh=>sh.rows.forEach(r=>{const k0=sh.name+"|"+r.d+"|"+r.m+"|"+r.a;c2[k0]=(c2[k0]||0)+1;const o=ov[k0+"|"+c2[k0]];if(o){if(o.ov!=null)r.ov=o.ov;if(o.fitOv!=null)r.fitOv=o.fitOv;kept++;}}));
+    }
     B[key]={fileName:f.name,up:Date.now(),sheets:P.sheets,appr:P.appr||null,raw:P.raw||null};
     window.__exp.ui.y=2000+Number(key.slice(0,2));window.__exp.ui.m=Number(key.slice(2));
     cardSaveNow(key);renderExpense();
     const n=P.sheets.reduce((a,s)=>a+s.rows.length,0);
-    toast(P.sheets.map(s=>s.name).join("·")+" "+n+"건을 불러왔어요");
+    toast(P.sheets.map(s=>s.name).join("·")+" "+n+"건"+(P.raw?" + 원본 "+P.raw.name+" 탭":"")+"을 불러왔어요"+(kept?" (바꿔둔 계정 "+kept+"건 유지)":""));
   }catch(e){console.error(e);toast("엑셀 읽기 실패: "+(e.message||e),true);}
   finally{inp.value="";}
 };
@@ -11488,11 +11495,15 @@ function renderExpCard(){
   /* 원본 내역 (사용자 탭별, 계정 묶음) */
   const accOpts=(r)=>{const e=cardEff(r),f=cardIsFit(r);const list=CARD_ACC_LIST.slice();if(r.ac&&list.indexOf(r.ac)<0)list.push(r.ac);if(e&&list.indexOf(e)<0)list.push(e);
     return list.map(a=>`<option value="${esc(a)}" ${a===e&&!f?"selected":""}>${esc(a)}</option>`).join("")+(`<option value="__fit" ${f?"selected":""}>복리후생비(체력단련)</option>`);};
-  const selSi=Math.min(window.__exp.ui.cardSheet||0,C.per.length-1);
+  const hasRaw=!!(doc.raw&&doc.raw.rows&&doc.raw.rows.length);
+  const selSi=Math.min(window.__exp.ui.cardSheet||0,C.per.length-(hasRaw?0:1));
+  const rawSel=hasRaw&&selSi===C.per.length;
   const view=window.__exp.ui.cardView||"acc";
   const selOpt=(r,si,i)=>{const changed=r.ov!=null||r.fitOv!=null;return `<select onchange="cardSetAcct('${ym.key}',${si},${i},this.value)" style="font:inherit;font-size:12px;padding:2px 4px;border:1px solid ${changed?"#E8C88A":"var(--line,#ddd)"};border-radius:6px;background:${changed?"#FFFBEA":"#fff"}">${accOpts(r)}</select>`;};
-  const sheetTabs=`<div style="display:flex;gap:0;flex-wrap:wrap;border-bottom:2px solid #2F6B3F;margin-top:4px">${C.per.map((p,si)=>`<button onclick="cardSheetSel(${si})" style="font:inherit;font-size:13.5px;padding:7px 16px;border:1px solid ${si===selSi?"#2F6B3F":"var(--line,#ddd)"};border-bottom:none;border-radius:8px 8px 0 0;margin-right:3px;cursor:pointer;background:${si===selSi?"#2F6B3F":"#F4F6F2"};color:${si===selSi?"#fff":"inherit"};font-weight:${si===selSi?700:500}">${esc(p.name)} <span style="font-size:11.5px;opacity:.85">${fmt(p.sum)}</span>${p.ap&&p.ap.sum!==p.sum?' <span style="color:#F2C14E">⚠</span>':""}</button>`).join("")}</div>
-    <div style="display:flex;gap:6px;margin:8px 0 2px;align-items:center"><span class="unit">보기</span><button class="btn btn-sm ${view==="acc"?"btn-primary":""}" onclick="cardViewSel('acc')">계정별 묶음</button><button class="btn btn-sm ${view==="date"?"btn-primary":""}" onclick="cardViewSel('date')">날짜순</button></div>`;
+  const sheetTabs=`<div style="display:flex;gap:0;flex-wrap:wrap;border-bottom:2px solid #2F6B3F;margin-top:4px">${C.per.map((p,si)=>`<button onclick="cardSheetSel(${si})" style="font:inherit;font-size:13.5px;padding:7px 16px;border:1px solid ${si===selSi?"#2F6B3F":"var(--line,#ddd)"};border-bottom:none;border-radius:8px 8px 0 0;margin-right:3px;cursor:pointer;background:${si===selSi?"#2F6B3F":"#F4F6F2"};color:${si===selSi?"#fff":"inherit"};font-weight:${si===selSi?700:500}">${esc(p.name)} <span style="font-size:11.5px;opacity:.85">${fmt(p.sum)}</span>${p.ap&&p.ap.sum!==p.sum?' <span style="color:#F2C14E">⚠</span>':""}</button>`).join("")}${hasRaw?`<button onclick="cardSheetSel(${C.per.length})" style="font:inherit;font-size:13.5px;padding:7px 16px;border:1px dashed ${rawSel?"#555":"var(--line,#ccc)"};border-bottom:none;border-radius:8px 8px 0 0;cursor:pointer;background:${rawSel?"#555":"#fff"};color:${rawSel?"#fff":"inherit"};font-weight:${rawSel?700:500}">${esc(doc.raw.name)} <span style="font-size:11.5px;opacity:.85">원본</span></button>`:""}</div>
+    ${rawSel?"":`<div style="display:flex;gap:6px;margin:8px 0 2px;align-items:center"><span class="unit">보기</span><button class="btn btn-sm ${view==="acc"?"btn-primary":""}" onclick="cardViewSel('acc')">계정별 묶음</button><button class="btn btn-sm ${view==="date"?"btn-primary":""}" onclick="cardViewSel('date')">날짜순</button></div>`}`;
+  const rawHtml=rawSel?(()=>{const R=doc.raw.rows;const hdr=(R[0]&&R[0].v)||[];const nc=Math.max(...R.map(o=>(o.v||[]).length));
+    return `<div style="margin-top:10px"><div class="unit" style="margin-bottom:4px">카드사에서 받은 원본 그대로예요 (${R.length-1}줄) — 세무사무소용 엑셀 마지막 탭으로 같이 들어가요</div><div class="table-wrap"><table class="rpt" style="font-size:12px;margin:0;white-space:nowrap"><thead><tr>${Array.from({length:nc},(_,c)=>`<th>${esc(hdr[c]==null?"":hdr[c])}</th>`).join("")}</tr></thead><tbody>${R.slice(1).map(o=>`<tr>${Array.from({length:nc},(_,c)=>{const v=(o.v||[])[c];return typeof v==="number"?`<td style="text-align:right">${fmt(v)}</td>`:`<td class="l">${esc(v==null?"":v)}</td>`;}).join("")}</tr>`).join("")}</tbody></table></div></div>`;})():"";
   const detail=C.per.map((p,si)=>{
     if(si!==selSi)return "";
     if(view==="date"){
@@ -11530,7 +11541,8 @@ function renderExpCard(){
   <div class="card"><div class="card-head"><div class="card-title">엑셀 내역 <span class="unit">탭을 눌러 사용자별로 보기 · 계정 칸을 바꾸면 집계·전표에 바로 반영돼요(노란색=바꾼 칸)</span></div>
     <div class="card-actions"><button class="btn btn-sm btn-primary" onclick="cardTaxDl('${ym.key}')">📥 세무사무소용 엑셀 받기</button>${window.showDirectoryPicker?`<button class="btn btn-sm" onclick="cardChangeDir()" title="엑셀을 저장할 폴더">📁 ${window.__exp.ui.cardDirName?esc(window.__exp.ui.cardDirName)+" 폴더":"저장 폴더 정하기"}</button>`:""}</div></div>
     <div class="footnote" style="margin:-4px 0 4px">세무사무소용 엑셀: 사용자별 탭(날짜순, 세부 내역 빼고 계정은 비고 칸) + 합 계 + 원본 ${esc(doc.raw?doc.raw.name:"승인내역")} 탭</div>
-    ${sheetTabs}${detail}</div>`;
+    ${hasRaw?"":`<div style="margin:6px 0 8px;padding:8px 12px;background:#FDF6EC;border:1px solid #E8C88A;border-radius:10px"><b>⚠ 이 달 자료엔 원본(승인내역) 탭이 저장돼 있지 않아요</b> — 원본 저장 기능이 생기기 전에 올린 자료라서 그래요. 위 "📂 법인카드 엑셀 다시 올리기"로 같은 파일을 한 번만 다시 올려주세요 (바꿔둔 계정은 그대로 유지돼요)</div>`}
+    ${sheetTabs}${rawSel?rawHtml:detail}</div>`;
 }
 window.renderExpCard=renderExpCard;
 window.cardSheetSel=function(i){window.__exp.ui.cardSheet=i;renderExpense();};
@@ -11625,6 +11637,7 @@ async function cardSaveToDir(blob,fname){
 }
 window.cardTaxDl=async function(key){
   const doc=cardStore()[key];if(!doc)return;
+  if(!(doc.raw&&doc.raw.rows&&doc.raw.rows.length)&&!confirm("이 달 자료엔 원본(승인내역) 탭이 없어요.\n엑셀을 한 번 다시 올리면 원본 탭까지 같이 받을 수 있어요.\n\n원본 탭 없이 그냥 받을까요?"))return;
   try{
     const out=[];
     doc.sheets.forEach(sh=>{
