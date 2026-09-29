@@ -478,7 +478,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v247</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v248</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -12620,21 +12620,13 @@ function plRender(){
     <td class="n">${isAd?cell(i,"dr",r.dr?fmt(r.dr):"","right",90):(r.dr?fmt(r.dr):"")}</td><td class="n">${isAd?cell(i,"cr",r.cr?fmt(r.cr):"","right",90):(r.cr?fmt(r.cr):"")}</td>
     <td>${cell(i,"dept",r.dept,"left",80)}</td>${isAd?`<td style="text-align:center"><button class="btn btn-sm" style="padding:0 7px" onclick="plDel(${i})">×</button></td>`:""}</tr>`).join("");
   const pvLine=pr?PNL_ENTS.filter(([k])=>pr.v&&pr.v[k]!=null).map(([k,n])=>`${n} <b>${fmt(pr.v[k])}</b>`).join(" <span style='color:#bbb'>|</span> "):"";
-  const inBox=isAd?`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0 4px">
-      <label class="btn btn-sm btn-primary" style="cursor:pointer">📂 이카운트 계정별원장 엑셀 넣기<input type="file" accept=".xlsx" style="display:none" onchange="plPick(this)"></label>
-      <button class="btn btn-sm ${U.paste?"btn-primary":""}" onclick="plTogglePaste()">표 붙여넣기</button>
-      <button class="btn btn-sm" onclick="plAdd()">＋ 한 줄 추가</button>
-      ${L.rows&&L.rows.length||L.note?`<button class="btn btn-sm" style="margin-left:auto" onclick="plClearAll()">내역 모두 지우기</button>`:""}</div>
-    <div class="footnote">이카운트 [계정별원장]에서 이 계정·이 달(${yy}/${mm}/01 ~ 말일)로 조회한 뒤 Excel 버튼으로 받은 파일을 넣거나, 표를 머리글까지 복사해서 이 창에서 Ctrl+V 하세요. 부서명대로 사업장이 나뉘어 사업장별 추이에서도 사업장별로 보여요. 넣은 뒤에도 칸을 눌러 고치거나 지울 수 있어요.</div>
-    ${U.paste?`<textarea id="plTa" style="width:100%;min-height:110px;margin-top:6px;font:12px monospace;box-sizing:border-box" placeholder="전표번호 · 적요 · 거래처 · 차변 · 대변 · 잔액 · 부서명 표를 머리글까지 복사해서 붙여넣으세요"></textarea><button class="btn btn-sm btn-primary" style="margin-top:4px" onclick="plPaste()">넣기</button>`:""}`:"";
-  const noteBox=isAd?`<textarea placeholder="설명 (임원 보고용) — 예: 8월 브랜드마케팅 5회차 500만원이 크게 늘었어요" onchange="plNote(this.value)" style="width:100%;min-height:52px;box-sizing:border-box;font:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--line,#ddd);border-radius:8px;margin-top:8px">${esc(L.note||"")}</textarea>`
-    :(L.note?`<div style="margin-top:8px;padding:9px 12px;background:#FFFBEA;border:1px solid #EFD98A;border-radius:8px;white-space:pre-wrap;font-size:13.5px">${esc(L.note)}</div>`:"");
+  const inBox=isAd?`<textarea id="plTa" rows="2" style="width:100%;box-sizing:border-box;font:inherit;font-size:13px;padding:10px 12px;border:1.5px dashed #9db3e8;border-radius:8px;background:#F7F9FE;resize:vertical" placeholder="이카운트 계정별원장 표를 머리글(전표번호~부서명)까지 복사해서 여기에 붙여넣으세요 (Ctrl+V)${L.rows&&L.rows.length?" — 다시 붙여넣으면 바꿔요":""}"></textarea>`:"";
+  const noteBox=!isAd&&L.note?`<div style="margin-bottom:10px;padding:9px 12px;background:#FFFBEA;border:1px solid #EFD98A;border-radius:8px;white-space:pre-wrap;font-size:13.5px">${esc(L.note)}</div>`:"";
   o.innerHTML=`<div class="pl-win"><div class="pl-head">📒 <b>계정별 내역</b> ${(()=>{const ks=Object.keys(S.data.pnl||{}).sort((a,b)=>{const[ay,am]=a.split("-").map(Number),[by,bm]=b.split("-").map(Number);return by-ay||bm-am;});
       return `<select onchange="plMonth(this.value)" style="font:inherit;font-size:13px;border:none;border-radius:6px;padding:3px 6px;background:rgba(255,255,255,.18);color:#fff;cursor:pointer">${ks.map(k=>`<option style="color:#222" value="${k}" ${k===U.key?"selected":""}>${k.split("-")[0]}년 ${Number(k.split("-")[1])}월${plHas(k,U.name)?" 📄":""}</option>`).join("")}</select>`;})()} <span style="opacity:.9">${esc(U.name.trim())}</span><button class="pl-x" onclick="plClose()" title="닫기 (Esc)">×</button></div>
     <div class="pl-body">
-      <div style="font-size:12.5px;color:#555">월별손익 금액: ${pvLine||"—"}</div>
       ${noteBox}${inBox}
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0 8px">${chips}</div>
+      ${rowsAll.length?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin:${isAd?12:0}px 0 8px">${chips}</div>`:""}
       ${rows.length?`<table class="pl"><thead><tr><th style="width:110px">일자</th><th>적요</th><th>거래처</th><th style="width:110px">차변</th><th style="width:110px">대변</th><th style="width:100px">부서명</th>${isAd?'<th style="width:34px"></th>':""}</tr></thead><tbody>${trs}
         <tr style="background:#F6F8FC;font-weight:700"><td colspan="3" style="text-align:right">합계 ${rows.length}건</td><td class="n">${fmt(sumDr)}</td><td class="n">${fmt(sumCr)}</td><td colspan="${isAd?2:1}"></td></tr></tbody></table>
         <div style="margin-top:8px;font-size:13px">내역 합계 <b>${fmt(nv)}원</b> ${cmp}</div>`
