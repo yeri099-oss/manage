@@ -478,7 +478,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v239</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v241</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -1125,7 +1125,7 @@ async function loadAllData() {
   jobs.push(fsCol("config").doc("bojagiDrinkItems").get().then((d) => { S.data.drinkItems = d.data()?.items || []; }));
   jobs.push(db.collection("salesStatus_months").get().then((snap) => { S.cfmYms = []; snap.forEach((d) => S.cfmYms.push(d.id)); }).catch(() => {}));
   jobs.push(fsCol("config").doc("epidaDrink").get().then((d) => { S.data.epidaDrink = d.data() || { add: [], remove: [] }; }).catch(() => {}));
-  jobs.push(fsCol("payMonthly").get().then((snap)=>{const out={},files={};snap.forEach((d)=>{if(d.id.indexOf("file_")===0)files[d.id.slice(5)]=d.data();else if(d.id==="acctConfig")S.data.payAcct=d.data().acctOf||{};else if(d.id==="taxConfig")S.data.payTax=d.data()||{byName:{}};else if(d.id==="taxTable")S.data.payTaxTable=d.data()||null;else if(d.id==="bizConfig")S.data.payBiz=d.data()||{bizOf:{}};else out[d.id]=d.data();});S.data.payMonthly=out;S.data.payFiles=files;}).catch(()=>{S.data.payMonthly=S.data.payMonthly||{};S.data.payFiles=S.data.payFiles||{};S.data.payAcct=S.data.payAcct||{};}));
+  jobs.push(fsCol("payMonthly").get().then((snap)=>{const out={},files={};snap.forEach((d)=>{if(d.id.indexOf("file_")===0)files[d.id.slice(5)]=d.data();else if(d.id==="acctConfig")S.data.payAcct=d.data().acctOf||{};else if(d.id==="taxConfig")S.data.payTax=d.data()||{byName:{}};else if(d.id==="taxTable")S.data.payTaxTable=d.data()||null;else if(d.id==="bizConfig")S.data.payBiz=d.data()||{bizOf:{}};else if(d.id.indexOf("hg_")===0){S.data.payHg=S.data.payHg||{};S.data.payHg[d.id.slice(3)]=d.data();}else out[d.id]=d.data();});S.data.payMonthly=out;S.data.payFiles=files;}).catch(()=>{S.data.payMonthly=S.data.payMonthly||{};S.data.payFiles=S.data.payFiles||{};S.data.payAcct=S.data.payAcct||{};}));
   jobs.push(fsCol("config").doc("bojagiPosMap").get().then((d) => { S.data.bojagiPosMap = (d.data() || {}).map || {}; }).catch(() => {}));
   if(S.user&&S.user.role==="admin")jobs.push(fsCol("buy").get().then((snap)=>{const B={files:{},close:{},stat:{},vendorMap:{}};snap.forEach((d)=>{const id=d.id;if(id==="file_close")B.files.close=d.data();else if(id==="file_stat")B.files.stat=d.data();else if(id.indexOf("close_")===0)B.close[id.slice(6)]=d.data();else if(id.indexOf("stat_")===0)B.stat[id.slice(5)]=d.data();else if(id==="vendorMap"){B.vendorMap=(d.data()||{}).map||{};B.vendorSkip=(d.data()||{}).skip||{};}else if(id==="expenseCheck"){B.expense=d.data()||{months:{}};}else if(id.indexOf("card_")===0){B.card=B.card||{};B.card[id.slice(5)]=d.data();}else if(id==="cardConfig"){B.cardCfg=d.data()||{};}else if(id.indexOf("debit_")===0){B.debit=B.debit||{};B.debit[id.slice(6)]=d.data();}else if(id==="debitConfig"){B.debitCfg=d.data()||{};}});S.data.buy=B;}).catch(()=>{S.data.buy=S.data.buy||{files:{},close:{},stat:{},vendorMap:{}};}));
   await Promise.all(jobs);
@@ -7829,6 +7829,7 @@ function renderPay(){
     const chips=chipList.map(s=>`<button class="paychip${s.name===active?" on":""}" onclick="window.__pay.sheet='${esc(s.name)}';renderPay()">${esc(s.name)}${(P.edits||{})[s.name]&&Object.keys(P.edits[s.name]).length?" ✎":""}</button>`).join("")
       +`<button class="paychip${active==="__cfg"?" on":""}" style="border-style:dashed" onclick="window.__pay.sheet='__cfg';renderPay()">⚙ 사원 설정</button>`
       +`<button class="paychip${active==="__ecount"?" on":""}" style="border-style:dashed" onclick="window.__pay.sheet='__ecount';renderPay()">🧾 이카운트 입력</button>`
+      +`<button class="paychip${active==="__hg"?" on":""}" style="border-style:dashed" onclick="window.__pay.sheet='__hg';renderPay()">🏛 한가람 대조</button>`
       +(active==="상용직급여"?`<button class="paychip" style="border-style:dashed;margin-left:6px" onclick="payPasteOpen()">📋 최종 표 붙여넣어 대조</button>`:"");
     let body="";
     if(active==="__cfg"){
@@ -7861,6 +7862,8 @@ function renderPay(){
       <div class="table-wrap"><table class="rpt" style="font-size:12.5px"><thead><tr><th class="l">사원</th><th>국민연금</th><th>건강보험</th><th>장기요양</th><th>고용보험</th><th>가족수(자녀 포함 전체)</th><th>8~20세 자녀</th><th>세액표</th><th>임원 일급</th><th>기준 실측(총액→소득세)</th></tr></thead><tbody>${rows3}</tbody></table></div>`;
     }else if(active==="__ecount"){
       body=(typeof payEcBody==="function")?payEcBody():"";
+    }else if(active==="__hg"){
+      body=(typeof payHgBody==="function")?payHgBody():"";
     }else{
       const sh=wb.sheets.find(s=>s.name===active)||wb.sheets[0];
       const edits=(P.edits||{})[sh.name]||{};
@@ -11898,6 +11901,350 @@ function renderExpDebit(){
   </div>`;
 }
 window.renderExpDebit=renderExpDebit;
+</script>
+
+<style>
+#dndOverlay{position:fixed;inset:0;z-index:9999;background:rgba(30,50,35,.55);display:none;align-items:center;justify-content:center;padding:24px}
+#dndOverlay.on{display:flex}
+#dndOverlay .dnd-box{background:#fff;border-radius:16px;padding:18px 20px;max-width:760px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,.25)}
+#dndOverlay .dnd-title{font-weight:800;font-size:16px;margin-bottom:10px;color:#1f2a1f}
+#dndOverlay .dnd-zones{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+#dndOverlay .dnd-zone{border:2.5px dashed #9DBBA4;border-radius:12px;padding:22px 14px;text-align:center;font-weight:700;font-size:14px;color:#2F6B3F;background:#F4F9F4;transition:all .12s;min-height:70px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:4px}
+#dndOverlay .dnd-zone.hot{border-color:#2F6B3F;background:#DDEEDF;transform:scale(1.02)}
+#dndOverlay .dnd-zone small{font-weight:500;color:#667;font-size:12px}
+#dndOverlay .dnd-none{padding:18px;text-align:center;color:#8a5a00;background:#FDF6EC;border-radius:10px}
+</style>
+<script>
+/* === dnd.js — 엑셀 파일을 화면에 끌어다 놓아 올리기 (지금 보이는 화면의 '올리기' 버튼들로 연결) === */
+"use strict";
+(function(){
+  let depth=0,targets=[],files=null;
+  const ov=document.createElement("div");ov.id="dndOverlay";
+  const mount=()=>{if(!document.getElementById("dndOverlay"))document.body.appendChild(ov);};
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",mount);else mount();
+  const hasFiles=(e)=>{const t=e.dataTransfer&&e.dataTransfer.types;return t&&[...t].indexOf("Files")>=0;};
+  const shown=(el)=>{
+    for(let n=el.parentElement;n&&n!==document.body;n=n.parentElement){
+      if(n.classList&&n.classList.contains("hidden"))return false;
+      if(n.hidden)return false;
+      const cs=getComputedStyle(n);if(cs.display==="none"||cs.visibility==="hidden")return false;
+    }
+    return true;
+  };
+  const clean=(t)=>{t=String(t).replace(/\s+/g," ").trim();const cut=t.search(/\s[(（—–]|\s·\s| 올리면| 모든 시트/);if(cut>3)t=t.slice(0,cut);return t.length>34?t.slice(0,34)+"…":t;};
+  const labelOf=(inp)=>clean(labelRaw(inp));
+  const labelRaw=(inp)=>{
+    if(inp.dataset&&inp.dataset.dndLabel)return inp.dataset.dndLabel;
+    if(/uplRouterPick/.test(inp.getAttribute("onchange")||""))return "🪄 자동 분류 (여러 파일 한꺼번에 — 종류를 알아서 찾아 채워요)";
+    const oc=inp.getAttribute("onchange")||"";
+    const NM={mbPick:"회원구매현황(회원분석) 엑셀",bpFilesPick:"키오스크 매출분석 / 쿠팡이츠 주문내역"};
+    for(const k in NM)if(oc.indexOf(k+"(")>=0)return NM[k];
+    if(inp.id){
+      const b=[...document.querySelectorAll("button,a,label,span")].find(x=>{const oc=x.getAttribute("onclick")||"";return oc.indexOf("'"+inp.id+"'")>=0||oc.indexOf('"'+inp.id+'"')>=0||x.getAttribute("for")===inp.id;});
+      if(b&&b.textContent.trim())return b.textContent.trim();
+    }
+    const lb=inp.closest("label");if(lb&&lb.textContent.trim())return lb.textContent.trim();
+    let p=inp.previousElementSibling;for(let k=0;k<3&&p;k++,p=p.previousElementSibling){if(/^(BUTTON|B|SPAN|LABEL|STRONG)$/.test(p.tagName)&&p.textContent.trim())return p.textContent.trim();}
+    const par=inp.parentElement;if(par){const t=[...par.childNodes].filter(n=>n!==inp&&(n.nodeType===3||(n.nodeType===1&&!/INPUT|SELECT|BUTTON/.test(n.tagName)))).map(n=>n.textContent).join(" ").replace(/\s+/g," ").trim();if(t)return t.slice(0,40);}
+    return "파일 올리기";
+  };
+  const extOk=(inp,names)=>{const acc=(inp.getAttribute("accept")||"").toLowerCase();if(!acc)return true;const list=acc.split(",").map(s=>s.trim()).filter(s=>s.charAt(0)===".");if(!list.length)return true;return names.every(n=>list.some(x=>n.toLowerCase().endsWith(x)));};
+  const collect=(names)=>{
+    const modal=document.getElementById("modal-backdrop");
+    let scope=document;
+    if(modal&&!modal.classList.contains("hidden")&&modal.querySelector('input[type=file]'))scope=modal;
+    let list=[...scope.querySelectorAll('input[type=file]')].filter(i=>!i.disabled&&shown(i));
+    if(names&&names.length)list=list.filter(i=>extOk(i,names));
+    const seen=new Set();const out=[];
+    let hasRouter=false;
+    list.forEach(i=>{const router=/uplRouterPick/.test(i.getAttribute("onchange")||"");if(router&&hasRouter)return;if(router)hasRouter=true;const l=labelOf(i);if(seen.has(i))return;seen.add(i);out.push({inp:i,label:l,router});});
+    out.sort((a,b)=>(b.router?1:0)-(a.router?1:0));
+    return out;
+  };
+  const render=(names)=>{
+    targets=collect(names);
+    ov.innerHTML=`<div class="dnd-box"><div class="dnd-title">📥 ${targets.length>1?"어디에 올릴지 칸 위에 놓아주세요":"여기에 놓으면 바로 올라가요"}</div>
+      ${targets.length?`<div class="dnd-zones">${targets.map((t,i)=>`<div class="dnd-zone" data-i="${i}"${t.router?' style="grid-column:1/-1;background:#EEF4FB;border-color:#93c5fd;color:#1d4ed8"':""}>${t.label.replace(/[<>&]/g,"")}<small>${(t.inp.getAttribute("accept")||"").replace(/,/g," ")}${t.inp.multiple?" · 여러 개 가능":""}</small></div>`).join("")}</div>`:`<div class="dnd-none">이 화면에는 파일을 올리는 곳이 없어요 — 올리기 버튼이 있는 화면에서 놓아주세요</div>`}</div>`;
+    ov.classList.add("on");
+  };
+  const hide=()=>{depth=0;ov.classList.remove("on");ov.innerHTML="";};
+  const namesOf=(e)=>{const it=e.dataTransfer&&e.dataTransfer.items;if(!it)return[];/* 드래그 중엔 이름을 못 읽는 브라우저가 많아 확장자 필터는 놓을 때만 */return[];};
+  window.addEventListener("dragenter",(e)=>{if(!hasFiles(e))return;e.preventDefault();if(!ov.classList.contains("on"))depth=0;depth++;if(depth===1)render(namesOf(e));});
+  window.addEventListener("dragend",hide);
+  window.addEventListener("keydown",(e)=>{if(e.key==="Escape"&&ov.classList.contains("on"))hide();});
+  ov.addEventListener("click",hide);
+  window.addEventListener("dragleave",(e)=>{if(!hasFiles(e))return;depth--;if(depth<=0)hide();});
+  window.addEventListener("dragover",(e)=>{if(!hasFiles(e))return;e.preventDefault();
+    const z=e.target&&e.target.closest?e.target.closest(".dnd-zone"):null;
+    ov.querySelectorAll(".dnd-zone").forEach(x=>x.classList.toggle("hot",x===z||(targets.length===1)));
+    e.dataTransfer.dropEffect=(z||targets.length===1)?"copy":"none";});
+  window.addEventListener("drop",(e)=>{
+    if(!hasFiles(e))return;e.preventDefault();
+    const fl=[...(e.dataTransfer.files||[])];
+    const z=e.target&&e.target.closest?e.target.closest(".dnd-zone"):null;
+    let t=null;
+    if(z)t=targets[+z.dataset.i];else if(targets.length===1)t=targets[0];
+    hide();
+    if(!fl.length)return;
+    if(!t){if(typeof toast==="function")toast(targets.length?"올릴 칸 위에 놓아주세요":"이 화면에는 파일을 올리는 곳이 없어요",true);return;}
+    if(!extOk(t.inp,fl.map(f=>f.name))){if(typeof toast==="function")toast("이 칸은 "+(t.inp.getAttribute("accept")||"")+" 파일만 받아요",true);return;}
+    try{
+      const dt=new DataTransfer();(t.inp.multiple?fl:fl.slice(0,1)).forEach(f=>dt.items.add(f));
+      t.inp.files=dt.files;
+      t.inp.dispatchEvent(new Event("change",{bubbles:true}));
+    }catch(err){console.error(err);if(typeof toast==="function")toast("파일을 넘기지 못했어요 — 버튼을 눌러 올려주세요",true);}
+  });
+})();
+</script>
+
+<script>
+/* === pay_hg.js — 급여탭 '🏛 한가람 대조': 세무사무소(한가람) PDF(급여대장·사업소득지급대장·일용직급여지급명세서) ↔ 앱 이번 달 급여 크로스체크
+   PDF에서 이름·금액만 읽고 주민번호·주소·전화는 저장하지 않음. 저장: payMonthly/hg_{yyyy-mm} */
+"use strict";
+const HG_PDFJS="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/";
+let hgLib=null;
+async function hgPdfjs(){
+  if(hgLib)return hgLib;
+  const lib=await import(HG_PDFJS+"build/pdf.min.mjs");
+  lib.GlobalWorkerOptions.workerSrc=HG_PDFJS+"build/pdf.worker.min.mjs";
+  hgLib=lib;return lib;
+}
+/* PDF → 페이지별 줄(글자 조각을 이어 붙인 뒤 y로 묶음) */
+async function hgPdfLines(buf){
+  const lib=await hgPdfjs();
+  const doc=await lib.getDocument({data:new Uint8Array(buf),cMapUrl:HG_PDFJS+"cmaps/",cMapPacked:true,standardFontDataUrl:HG_PDFJS+"standard_fonts/"}).promise;
+  const pages=[];
+  for(let p=1;p<=doc.numPages;p++){
+    const pg=await doc.getPage(p);const tc=await pg.getTextContent();
+    const it=tc.items.filter(i=>i.str&&i.str.trim()).map(i=>({s:i.str,x:i.transform[4],y:i.transform[5],w:i.width}));
+    it.sort((a,b)=>b.y-a.y||a.x-b.x);
+    const lines=[];
+    it.forEach(i=>{let L=lines.find(l=>Math.abs(l.y-i.y)<2);if(!L){L={y:i.y,items:[]};lines.push(L);}L.items.push(i);});
+    lines.sort((a,b)=>b.y-a.y);
+    lines.forEach(L=>{
+      L.items.sort((a,b)=>a.x-b.x);
+      const m=[];
+      L.items.forEach(i=>{const last=m[m.length-1];if(last&&i.x-(last.x+last.w)<1.6&&!/●/.test(i.s)&&!/●/.test(last.s)){last.s+=i.s;last.w=i.x+i.w-last.x;}else m.push({s:i.s,x:i.x,w:i.w});});
+      m.forEach(i=>{i.s=i.s.trim();i.c=i.x+i.w/2;});
+      L.items=m.filter(i=>i.s);L.text=L.items.map(i=>i.s).join(" ");
+    });
+    pages.push(lines);
+  }
+  return pages;
+}
+const hgIsNum=(s)=>/^-?[\d,]+(\.\d+)?$/.test(String(s).replace(/\s/g,""))&&/\d/.test(s);
+const hgNum=(s)=>Number(String(s).replace(/[,\s]/g,""))||0;
+const hgNorm=(s)=>String(s||"").replace(/\s+/g,"");
+function hgNearest(cols,c){let b=null,bd=1e9;cols.forEach(k=>{const d=Math.abs(k.c-c);if(d<bd){bd=d;b=k;}});return b&&bd<60?b:null;}
+const HG_KEYS={"기본급":"pay","상여":"bon","제수당":"alw","국민연금":"np","건강보험":"hi","고용보험":"ei","장기요양보험료":"ltc","장기요양":"ltc","소득세":"tax","지방소득세":"ltax","공제합계":"ded","비과세계":"nontax","지급합계":"tot","차인지급액":"net","급여총액":"tot","요양보험":"ltc","고용보험료":"ei","건강보험료":"hi"};
+function hgMeta(pages){
+  const all=pages.map(p=>p.map(l=>l.text).join("\n")).join("\n");
+  let kind=/사업소득지급대장/.test(all)?"biz":/일용직/.test(all)?"daily":/급여대장/.test(all)?"pay":null;
+  let ym=null;const m=/귀속\s*:?\s*(\d{4})\s*년\s*(\d{1,2})\s*월/.exec(all);if(m)ym=m[1]+"-"+m[2].padStart(2,"0");
+  if(!ym&&kind==="biz"){const b=/(20\d{2})\.(\d{2})(?!\.\d)/.exec(all);if(b)ym=b[1]+"-"+b[2];}
+  let branch="";const br=/\(([^()]*)\)\s*\((본점|지점)\)|([^\s\[]+)\((본점|지점)\)/.exec(all);
+  if(br)branch=(br[0]||"").replace(/\s+/g,"");
+  return {kind,ym,branch,isBranch:/지점\)/.test(branch)};
+}
+/* 급여대장 (3줄 1인: ①기본급~지방소득세 ②입사일·공제합계 ③퇴사일·지급합계·차인지급액) */
+function hgParsePay(pages){
+  const rows=[];let total=null;
+  pages.forEach(lines=>{
+    const h1=lines.find(l=>l.items.some(i=>hgNorm(i.s)==="기본급"));
+    const h2=lines.find(l=>l.items.some(i=>hgNorm(i.s)==="공제합계"));
+    const h3=lines.find(l=>l.items.some(i=>hgNorm(i.s)==="차인지급액"));
+    if(!h1)return;
+    const cols=(h)=>h?h.items.map(i=>({k:HG_KEYS[hgNorm(i.s)]||("x:"+hgNorm(i.s)),c:i.c,lab:hgNorm(i.s)})).filter(k=>!/^x:(사원번호|성명|입사일|직급|퇴사일|부서|영수인)$/.test(k.k)):[];
+    const C1=cols(h1),C2=cols(h2),C3=cols(h3);
+    const start=Math.max(lines.indexOf(h1),lines.indexOf(h2),lines.indexOf(h3))+1;
+    let cur=null,ph=0,tot=null,tph=0;
+    const put=(o,L,C)=>L.items.forEach(i=>{if(!hgIsNum(i.s))return;if(/^\d{4}-\d{2}-\d{2}$/.test(i.s))return;const k=hgNearest(C,i.c);if(!k)return;if(k.k.indexOf("x:")===0){o.extra=o.extra||{};o.extra[k.lab]=(o.extra[k.lab]||0)+hgNum(i.s);}else o[k.k]=(o[k.k]||0)+hgNum(i.s);});
+    for(let li=start;li<lines.length;li++){
+      const L=lines[li];if(/page\s*:|급여대장|인적사항/.test(L.text))continue;
+      const f=L.items[0];
+      if(f&&/^\d{2,6}$/.test(f.s)&&f.x<60&&L.items[1]&&/[가-힣A-Za-z]/.test(L.items[1].s)){
+        cur={code:f.s,name:hgNorm(L.items[1].s)};rows.push(cur);ph=1;put(cur,{items:L.items.slice(2)},C1);continue;
+      }
+      if(/합계\s*\(/.test(L.text)){tot=tot||{};put(tot,L,C2);tph=2;cur=null;ph=0;continue;}
+      if(cur&&ph===1){const d=L.items.find(i=>/^\d{4}-\d{2}-\d{2}$/.test(i.s));put(cur,L,C2);ph=2;continue;}
+      if(cur&&ph===2){const d=L.items.find(i=>/^\d{4}-\d{2}-\d{2}$/.test(i.s));if(d&&d.x<60)cur.out=d.s;put(cur,L,C3);ph=3;continue;}
+      if(tph===2){put(tot,L,C3);tph=3;continue;}
+      if(L.items.some(i=>hgIsNum(i.s))&&!cur||ph===3){if(L.items.filter(i=>hgIsNum(i.s)).length>=2){tot={};put(tot,L,C1);tph=1;cur=null;ph=0;}}
+    }
+    if(tot)total=tot;
+  });
+  return {rows,total};
+}
+/* 사업소득지급대장 (위 줄: 귀속월·소득세 / 가운데: 코드·성명·지급액·세율 / 아래: 지급일·지방소득세·차인지급액) */
+function hgParseBiz(pages){
+  const rows=[];let total=null;
+  pages.forEach(lines=>{
+    lines.forEach((L,li)=>{
+      const it=L.items;
+      const ci=it.findIndex(i=>/^\d{5,7}$/.test(i.s));
+      const isTot=/총\s*계/.test(L.text);
+      if(!(ci>=0&&it[ci+1]&&/[가-힣]/.test(it[ci+1].s))&&!isTot)return;
+      const nums=(l)=>l?l.items.filter(i=>hgIsNum(i.s)&&!/^\d{4}\.\d{2}(\.\d{2})?$/.test(i.s)&&!/^\d{5,7}$/.test(i.s)).map(i=>hgNum(i.s)):[];
+      const prev=lines[li-1],next=lines[li+1];
+      const mid=nums({items:ci>=0?it.slice(ci+2):it});const up=nums(prev);const dn=nums(next);
+      const o={amt:mid.filter(v=>v>100)[0]||0,rate:mid.find(v=>v>0&&v<=100)||null,tax:up.length?up[up.length-1]:0,ltax:dn.length>1?dn[0]:0,net:dn.length?dn[dn.length-1]:0};
+      if(isTot)total=o;else{o.code=it[ci].s;o.name=hgNorm(it[ci+1].s);rows.push(o);}
+    });
+  });
+  return {rows,total};
+}
+/* 일용직급여지급명세서 (3줄 1인: ①코드·주민번호(저장 안 함)·입사일·급여총액·국민연금·소득세·요양 ②근무일수·시간 ③성명·고용·건강·지방·차인지급액) */
+function hgParseDaily(pages){
+  const rows=[];let total=null;
+  pages.forEach(lines=>{
+    const h1=lines.find(l=>l.items.some(i=>hgNorm(i.s)==="급여총액"));
+    const h2=lines.find(l=>l.items.some(i=>hgNorm(i.s)==="차인지급액"));
+    if(!h1)return;
+    const cols=(h)=>h?h.items.filter(i=>HG_KEYS[hgNorm(i.s)]).map(i=>({k:HG_KEYS[hgNorm(i.s)],c:i.c})):[];
+    const C1=cols(h1),C2=cols(h2);
+    const moneyX=Math.min(...C1.concat(C2).map(k=>k.c))-40;
+    const start=Math.max(lines.indexOf(h1),lines.indexOf(h2))+1;
+    let cur=null,ph=0;
+    for(let li=start;li<lines.length;li++){
+      const L=lines[li];
+      const f=L.items[0];
+      if(/총인원/.test(L.text)){total={tot:0};L.items.filter(i=>hgIsNum(i.s)&&i.x>moneyX).forEach(i=>{const k=hgNearest(C1,i.c);if(k)total[k.k]=(total[k.k]||0)+hgNum(i.s);});continue;}
+      if(f&&/^\d{3}$/.test(f.s)&&f.x<60){cur={code:f.s};rows.push(cur);ph=1;
+        L.items.filter(i=>hgIsNum(i.s)&&i.x>moneyX&&!/-/.test(i.s)).forEach(i=>{const k=hgNearest(C1,i.c);if(k)cur[k.k]=(cur[k.k]||0)+hgNum(i.s);});continue;}
+      if(cur&&ph===1){const n=L.items.filter(i=>hgIsNum(i.s)&&i.x<moneyX);if(n[0])cur.days=hgNum(n[0].s);if(n[1])cur.hours=hgNum(n[1].s);ph=2;continue;}
+      if(cur&&ph===2){const nm=L.items.find(i=>/^[가-힣]{2,5}$/.test(i.s)&&i.x<90);if(nm)cur.name=nm.s;
+        L.items.filter(i=>hgIsNum(i.s)&&i.x>moneyX).forEach(i=>{const k=hgNearest(C2,i.c);if(k)cur[k.k]=(cur[k.k]||0)+hgNum(i.s);});ph=3;continue;}
+    }
+  });
+  rows.forEach(r=>{if(r.net==null)r.net=(r.tot||0)-((r.np||0)+(r.ei||0)+(r.hi||0)+(r.ltc||0)+(r.tax||0)+(r.ltax||0));});
+  return {rows:rows.filter(r=>r.name),total};
+}
+function hgKey(){const ym=payYm();return ym?ym.y+"-"+String(ym.m).padStart(2,"0"):null;}
+function hgStore(){S.data.payHg=S.data.payHg||{};return S.data.payHg;}
+async function hgSave(key){
+  if(typeof IS_DEMO!=="undefined"&&IS_DEMO)return;
+  try{const d=hgStore()[key];if(d)await fsCol("payMonthly").doc("hg_"+key).set(JSON.parse(JSON.stringify(d)));else await fsCol("payMonthly").doc("hg_"+key).delete();}
+  catch(e){console.error(e);toast("한가람 자료 저장 실패: "+(e.message||""),true);}
+}
+window.hgPick=async function(inp){
+  const fl=[...(inp.files||[])];if(!fl.length)return;
+  try{
+    toast("PDF 읽는 중…");
+    const done=[];const H=hgStore();let lastKey=null;
+    for(const f of fl){
+      const pages=await hgPdfLines(await f.arrayBuffer());
+      const meta=hgMeta(pages);
+      if(!meta.kind){toast(f.name+": 급여대장/사업소득/일용직 명세서가 아니에요",true);continue;}
+      const P=meta.kind==="pay"?hgParsePay(pages):meta.kind==="biz"?hgParseBiz(pages):hgParseDaily(pages);
+      const key=meta.ym||hgKey();lastKey=key;
+      const doc=H[key]=H[key]||{files:{}};
+      const slot=meta.kind==="pay"?"pay_"+(meta.isBranch?"branch":"main"):meta.kind;
+      doc.files[slot]={name:f.name,kind:meta.kind,branch:meta.branch,ym:meta.ym,rows:P.rows,total:P.total,up:Date.now()};
+      done.push((meta.kind==="pay"?"급여대장 "+(meta.isBranch?"지점":"본점"):meta.kind==="biz"?"사업소득":"일용직")+" "+P.rows.length+"명");
+    }
+    if(lastKey){hgSave(lastKey);}
+    renderPay();
+    if(done.length)toast("한가람 PDF 읽음: "+done.join(", "));
+  }catch(e){console.error(e);toast("PDF 읽기 실패: "+(e.message||e),true);}
+  finally{inp.value="";}
+};
+window.hgClear=function(key,slot){const H=hgStore();const d=H[key];if(!d)return;if(slot){delete d.files[slot];}else{if(!confirm("이 달 한가람 자료를 모두 지울까요?"))return;delete H[key];}hgSave(key);renderPay();};
+/* 앱 쪽 값 */
+function hgAppPay(){
+  const em=payEmpRows();if(!em)return {};
+  const g=(c,r)=>c?Math.round(em.val(c+r)):0;const cm=em.cm;const out={};
+  em.rows.forEach(row=>{const r=row.r;const o={pay:g(cm.pay,r),bon:g(cm.bon,r)+(cm.sbon?g(cm.sbon,r):0),alw:g(cm.alw,r),tot:g(cm.tot,r),np:g(cm.np,r),hi:g(cm.hi,r),ei:g(cm.ei,r),ltc:g(cm.ltc,r),tax:g(cm.tax,r),ltax:g(cm.ltax,r),ded:g(cm.ded,r),net:g(cm.net,r),pre:cm.pre?g(cm.pre,r):0};
+    out[hgNorm(row.name)]=o;});
+  return out;
+}
+function hgAppHourly(){
+  const hs=paySheetByName("시급직급여");if(!hs)return null;
+  const P=window.__pay;const hv=payMkVal(hs,(P.edits||{})["시급직급여"]);
+  let hr=3,cT=null,cN=null,cName="B";
+  for(let r=1;r<=6;r++){for(let c=1;c<=hs.maxC;c++){const L=payIdxCol(c);const x=hs.cells[L+r];const t=x&&x.typ==="str"?hgNorm(x.v):"";if(t==="지급총액"){cT=L;hr=r;}if(/실지급|차인지급/.test(t)){cN=L;hr=r;}if(t==="성명")cName=L;}}
+  cN=cN||"L";
+  const out={};
+  for(let r=hr+1;r<=hs.maxR;r++){const b=hs.cells[cName+r];if(!b||b.typ!=="str")continue;const nm=hgNorm(b.v);if(!nm||nm==="성명"||/파출|계|합/.test(nm))continue;
+    const o={tot:cT?Math.round(hv(cT+r)):null,net:Math.round(hv(cN+r))};if(out[nm]){out[nm].tot=(out[nm].tot||0)+(o.tot||0);out[nm].net+=o.net;}else out[nm]=o;}
+  return out;
+}
+function hgAppYong(){const Y=(typeof pecYong==="function")?pecYong():null;if(!Y)return null;const o={};Y.per.forEach(p=>{o[hgNorm(p.name)]={amt:p.amt,tax:p.tax,ltax:p.ltax,net:p.net};});return o;}
+function hgCell(h,a,strong){
+  if(h==null&&a==null)return `<td></td>`;
+  const hv=h||0,av=a==null?null:a;
+  if(av===null)return `<td style="text-align:right">${hv?fmt(hv):""}</td>`;
+  if(hv===av)return `<td style="text-align:right;${strong?"font-weight:700":""}">${hv?fmt(hv):'<span style="color:#bbb">0</span>'}</td>`;
+  return `<td style="text-align:right;background:#FDECEC" title="한가람 ${fmt(hv)} / 앱 ${fmt(av)}"><b>${fmt(hv)}</b><div style="font-size:10.5px;color:#b42318">앱 ${fmt(av)}</div></td>`;
+}
+window.payHgBody=function(){
+  const key=hgKey();
+  const H=hgStore();const d=key&&H[key];
+  const up=`<button class="btn btn-sm btn-primary" onclick="document.getElementById('hgFile').click()">📄 한가람 PDF 올리기</button><input type="file" id="hgFile" accept=".pdf" multiple style="display:none" onchange="hgPick(this)">`;
+  const head=`<div class="card"><div class="card-head"><div class="card-title">🏛 한가람 대조 ${key?`— ${key.replace("-","년 ")}월 귀속`:""} <span class="unit">세무사무소에서 받은 급여대장(본점·지점)·사업소득지급대장·일용직급여지급명세서 PDF를 올리면 이번 달 앱 금액과 맞는지 확인해요</span></div><div class="card-actions">${up}${d?`<button class="btn btn-sm" onclick="hgClear('${key}')">자료 지우기</button>`:""}</div></div>
+    <div class="footnote" style="margin:-4px 0 6px">PDF 네 개를 한 번에 골라 올려도 돼요. 이름과 금액만 읽고 주민등록번호·주소·전화번호는 저장하지 않아요.</div>`;
+  if(!key)return head+`<div class="footnote">급여품의 파일을 먼저 올려주세요 (귀속 연월을 앱 급여에서 가져와요).</div></div>`;
+  if(!d||!Object.keys(d.files||{}).length){
+    const others=Object.keys(H).filter(k=>k!==key&&H[k]&&Object.keys(H[k].files||{}).length).sort().reverse();
+    return head+(others.length?`<div style="margin:4px 0 8px;padding:8px 12px;background:#FDF6EC;border:1px solid #E8C88A;border-radius:10px"><b>⚠ 올린 PDF는 ${others.map(k=>k.replace("-","년 ")+"월").join(", ")} 귀속이에요.</b> 지금 급여 탭은 ${key.replace("-","년 ")}월을 보고 있어서 대조할 수 없어요 — 위에서 그 달 급여를 열면 바로 대조돼요.</div>`:`<div class="footnote">아직 올린 PDF가 없어요.</div>`)+`</div>`;
+  }
+  const F=d.files;
+  const ymWarn=Object.values(F).filter(f=>f.ym&&f.ym!==key).map(f=>`${esc(f.name)}(${f.ym})`);
+  let html=head+(ymWarn.length?`<div style="margin:4px 0 8px;padding:8px 12px;background:#FDF6EC;border:1px solid #E8C88A;border-radius:10px"><b>⚠ 귀속월이 다른 파일:</b> ${ymWarn.join(", ")} — 급여 탭에서 보고 있는 달(${key})과 달라요</div>`:"");
+  html+=`<div class="unit" style="margin-bottom:6px">${Object.entries(F).map(([k,f])=>`<span style="margin-right:10px">✓ ${k==="pay_main"?"급여대장 본점":k==="pay_branch"?"급여대장 지점":k==="biz"?"사업소득":"일용직"} <span style="color:#999">${esc(f.name)}</span> <a href="javascript:void(0)" onclick="hgClear('${key}','${k}')" style="color:#b42318;text-decoration:none">×</a></span>`).join("")}</div>`;
+  /* ① 급여대장 ↔ 상용직급여 */
+  const payFiles=["pay_main","pay_branch"].filter(k=>F[k]);
+  if(payFiles.length){
+    const app=hgAppPay();const seen=new Set();
+    const cfg=(typeof pecCfg==="function")?pecCfg():{bizOf:{}};
+    const FLD=[["pay","기본급"],["bon","상여"],["alw","제수당"],["tot","지급합계"],["np","국민연금"],["hi","건강보험"],["ei","고용보험"],["ltc","장기요양"],["tax","소득세"],["ltax","지방소득세"],["ded","공제합계"],["net","차인지급액"]];
+    let bad=0,miss=0;const sumH={},sumA={};
+    const trs=[];
+    payFiles.forEach(k=>{const f=F[k];const isB=k==="pay_branch";
+      trs.push(`<tr style="background:#EEF3EC"><td colspan="${FLD.length+2}" class="l"><b>${isB?"지점":"본점"}</b> <span class="unit">${esc(f.branch||"")} · ${f.rows.length}명</span></td></tr>`);
+      f.rows.forEach(r=>{const a=app[r.name];seen.add(r.name);
+        let diff=0;const cells=FLD.map(([fk])=>{let av=a?a[fk]:null;if(fk==="net"&&a&&a.pre)av=a.net+a.pre;if(a&&(r[fk]||0)!==(av||0))diff++;sumH[fk]=(sumH[fk]||0)+(r[fk]||0);if(a)sumA[fk]=(sumA[fk]||0)+(av||0);return hgCell(r[fk]||0,a?av||0:null,fk==="tot"||fk==="net");}).join("");
+        if(!a)miss++;else if(diff)bad++;
+        const bz=cfg.bizOf?cfg.bizOf[r.name]:null;const bzWarn=bz&&((isB&&bz!=="ep")||(!isB&&bz==="ep"))?` <span class="buy-warn" title="이카운트 입력 사업장 설정과 소속이 달라요">사업장 ${bz==="ep"?"꽃밥에피다":bz==="mk"?"꽃밥마켓":"보자기꽃밥"}</span>`:"";
+        trs.push(`<tr${!a?' style="background:#FFF8EC"':""}><td class="l"><b>${esc(r.name)}</b>${bzWarn}${r.out?`<div class="unit" style="font-size:10.5px">퇴사 ${esc(r.out)}</div>`:""}</td>${cells}<td>${!a?'<span class="buy-warn">앱에 없음</span>':diff?`<span class="buy-warn">⚠ ${diff}칸</span>`:'<span style="color:#2F6B3F">✓</span>'}</td></tr>`);
+      });
+    });
+    const appOnly=Object.keys(app).filter(n=>!seen.has(n));
+    const allA={};Object.values(app).forEach(a=>FLD.forEach(([fk])=>{allA[fk]=(allA[fk]||0)+(fk==="net"&&a.pre?a.net+a.pre:(a[fk]||0));}));
+    const totRow=`<tr class="total"><td class="l"><b>합계</b><div class="unit" style="font-weight:400">앱 = 상용직 전체</div></td>${FLD.map(([fk])=>hgCell(sumH[fk]||0,allA[fk]||0,true)).join("")}<td></td></tr>`;
+    html+=`<div style="font-weight:700;margin:12px 0 4px">① 급여대장 ↔ 상용직급여 ${bad||miss||appOnly.length?`<span class="buy-warn">다른 사람 ${bad}명${miss?` / 앱에 없음 ${miss}명`:""}${appOnly.length?` / 한가람에 없음 ${appOnly.length}명`:""}</span>`:'<span style="color:#2F6B3F">✓ 전원 일치</span>'}</div>
+      <style>.hgT td,.hgT th{padding:4px 5px!important;white-space:nowrap}.hgT{width:auto!important}</style><div class="table-wrap"><table class="rpt hgT" style="font-size:11px;margin:0"><thead><tr><th class="l">성명</th>${FLD.map(([,n])=>`<th>${n}</th>`).join("")}<th>대조</th></tr></thead><tbody>${trs.join("")}${totRow}</tbody></table></div>
+      ${appOnly.length?`<div class="footnote" style="margin-top:4px"><b style="color:#b45309">앱 상용직급여에만 있는 사람:</b> ${appOnly.map(esc).join(", ")}</div>`:""}
+      <div class="footnote" style="margin-top:4px">빨간 칸 = 한가람 금액(굵게)과 앱 금액이 다른 곳이에요. 앱에 기지급액이 있으면 차인지급액은 기지급액을 더해서 비교해요.</div>`;
+  }
+  /* ② 사업소득 ↔ 용역직급여 */
+  if(F.biz){
+    const app=hgAppYong();const FLD=[["amt","지급액"],["tax","소득세"],["ltax","지방소득세"],["net","차인지급액"]];
+    const seen=new Set();let bad=0;
+    const trs=F.biz.rows.map(r=>{const a=app?app[r.name]:null;seen.add(r.name);let diff=0;const cells=FLD.map(([k])=>{if(a&&(r[k]||0)!==(a[k]||0))diff++;return hgCell(r[k]||0,a?a[k]||0:null);}).join("");if(!a||diff)bad++;
+      return `<tr><td class="l"><b>${esc(r.name)}</b>${r.rate?` <span class="unit">${r.rate}%</span>`:""}</td>${cells}<td>${!a?'<span class="buy-warn">앱에 없음</span>':diff?`<span class="buy-warn">⚠ ${diff}칸</span>`:'<span style="color:#2F6B3F">✓</span>'}</td></tr>`;}).join("");
+    const appOnly=app?Object.keys(app).filter(n=>!seen.has(n)):[];
+    html+=`<div style="font-weight:700;margin:16px 0 4px">② 사업소득지급대장 ↔ 용역직급여 ${bad||appOnly.length?`<span class="buy-warn">확인 필요 ${bad+appOnly.length}건</span>`:'<span style="color:#2F6B3F">✓ 일치</span>'}</div>
+      ${app?"":`<div class="footnote">앱에 용역직급여 시트가 없어서 한가람 값만 보여요.</div>`}
+      <div class="table-wrap"><table class="rpt hgT" style="font-size:12px;margin:0"><thead><tr><th class="l">성명</th>${FLD.map(([,n])=>`<th>${n}</th>`).join("")}<th>대조</th></tr></thead><tbody>${trs}</tbody></table></div>
+      ${appOnly.length?`<div class="footnote" style="margin-top:4px"><b style="color:#b45309">앱 용역직급여에만 있는 사람:</b> ${appOnly.map(esc).join(", ")}</div>`:""}`;
+  }
+  /* ③ 일용직 ↔ 시급직급여 */
+  if(F.daily){
+    const app=hgAppHourly();const seen=new Set();let bad=0,sh=0,sa=0,nh=0,na=0;
+    const trs=F.daily.rows.map(r=>{const a=app?app[r.name]:null;seen.add(r.name);sh+=r.tot||0;nh+=r.net||0;if(a){sa+=a.tot!=null?a.tot:a.net;na+=a.net;}
+      const dT=a&&a.tot!=null&&(r.tot||0)!==a.tot,dN=a&&(r.net||0)!==a.net;if(!a||dT||dN)bad++;
+      return `<tr><td class="l"><b>${esc(r.name)}</b></td><td style="text-align:right">${r.days||""}</td><td style="text-align:right">${r.hours||""}</td>${hgCell(r.tot||0,a?(a.tot!=null?a.tot:null):null)}${hgCell(r.net||0,a?a.net:null)}<td>${!a?'<span class="buy-warn">앱에 없음</span>':dT||dN?'<span class="buy-warn">⚠</span>':'<span style="color:#2F6B3F">✓</span>'}</td></tr>`;}).join("");
+    const appOnly=app?Object.keys(app).filter(n=>!seen.has(n)):[];
+    const t=F.daily.total||{};
+    html+=`<div style="font-weight:700;margin:16px 0 4px">③ 일용직급여지급명세서 ↔ 시급직급여 ${bad||appOnly.length?`<span class="buy-warn">확인 필요 ${bad+appOnly.length}건</span>`:'<span style="color:#2F6B3F">✓ 일치</span>'}</div>
+      ${app?"":`<div class="footnote">앱에 시급직급여 시트가 없어서 한가람 값만 보여요.</div>`}
+      <div class="table-wrap"><table class="rpt hgT" style="font-size:12px;margin:0"><thead><tr><th class="l">성명</th><th>근무일수</th><th>시간</th><th>급여총액</th><th>차인지급액</th><th>대조</th></tr></thead><tbody>${trs}
+      <tr class="total"><td class="l"><b>합계</b></td><td></td><td></td>${hgCell(sh,app?sa:null,true)}${hgCell(nh,app?na:null,true)}<td></td></tr></tbody></table></div>
+      ${t.tot!=null&&t.tot!==sh?`<div class="footnote" style="color:#b45309">PDF 총계 ${fmt(t.tot)}원과 사람별 합 ${fmt(sh)}원이 달라요 — PDF를 한 번 확인해 주세요</div>`:""}
+      ${appOnly.length?`<div class="footnote" style="margin-top:4px"><b style="color:#b45309">앱 시급직급여에만 있는 사람:</b> ${appOnly.map(esc).join(", ")}</div>`:""}`;
+  }
+  return html+`</div>`;
+};
 </script>
 
 <script>
