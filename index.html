@@ -478,7 +478,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v256</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v257</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -13014,14 +13014,14 @@ function piExclExtra(view,keys){
       <div class="footnote" style="margin-bottom:6px">리모델링 비용이 손익표 계정(예: 수선비, 지급수수료)에 비용으로 들어가 있을 때 적어요. 자산(시설장치 등)으로 잡혀 손익표에 없으면 적지 않아도 돼요.</div>
       ${ex.length?`<table class="pi"><thead><tr><th>계정</th><th>사업장</th><th>금액</th><th>메모</th><th></th></tr></thead><tbody>${ex.map((a,i)=>`<tr><td>${esc(a.acct)}</td><td>${nmD(a.dk)}</td><td class="n">${fmt(a.amt)}</td><td>${esc(a.memo||"")}</td><td><button class="btn btn-sm" style="padding:0 7px" onclick="piExDel('${key}',${i})">×</button></td></tr>`).join("")}</tbody></table>`:""}
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px">
-        <select id="piExA" class="ctl">${names.map(n=>`<option>${esc(n)}</option>`).join("")}</select>
+        <select id="piExA" class="ctl"><option value="">계정 선택</option>${names.map(n=>`<option>${esc(n)}</option>`).join("")}</select>
         <select id="piExD" class="ctl">${PI_DEPTS.map(([dk,n])=>`<option value="${dk}">${n}</option>`).join("")}</select>
         <input id="piExM" class="pi-in" inputmode="numeric" placeholder="금액">
         <input id="piExN" class="pi-in" style="width:160px;text-align:left" placeholder="메모 (예: 리모델링)" value="리모델링">
         <button class="btn btn-sm" onclick="piExAdd('${key}')">＋ 추가</button></div>
       <div style="font-size:12.5px;font-weight:700;margin:14px 0 4px">② 포함가 매입세액에서 빼기 <span class="unit">부가세대급금 원장 줄 · 10만원 이상과 체크한 줄만 보여요</span></div>
       ${vr.length?`<table class="pi"><thead><tr><th>제외</th><th>일자</th><th>적요</th><th>거래처</th><th>부서</th><th>매입세액</th></tr></thead><tbody>${shown.map(x=>`<tr style="${inEx[x.id]?"background:#FFF6E0":""}"><td style="text-align:center"><input type="checkbox" ${inEx[x.id]?"checked":""} onchange="piExVat('${key}','${x.id.replace(/'/g,"")}',this.checked)"></td><td>${x.d.slice(5)}</td><td>${esc(x.memo||"")}</td><td>${esc(x.v||"")}</td><td>${nmD(x.dk)}</td><td class="n">${fmt(x.amt)}</td></tr>`).join("")}</tbody></table>`
-        :`<div class="footnote">부가세대급금 원장을 넣으면 여기서 고를 수 있어요 (포함가 › 부가세 자료).</div>`}
+        :`<div class="check-box warn" style="margin-top:4px">아직 고를 줄이 없어요. 아래 버튼으로 이카운트 부가세대급금·부가세예수금 원장 엑셀 두 파일을 한 번 더 넣어 주세요 (전에 넣은 자료에는 원장 줄이 저장돼 있지 않아요). 넣으면 여기에 줄이 나오고 공사·인테리어 같은 줄은 미리 체크돼요.</div><div style="margin-top:8px">${PI_UP}</div>`}
     </details></div>`;
   }
   return h;
