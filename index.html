@@ -478,7 +478,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v251</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v254</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -4233,7 +4233,7 @@ window.pnlExportXlsx=async function(){
       const ents=PNL_ENTS.filter(([e])=>doc.rows.some(r=>r.v[e]!=null));
       const i6=doc.rows.findIndex(r=>r.lv===0&&/^6\./.test(r.n));
       const listM=i6>=0?doc.rows.slice(0,i6):doc.rows;
-      const bw=buildWide(`${ky}년 ${km}월 손익현황 (매출액대비 손익율)`,listM,ents,
+      const bw=buildWide(`${ky}년 ${km}월 손익현황${window.__pnlXName||""} (매출액대비 손익율)`,listM,ents,
         (n,e)=>{const r=doc.rows.find(x=>x.n===n);const v=r?r.v[e]:null;return v==null?null:v;});
       mSheets.push({name:`손익현황(${km}월)`,xml:pnlSheetXml(bw.cols,bw.rows,bw.merges)});
     }
@@ -4243,7 +4243,7 @@ window.pnlExportXlsx=async function(){
       const ents=PNL_ENTS.filter(([e])=>yKeys.some(k=>P[k].rows.some(r=>r.v[e]!=null)));
       const agg=(n,e)=>pnlAggOf(n,yKeys.map(k=>{const r=P[k].rows.find(x=>x.n===n);return r?r.v[e]:null;}));
       const i6=names.findIndex(x=>x.lv===0&&/^6\./.test(x.n));
-      const bw=buildWide(`${year}년 손익현황 (매출액대비 손익율)`,names,ents,agg,i6>=0?i6:null);
+      const bw=buildWide(`${year}년 손익현황${window.__pnlXName||""} (매출액대비 손익율)`,names,ents,agg,i6>=0?i6:null);
       ySheet={name:`${year}년손익현황`,xml:pnlSheetXml(bw.cols,bw.rows,bw.merges)};
     }
     /* ③ 사업장별 월 추이 시트들 (제목 병합) */
@@ -4252,7 +4252,7 @@ window.pnlExportXlsx=async function(){
       const names=pnlUnionNames(yKeys);
       const cols=[22.5].concat(yKeys.map(()=>11)).concat([11.9]);
       const rows=[
-        {h:39.75,cells:[{t:"s",v:` 월별손익분석 (${nm})`,s:1}]},
+        {h:39.75,cells:[{t:"s",v:` 월별손익분석 (${nm})${window.__pnlXName||""}`,s:1}]},
         {cells:[{t:"s",v:"계정명",s:2}].concat([...yKeys].reverse().map(k=>({t:"s",v:`${year}년 ${k.split("-")[1]}월`,s:2}))).concat([{t:"s",v:"집계",s:2}])}
       ];
       for(const {n,lv} of names){
@@ -4280,7 +4280,7 @@ window.pnlExportXlsx=async function(){
     const blob=await zip.generateAsync({type:"blob",compression:"DEFLATE",mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
     const a=document.createElement("a");
     a.href=URL.createObjectURL(blob);
-    a.download=`월별손익현황 ${year}.xlsx`;
+    a.download=`월별손익현황 ${year}${window.__pnlXName||""}.xlsx`;
     document.body.appendChild(a);a.click();
     setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},2000);
     toast("월별손익 엑셀을 내려받았어요 ("+sheets.length+"개 시트)");
@@ -4471,7 +4471,7 @@ function pnlHtmlTable(list,ents,val,totalOnlyFrom,lkey){
   list.forEach((r,li)=>{
     const bg=r.lv===0?pnlRowColor(r.n):null;
     const noPct=r.lv===0&&/^(6|7|8)\./.test(r.n);
-    h+=`<tr class="${r.lv===0?"total":""}"${bg?` style="background:${bg}"`:""}><td class="lab sticky" style="padding-left:${8+r.lv*14}px${bg?";background:"+bg:""}">${lkey&&r.lv>0&&typeof plHas==="function"&&(S.user&&S.user.role==="admin"||plHas(lkey,r.n))?`<span class="pl-link${plHas(lkey,r.n)?" pl-has":""}" onclick="pnlLedgerOpen('${lkey}','${encodeURIComponent(r.n)}')">${r.n}</span>`:r.n}</td>`;
+    h+=`<tr class="${r.lv===0?"total":""}"${bg?` style="background:${bg}"`:""}><td class="lab sticky" style="padding-left:${8+r.lv*14}px${bg?";background:"+bg:""}">${lkey&&r.lv>0&&!/^부가세 \(/.test(r.n)&&typeof plHas==="function"&&(S.user&&S.user.role==="admin"||plHas(lkey,r.n))?`<span class="pl-link${plHas(lkey,r.n)?" pl-has":""}" onclick="pnlLedgerOpen('${lkey}','${encodeURIComponent(r.n)}')">${r.n}</span>`:r.n}</td>`;
     for(const[e]of ents){
       const cutCell=totalOnlyFrom!=null&&li>=totalOnlyFrom&&e!=="total";
       if(cutCell){h+=`<td colspan="2" style="border:none;background:transparent"></td>`;continue;}
@@ -4528,6 +4528,7 @@ window.pnlDelete=async function(key){
 };
 function pnlPct(v,base){return (v!=null&&base)? '<span class="unit"> '+(v/base*100).toFixed(1)+'%</span>':"";}
 function renderPnl(){
+  if(!renderPnl._in){window.__pnlReal=S.data.pnl;if(S.ui.pnlMode==="incl"&&typeof pnlInclAll==="function"){const sv=S.data.pnl;renderPnl._in=true;S.data.pnl=pnlInclAll(sv||{});try{return renderPnl();}finally{S.data.pnl=sv;renderPnl._in=false;}}}
   const el=document.getElementById("tab-pnl");if(!el)return;
   if(!S.user){el.innerHTML="";return;}
   const canEdit=S.user.role==="admin";
@@ -4643,12 +4644,12 @@ function renderPnl(){
           else{const has=vals.filter(v=>v!=null);agg=has.length?has.reduce((a,b)=>a+b,0):null;}
           const bg=lv===0?pnlRowColor(n):null;
           const tdBg=bg?` style="background:${bg}"`:"";
-          return `<tr class="${lv===0?"total":""}"${bg?` style="background:${bg}"`:""}><td class="lab sticky" style="padding-left:${8+lv*14}px${bg?";background:"+bg:""}">${lv>0&&typeof plHas==="function"&&(S.user&&S.user.role==="admin"||plAnyHas(yKeys,n))?`<span class="pl-link${plAnyHas(yKeys,n)?" pl-has":""}" onclick="pnlLedgerOpen('${plLatestKey(yKeys,n)}','${encodeURIComponent(n)}','${ent==="total"?"all":ent}')">${n}</span>`:n}</td>${[...vals].reverse().map((v,ri)=>{const k=yKeys[yKeys.length-1-ri];const h=lv>0&&typeof plHas==="function"&&plHas(k,n);return `<td${tdBg}${h?` class="pl-cell" title="내역 보기" onclick="pnlLedgerOpen('${k}','${encodeURIComponent(n)}','${ent==="total"?"all":ent}')"`:""}>${fmtS(v)}</td>`;}).join("")}<td${tdBg}><b>${fmtS(agg)}</b></td></tr>`;
+          return `<tr class="${lv===0?"total":""}"${bg?` style="background:${bg}"`:""}><td class="lab sticky" style="padding-left:${8+lv*14}px${bg?";background:"+bg:""}">${lv>0&&!/^부가세 \(/.test(n)&&typeof plHas==="function"&&(S.user&&S.user.role==="admin"||plAnyHas(yKeys,n))?`<span class="pl-link${plAnyHas(yKeys,n)?" pl-has":""}" onclick="pnlLedgerOpen('${plLatestKey(yKeys,n)}','${encodeURIComponent(n)}','${ent==="total"?"all":ent}')">${n}</span>`:n}</td>${[...vals].reverse().map((v,ri)=>{const k=yKeys[yKeys.length-1-ri];const h=lv>0&&typeof plHas==="function"&&plHas(k,n);return `<td${tdBg}${h?` class="pl-cell" title="내역 보기" onclick="pnlLedgerOpen('${k}','${encodeURIComponent(n)}','${ent==="total"?"all":ent}')"`:""}>${fmtS(v)}</td>`;}).join("")}<td${tdBg}><b>${fmtS(agg)}</b></td></tr>`;
         }).join("")}</tbody></table></div>
     </div>`;
   }
-  const viewTabs=`<div class="subtabs" style="align-items:center;flex-wrap:wrap"><button class="subtab ${view==="month"?"active":""}" onclick="pnlSetView('month')">월별 상세</button><button class="subtab ${view==="total"?"active":""}" onclick="pnlSetView('total')">연간 합산</button><button class="subtab ${view==="year"?"active":""}" onclick="pnlSetView('year')">사업장별 추이</button>${keys.length?`<button class="btn btn-sm" style="margin-left:auto" onclick="pnlExportXlsx()">📥 엑셀로 받기</button>`:""}</div>`;
-  el.innerHTML=pasteBox+viewTabs+body;
+  const viewTabs=`<div class="subtabs" style="align-items:center;flex-wrap:wrap"><button class="subtab ${view==="month"?"active":""}" onclick="pnlSetView('month')">월별 상세</button><button class="subtab ${view==="total"?"active":""}" onclick="pnlSetView('total')">연간 합산</button><button class="subtab ${view==="year"?"active":""}" onclick="pnlSetView('year')">사업장별 추이</button>${keys.length?`<span style="margin-left:auto"></span>${typeof pnlModeBtns==="function"?pnlModeBtns():""}<button class="btn btn-sm" onclick="pnlExportXlsx()">📥 별도가 엑셀</button><button class="btn btn-sm" onclick="pnlExportIncl()">📥 포함가 엑셀</button>`:""}</div>`;
+  el.innerHTML=pasteBox+viewTabs+(typeof pnlInclExtra==="function"?pnlInclExtra(view,keys):"")+body;
 }
 /* ===== 도우미 (데이터 질문 답변) ===== */
 const AI_ENT_DEFS=[
@@ -12871,6 +12872,136 @@ function renderFree(){
   }
   const tabs=`<div class="subtabs" style="margin:0 0 10px"><button class="subtab ${view==="side"?"active":""}" onclick="freeView('side')">나란히 보기</button><button class="subtab ${view!=="side"?"active":""}" onclick="freeView('detail')">대조 결과 자세히</button></div>`;
   el.innerHTML=up+summary+tabs+(view==="side"?sideHtml:posTable+dayTable+zTable);
+}
+</script>
+
+<style>
+#tab-pnl .pi-card table.pi{border-collapse:collapse;font-size:12.5px;width:auto;min-width:min(100%,620px)}
+#tab-pnl .pi-card table.pi th{background:#F3F5F1;border:1px solid #dde2da;padding:6px 10px;white-space:nowrap}
+#tab-pnl .pi-card table.pi td{border:1px solid #e6e9e3;padding:5px 10px;white-space:nowrap}
+#tab-pnl .pi-card table.pi td.n{text-align:right;font-variant-numeric:tabular-nums}
+#tab-pnl .pi-card input.pi-in{font:inherit;font-size:12.5px;text-align:right;width:120px;border:1px solid #e3e3e3;border-radius:4px;padding:3px 6px}
+#tab-pnl .pi-card textarea{width:100%;box-sizing:border-box;font:inherit;font-size:12.5px;padding:8px 10px;border:1.5px dashed #9db3e8;border-radius:8px;background:#F7F9FE;resize:vertical}
+.pi-mode{display:inline-flex;border:1px solid var(--line,#ddd);border-radius:999px;overflow:hidden}
+.pi-mode button{border:none;background:#fff;font:inherit;font-size:12.5px;padding:5px 12px;cursor:pointer}
+.pi-mode button.on{background:#2F6B3F;color:#fff;font-weight:700}
+</style>
+<script>
+/* === pnl_incl.js — 월별손익 포함가(부가세 포함) 보기·엑셀. 부가세는 이카운트 부가세예수금(매출세액)·부가세대급금(매입세액) 계정별원장을 부서별로 합산해 S.data.pnl[yyyy-mm].vat 에 저장 === */
+"use strict";
+const PI_DEPTS=[["insadong","꽃밥에피다"],["market","꽃밥마켓"],["bojagi","보자기꽃밥"],["common","꽃밥이야기 공통"]];
+function piEnt(obj,e){if(!obj)return 0;const g=k=>Number(obj[k]||0);if(e==="total")return g("insadong")+g("market")+g("bojagi")+g("common");if(e==="bukchon")return g("market")+g("bojagi");return g(e);}
+function piHasVat(doc){const V=doc&&doc.vat;if(!V)return false;return ["out","in"].some(k=>V[k]&&Object.values(V[k]).some(v=>Number(v)));}
+function piSaleIdx(rows){return rows.findIndex(r=>r.lv===0&&/매출/.test(r.n)&&!/원가|이익/.test(r.n));}
+/* 한 달 손익표 → 포함가: 매출액에 매출세액(자식 줄로 표시), 매출원가에 매입세액(자식 줄), 이익 줄에는 (매출세액−매입세액) */
+function pnlInclDoc(doc,opt){
+  opt=opt||{};const has=piHasVat(doc);
+  if(!doc||(!has&&!opt.blank))return doc;
+  const V=has?doc.vat:{},out=V.out||{},inn=V.in||{};
+  const rows=doc.rows.map(r=>({n:r.n,lv:r.lv,v:Object.assign({},r.v)}));
+  const addChild=(pi,name,src)=>{const p=rows[pi];let j=pi+1;while(rows[j]&&rows[j].lv>0)j++;const c={n:name,lv:1,v:{}};
+    for(const e of Object.keys(p.v)){if(p.v[e]==null)continue;if(!has){c.v[e]=null;continue;}const a=piEnt(src,e);c.v[e]=a;p.v[e]+=a;}rows.splice(j,0,c);};
+  const iS=piSaleIdx(rows);
+  const hasIn=Object.values(inn).some(v=>Number(v));
+  if(iS>=0)addChild(iS,"부가세 (매출세액)",out);
+  const iC=rows.findIndex(r=>r.lv===0&&/매출원가/.test(r.n));
+  if((hasIn||opt.anyIn)&&iC>=0)addChild(iC,"부가세 (매입세액)",inn);
+  if(has){const iS2=piSaleIdx(rows);const iC2=rows.findIndex(r=>r.lv===0&&/매출원가/.test(r.n));
+    rows.forEach((r,i)=>{if(r.lv!==0||i<=iS2||!/이익|손익/.test(r.n)||/영업외/.test(r.n))return;for(const e of Object.keys(r.v)){if(r.v[e]==null)continue;r.v[e]+=piEnt(out,e)-(hasIn&&iC2>=0&&iC2<i?piEnt(inn,e):0);}});}
+  return Object.assign({},doc,{rows});
+}
+/* 모든 달: 부가세 자료 없는 달에도 같은 자리에 빈 부가세 줄을 넣어 추이·엑셀에서 줄 순서가 맞게 */
+function pnlInclAll(P){const anyIn=Object.values(P).some(d=>d&&d.vat&&d.vat.in&&Object.values(d.vat.in).some(v=>Number(v)));const o={};for(const k in P)o[k]=pnlInclDoc(P[k],{blank:true,anyIn});return o;}
+window.pnlSetMode=function(m){S.ui.pnlMode=m;rerenderCurrent();};
+function pnlModeBtns(){const m=S.ui.pnlMode||"sep";return `<span class="pi-mode"><button class="${m==="sep"?"on":""}" onclick="pnlSetMode('sep')">별도가</button><button class="${m==="incl"?"on":""}" onclick="pnlSetMode('incl')">포함가</button></span>`;}
+window.pnlExportIncl=async function(){
+  const real=S.data.pnl;const miss=Object.keys(real||{}).filter(k=>!piHasVat(real[k]));
+  if(miss.length&&!confirm("부가세 자료가 없는 달("+miss.sort().map(k=>Number(k.split("-")[1])+"월").join(", ")+")은 별도가 그대로 들어가요. 계속할까요?"))return;
+  S.data.pnl=pnlInclAll(real);window.__pnlXName=" (포함가)";
+  try{await pnlExportXlsx();}finally{S.data.pnl=real;window.__pnlXName="";}
+};
+/* 부가세 입력 */
+function piDoc(key){return (window.__pnlReal||S.data.pnl||{})[key];}
+function piSave(key){try{pnlSaveLocal();}catch(e){}queueSave("pnl",key);}
+/* 원장 줄 → 달별·부서별 합계. 매출세액 = 부가세예수금 대변 − 차변(택스리펀 등), 매입세액 = 부가세대급금 차변 − 대변. 분기 부가세 예정·확정 정리 전표는 제외 */
+function piImport(kind,rows,src){
+  const R=window.__pnlReal||S.data.pnl||{};
+  const isClose=r=>/예정|확정/.test(String(r.memo||""))&&(kind==="out"?r.dr:r.cr);
+  const byM={};let closeN=0;
+  rows.forEach(r=>{if(isClose(r)){closeN++;return;}const m=r.d.slice(0,7);const dk=piDeptKey(r.dept);const v=kind==="out"?(r.cr-r.dr):(r.dr-r.cr);(byM[m]=byM[m]||{sum:{},n:0}).sum[dk]=((byM[m].sum[dk])||0)+v;byM[m].n++;});
+  const ms=Object.keys(byM).sort();const ok=ms.filter(m=>R[m]),skip=ms.filter(m=>!R[m]);
+  if(!ok.length){toast((skip.length?skip.map(m=>Number(m.slice(5))+"월").join(", ")+"은 월별손익에 아직 없는 달이에요":"넣을 내역이 없어요"),true);return;}
+  const nm=kind==="out"?"매출세액(부가세예수금)":"매입세액(부가세대급금)";
+  const over=ok.filter(m=>R[m].vat&&R[m].vat[kind]&&Object.values(R[m].vat[kind]).some(v=>Number(v)));
+  if(over.length&&!confirm(nm+" — "+over.map(m=>Number(m.slice(5))+"월").join(", ")+"은 이미 값이 있어요. 새 내역으로 바꿀까요?"))return;
+  ok.forEach(m=>{const d=R[m];d.vat=d.vat||{};d.vat[kind]=byM[m].sum;d.vat[kind+"N"]=byM[m].n;d.vat[kind+"Src"]=src||"";d.vat.up=Date.now();piSave(m);});
+  rerenderCurrent();
+  toast(nm+" "+ok.map(m=>Number(m.slice(5))+"월").join(", ")+" 넣었어요"+(closeN?" (분기 정리 전표 "+closeN+"줄 제외)":"")+(skip.length?" — "+skip.map(m=>Number(m.slice(5))+"월").join(", ")+"은 월별손익에 없어 건너뜀":""));
+}
+/* 부서명 → 사업장: 온라인(명절)=보자기꽃밥, 온라인판매(스마트스토어)=꽃밥마켓, 그 외는 이름대로 */
+function piDeptKey(d){const t=String(d||"").replace(/\s/g,"");if(/명절/.test(t))return "bojagi";if(/온라인|스마트스토어/.test(t))return "market";return plDeptKey(d);}
+function piKindOf(P,hint){const a=String(P.acct||"");if(/예수/.test(a))return "out";if(/대급/.test(a))return "in";if(hint)return hint;const cr=P.rows.reduce((s,r)=>s+r.cr,0),dr=P.rows.reduce((s,r)=>s+r.dr,0);return cr>=dr?"out":"in";}
+window.piPaste=function(key,kind,txt){
+  let P;try{P=plParseAoa(String(txt).split(/\r?\n/).map(l=>l.split("\t")));}catch(e){toast(e.message||String(e),true);return;}
+  if(!P.rows.length){toast("내역 줄을 찾지 못했어요",true);return;}
+  const k2=piKindOf(P,null);if(P.acct&&k2!==kind&&!confirm("붙여넣은 표는 '"+P.acct+"' 계정이에요. "+(k2==="out"?"매출세액":"매입세액")+"으로 넣을까요?"))return;
+  piImport(P.acct?k2:kind,P.rows,"붙여넣기");
+};
+window.piPick=async function(inp){
+  const fl=[...(inp.files||[])];
+  try{for(const f of fl){const wb=await pumParse(await f.arrayBuffer());let P=null;for(const ws of wb.sheets){try{P=plParseAoa(debitAoa(ws));if(P.rows.length)break;}catch(e){}}
+    if(!P||!P.rows.length){toast(f.name+": 계정별원장 표를 찾지 못했어요",true);continue;}
+    piImport(piKindOf(P,null),P.rows,f.name);}}
+  catch(e){console.error(e);toast("읽기 실패: "+(e.message||e),true);}
+  finally{inp.value="";}
+};
+const PI_UP=`<label class="btn btn-sm btn-primary" style="cursor:pointer">📂 이카운트 계정별원장 엑셀 넣기 (여러 달·두 파일 한꺼번에 가능)<input type="file" accept=".xlsx" multiple style="display:none" onchange="piPick(this)"></label>`;
+window.piEdit=function(key,kind,dk,v){const doc=piDoc(key);if(!doc)return;doc.vat=doc.vat||{};doc.vat[kind]=doc.vat[kind]||{};const t=String(v).replace(/[,\s원]/g,"");if(t===""||isNaN(Number(t)))delete doc.vat[kind][dk];else doc.vat[kind][dk]=Math.round(Number(t));doc.vat.up=Date.now();piSave(key);rerenderCurrent();};
+window.piClear=function(key){const doc=piDoc(key);if(!doc||!doc.vat)return;if(!confirm("이 달 부가세 자료를 지울까요?"))return;delete doc.vat;piSave(key);rerenderCurrent();};
+document.addEventListener("paste",e=>{const t=e.target;if(!t||!t.dataset||!t.dataset.piKind)return;const txt=(e.clipboardData||window.clipboardData).getData("text");if(!txt)return;e.preventDefault();piPaste(t.dataset.piKey,t.dataset.piKind,txt);});
+/* 월별손익 화면에 끼워 넣는 카드: 포함가일 때 비교표 + (관리자) 부가세 입력 */
+function pnlInclExtra(view,keys){
+  const mode=S.ui.pnlMode||"sep";if(mode!=="incl"||!keys.length)return "";
+  const R=window.__pnlReal||S.data.pnl||{};
+  const isAd=S.user&&S.user.role==="admin";
+  const lab=k=>k.split("-")[0]+"년 "+Number(k.split("-")[1])+"월";
+  if(view!=="month"){
+    const years=[...new Set(keys.map(k=>k.split("-")[0]))];const year=years.includes(S.ui.pnlYear)?S.ui.pnlYear:years[years.length-1];
+    const miss=keys.filter(k=>k.split("-")[0]===year&&!piHasVat(R[k]));
+    return `<div class="card pi-card"><div class="card-title">💡 포함가로 보는 중 <span class="unit">매출액에 매출세액, 매출원가에 매입세액을 더한 값이에요</span></div>
+      ${miss.length?`<div class="check-box warn" style="margin-top:6px">부가세 자료가 없는 달: ${miss.map(k=>Number(k.split("-")[1])+"월").join(", ")} — 이 달들은 별도가 그대로 합쳐져요.</div>${isAd?`<div style="margin-top:8px">${PI_UP}</div>`:""}`:`<div class="footnote">${year}년 모든 달에 부가세 자료가 있어요.</div>`}</div>`;
+  }
+  const key=R[S.ui.pnlKey]?S.ui.pnlKey:keys[keys.length-1];
+  const doc=R[key];if(!doc)return "";
+  const inc=pnlInclDoc(doc);const V=doc.vat||{};const has=piHasVat(doc);
+  const find=(d,re)=>d.rows.find(r=>r.lv===0&&re.test(r.n));
+  const sS=find(doc,/매출(?!원가|총이익)/),sI=find(inc,/매출(?!원가|총이익)/);
+  const oS=doc.rows.find(r=>r.lv===0&&/영업(이익|손익)/.test(r.n)),oI=inc.rows.find(r=>r.lv===0&&/영업(이익|손익)/.test(r.n));
+  const ents=PNL_ENTS.filter(([e])=>sS&&sS.v[e]!=null);
+  const pct=(a,b)=>a!=null&&b?(a/b*100).toFixed(1)+"%":"";
+  const cmp=has?`<table class="pi" style="margin-top:8px"><thead><tr><th rowspan="2">사업장</th><th colspan="3">매출액</th><th colspan="2">영업손익 (매출액 대비)</th></tr><tr><th>별도가</th><th>부가세</th><th>포함가</th><th>별도가</th><th>포함가</th></tr></thead><tbody>
+    ${ents.map(([e,n])=>{const a=sS.v[e],b=sI?sI.v[e]:null,c=oS?oS.v[e]:null,d=oI?oI.v[e]:null;return `<tr><td>${n}</td><td class="n">${fmt(a||0)}</td><td class="n" style="color:#666">${fmt((b||0)-(a||0))}</td><td class="n"><b>${fmt(b||0)}</b></td><td class="n">${c==null?"":fmt(c)+` <span class="unit">${pct(c,a)}</span>`}</td><td class="n">${d==null?"":"<b>"+fmt(d)+"</b>"+` <span class="unit">${pct(d,b)}</span>`}</td></tr>`;}).join("")}
+    </tbody></table>
+    <div class="footnote" style="margin-top:6px">포함가 영업손익에는 나중에 국세청에 낼 부가세(매출세액 − 매입세액)가 들어 있어요. 이만큼 빼면 별도가 영업손익과 같아요.</div>`
+    :`<div class="check-box warn" style="margin-top:6px">${lab(key)}은 아직 부가세 자료가 없어서 아래 표가 별도가 그대로예요.${isAd?" 아래에 이카운트 원장을 붙여넣어 주세요.":""}</div>`;
+  let input="";
+  if(isAd){
+    const cell=(kind,dk)=>`<input class="pi-in" inputmode="numeric" value="${V[kind]&&V[kind][dk]!=null?fmt(V[kind][dk]):""}" onchange="piEdit('${key}','${kind}','${dk}',this.value)">`;
+    const tot=kind=>PI_DEPTS.reduce((s,[dk])=>s+Number((V[kind]||{})[dk]||0),0);
+    input=`<details ${has?"":"open"} style="margin-top:12px"><summary style="cursor:pointer;font-weight:700;font-size:13px">🧾 ${lab(key)} 부가세 자료 ${has?"고치기":"넣기"}</summary>
+      <div class="footnote" style="margin:6px 0">이카운트 [계정별원장]에서 부가세예수금(2559)·부가세대급금(1359)을 조회해 Excel로 받은 파일을 넣으세요. 기간을 여러 달로 받아도 날짜대로 달마다 나눠 넣어요. 표를 복사해 아래 칸에 붙여넣어도 돼요.<br>매출세액 = 부가세예수금 대변 − 차변(택스리펀 등), 매입세액 = 부가세대급금 차변 − 대변. 분기 부가세 예정·확정 정리 전표는 빼요. 부서명 온라인판매는 꽃밥마켓, 온라인(명절)은 보자기꽃밥으로 넣고, 꽃밥이야기 등 사업장이 아닌 것은 '꽃밥이야기 공통'(전체에만 반영)으로 들어가요.</div>
+      <div style="margin-bottom:8px">${PI_UP}</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:8px">
+        <div><div style="font-size:12.5px;font-weight:700;margin-bottom:3px">① 부가세예수금 (매출세액)${V.outN?` <span class="unit">${V.outN}줄 합침</span>`:""}</div><textarea rows="2" data-pi-key="${key}" data-pi-kind="out" placeholder="부가세예수금 계정별원장 붙여넣기 (Ctrl+V)"></textarea></div>
+        <div><div style="font-size:12.5px;font-weight:700;margin-bottom:3px">② 부가세대급금 (매입세액) <span class="unit">선택</span>${V.inN?` <span class="unit">${V.inN}줄 합침</span>`:""}</div><textarea rows="2" data-pi-key="${key}" data-pi-kind="in" placeholder="부가세대급금 계정별원장 붙여넣기 (Ctrl+V)"></textarea></div>
+      </div>
+      <table class="pi" style="margin-top:8px"><thead><tr><th>부서</th><th>매출세액</th><th>매입세액</th></tr></thead><tbody>
+        ${PI_DEPTS.map(([dk,n])=>`<tr><td>${n}</td><td class="n">${cell("out",dk)}</td><td class="n">${cell("in",dk)}</td></tr>`).join("")}
+        <tr style="font-weight:700;background:#F6F8F4"><td>합계</td><td class="n">${fmt(tot("out"))}</td><td class="n">${fmt(tot("in"))}</td></tr></tbody></table>
+      <div class="footnote" style="margin-top:4px">칸에 숫자를 직접 적어도 돼요. 매입세액을 비워두면 매출만 포함가로 바뀌어요. ${has?`<a href="#" onclick="event.preventDefault();piClear('${key}')" style="color:#999">이 달 부가세 자료 지우기</a>`:""}</div>
+    </details>`;
+  }
+  return `<div class="card pi-card"><div class="card-title">💡 ${lab(key)} 별도가 ↔ 포함가 <span class="unit">아래 표는 포함가예요</span></div>${cmp}${input}</div>`;
 }
 </script>
 
