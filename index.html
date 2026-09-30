@@ -478,7 +478,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v248</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v251</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -491,6 +491,7 @@ window.FIREBASE_CONFIG = {
     <button class="tab admin-only" data-tab="buy">매입</button>
     <button class="tab admin-only" data-tab="pay">급여</button>
     <button class="tab admin-only" data-tab="expense">비용정리</button>
+    <button class="tab admin-only" data-tab="free">임의결제</button>
     <button class="tab admin-only" data-tab="settings">설정</button>
     <div id="sideSubs"></div>
   </nav>
@@ -512,6 +513,7 @@ window.FIREBASE_CONFIG = {
     <section id="tab-buy" class="tab-panel hidden"></section>
     <section id="tab-pay" class="tab-panel hidden"></section>
     <section id="tab-expense" class="tab-panel hidden"></section>
+    <section id="tab-free" class="tab-panel hidden"></section>
     <section id="tab-jagum" class="tab-panel hidden"></section>
     <section id="tab-settings" class="tab-panel hidden"></section>
   </main>
@@ -1127,7 +1129,7 @@ async function loadAllData() {
   jobs.push(fsCol("config").doc("epidaDrink").get().then((d) => { S.data.epidaDrink = d.data() || { add: [], remove: [] }; }).catch(() => {}));
   jobs.push(fsCol("payMonthly").get().then((snap)=>{const out={},files={};snap.forEach((d)=>{if(d.id.indexOf("file_")===0)files[d.id.slice(5)]=d.data();else if(d.id==="acctConfig")S.data.payAcct=d.data().acctOf||{};else if(d.id==="taxConfig")S.data.payTax=d.data()||{byName:{}};else if(d.id==="taxTable")S.data.payTaxTable=d.data()||null;else if(d.id==="bizConfig")S.data.payBiz=d.data()||{bizOf:{}};else if(d.id.indexOf("hg_")===0){S.data.payHg=S.data.payHg||{};S.data.payHg[d.id.slice(3)]=d.data();}else out[d.id]=d.data();});S.data.payMonthly=out;S.data.payFiles=files;}).catch(()=>{S.data.payMonthly=S.data.payMonthly||{};S.data.payFiles=S.data.payFiles||{};S.data.payAcct=S.data.payAcct||{};}));
   jobs.push(fsCol("config").doc("bojagiPosMap").get().then((d) => { S.data.bojagiPosMap = (d.data() || {}).map || {}; }).catch(() => {}));
-  if(S.user&&S.user.role==="admin")jobs.push(fsCol("buy").get().then((snap)=>{const B={files:{},close:{},stat:{},vendorMap:{}};snap.forEach((d)=>{const id=d.id;if(id==="file_close")B.files.close=d.data();else if(id==="file_stat")B.files.stat=d.data();else if(id.indexOf("close_")===0)B.close[id.slice(6)]=d.data();else if(id.indexOf("stat_")===0)B.stat[id.slice(5)]=d.data();else if(id==="vendorMap"){B.vendorMap=(d.data()||{}).map||{};B.vendorSkip=(d.data()||{}).skip||{};}else if(id==="expenseCheck"){B.expense=d.data()||{months:{}};}else if(id.indexOf("card_")===0){B.card=B.card||{};B.card[id.slice(5)]=d.data();}else if(id==="cardConfig"){B.cardCfg=d.data()||{};}else if(id.indexOf("debit_")===0){B.debit=B.debit||{};B.debit[id.slice(6)]=d.data();}else if(id==="debitConfig"){B.debitCfg=d.data()||{};}});S.data.buy=B;}).catch(()=>{S.data.buy=S.data.buy||{files:{},close:{},stat:{},vendorMap:{}};}));
+  if(S.user&&S.user.role==="admin")jobs.push(fsCol("buy").get().then((snap)=>{const B={files:{},close:{},stat:{},vendorMap:{}};snap.forEach((d)=>{const id=d.id;if(id==="file_close")B.files.close=d.data();else if(id==="file_stat")B.files.stat=d.data();else if(id.indexOf("close_")===0)B.close[id.slice(6)]=d.data();else if(id.indexOf("stat_")===0)B.stat[id.slice(5)]=d.data();else if(id==="vendorMap"){B.vendorMap=(d.data()||{}).map||{};B.vendorSkip=(d.data()||{}).skip||{};}else if(id==="expenseCheck"){B.expense=d.data()||{months:{}};}else if(id.indexOf("free_")===0){B.free=B.free||{};B.free[id.slice(5)]=d.data();}else if(id.indexOf("card_")===0){B.card=B.card||{};B.card[id.slice(5)]=d.data();}else if(id==="cardConfig"){B.cardCfg=d.data()||{};}else if(id.indexOf("debit_")===0){B.debit=B.debit||{};B.debit[id.slice(6)]=d.data();}else if(id==="debitConfig"){B.debitCfg=d.data()||{};}});S.data.buy=B;}).catch(()=>{S.data.buy=S.data.buy||{files:{},close:{},stat:{},vendorMap:{}};}));
   await Promise.all(jobs);
   pnlNormalizeKeys();
 }
@@ -6302,7 +6304,7 @@ async function pumParse(buf){
         }else cells[ref].f=null;
       }
     }
-    sheets.push({name:sh.getAttribute("name"),path:tg,cells:cells,maxR:Math.min(maxR,300),maxC:Math.min(maxC,30),merges:merges,covered:covered,colW:colW,rowH:rowH});
+    sheets.push({name:sh.getAttribute("name"),path:tg,cells:cells,maxR:Math.min(maxR,300),realR:maxR,maxC:Math.min(maxC,30),merges:merges,covered:covered,colW:colW,rowH:rowH});
   }
   return {zipBuf:buf,sheets:sheets,styles:styles};
 }
@@ -8076,11 +8078,11 @@ window.payRecordMonth=payRecordMonth;window.paySummaryCopy=paySummaryCopy;
 window.payPick=payPick;window.payDownload=payDownload;window.payCellEdit=payCellEdit;
 const RENDERERS = {
   home: () => renderHome(),
-  compare: renderCompare, sales: renderSales, pnl: renderPnl, jagum: renderJagum, pay: renderPay, buy: () => renderBuy(), expense: () => renderExpense(), settings: () => renderSettings(),
+  compare: renderCompare, sales: renderSales, pnl: renderPnl, jagum: renderJagum, pay: renderPay, buy: () => renderBuy(), expense: () => renderExpense(), free: () => renderFree(), settings: () => renderSettings(),
 };
 function switchTab(tab) {
   if(["monthly","daily","market","bojagi","agency"].includes(tab)){S.ui.salesSub=tab;tab="sales";}
-  if(["buy","pay","expense","settings","confirmapp"].includes(tab)&&(!S.user||S.user.role!=="admin"))tab="home";
+  if(["buy","pay","expense","free","settings","confirmapp"].includes(tab)&&(!S.user||S.user.role!=="admin"))tab="home";
   S.ui.tab = tab;
   try{history.replaceState(null,"","#"+tab);}catch(e){}
   document.querySelectorAll(".tabbar .tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
@@ -11350,7 +11352,7 @@ async function cardParse(buf){
   const sheets=[];let appr=null,raw=null;
   for(const ws of wb.sheets){
     const nm=ws.name;const aoa=[];
-    for(let r=1;r<=ws.maxR;r++){const row=[];for(let c=1;c<=ws.maxC;c++){const cl=ws.cells[payIdxCol(c)+r];if(!cl){row.push("");continue;}if(cl.typ==="num"){row.push(cl.v===""?"":Number(cl.v));}else if(cl.typ==="str")row.push(cl.v);else row.push("");}aoa.push(row);}
+    for(let r=1;r<=(ws.realR||ws.maxR);r++){const row=[];for(let c=1;c<=ws.maxC;c++){const cl=ws.cells[payIdxCol(c)+r];if(!cl){row.push("");continue;}if(cl.typ==="num"){row.push(cl.v===""?"":Number(cl.v));}else if(cl.typ==="str")row.push(cl.v);else row.push("");}aoa.push(row);}
     if(/승인|이용/.test(nm)){appr=cardApprSum(aoa);let last=aoa.length;while(last>0&&!(aoa[last-1]||[]).some(v=>v!==""))last--;let lc=0;aoa.slice(0,last).forEach(r=>{for(let c=r.length-1;c>=0;c--)if(r[c]!==""){lc=Math.max(lc,c+1);break;}});raw={name:nm,rows:aoa.slice(0,Math.min(last,800)).map(r=>({v:r.slice(0,lc)}))};continue;}
     const sh=cardParseSheet(nm,aoa);
     if(sh&&sh.rows.length)sheets.push(sh);
@@ -11695,7 +11697,7 @@ function debitSerial(v){/* 엑셀 날짜 숫자 → 문자열 */
   return d.getUTCFullYear()+"-"+p(d.getUTCMonth()+1)+"-"+p(d.getUTCDate())+(hasT?" "+p(d.getUTCHours())+":"+p(d.getUTCMinutes())+":"+p(d.getUTCSeconds()):"");
 }
 function debitDay(s){const m=/(20\d{2})[.\-\/](\d{1,2})[.\-\/](\d{1,2})/.exec(String(s||""));return m?m[1]+"-"+m[2].padStart(2,"0")+"-"+m[3].padStart(2,"0"):"";}
-function debitAoa(ws){const aoa=[];for(let r=1;r<=ws.maxR;r++){const row=[];for(let c=1;c<=ws.maxC;c++){const cl=ws.cells[payIdxCol(c)+r];if(!cl){row.push("");continue;}if(cl.typ==="num")row.push(cl.v===""?"":Number(cl.v));else if(cl.typ==="str")row.push(cl.v);else row.push("");}aoa.push(row);}return aoa;}
+function debitAoa(ws){const aoa=[];for(let r=1;r<=(ws.realR||ws.maxR);r++){const row=[];for(let c=1;c<=ws.maxC;c++){const cl=ws.cells[payIdxCol(c)+r];if(!cl){row.push("");continue;}if(cl.typ==="num")row.push(cl.v===""?"":Number(cl.v));else if(cl.typ==="str")row.push(cl.v);else row.push("");}aoa.push(row);}return aoa;}
 function debitFindHdr(aoa,need){for(let i=0;i<Math.min(aoa.length,12);i++){const t=(aoa[i]||[]).map(v=>String(v).replace(/\s/g,""));if(need.every(n=>t.some(x=>x===n||x.indexOf(n)>=0)))return {i,H:t};}return null;}
 /* 은행 거래내역조회 */
 function debitParseBank(aoa){
@@ -12550,7 +12552,7 @@ function plApplyParsed(key,name,P,src){
 window.plPick=async function(inp){
   const f=inp.files&&inp.files[0];if(!f)return;const U=window.__pl;
   try{const wb=await pumParse(await f.arrayBuffer());let P=null,err=null;
-    for(const ws of wb.sheets){const aoa=[];for(let r=1;r<=ws.maxR;r++){const row=[];for(let c=1;c<=ws.maxC;c++){const cl=ws.cells[payIdxCol(c)+r];row.push(!cl?"":cl.typ==="num"?(cl.v===""?"":Number(cl.v)):cl.typ==="str"?cl.v:"");}aoa.push(row);}
+    for(const ws of wb.sheets){const aoa=[];for(let r=1;r<=(ws.realR||ws.maxR);r++){const row=[];for(let c=1;c<=ws.maxC;c++){const cl=ws.cells[payIdxCol(c)+r];row.push(!cl?"":cl.typ==="num"?(cl.v===""?"":Number(cl.v)):cl.typ==="str"?cl.v:"");}aoa.push(row);}
       try{P=plParseAoa(aoa);break;}catch(e){err=e;}}
     if(!P)throw err||new Error("내용을 찾지 못했어요");
     plApplyParsed(U.key,U.name,P,f.name);
@@ -12635,6 +12637,243 @@ function plRender(){
 }
 </script>
 
+<style>
+#tab-free table.fr{border-collapse:collapse;width:100%;font-size:12.5px}
+#tab-free table.fr th{background:#F3F5F1;border:1px solid #dde2da;padding:6px 8px;font-weight:700;position:sticky;top:0;z-index:1;white-space:nowrap}
+#tab-free table.fr td{border:1px solid #e6e9e3;padding:5px 8px;vertical-align:middle}
+#tab-free table.fr td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+#tab-free tr.fr-bad td{background:#FDF0EE}
+#tab-free tr.fr-warn td{background:#FFF8E6}
+#tab-free tr.fr-memo td{background:#FFFDF3}
+#tab-free tr.fr-canc td{color:#9aa0a6;background:#FAFAFA}
+#tab-free tr.fr-canc td.n{text-decoration:line-through}
+#tab-free .fr-ok{color:#2F6B3F;font-weight:700}
+#tab-free .fr-no{color:#C0392B;font-weight:700}
+#tab-free .fr-w{color:#9A6700;font-weight:700}
+#tab-free table.fr-side{width:auto;min-width:min(100%,560px)}
+#tab-free table.fr-side td,#tab-free table.fr-side th{padding:5px 14px}
+#tab-free table.fr-side thead tr:first-child th{top:51px;height:30px;box-sizing:border-box}
+#tab-free table.fr-side thead tr:nth-child(2) th{top:81px}
+#tab-free .fr-mid{border-right:3px solid #9DBBA4!important}
+#tab-free tr.fr-day td{background:#F6F7F4;font-weight:700;font-size:12.5px;border-top:2px solid #cfd6cb}
+#tab-free td.fr-t{color:#555;font-variant-numeric:tabular-nums}
+#tab-free td.fr-k{text-align:center;width:28px}
+#tab-free td.fr-e{background:#fcfcfc}
+#tab-free td.fr-cx{color:#aaa}
+#tab-free td.n.fr-cx{text-decoration:line-through}
+#tab-free td.fr-hi{background:#FFF1B8!important}
+#tab-free .fr-stat{display:inline-block;border:1px solid var(--line,#ddd);border-radius:10px;padding:8px 12px;margin:0 6px 6px 0;background:#fff;font-size:12.5px}
+#tab-free .fr-stat b{display:block;font-size:17px;margin-top:2px}
+#tab-free input.fr-m{font:inherit;font-size:12.5px;border:1px solid transparent;background:transparent;padding:2px 4px;width:100%;box-sizing:border-box;border-radius:4px;min-width:140px}
+#tab-free input.fr-m:hover{border-color:#ddd}
+#tab-free input.fr-m:focus{border-color:#9DBBA4;background:#fff;outline:none}
+</style>
+<script>
+/* === free.js — 임의결제 대조: 오케이포스 신용카드 승인현황 중 카드번호가 비어 있는 건(임의결제) ↔ 제로페이 결제내역조회 (날짜·금액) === */
+"use strict";
+window.__free=window.__free||{ui:{}};
+function freeStore(){S.data.buy=S.data.buy||{};S.data.buy.free=S.data.buy.free||{};return S.data.buy.free;}
+function freeSave(key){if(typeof IS_DEMO!=="undefined"&&IS_DEMO)return;clearTimeout(window.__free.t);window.__free.t=setTimeout(async()=>{const doc=freeStore()[key];try{if(doc)await fsCol("buy").doc("free_"+key).set(JSON.parse(JSON.stringify(doc)));}catch(e){console.error(e);toast("임의결제 저장 실패: "+(e.message||""),true);}},600);}
+function freeTime(v){if(typeof v==="number"&&v>=0&&v<1){const s=Math.round(v*86400);const p=n=>String(n).padStart(2,"0");return p(Math.floor(s/3600))+":"+p(Math.floor(s%3600/60))+":"+p(s%60);}const m=/(\d{1,2}):(\d{2})(?::(\d{2}))?/.exec(String(v||""));return m?m[1].padStart(2,"0")+":"+m[2]+":"+(m[3]||"00"):"";}
+function freeSec(t){const m=/(\d{2}):(\d{2}):(\d{2})/.exec(t||"");return m?(+m[1])*3600+(+m[2])*60+(+m[3]):null;}
+/* ① 오케이포스 신용카드 승인현황 */
+function freeParsePos(aoa){
+  let hi=-1,H=null;
+  for(let i=0;i<Math.min(aoa.length,15);i++){const t=(aoa[i]||[]).map(v=>String(v==null?"":v).replace(/\s/g,""));if(t.some(x=>x==="카드번호")&&t.some(x=>/영업일자|승인일자/.test(x))){hi=i;H=t;break;}}
+  if(hi<0)return null;
+  const S2=(aoa[hi+1]||[]).map(v=>String(v==null?"":v).replace(/\s/g,""));
+  const f=(re)=>H.findIndex(x=>re.test(x));
+  const cDay=f(/^영업일자$/),cAD=f(/^승인일자$/),cRc=f(/영수증/),cPos=f(/^포스/),cCo=f(/매입사|카드사/),cCard=f(/^카드번호$/),cT=f(/승인시각|승인시간/),cNo=f(/^승인번호$/);
+  let cAmt=-1;for(let i=H.length-1;i>=0;i--)if(/^승인금액$/.test(H[i])){cAmt=i;break;}
+  if(cAmt<0)cAmt=f(/금액/);
+  let cGb=H.findIndex(x=>x==="승인");let cProc=-1;if(cGb>=0&&S2[cGb+1]==="처리")cProc=cGb+1;if(cGb>=0&&S2[cGb]&&S2[cGb]!=="구분")cGb=-1;
+  const rows=[];let total=0;const days=[];
+  for(let i=hi+1;i<aoa.length;i++){const r=aoa[i]||[];
+    const day=debitDay(debitSerial(r[cDay>=0?cDay:cAD]));if(!day)continue;
+    const amt=debitNum(r[cAmt]);if(amt==null)continue;total++;days.push({day});
+    const card=String(r[cCard]==null?"":r[cCard]).trim();
+    if(/\d/.test(card))continue; /* 카드번호가 있으면 일반 카드결제 */
+    rows.push({day,t:freeTime(r[cT]),rc:cRc>=0?String(r[cRc]||"").trim():"",pos:cPos>=0?String(r[cPos]||"").trim():"",co:cCo>=0?String(r[cCo]||"").trim():"",card,amt:Math.round(amt),gb:cGb>=0?String(r[cGb]||"").trim():(amt<0?"취소":"승인"),proc:cProc>=0?String(r[cProc]||"").trim():"",no:cNo>=0?String(r[cNo]||"").trim():""});
+  }
+  return {rows,total,key:freeKeyOf(days)};
+}
+/* ② 제로페이 결제내역조회 (가맹점 포털 .xls = HTML 표, 또는 xlsx) */
+function freeParseZp(aoa){
+  const fd=debitFindHdr(aoa,["거래일시","금액"]);if(!fd)return null;
+  const H=fd.H;const f=(re)=>H.findIndex(x=>re.test(x));
+  const cD=f(/거래일시/),cA=f(/결제.*금액|^금액/),cK=f(/결제구분|결제수단/),cS=f(/결제상태|상태/),cId=f(/거래고유번호|거래번호/),cShop=f(/가맹점명/),cFee=f(/수수료/),cSet=f(/정산일/);
+  const rows=[];
+  for(let i=fd.i+1;i<aoa.length;i++){const r=aoa[i]||[];const s=debitSerial(r[cD]);const day=debitDay(s);if(!day)continue;const a=debitNum(r[cA]);if(a==null)continue;
+    const st=cS>=0?String(r[cS]||"").trim():"";let amt=Math.round(a);if(/취소/.test(st)&&amt>0)amt=-amt;
+    rows.push({day,t:freeTime(s),amt,kind:cK>=0?String(r[cK]||"").replace(/\s+/g," ").trim():"",st,id:cId>=0?String(r[cId]||"").trim():"",shop:cShop>=0?String(r[cShop]||"").trim():"",fee:cFee>=0?String(r[cFee]==null?"":r[cFee]).trim():"",set:cSet>=0?debitDay(debitSerial(r[cSet])):""});
+  }
+  return rows;
+}
+function freeHtmlAoa(text){const doc=new DOMParser().parseFromString(text,"text/html");const out=[];doc.querySelectorAll("tr").forEach(tr=>{const row=[];tr.querySelectorAll("th,td").forEach(td=>{row.push(td.textContent.replace(/ /g," ").trim());const cs=+(td.getAttribute("colspan")||1);for(let k=1;k<cs;k++)row.push("");});out.push(row);});return out;}
+function freeKeyOf(rows){const cnt={};rows.forEach(r=>{const k=r.day.slice(2,4)+r.day.slice(5,7);cnt[k]=(cnt[k]||0)+1;});let best=null;for(const k in cnt)if(!best||cnt[k]>cnt[best])best=k;return best;}
+window.freePick=async function(inp){
+  const fl=[...(inp.files||[])];if(!fl.length)return;
+  try{
+    let pos=null,zp=null,posName="",zpName="";
+    for(const f of fl){
+      const buf=await f.arrayBuffer();const head=new Uint8Array(buf.slice(0,8));
+      const isZip=head[0]===0x50&&head[1]===0x4B;const isOle=head[0]===0xD0&&head[1]===0xCF;
+      const aoas=[];
+      if(isZip){const wb=await pumParse(buf);wb.sheets.forEach(ws=>aoas.push(debitAoa(ws)));}
+      else if(isOle){toast(f.name+": 옛 엑셀(.xls) 형식은 못 읽어요 — 엑셀에서 '다른 이름으로 저장 → Excel 통합 문서(.xlsx)'로 바꿔서 올려주세요",true);continue;}
+      else{aoas.push(freeHtmlAoa(new TextDecoder("utf-8").decode(buf)));}
+      for(const aoa of aoas){
+        const p=freeParsePos(aoa);if(p&&p.total){pos=p;posName=f.name;break;}
+        const z=freeParseZp(aoa);if(z&&z.length){zp=z;zpName=f.name;break;}
+      }
+      if(!(posName===f.name||zpName===f.name))toast(f.name+": 승인현황(카드번호 열)이나 제로페이 결제내역(거래일시 열)을 찾지 못했어요",true);
+    }
+    if(!pos&&!zp)return;
+    const key=(pos&&pos.key)||freeKeyOf(zp||[])||window.__free.ui.key||freeDefKey();
+    const B=freeStore();const doc=B[key]=B[key]||{memo:{}};
+    if(pos){if(doc.pos&&!confirm(freeLabel(key)+" 승인현황이 이미 있어요. 새 파일로 바꿀까요? (적어둔 메모는 유지돼요)"))return;doc.pos=pos.rows;doc.posTotal=pos.total;doc.posFile=posName;}
+    if(zp){if(doc.zp&&!confirm(freeLabel(key)+" 제로페이 내역이 이미 있어요. 새 파일로 바꿀까요? (적어둔 메모는 유지돼요)"))return;doc.zp=zp;doc.zpFile=zpName;}
+    doc.up=Date.now();window.__free.ui.key=key;
+    freeSave(key);renderFree();
+    toast((pos?"승인현황 "+pos.total+"건 중 임의결제 "+pos.rows.length+"건":"")+(pos&&zp?" · ":"")+(zp?"제로페이 "+zp.length+"건":"")+"을 읽었어요");
+  }catch(e){console.error(e);toast("읽기 실패: "+(e.message||e),true);}
+  finally{inp.value="";}
+};
+function freeDefKey(){const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-1);return String(d.getFullYear()).slice(2)+String(d.getMonth()+1).padStart(2,"0");}
+function freeLabel(k){return "20"+k.slice(0,2)+"년 "+Number(k.slice(2))+"월";}
+function freeDayDiff(a,b){return Math.round((new Date(a+"T00:00:00Z")-new Date(b+"T00:00:00Z"))/86400000);}
+/* 대조: 취소 짝 → 같은 날·같은 금액(가까운 시각) → 하루 차이 → 같은 날 30분 이내 금액 다름 → 없음 */
+function freeMatch(doc){
+  const P=(doc.pos||[]).map((r,i)=>({r,i,id:"p"+r.day+"|"+r.t+"|"+r.rc+"|"+r.amt,st:null,z:null}));
+  const Z=(doc.zp||[]).map((r,i)=>({r,i,id:"z"+(r.id||r.day+"|"+r.t+"|"+r.amt),st:null,p:null}));
+  const byT=(a,b)=>(a.r.day+a.r.t).localeCompare(b.r.day+b.r.t);
+  const pairCancel=(L)=>{L.slice().sort(byT).forEach(c=>{if(c.r.amt>=0||c.st)return;const o=L.filter(x=>!x.st&&x.r.amt===-c.r.amt&&(x.r.day+x.r.t)<=(c.r.day+c.r.t)).sort(byT).pop();if(o){o.st="canc";c.st="canc";o.mate=c;c.mate=o;}else c.st="cancOnly";});};
+  pairCancel(P);pairCancel(Z);
+  const act=P.filter(x=>!x.st).sort(byT);const zAct=()=>Z.filter(x=>!x.st&&!x.p&&x.r.amt>0);
+  const near=(x,list)=>{const s=freeSec(x.r.t);return list.sort((a,b)=>{const da=freeSec(a.r.t),db=freeSec(b.r.t);return (s==null||da==null?0:Math.abs(da-s))-(s==null||db==null?0:Math.abs(db-s));})[0];};
+  act.forEach(x=>{const c=zAct().filter(z=>z.r.day===x.r.day&&z.r.amt===x.r.amt);if(c.length){const z=near(x,c);x.st="ok";x.z=z;z.p=x;}});
+  /* 한 건을 나눠 결제: 포스 1건 = 같은 날 제로페이 여러 건 합 (또는 반대) — 시각이 가까운 조합 우선 */
+  const subsetSum=(target,list,t0)=>{const L=list.filter(z=>z.r.amt>0&&z.r.amt<target).sort((a,b)=>{const s=freeSec(t0);return s==null?0:Math.abs((freeSec(a.r.t)||0)-s)-Math.abs((freeSec(b.r.t)||0)-s);}).slice(0,18);
+    let best=null,bestScore=Infinity;const s0=freeSec(t0);
+    const rec=(start,pick,sum)=>{if(sum===target&&pick.length>=2){const ts=pick.map(z=>freeSec(z.r.t)).filter(v=>v!=null);const span=ts.length?Math.max(...ts)-Math.min(...ts):0;const dist=s0!=null&&ts.length?Math.min(...ts.map(v=>Math.abs(v-s0))):0;const sc=span+dist+pick.length*60;if(sc<bestScore){bestScore=sc;best=pick.slice();}return;}
+      if(pick.length>=5||sum>=target)return;for(let i=start;i<L.length;i++){if(sum+L[i].r.amt>target)continue;pick.push(L[i]);rec(i+1,pick,sum+L[i].r.amt);pick.pop();}};
+    rec(0,[],0);return best;};
+  act.filter(x=>!x.st).forEach(x=>{const pick=subsetSum(x.r.amt,zAct().filter(z=>z.r.day===x.r.day),x.r.t);if(pick){x.st="split";x.zs=pick;pick.forEach(z=>{z.p=x;});}});
+  zAct().forEach(z=>{if(z.p)return;const pick=subsetSum(z.r.amt,act.filter(x=>!x.st&&x.r.day===z.r.day),z.r.t);if(pick){pick.forEach(x=>{x.st="merge";x.z=z;x.grp=pick;});z.p=pick[0];z.ps=pick;}});
+  act.filter(x=>!x.st).forEach(x=>{const c=zAct().filter(z=>Math.abs(freeDayDiff(z.r.day,x.r.day))===1&&z.r.amt===x.r.amt);if(c.length){const z=c[0];x.st="day";x.z=z;z.p=x;}});
+  act.filter(x=>!x.st).forEach(x=>{const s=freeSec(x.r.t);if(s==null)return;const c=zAct().filter(z=>z.r.day===x.r.day&&freeSec(z.r.t)!=null&&Math.abs(freeSec(z.r.t)-s)<=1800);if(c.length){const z=near(x,c);x.st="amt";x.z=z;z.p=x;}});
+  act.filter(x=>!x.st).forEach(x=>{x.st="none";});
+  return {P,Z};
+}
+window.freeMemo=function(key,id,v){const doc=freeStore()[key];if(!doc)return;doc.memo=doc.memo||{};v=String(v||"").trim();if(v)doc.memo[id]=v;else delete doc.memo[id];freeSave(key);renderFree();};
+window.freeSetKey=function(k){window.__free.ui.key=k;renderFree();};
+window.freeView=function(v){window.__free.ui.view=v;renderFree();};
+window.freeShowCanc=function(on){window.__free.ui.canc=!!on;renderFree();};
+window.freeHi=function(g,on){document.querySelectorAll('#tab-free [data-g="'+g+'"]').forEach(e=>e.classList.toggle("fr-hi",on));};
+window.freeClear=function(key,which){const B=freeStore();const doc=B[key];if(!doc)return;if(!confirm(freeLabel(key)+" "+(which==="pos"?"승인현황":"제로페이 내역")+"을 지울까요?"))return;delete doc[which];if(which==="pos"){delete doc.posFile;delete doc.posTotal;}else delete doc.zpFile;freeSave(key);renderFree();};
+function renderFree(){
+  const el=document.getElementById("tab-free");if(!el)return;
+  if(typeof S==="undefined"||!S.user||S.user.role!=="admin"){el.innerHTML='<div class="card">관리자만 볼 수 있어요.</div>';return;}
+  const B=freeStore();const keys=Object.keys(B).sort();
+  const key=window.__free.ui.key&&(B[window.__free.ui.key]||keys.indexOf(window.__free.ui.key)<0)?window.__free.ui.key:(keys[keys.length-1]||freeDefKey());
+  window.__free.ui.key=key;
+  const doc=B[key]||{};const memo=doc.memo||{};
+  const opts=[...new Set(keys.concat([key]))].sort().reverse().map(k=>`<option value="${k}" ${k===key?"selected":""}>${freeLabel(k)}</option>`).join("");
+  const up=`<div class="card">
+    <div class="card-head"><div class="card-title">🧾 임의결제 대조 <span class="unit">마켓 오케이포스 임의결제(카드번호 없음) ↔ 제로페이 결제내역</span></div>
+      <select class="ctl" onchange="freeSetKey(this.value)">${opts}</select></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0">
+      <label class="btn btn-primary" style="cursor:pointer">📂 파일 올리기 (두 파일 한꺼번에 가능)<input type="file" accept=".xlsx,.xls,.html,.htm" multiple style="display:none" onchange="freePick(this)"></label>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px;font-size:12.5px">
+      <div style="border:1px solid var(--line,#e3e3e3);border-radius:8px;padding:8px 10px">① 오케이포스 <b>신용카드 승인현황</b> (.xlsx)<br>${doc.pos?`<span class="fr-ok">✓</span> ${esc(doc.posFile||"")} · 전체 ${fmt(doc.posTotal||0)}건 중 임의결제 ${doc.pos.length}건 <a href="#" onclick="event.preventDefault();freeClear('${key}','pos')" style="color:#999;margin-left:4px">지우기</a>`:`<span class="unit">아직 없음</span>`}</div>
+      <div style="border:1px solid var(--line,#e3e3e3);border-radius:8px;padding:8px 10px">② <b>제로페이 결제내역조회</b> (.xls 그대로 가능)<br>${doc.zp?`<span class="fr-ok">✓</span> ${esc(doc.zpFile||"")} · ${doc.zp.length}건 <a href="#" onclick="event.preventDefault();freeClear('${key}','zp')" style="color:#999;margin-left:4px">지우기</a>`:`<span class="unit">아직 없음</span>`}</div>
+    </div>
+    <div class="footnote" style="margin-top:6px">승인현황에서 카드번호에 숫자가 없는 줄(****-****-****- 또는 -----)을 임의결제로 봐요. 제로페이 내역과 날짜·금액으로 맞춰보고, 같은 날 같은 금액이 여러 건이면 시각이 가장 가까운 것끼리 짝지어요. 금액이 딱 맞는 게 없으면 같은 날 제로페이 여러 건의 합(나눠 결제, 최대 5건)으로도 찾아요. 임의결제 취소는 같은 날 같은 금액 승인과 짝지어 빼요.</div>
+  </div>`;
+  if(!doc.pos&&!doc.zp){el.innerHTML=up;return;}
+  const M=freeMatch(doc);
+  const P=M.P.slice().sort((a,b)=>(a.r.day+a.r.t).localeCompare(b.r.day+b.r.t));
+  const act=P.filter(x=>x.st&&x.st!=="canc"&&x.st!=="cancOnly");
+  const sum=(l)=>l.reduce((s,x)=>s+x.r.amt,0);
+  const isOk=(x)=>x.st==="ok"||x.st==="split"||x.st==="merge";const ok=act.filter(isOk),bad=act.filter(x=>!isOk(x)),cOnly=P.filter(x=>x.st==="cancOnly");
+  const zRest=M.Z.filter(x=>!x.p&&!x.st&&x.r.amt>0);
+  const badOpen=bad.filter(x=>!memo[x.id]).length+cOnly.filter(x=>!memo[x.id]).length;
+  const stat=(t,v,s,cls)=>`<div class="fr-stat">${t}<b class="${cls||""}">${v}</b>${s?`<span class="unit">${s}</span>`:""}</div>`;
+  const summary=`<div class="card"><div class="card-title">${freeLabel(key)} 결과</div>
+    <div style="margin-top:8px">${stat("임의결제 (취소 뺌)",act.length+"건",fmt(sum(act))+"원")}${stat("제로페이 확인 ✓",ok.length+"건",fmt(sum(ok))+"원","fr-ok")}${stat("확인 필요",(bad.length+cOnly.length)+"건",bad.length+cOnly.length?(badOpen?"메모 안 한 것 "+badOpen+"건":"모두 메모함"):"없음",bad.length+cOnly.length?"fr-no":"fr-ok")}${doc.zp?stat("제로페이에만 있음",zRest.length+"건",fmt(sum(zRest))+"원"):""}</div>
+    ${!doc.zp?`<div class="check-box warn" style="margin-top:6px">② 제로페이 결제내역을 올려야 대조돼요.</div>`:""}
+    ${!doc.pos?`<div class="check-box warn" style="margin-top:6px">① 오케이포스 승인현황을 올려야 대조돼요.</div>`:""}
+    ${doc.zp&&doc.pos&&!bad.length&&!cOnly.length?`<div class="check-box ok" style="margin-top:6px">✓ 임의결제 ${act.length}건이 모두 제로페이 내역에 있어요.</div>`:""}</div>`;
+  const zInfo=(z)=>z?`${z.r.day!==undefined?z.r.day.slice(5).replace("-","/"):""} ${z.r.t.slice(0,5)} · ${esc(z.r.kind)} · ${fmt(z.r.amt)}원`:"";
+  const res=(x)=>x.st==="ok"?`<span class="fr-ok">✓</span> ${zInfo(x.z)}`
+    :x.st==="split"?`<span class="fr-ok">✓ 나눠 결제 ${x.zs.length}건</span> — ${x.zs.slice().sort((a,b)=>a.r.t.localeCompare(b.r.t)).map(z=>`${z.r.t.slice(0,5)} ${esc(z.r.kind.replace(/\s*\(.*$/,""))} ${fmt(z.r.amt)}`).join(" + ")} = ${fmt(x.r.amt)}원`
+    :x.st==="merge"?`<span class="fr-ok">✓ 포스 ${x.grp.length}건 합</span> = 제로페이 ${zInfo(x.z)}`
+    :x.st==="day"?`<span class="fr-w">⚠ 날짜 다름</span> — 제로페이 ${zInfo(x.z)}`
+    :x.st==="amt"?`<span class="fr-no">❌ 금액 다름</span> — 비슷한 시각 제로페이 ${zInfo(x.z)} (차이 ${fmt(x.r.amt-x.z.r.amt)}원)`
+    :x.st==="none"?(doc.zp?`<span class="fr-no">❌ 제로페이 내역 없음</span>`:`<span class="unit">제로페이 내역 올리면 대조</span>`)
+    :x.st==="canc"?`<span class="unit">취소 짝 (${x.r.amt<0?"승인":"취소"} ${x.mate.r.t.slice(0,5)})</span>`
+    :x.st==="cancOnly"?`<span class="fr-w">⚠ 짝 없는 취소</span>`:"";
+  const cls=(x)=>x.st==="canc"?"fr-canc":(isOk(x)?"":(memo[x.id]?"fr-memo":(x.st==="day"||x.st==="cancOnly"?"fr-warn":"fr-bad")));
+  const posTable=doc.pos?`<div class="card"><div class="card-title">① 임의결제 내역 <span class="unit">오케이포스 승인현황 · ${P.length}줄</span></div>
+    ${P.length?`<div class="table-wrap" style="margin-top:8px"><table class="fr"><thead><tr><th>영업일자</th><th>승인시각</th><th>영수증</th><th>매입사</th><th>처리</th><th>금액</th><th>대조 결과</th><th style="min-width:200px">확인 메모</th></tr></thead><tbody>
+      ${P.map(x=>`<tr class="${cls(x)}"><td style="white-space:nowrap">${x.r.day}</td><td>${x.r.t}</td><td>${esc(x.r.pos?x.r.pos+"-":"")}${esc(x.r.rc)}</td><td>${esc(x.r.co)}</td><td>${esc(x.r.gb)}${x.r.proc?" · "+esc(x.r.proc):""}</td><td class="n">${fmt(x.r.amt)}</td><td>${res(x)}</td>
+        <td>${x.st==="canc"?"":`<input class="fr-m" value="${esc(memo[x.id]||"")}" placeholder="${isOk(x)?"":"확인한 내용 (예: 현금 입금 확인)"}" onchange="freeMemo('${key}','${x.id}',this.value)">`}</td></tr>`).join("")}
+      <tr style="font-weight:700;background:#F6F8F4"><td colspan="5" style="text-align:right">임의결제 합계 (취소 뺌) ${act.length}건</td><td class="n">${fmt(sum(act))}</td><td colspan="2"></td></tr></tbody></table></div>`
+    :`<div class="footnote" style="padding:12px 0">이 달 승인현황에는 임의결제(카드번호 없는 줄)가 없어요.</div>`}</div>`:"";
+  const zTable=doc.zp?`<div class="card"><div class="card-title">② 제로페이에는 있는데 임의결제로 안 찍힌 건 <span class="unit">${zRest.length}건 · ${fmt(sum(zRest))}원</span></div>
+    <div class="footnote">포스에서 다른 결제수단(현금 등)으로 찍었거나, 제로페이 QR로 받고 포스에 안 찍은 건일 수 있어요. 매출 누락이 없는지 확인해 주세요.</div>
+    ${zRest.length?`<div class="table-wrap" style="margin-top:8px"><table class="fr"><thead><tr><th>거래일시</th><th>결제구분</th><th>상태</th><th>금액</th><th>정산일</th><th>거래고유번호</th><th style="min-width:200px">확인 메모</th></tr></thead><tbody>
+      ${zRest.sort((a,b)=>(a.r.day+a.r.t).localeCompare(b.r.day+b.r.t)).map(x=>`<tr class="${memo[x.id]?"fr-memo":""}"><td style="white-space:nowrap">${x.r.day} ${x.r.t.slice(0,5)}</td><td>${esc(x.r.kind)}</td><td>${esc(x.r.st)}</td><td class="n">${fmt(x.r.amt)}</td><td>${esc(x.r.set||"")}</td><td style="color:#888">${esc(x.r.id)}</td>
+        <td><input class="fr-m" value="${esc(memo[x.id]||"")}" placeholder="확인한 내용" onchange="freeMemo('${key}','${x.id}',this.value)"></td></tr>`).join("")}</tbody></table></div>`:""}
+    <details style="margin-top:8px"><summary style="cursor:pointer;font-size:12.5px;color:#555">제로페이 내역 전체 보기 (${doc.zp.length}건 · ${fmt(doc.zp.reduce((s,r)=>s+r.amt,0))}원)</summary>
+      <div class="table-wrap" style="margin-top:6px"><table class="fr"><thead><tr><th>거래일시</th><th>결제구분</th><th>상태</th><th>금액</th><th>임의결제 짝</th></tr></thead><tbody>
+      ${M.Z.slice().sort((a,b)=>(a.r.day+a.r.t).localeCompare(b.r.day+b.r.t)).map(x=>`<tr${x.st==="canc"?' class="fr-canc"':""}><td style="white-space:nowrap">${x.r.day} ${x.r.t.slice(0,5)}</td><td>${esc(x.r.kind)}</td><td>${esc(x.r.st)}</td><td class="n">${fmt(x.r.amt)}</td><td>${x.p&&x.p.st==="split"?'<span class="fr-ok">✓ 나눠 결제</span> → 포스 '+x.p.r.day.slice(5).replace("-","/")+" "+x.p.r.t.slice(0,5)+" "+fmt(x.p.r.amt)+"원":x.p&&x.p.st==="merge"?'<span class="fr-ok">✓</span> 포스 '+x.ps.length+"건 합 "+fmt(x.ps.reduce((s,q)=>s+q.r.amt,0))+"원":x.p?(x.p.st==="ok"?'<span class="fr-ok">✓</span> ':x.p.st==="day"?'<span class="fr-w">⚠</span> ':'<span class="fr-no">❌ 금액 다름</span> ')+x.p.r.day.slice(5).replace("-","/")+" "+x.p.r.t.slice(0,5)+" "+fmt(x.p.r.amt)+"원":(x.st==="canc"?"취소 짝":"—")}</td></tr>`).join("")}</tbody></table></div></details></div>`:"";
+  /* 날짜별 합계 — 임의결제(취소 뺌) vs 제로페이 */
+  let dayTable="";
+  if(doc.pos&&doc.zp){const D={};act.forEach(x=>{(D[x.r.day]=D[x.r.day]||{p:0,z:0,pn:0,zn:0}).p+=x.r.amt;D[x.r.day].pn++;});M.Z.filter(x=>!x.st&&x.r.amt>0).forEach(x=>{(D[x.r.day]=D[x.r.day]||{p:0,z:0,pn:0,zn:0}).z+=x.r.amt;D[x.r.day].zn++;});
+    const ds=Object.keys(D).sort();let tp=0,tz=0;
+    dayTable=`<div class="card"><div class="card-title">날짜별 합계 <span class="unit">임의결제(취소 뺌) ↔ 제로페이</span></div>
+      <div class="table-wrap" style="margin-top:8px"><table class="fr" style="max-width:640px"><thead><tr><th>날짜</th><th>임의결제</th><th>제로페이</th><th>차이</th></tr></thead><tbody>
+      ${ds.map(d=>{const v=D[d];tp+=v.p;tz+=v.z;const diff=v.p-v.z;return `<tr class="${diff?(v.p?"fr-bad":""):""}"><td>${d}</td><td class="n">${v.p?fmt(v.p)+` <span class="unit">${v.pn}건</span>`:""}</td><td class="n">${v.z?fmt(v.z)+` <span class="unit">${v.zn}건</span>`:""}</td><td class="n">${diff?`<span class="${v.p?"fr-no":""}">${fmt(diff)}</span>`:'<span class="fr-ok">✓</span>'}</td></tr>`;}).join("")}
+      <tr style="font-weight:700;background:#F6F8F4"><td>합계</td><td class="n">${fmt(tp)}</td><td class="n">${fmt(tz)}</td><td class="n">${fmt(tp-tz)}</td></tr></tbody></table></div>
+      <div class="footnote">빨간 줄 = 그날 임의결제가 제로페이보다 많거나 달라요(임의로 올린 매출일 수 있음). 제로페이만 있는 날은 포스에 다른 수단으로 찍힌 것일 수 있어요.</div></div>`;}
+  /* 나란히 보기: 왼쪽 오케이포스 임의결제 / 오른쪽 제로페이 — 날짜·시간·금액만, 날짜별로 묶어서 */
+  const view=window.__free.ui.view||"side";const showC=!!window.__free.ui.canc;
+  let gid=0;const gOf=new Map();
+  act.forEach(x=>{if(x.st==="ok"||x.st==="day"||x.st==="amt"){const g=++gid;gOf.set(x,g);gOf.set(x.z,g);}else if(x.st==="split"){if(!gOf.has(x)){const g=++gid;gOf.set(x,g);x.zs.forEach(z=>gOf.set(z,g));}}else if(x.st==="merge"){if(!gOf.has(x)){const g=++gid;x.grp.forEach(q=>gOf.set(q,g));gOf.set(x.z,g);}}});
+  P.forEach(x=>{if(x.st==="canc"&&x.mate&&!gOf.has(x)){const g=++gid;gOf.set(x,g);gOf.set(x.mate,g);}});
+  M.Z.forEach(x=>{if(x.st==="canc"&&x.mate&&!gOf.has(x)){const g=++gid;gOf.set(x,g);gOf.set(x.mate,g);}});
+  const mk=(x,side)=>{if(x.st==="canc")return '<span class="unit">취소</span>';if(side==="p")return isOk(x)?'<span class="fr-ok">✓</span>':x.st==="day"?'<span class="fr-w">⚠</span>':x.st==="cancOnly"?'<span class="fr-w">⚠</span>':'<span class="fr-no">❌</span>';
+    if(x.st==="cancOnly")return '<span class="fr-w">⚠</span>';if(!x.p)return '<span class="unit">—</span>';return x.p.st==="amt"?'<span class="fr-no">❌</span>':x.p.st==="day"?'<span class="fr-w">⚠</span>':'<span class="fr-ok">✓</span>';};
+  const tip=(x,side)=>{const t=side==="p"?(x.st==="split"?"나눠 결제":x.st==="merge"?"포스 여러 건 합":x.st==="day"?"날짜 하루 다름":x.st==="amt"?"금액 다름":x.st==="none"?"제로페이 내역 없음":""):(x.p?(x.p.st==="split"?"나눠 결제":x.p.st==="merge"?"포스 여러 건 합":x.p.st==="amt"?"금액 다름":x.p.st==="day"?"날짜 하루 다름":""):"임의결제에 없음");return t?` title="${t}"`:"";};
+  let sideHtml="";
+  if(view==="side"){
+    const Lp=P.filter(x=>showC||(x.st!=="canc"));const Lz=M.Z.filter(x=>showC||(x.st!=="canc"));
+    const days=[...new Set(Lp.map(x=>x.r.day).concat(Lz.map(x=>x.r.day)))].sort();
+    const byT=(a,b)=>a.r.t.localeCompare(b.r.t);
+    const cell=(x,side)=>{if(!x)return `<td class="fr-e"></td><td class="fr-e"></td><td class="fr-e${side==="p"?" fr-mid":""}"></td>`;const g=gOf.get(x);const c=x.st==="canc"?" fr-cx":"";
+      const at=g?` data-g="${g}" onmouseenter="freeHi(${g},true)" onmouseleave="freeHi(${g},false)"`:"";
+      return `<td class="fr-t${c}"${at}${tip(x,side)}>${x.r.t.slice(0,5)}</td><td class="n${c}"${at}${tip(x,side)}>${fmt(x.r.amt)}</td><td class="fr-k${side==="p"?" fr-mid":""}${c}"${at}${tip(x,side)}>${mk(x,side)}</td>`;};
+    let tP=0,tZ=0;
+    const body=days.map(d=>{const a=Lp.filter(x=>x.r.day===d).sort(byT),b=Lz.filter(x=>x.r.day===d).sort(byT);
+      const sp=a.filter(x=>x.st!=="canc"&&x.st!=="cancOnly").reduce((s,x)=>s+x.r.amt,0),sz=b.filter(x=>x.st!=="canc"&&x.st!=="cancOnly").reduce((s,x)=>s+x.r.amt,0);tP+=sp;tZ+=sz;
+      const diff=sp-sz;const n=Math.max(a.length,b.length);
+      let h=`<tr class="fr-day"><td colspan="3" class="fr-mid">${d.slice(5).replace("-","/")} (${"일월화수목금토"[new Date(d+"T00:00:00").getDay()]}) <span style="float:right">${sp?fmt(sp):""}</span></td><td colspan="3"><span style="float:right">${sz?fmt(sz):""}${sp||sz?` <span class="${diff?(sp?"fr-no":"unit"):"fr-ok"}" style="margin-left:6px">${diff?"차이 "+fmt(diff):"✓"}</span>`:""}</span></td></tr>`;
+      for(let i=0;i<n;i++)h+=`<tr>${cell(a[i],"p")}${cell(b[i],"z")}</tr>`;return h;}).join("");
+    sideHtml=`<div class="card"><div class="card-head"><div class="card-title">나란히 보기 <span class="unit">줄에 마우스를 올리면 짝이 함께 칠해져요</span></div>
+      <label style="font-size:12.5px;cursor:pointer"><input type="checkbox" ${showC?"checked":""} onchange="freeShowCanc(this.checked)"> 취소된 건도 보기</label></div>
+      ${days.length?`<table class="fr fr-side" style="margin-top:8px"><thead><tr><th colspan="3" class="fr-mid" style="background:#EAF1E7">오케이포스 임의결제</th><th colspan="3" style="background:#EAF0FA">제로페이</th></tr>
+        <tr><th>시간</th><th>금액</th><th class="fr-mid"></th><th>시간</th><th>금액</th><th></th></tr></thead><tbody>${body}
+        <tr style="font-weight:700;background:#F6F8F4"><td>합계</td><td class="n">${fmt(tP)}</td><td class="fr-mid"></td><td></td><td class="n">${fmt(tZ)}</td><td class="n" style="white-space:nowrap">${tP-tZ?"차이 "+fmt(tP-tZ):"✓"}</td></tr></tbody></table>`
+      :`<div class="footnote" style="padding:12px 0">표시할 내역이 없어요.</div>`}
+      <div class="footnote" style="margin-top:6px">✓ 짝 있음 &nbsp; ⚠ 날짜 하루 다름, 짝 없는 취소 &nbsp; ❌ 짝 없음 또는 금액 다름 &nbsp; — 제로페이에만 있음 &nbsp;(칸에 마우스를 올리면 이유가 나와요)</div></div>`;
+  }
+  const tabs=`<div class="subtabs" style="margin:0 0 10px"><button class="subtab ${view==="side"?"active":""}" onclick="freeView('side')">나란히 보기</button><button class="subtab ${view!=="side"?"active":""}" onclick="freeView('detail')">대조 결과 자세히</button></div>`;
+  el.innerHTML=up+summary+tabs+(view==="side"?sideHtml:posTable+dayTable+zTable);
+}
+</script>
+
 <script>
 /* === main.js === */
 /* ===== 앱 시작 ===== */
@@ -12670,6 +12909,7 @@ async function showApp() {
     <section id="tab-buy" class="tab-panel hidden"></section>
     <section id="tab-pay" class="tab-panel hidden"></section>
     <section id="tab-expense" class="tab-panel hidden"></section>
+    <section id="tab-free" class="tab-panel hidden"></section>
     <section id="tab-jagum" class="tab-panel hidden"></section>
     <section id="tab-settings" class="tab-panel hidden"></section>`;
   document.getElementById("tab-home").innerHTML = `<div class="loading"><span class="spin"></span><br>데이터를 불러오는 중…</div>`;
@@ -12687,11 +12927,11 @@ function deepLinkTab(){
   try{
     let h=decodeURIComponent((location.hash||"").replace(/^#/,"")).trim();
     if(!h)return null;
-    const KO={"요약":"home","자금일보":"jagum","자금":"jagum","매출비교":"compare","매출현황":"sales","매출":"sales","월별손익":"pnl","손익":"pnl","매입":"buy","급여":"pay","비용정리":"expense","비용":"expense","설정":"settings","매출확정":"confirmapp"};
+    const KO={"요약":"home","자금일보":"jagum","자금":"jagum","매출비교":"compare","매출현황":"sales","매출":"sales","월별손익":"pnl","손익":"pnl","매입":"buy","급여":"pay","비용정리":"expense","비용":"expense","임의결제":"free","설정":"settings","매출확정":"confirmapp"};
     if(KO[h])h=KO[h];
-    const OK=["home","jagum","compare","sales","pnl","buy","pay","expense","settings","confirmapp","monthly","daily","market","bojagi","agency"];
+    const OK=["home","jagum","compare","sales","pnl","buy","pay","expense","free","settings","confirmapp","monthly","daily","market","bojagi","agency"];
     if(OK.indexOf(h)<0)return null;
-    const ADMIN=["buy","pay","expense","settings","confirmapp"];
+    const ADMIN=["buy","pay","expense","free","settings","confirmapp"];
     if(ADMIN.indexOf(h)>=0&&(!S.user||S.user.role!=="admin"))return null;
     return h;
   }catch(e){return null;}
