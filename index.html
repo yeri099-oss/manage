@@ -478,7 +478,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v260</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v262</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -5498,22 +5498,22 @@ function jgHalvesTables(halves,groupEnds){
     const o=opt||{};
     const vals=halves.map(f=>{const p=jgGet(f);return p?fn(p,f):null;});
     if(!o.always&&vals.every(v=>v==null||v===0))return;
-    r2+=`<tr${o.total?` class="total"`:""}><td class="l sticky" style="padding-left:${8+(o.lv||0)*14}px${o.sub?";font-weight:700":""}">${esc(label)}</td>${vals.map((v,i)=>td(v,i,o.color,o.sub||o.total)).join("")}</tr>`;
+    r2+=`<tr${o.total?` class="total"`:""}${o.bg?` style="background:${o.bg}"`:""}><td class="l sticky" style="padding-left:${8+(o.lv||0)*14}px${o.bg?";background:"+o.bg:""}${o.sub?";font-weight:700":""}">${esc(label)}</td>${vals.map((v,i)=>td(v,i,null,o.sub||o.total)).join("")}</tr>`;
   };
   const rank=(list,box)=>list.map((n,i)=>({n,i,m:Math.max(...halves.map(f=>{const p=jgGet(f);return p&&p[box]&&p[box][i]?Number(p[box][i]):0;}))}))
     .filter(x=>x.m>0).sort((x,y2)=>y2.m-x.m);
   line2("기초잔액",(p,f)=>jgBase(f),{sub:1,always:1});
-  rank(JG_INC,"inc").forEach(x=>line2("↑ "+x.n,p=>p.inc?.[x.i],{lv:1,color:"#1c6b2f"}));
-  line2("증가 소계",p=>jgIncSum(p),{sub:1,color:"#1c6b2f",always:1});
-  rank(JG_DEC,"dec").forEach(x=>line2("↓ "+x.n,p=>p.dec?.[x.i],{lv:1,color:"#C00000"}));
-  line2("감소 소계",p=>jgDecSum(p),{sub:1,color:"#C00000",always:1});
+  rank(JG_INC,"inc").forEach(x=>line2(x.n,p=>p.inc?.[x.i],{lv:1}));
+  line2("증가 소계",p=>jgIncSum(p),{sub:1,bg:"#F3F7EE",always:1});
+  rank(JG_DEC,"dec").forEach(x=>line2(x.n,p=>p.dec?.[x.i],{lv:1}));
+  line2("감소 소계",p=>jgDecSum(p),{sub:1,bg:"#F3F7EE",always:1});
   line2("잔액",(p,f)=>jgEnding(f),{total:1,always:1});
   const th1=halves.map((f,i)=>`<th style="${sep(i)}">${jgLabel(f)}</th>`).join("");
   const th2=halves.map((f,i)=>`<th style="${sep(i)}">${jgRange(f)}</th>`).join("");
   return `
   <div class="card"><div class="card-title">1. 자금 현황 <span class="unit">반월 원값 그대로 · 단위: 원 · 값 없는 계정은 숨김 (엑셀엔 전체)</span></div>
     <div class="table-wrap"><table class="rpt" style="width:100%"><thead><tr><th class="l sticky" style="min-width:180px">계정</th>${th1}</tr></thead><tbody>${r1}</tbody></table></div></div>
-  <div class="card"><div class="card-title">2. 증감 내역 <span class="unit">↑증가 초록 · ↓감소 빨강 · 금액 큰 순</span></div>
+  <div class="card"><div class="card-title">2. 증감 내역 <span class="unit">단위: 원 · 증가, 감소 각각 금액 큰 순</span></div>
     <div class="table-wrap"><table class="rpt" style="width:100%"><thead><tr><th class="l sticky" style="min-width:180px">계정</th>${th2}</tr></thead><tbody>${r2}</tbody></table></div></div>`;
 }
 function jgMonthHalves(ym){return jgPeriods().filter(k=>k.slice(0,7)===ym).sort().reverse();} /* 후반 먼저(최신 왼쪽) */
@@ -5887,11 +5887,50 @@ window.bjApplyQty=function(rows,ch,y,mo){
     return {ok:true,applied};
   }catch(e){console.error(e);return {ok:false,error:e.message};}
 };
+async function jgLoanPatchXlsx(zip){
+  const ST={};for(const y in (S.data.jagum||{})){const L=S.data.jagum[y]&&S.data.jagum[y].loans;if(!L)continue;for(const k in L)for(const lab in L[k]){(ST[k]=ST[k]||{})[y+"|"+lab]=!!L[k][lab];}}
+  if(!Object.keys(ST).length)return;
+  const wbx=await zip.file("xl/workbook.xml").async("string"),rels=await zip.file("xl/_rels/workbook.xml.rels").async("string");
+  const ssx=zip.file("xl/sharedStrings.xml")?await zip.file("xl/sharedStrings.xml").async("string"):"";
+  const SS=[];(ssx.match(/<si>[\s\S]*?<\/si>/g)||[]).forEach(si=>SS.push((si.match(/<t[^>]*>([\s\S]*?)<\/t>/g)||[]).map(t=>t.replace(/<[^>]+>/g,"")).join("")));
+  const pathOf=nm=>{const m=new RegExp('<sheet name="'+nm+'"[^>]*r:id="([^"]+)"').exec(wbx);if(!m)return null;const r=new RegExp('Id="'+m[1]+'"[^>]*Target="([^"]+)"').exec(rels)||new RegExp('Target="([^"]+)"[^>]*Id="'+m[1]+'"').exec(rels);return r?"xl/"+r[1].replace(/^\/?xl\//,""):null;};
+  let sty=await zip.file("xl/styles.xml").async("string");
+  const fillsM=/<fills count="(\d+)">([\s\S]*?)<\/fills>/.exec(sty);const xfsM=/<cellXfs count="(\d+)">([\s\S]*?)<\/cellXfs>/.exec(sty);
+  if(!fillsM||!xfsM)return;
+  let nFill=+fillsM[1];const newFills=[];const fillId={};
+  const getFill=rgb=>{if(rgb==null)return 0;if(fillId[rgb]==null){newFills.push('<fill><patternFill patternType="solid"><fgColor rgb="FF'+rgb+'"/><bgColor indexed="64"/></patternFill></fill>');fillId[rgb]=nFill++;}return fillId[rgb];};
+  const xfs=xfsM[2].match(/<xf\b[^>]*?(?:\/>|>[\s\S]*?<\/xf>)/g)||[];let nXf=+xfsM[1];const newXfs=[];const xfC={};
+  const getXf=(s,rgb)=>{const k=s+"|"+rgb;if(xfC[k]!=null)return xfC[k];const base=xfs[+s]||xfs[0];const f=getFill(rgb);let x=base.replace(/fillId="\d+"/,'fillId="'+f+'"');if(!/applyFill=/.test(x))x=x.replace(/<xf\b/,'<xf applyFill="1"');else x=x.replace(/applyFill="\d"/,'applyFill="1"');newXfs.push(x);xfC[k]=nXf++;return xfC[k];};
+  const colN=c=>c.split("").reduce((a,ch)=>a*26+ch.charCodeAt(0)-64,0);
+  for(const [key,nm] of [["nenia","네니아대여금"],["pullo","풀로만대여금"]]){
+    if(!ST[key])continue;const pth=pathOf(nm);if(!pth||!zip.file(pth))continue;
+    let sx=await zip.file(pth).async("string");
+    const cells=[];const re=/<c r="([A-Z]+)(\d+)"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g;let m;
+    while((m=re.exec(sx))){const attrs=m[3]||"";const s=(/\bs="(\d+)"/.exec(attrs)||[])[1]||"0";const t=(/\bt="(\w+)"/.exec(attrs)||[])[1]||"";const v=(/<v>([\s\S]*?)<\/v>/.exec(m[4]||"")||[])[1];
+      let txt=v==null?"":(t==="s"?SS[+v]||"":(t==="inlineStr"?((m[4]||"").replace(/<[^>]+>/g,"")):v));cells.push({c:m[1],r:+m[2],s,txt:String(txt).trim()});}
+    const merges=(sx.match(/<mergeCell ref="[^"]+"\/>/g)||[]).map(x=>{const q=/ref="([A-Z]+)(\d+):([A-Z]+)(\d+)"/.exec(x);return q?{c1:colN(q[1]),r1:+q[2],c2:colN(q[3]),r2:+q[4]}:null;}).filter(Boolean);
+    const at=(c,r)=>cells.find(x=>x.r===r&&colN(x.c)===c);
+    const yearOf=r=>{const mg=merges.find(g=>g.c1===1&&g.r1<=r&&g.r2>=r);const top=mg?at(1,mg.r1):at(1,r);const q=top&&/(\d{4})\s*년/.exec(top.txt);return q?q[1]:null;};
+    const bigo=cells.find(x=>x.txt==="비고");const bigoC=bigo?colN(bigo.c):99;const tot=cells.find(x=>/총\s*잔액/.test(x.txt));const totC=tot?colN(tot.c):-1;
+    const plan={};
+    cells.forEach(x=>{const ci=colN(x.c);let y=null;if(ci<=2&&/^\d{1,2}월\s*\d{1,2}일$/.test(x.txt))y=yearOf(x.r);else if(ci===1){const q=/^(\d{4})\.\s*\d{1,2}\.\s*\d{1,2}$/.exec(x.txt);if(q)y=q[1];}
+      if(!y)return;const st=ST[key][y+"|"+x.txt];if(st==null)return;plan[x.r]={from:ci,on:st};});
+    if(!Object.keys(plan).length)continue;
+    sx=sx.replace(/<c r="([A-Z]+)(\d+)"([^>]*?)(\/>|>)/g,(all,c,r,attrs,end)=>{const p=plan[+r];const ci=colN(c);if(!p||ci<p.from||ci>=bigoC)return all;
+      const s=(/\bs="(\d+)"/.exec(attrs)||[])[1]||"0";const ns=getXf(s,p.on?(ci===totC?"FFE598":"FFF2CB"):null);
+      const a2=/\bs="\d+"/.test(attrs)?attrs.replace(/\bs="\d+"/,'s="'+ns+'"'):attrs+' s="'+ns+'"';return '<c r="'+c+r+'"'+a2+end;});
+    zip.file(pth,sx);
+  }
+  if(newFills.length)sty=sty.replace(fillsM[0],'<fills count="'+nFill+'">'+fillsM[2]+newFills.join("")+'</fills>');
+  if(newXfs.length){const x2=/<cellXfs count="(\d+)">([\s\S]*?)<\/cellXfs>/.exec(sty);sty=sty.replace(x2[0],'<cellXfs count="'+nXf+'">'+x2[2]+newXfs.join("")+'</cellXfs>');}
+  zip.file("xl/styles.xml",sty);
+}
 window.jgExportXlsx=async function(){
   try{
     toast("엑셀 파일 만드는 중… (원본 서식 그대로)");
     if(typeof JSZip==="undefined")throw new Error("파일 모듈이 아직 로드되지 않았어요");
     const zip=await JSZip.loadAsync(tplB64U8(JAGUM_TPL_B64));
+    try{await jgLoanPatchXlsx(zip);}catch(e){console.error("대여금 색 반영 실패",e);}
     const all=[...jgPeriods()].reverse(); /* 최신 왼쪽 */
     const n=all.length;
     const D=all.map(f=>jgGet(f));
