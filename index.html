@@ -478,7 +478,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v263</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v265</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -14147,15 +14147,19 @@ async function mbFile(f){
   const numv4=x=>Number(String(x||'').replace(/,/g,''))||0;
   const MAP={'꽃밥에피다':'insadong','보자기꽃밥':'bojagi','꽃밥마켓':'pangong','꽃밥이야기':'sanae'};
   const agg={insadong:{g:0,v:0},bojagi:{g:0,v:0},pangong:{g:0,v:0},sanae:{g:0,v:0}};
-  const unknown={};
-  let n=0;
+  const unknown={},unkDisc={},svcDisc={};
+  let n=0,taekbae=0;
   for(let i=hi+1;i<aoa.length;i++){
     const r=aoa[i]||[];
     if(!/^\d+$/.test(String(r[0]||'').trim()))continue;
     const nm=String(r[ci['회원명']]||'').trim();
     const key=MAP[nm];
-    const amt=numv4(r[ci['매출액']]),vat=numv4(r[ci['부가세']]);
-    if(!key){if(nm&&(amt||vat))unknown[nm]=(unknown[nm]||0)+amt;continue;}
+    const amt0=numv4(r[ci['매출액']]),vat=numv4(r[ci['부가세']]),disc=ci['할인액']!=null?numv4(r[ci['할인액']]):0;
+    const svc=(key==='pangong'||key==='sanae');
+    const amt=svc?amt0+disc:amt0;
+    if(!key&&/택배/.test(nm)){taekbae+=amt0+disc;continue;}
+    if(!key){if(nm&&(amt0||vat||disc)){unknown[nm]=(unknown[nm]||0)+amt0;unkDisc[nm]=(unkDisc[nm]||0)+disc;}continue;}
+    if(svc)svcDisc[key]=(svcDisc[key]||0)+disc;
     agg[key].g+=amt;agg[key].v+=vat;n++;
   }
   if(!n)throw new Error("거래 줄을 찾지 못했어요.");
@@ -14166,11 +14170,14 @@ async function mbFile(f){
     m.members[k+'Buga']=Math.round(agg[k].v);
     m.members[k+'Gong']=Math.round(agg[k].v)*10;
   }
+  m.members.taekbaeRef=Math.round(taekbae);
   m.uploads=m.uploads||{};m.uploads.members=1;
   touch();renderInput();
   const line=(nm,k)=>"· "+nm+": "+fmt(m.members[k+'Gye'])+"원 (부가세 "+fmt(m.members[k+'Buga'])+")";
   alert("회원구매현황 반영 완료\n\n"+line("인사동(꽃밥에피다)","insadong")+"\n"+line("보자기(보자기꽃밥)","bojagi")+"\n"+line("판공(꽃밥마켓)","pangong")+"\n"+line("사내(꽃밥이야기)","sanae")
-    +(Object.keys(unknown).length?"\n\n⚠ 짝을 모르는 회원: "+Object.entries(unknown).map(([k2,v2])=>k2+" "+fmt(v2)+"원").join(', ')+" — 직접 배정해 주세요.":"")
+    +((svcDisc.pangong||svcDisc.sanae)?"\n\nℹ 판공·사내는 포스에서 서비스(매출액 0)로 찍혀서 할인액을 더해 가져왔어요 (판공 할인액 "+fmt(svcDisc.pangong||0)+"원, 사내 할인액 "+fmt(svcDisc.sanae||0)+"원).":"")
+    +(taekbae?"\n\n· 참고 — 꽃밥택배(택배 출고): "+fmt(Math.round(taekbae))+"원 — 재고 차감용이라 매출에는 넣지 않았어요.":"")
+    +(Object.keys(unknown).length?"\n\n⚠ 짝을 모르는 회원: "+Object.entries(unknown).map(([k2,v2])=>k2+" 매출액 "+fmt(v2)+"원"+(unkDisc[k2]?" (할인액 "+fmt(unkDisc[k2])+"원)":"")).join(', ')+" — 어디에도 안 들어갔어요. 필요하면 직접 배정해 주세요.":"")
     +"\n\n면세는 계−부가세×11로 자동 계산돼요. 사내는 보고 반영 시 마켓매출 '사내'에 합산돼요.");
 }
 async function uplRouterPick(inp){
@@ -14819,7 +14826,8 @@ function renderInput(){
       +`${inp('members.sanaeGong')}${inp('members.sanaeBuga')}</tr>
     <tr><td class="lb"></td><td class="au" colspan="5" style="text-align:left;color:var(--sub);font-size:12px">판공+사내 합계는 보고 반영 시 매출현황 마켓매출 비고칸에 자동으로 적혀요.</td></tr>
   </table>
-  <div class="hint" style="background:#f0f7ff;border:1px dashed #93c5fd;border-radius:8px;padding:8px 10px">📂 <b>회원구매현황 엑셀로 자동 입력</b> — <input type="file" accept=".xlsx" onchange="mbPick(this)" style="font-size:12px"> 회원분석(일자별회원구매내역) 엑셀을 넣으면 인사동·보자기·판공·사내가 자동으로 채워져요 (반품 차감, 면세 자동).</div>
+  <div class="hint" style="background:#f0f7ff;border:1px dashed #93c5fd;border-radius:8px;padding:8px 10px">📂 <b>회원구매현황 엑셀로 자동 입력</b> — <input type="file" accept=".xlsx" onchange="mbPick(this)" style="font-size:12px"> 회원분석(일자별회원구매내역) 엑셀을 넣으면 인사동·보자기·판공·사내가 자동으로 채워져요 (반품 차감, 면세 자동). 판공·사내는 포스에서 서비스로 찍혀서 매출액+할인액으로 가져와요.</div>
+  ${m.members.taekbaeRef?`<div class="hint" style="margin-top:6px">참고 — 꽃밥택배(택배 출고) <b>${fmt(m.members.taekbaeRef)}원</b> : 스마트스토어, 카페24, 아이디어스, 마켓 택배 등으로 보낸 물건을 재고에서 뺀 금액(포스 판매가)이에요. 매출은 각 온라인 채널 쪽에서 잡히니 여기 합계에는 넣지 않아요.</div>`:""}
   <div class="hint">인사동+보자기 합계가 매출확정의 '꽃밥(세금계산서)'로 자동 반영됩니다.</div></div>`;
   // ③ 보자기포스
   h+=`<div class="card"><h2>③ 보자기꽃밥 — 보자기포스</h2>
