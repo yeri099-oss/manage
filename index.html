@@ -478,7 +478,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v274</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v276</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -3120,6 +3120,8 @@ function renderMarket() {
     </div>
     <div class="footnote">* 피다+보자기: 인사동·보자기 매입 &nbsp;·&nbsp; 순매출 = 총매출 − 피다+보자기, 일평균 = 순매출 ÷ 마켓 영업일수(일평균 탭에서 입력) &nbsp;·&nbsp; 고객수는 앱 화면에만 표시(엑셀 양식 미포함)</div>
     <div class="chart-box" style="margin-top:8px"><canvas id="ch-market-stack"></canvas></div>
+    <div style="font-size:13px;font-weight:700;margin:16px 2px 0">${year}년 월별 매출 추이 <span class="unit">총매출, 순매출</span></div>
+    <div class="chart-box"><canvas id="ch-market-line"></canvas></div>
   </div>`;
   const meatHtml = `
   <div class="card">
@@ -3154,6 +3156,20 @@ function renderMarket() {
         footer: (items) => "총매출: " + fmt(items.reduce((a, i) => a + i.parsed.y, 0)) + "원",
       } } },
       scales: { y: { ...moneyScaleY, stacked: true }, x: { ...catScaleX, stacked: true } },
+    },
+  });
+  makeChart("ch-market-line", {
+    type: "line",
+    data: {
+      labels: MONTH_LABELS,
+      datasets: [
+        { label: "총매출", data: MONTHS.map((m) => { const c = marketCalc(year, m); return c.net != null ? (c.total || 0) : null; }), borderColor: "#BF8F00", backgroundColor: "#BF8F00" },
+        { label: "순매출", data: MONTHS.map((m) => marketCalc(year, m).net ?? null), borderColor: "#ED7D31", backgroundColor: "#ED7D31" },
+      ].map((d) => ({ ...d, borderWidth: 2.5, pointRadius: 3.5 })),
+    },
+    options: {
+      maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
+      plugins: { tooltip: moneyTip }, scales: { y: moneyScaleY, x: catScaleX },
     },
   });
   makeChart("ch-market-meat", {
@@ -3763,6 +3779,8 @@ window.epidaFilesPick=async function(inp){
 };
 function setEpidaYear(y){S.ui.epidaYear=String(y);renderEpida();}
 function setEpidaSub(k){S.ui.epidaSub=k;renderEpida();}
+function setEpidaMonth(m){S.ui.epidaMonth=String(m);renderEpida();}
+function setEpidaBarAll(v){S.ui.epidaBarAll=!!v;renderEpida();}
 window.epidaMoveDrink=async function(selId,toDrink){
   const sel=document.getElementById(selId);
   const n=sel&&sel.value;
@@ -3938,7 +3956,10 @@ function renderEpida(){
   const D=S.data.epidaDetail||{};
   const yrs=Object.keys(D).filter(y=>Object.keys(D[y]?.months||{}).length).sort();
   const isAd=S.user?.role==="admin";
-  const upBox=isAd?`<div class="card"><div class="card-title">📂 포스 매출상세 파일 넣기 <span class="unit">.xls · 여러 달 한꺼번에 가능 · 같은 달은 새 파일로 덮어써요</span></div>
+  const chkY=yrs.includes(S.ui.epidaYear)?S.ui.epidaYear:(yrs[yrs.length-1]||String(new Date().getFullYear()));
+  const chkM=D[chkY]?.months||{};
+  const chkTbl=`<div class="table-wrap" style="margin:4px 0 8px"><table class="rpt" style="font-size:12px"><thead><tr><th class="l" style="width:86px">${chkY}년</th>`+MONTHS.map(m2=>`<th style="text-align:center">${m2}월</th>`).join("")+`</tr></thead><tbody><tr><td class="l">포스</td>`+MONTHS.map(m2=>`<td style="text-align:center">${chkM[m2]?'<span style="color:#15803d;font-weight:700">✓</span>':'<span style="color:#d1d5db">·</span>'}</td>`).join("")+`</tr></tbody></table></div>`;
+  const upBox=isAd?`<div class="card"><div class="card-title">📂 포스 매출상세 파일 넣기 <span class="unit">.xls · 여러 달 한꺼번에 가능 · 같은 달은 새 파일로 덮어써요 · ✓ = 그 달 파일이 들어있음</span></div>${chkTbl}
     <div style="padding:6px 2px"><input type="file" multiple accept=".xls,.xlsx,.html" onchange="epidaFilesPick(this)"></div>
     <div class="footnote">포스에서 내려받은 '일일매출상세내역' 파일(꽃밥에피다매출상세_YYMM.xls)을 그대로 선택하면 달을 자동으로 알아채서 집계해요.</div></div>`:"";
   if(!yrs.length){el.innerHTML=upBox+`<div class="card"><div class="hint" style="padding:14px">아직 피다 매출상세 데이터가 없어요.${isAd?" 위에서 파일을 올려주세요.":""}</div></div>`;return;}
@@ -4014,11 +4035,39 @@ function renderEpida(){
     <button class="subtab ${sub==="menu"?"active":""}" onclick="setEpidaSub('menu')">메뉴별</button>
     <button class="subtab ${sub==="drinks"?"active":""}" onclick="setEpidaSub('drinks')">주류별</button>
   </div>`;
+  const curKeys=sub==="menu"?menuKeys:sub==="drinks"?drinkKeys:[];
+  const epM=ms.includes(String(S.ui.epidaMonth))?String(S.ui.epidaMonth):ms[ms.length-1];
+  let chartHtml="",barRows=[];
+  if(sub!=="sales"&&curKeys.length&&epM){
+    const its=Ms[epM].items||{};
+    const all=curKeys.map(k=>({n:allKeys[k].n,q:(its[k]||{}).q||0})).filter(o=>o.q>0).sort((a,b)=>b.q-a.q);
+    const showAll=!!S.ui.epidaBarAll;
+    barRows=showAll?all:all.slice(0,20);
+    const word=sub==="menu"?"메뉴별":"주류·음료별";
+    const mSel=`<select class="ctl" onchange="setEpidaMonth(this.value)">${ms.map(m=>`<option value="${m}" ${m===epM?"selected":""}>${m}월</option>`).join("")}</select>`;
+    const tog=all.length>20?`<button class="btn btn-sm" onclick="setEpidaBarAll(${showAll?0:1})">${showAll?"상위 20개만 보기":`전체 ${all.length}개 보기`}</button>`:"";
+    chartHtml=`<div class="card"><div class="card-head"><div class="card-title">${year}년 ${epM}월 ${word} 판매량 <span class="unit">${all.length>20&&!showAll?`판매량 많은 순 상위 20개 (전체 ${all.length}개)`:"판매량 많은 순"} · 단위: 개</span></div><div class="card-actions">${yearSel} ${mSel} ${tog}</div></div>
+      ${barRows.length?`<div class="chart-box" style="height:${Math.max(260,barRows.length*22+50)}px"><canvas id="ch-ep-bar"></canvas></div>`:`<div class="hint" style="padding:14px">${epM}월에는 판매 수량이 없어요.</div>`}</div>
+    <div class="card"><div class="card-title">${year}년 월별 ${sub==="menu"?"메뉴":"주류·음료"} 총 판매수량 <span class="unit">단위: 개</span></div>
+      <div class="chart-box"><canvas id="ch-ep-trend"></canvas></div></div>`;
+  }
   let body="";
   if(sub==="sales")body=upBox+t1;
-  else if(sub==="menu")body=pivot(menuKeys,"메뉴별 판매수량","월별 수량 · 판매량 많은 순")+moveBox;
-  else body=pivot(drinkKeys,"주류·음료 판매수량","자동 분류 + 직접 옮긴 품목")+moveBox;
+  else if(sub==="menu")body=chartHtml+pivot(menuKeys,"메뉴별 판매수량","월별 수량 · 판매량 많은 순")+moveBox;
+  else body=chartHtml+pivot(drinkKeys,"주류·음료 판매수량","자동 분류 + 직접 옮긴 품목")+moveBox;
   el.innerHTML=subtabs+body;
+  if(chartHtml){
+    if(barRows.length)makeChart("ch-ep-bar",{type:"bar",
+      data:{labels:barRows.map(o=>o.n),datasets:[{label:"판매수량",data:barRows.map(o=>Math.round(o.q)),backgroundColor:"#E2EFDA",borderColor:"#70AD47",borderRadius:4,maxBarThickness:20}]},
+      options:{indexAxis:"y",maintainAspectRatio:false,
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:(c)=>fmt(c.parsed.x)+"개"}}},
+        scales:{x:{grid:{color:"#e1e0d9"},border:{display:false}},y:{grid:{display:false},border:{color:"#c3c2b7"},ticks:{autoSkip:false,font:{size:11}}}}}});
+    makeChart("ch-ep-trend",{type:"line",
+      data:{labels:MONTH_LABELS,datasets:[{label:"총 판매수량",data:MONTHS.map(m=>Ms[m]?(Math.round(curKeys.reduce((a2,k)=>a2+(((Ms[m].items||{})[k]||{}).q||0),0))||null):null),borderColor:"#70AD47",backgroundColor:"#70AD47",borderWidth:2.5,pointRadius:3.5}]},
+      options:{maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:(c)=>fmt(c.parsed.y)+"개"}}},
+        scales:{y:{grid:{color:"#e1e0d9"},border:{display:false}},x:catScaleX}}});
+  }
 }
 function renderAgency() {
   const el = document.getElementById("tab-agency");
