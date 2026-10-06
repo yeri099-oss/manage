@@ -478,7 +478,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v265</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v267</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -3193,22 +3193,42 @@ function bjPosGuess(name){
   return best;
 }
 window.bjPosPick=async function(inp){
-  const f=inp.files&&inp.files[0];inp.value="";
-  if(!f)return;
+  const fl=[...(inp.files||[])];inp.value="";
+  if(!fl.length)return;
   try{
     toast("파일 읽는 중…");
-    await loadScript(XLS_URL);
-    const wb=XLSX.read(await f.arrayBuffer(),{type:"array"});
-    const ws=wb.Sheets[wb.SheetNames[0]];
-    const aoa=XLSX.utils.sheet_to_json(ws,{header:1,defval:""});
+    const parts=[];
+    for(const f of fl){const st=await bjPosOne(f);st.file=f.name;parts.push(st);}
+    if(new Set(parts.map(p=>p.src)).size>1)throw new Error("종류가 다른 파일이 섞여 있어요 — 포스, 키오스크, 쿠팡이츠는 따로 올려주세요.");
+    const seen={},use=[],dup=[];
+    parts.forEach(p=>{if(p.range&&seen[p.range]){dup.push(p.range);return;}if(p.range)seen[p.range]=1;use.push(p);});
+    const agg={},order=[];let money=0,gross=0;
+    use.forEach(p=>{money+=p.money||0;gross+=p.moneyGross||0;p.rows.forEach(r=>{if(!agg[r.code]){agg[r.code]={code:r.code,name:r.name,qty:0};order.push(r.code);}agg[r.code].qty+=r.qty;});});
+    const rows=order.map(c=>agg[c]).filter(r=>r.qty);
+    if(!rows.length)throw new Error("판매 내역을 찾지 못했어요.");
+    const yms=[...new Set(use.map(p=>p.ym?p.ym.y+"년 "+p.ym.mo+"월":"").filter(Boolean))];
+    window.__bjPos={rows,ch:use[0].ch,ym:use[0].ym,src:use[0].src,money:Math.round(money),moneyGross:Math.round(gross),files:use.length,ranges:use.map(p=>p.range).filter(Boolean).sort(),multiYm:yms.length>1?yms:null};
+    renderBojagi();
+    if(dup.length)toast("같은 기간 파일이 겹쳐서 한 번만 넣었어요 ("+dup.join(", ")+")",true);
+    else if(yms.length>1)toast("서로 다른 달 파일이 섞여 있어요: "+yms.join(", "),true);
+  }catch(e){console.error(e);toast(e.message||"파일을 읽지 못했어요",true);}
+};
+async function bjPosOne(f){
+  {
+    const buf=await f.arrayBuffer();let aoa=null;
+    try{await loadScript(XLS_URL);const wb=XLSX.read(buf,{type:"array"});aoa=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:""});}
+    catch(e0){const hd=new Uint8Array(buf.slice(0,4));if(hd[0]===0x50&&hd[1]===0x4B&&typeof pumParse==="function"&&typeof debitAoa==="function"){const wb0=await pumParse(buf);aoa=debitAoa(wb0.sheets[0]);}else throw e0;}
+    let range="";
     let hi=-1,ci={},kind=null;
     for(let i=0;i<Math.min(aoa.length,10);i++){
       const r=aoa[i].map(x=>String(x).trim());
       if(r.includes("상세내역")&&r.includes("주문번호")){hi=i;r.forEach((v,j)=>ci[v]=j);kind="coupang";break;}
-      if(r.includes("상품명")&&r.includes("판매수량")){hi=i;r.forEach((v,j)=>ci[v]=j);kind=r.includes("상품코드")?"pos":"kiosk";break;}
+      {const dm0=r.join(" ").match(/조회일자\s*:\s*(\d{4}-\d{2}-\d{2})\s*~\s*(\d{4}-\d{2}-\d{2})/);if(dm0)range=dm0[1]+"~"+dm0[2];}
+      if(r.includes("상품명")&&(r.includes("판매수량")||(r.includes("수량")&&r.includes("상품코드")))){hi=i;r.forEach((v,j)=>{if(ci[v]==null)ci[v]=j;});kind=r.includes("상품코드")?"pos":"kiosk";break;}
     }
     if(!kind)throw new Error("아는 형식이 아니에요 — 포스 상품매출내역, 키오스크 매출분석(상품별), 쿠팡이츠 주문내역 엑셀을 올려주세요.");
     const rows=[];let ymGuess=null;let money=0;let moneyGross=0;
+    if(range){const q=range.match(/^(\d{4})-(\d{2})/);if(q)ymGuess={y:q[1],mo:String(Number(q[2]))};}
     if(kind==="coupang"){
       const agg={};
       const jTot=ci["주문금액"]!=null?ci["주문금액"]:ci["총금액"];
@@ -3241,7 +3261,7 @@ window.bjPosPick=async function(inp){
         if(first==="합계")break;
         const code=kind==="pos"?String(r[ci["상품코드"]]||"").trim():"";
         const name=String(r[ci["상품명"]]||"").trim();
-        const qty=Number(String(r[ci["판매수량"]]||"").replace(/[,\s]/g,""))||0;
+        const qty=Number(String(r[ci["판매수량"]!=null?ci["판매수량"]:ci["수량"]]||"").replace(/[,\s]/g,""))||0;
         if(!name||!qty)continue;
         const mc=ci["판매금액(원)"]!=null?ci["판매금액(원)"]:ci["실매출액"];
         if(mc!=null){const v=Number(String(r[mc]).replace(/[,\s]/g,""));if(!isNaN(v))money+=v;}
@@ -3251,10 +3271,9 @@ window.bjPosPick=async function(inp){
       }
     }
     if(!rows.length)throw new Error("판매 내역을 찾지 못했어요.");
-    window.__bjPos={rows,ch:kind==="coupang"?"d":kind==="kiosk"?"k":"p",ym:ymGuess,src:kind,money:Math.round(money),moneyGross:Math.round(moneyGross)};
-    renderBojagi();
-  }catch(e){console.error(e);toast(e.message||"파일을 읽지 못했어요",true);}
-};
+    return {rows,ch:kind==="coupang"?"d":kind==="kiosk"?"k":"p",ym:ymGuess,src:kind,money:Math.round(money),moneyGross:Math.round(moneyGross),range};
+  }
+}
 window.bjPosCancel=function(){window.__bjPos=null;renderBojagi();};
 window.bjPosApply=async function(){
   try{
@@ -3334,8 +3353,8 @@ function bjPosCard(year,month){
     return h2+`</tbody></table></div>`;
   })();
   const head=`<div class="card"><div class="card-title">📂 엑셀 상품매출내역 넣기 <span class="unit">마켓포스에서 받은 보자기 판매수량 엑셀 — 상품코드로 메뉴를 기억해요 · ✓ = 그 달에 채널 수량이 들어있음</span></div>`+chChk;
-  if(!st)return head+`<div style="padding:6px 2px"><input type="file" accept=".xlsx,.xls" onchange="bjPosPick(this)"></div>
-    <div class="footnote">포스 상품매출내역 · 키오스크 매출분석(상품별) · 쿠팡이츠 주문내역 — 세 파일 다 알아서 인식해요. 쿠팡이츠는 <b>매월 5일 이후</b>에 전월 자료를 내려받을 수 있어요.</div></div>`;
+  if(!st)return head+`<div style="padding:6px 2px"><input type="file" accept=".xlsx,.xls" multiple onchange="bjPosPick(this)"></div>
+    <div class="footnote">주 단위로 나눠 받은 파일은 한꺼번에 골라 올리면 합쳐줘요 · 포스 상품매출내역(결제수단별 포함) · 키오스크 매출분석(상품별) · 쿠팡이츠 주문내역 — 세 파일 다 알아서 인식해요. 쿠팡이츠는 <b>매월 5일 이후</b>에 전월 자료를 내려받을 수 있어요.</div></div>`;
   const map=S.data.bojagiPosMap||{};
   const now=new Date();
   const dupN={};(S.data.menuItems||[]).forEach(it=>{dupN[it.name]=(dupN[it.name]||0)+1;});
@@ -3358,7 +3377,7 @@ function bjPosCard(year,month){
   return head+`
     <template id="bjPmTpl"><select id="bjPm__I__" class="ctl" style="font-size:12px">${opts}</select></template>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:4px 2px;margin-bottom:6px">
-      <span style="font-size:12px;font-weight:700;color:var(--brand)">${{pos:"포스 파일",kiosk:"키오스크 파일",coupang:"쿠팡이츠 파일"}[st.src]||""} 인식됨</span>
+      <span style="font-size:12px;font-weight:700;color:var(--brand)">${{pos:"포스 파일",kiosk:"키오스크 파일",coupang:"쿠팡이츠 파일"}[st.src]||""} 인식됨${st.files>1?` · ${st.files}개 파일 합침`:""}</span>${st.ranges&&st.ranges.length?`<span class="unit">${st.ranges.join(" / ")}</span>`:""}
       <select id="bjPosY" class="ctl">${[now.getFullYear()+1,now.getFullYear(),now.getFullYear()-1].map(yy=>`<option ${yy===Number(st.ym?st.ym.y:year)?"selected":""}>${yy}</option>`).join("")}</select>년
       <select id="bjPosM" class="ctl">${MONTHS.map(m2=>`<option value="${m2}" ${String(m2)===String(st.ym?st.ym.mo:month)?"selected":""}>${m2}</option>`).join("")}</select>월의
       <select id="bjPosCh" class="ctl">${[["p","포스"],["k","키오스크"],["d","배달(쿠팡이츠)"]].map(([v,n])=>`<option value="${v}" ${v===st.ch?"selected":""}>${n}</option>`).join("")}</select> 수량으로 반영
@@ -13545,7 +13564,7 @@ function setPath(o,p,v){const ks=p.split('.');let t=o;for(let i=0;i<ks.length-1;
 function emptyMonth(){return{
   v:2,
   market:{total:0,myeon:0,gong:0,buga:0,cashMyeon:0,cashGong:0,cashBuga:0,cardMyeon:0,cardGong:0,cardBuga:0,zeropay:0,point:0,credit:0,jeongyukMyeon:0,jeongyukGwase:0,pointAccum:0,guest:0,eunuri:0},
-  members:{insadongGye:0,insadongGong:0,insadongBuga:0,bojagiGye:0,bojagiGong:0,bojagiBuga:0,siksaGye:0,siksaGong:0,siksaBuga:0,pangongGye:0,pangongGong:0,pangongBuga:0,sanaeGye:0,sanaeGong:0,sanaeBuga:0},
+  members:{insadongGye:0,insadongGong:0,insadongBuga:0,bojagiGye:0,bojagiGong:0,bojagiBuga:0,siksaGye:0,siksaGong:0,siksaBuga:0,pangongGye:0,pangongGong:0,pangongBuga:0,sanaeGye:0,sanaeGong:0,sanaeBuga:0,taekbaeRef:0},
   bpos:{kioskGye:0,kioskGong:0,kioskBuga:0,marketpos:0,coupangGye:0,coupangGong:0,coupangBuga:0,coupangTemp:false,zeropay:0,liquor:0},
   corner:{cardTotal:0,cashTotal:0,cardBojagi:0},
   uploads:{},
@@ -14824,10 +14843,10 @@ function renderInput(){
       +autoCell('mb_sa_m',mm=>mm.members.sanaeGye-(mm.members.sanaeGong+mm.members.sanaeBuga))
       +autoCell('mb_sa_g',mm=>mm.members.sanaeGong+mm.members.sanaeBuga)
       +`${inp('members.sanaeGong')}${inp('members.sanaeBuga')}</tr>
+    <tr><td class="lb">택배 (꽃밥택배)</td>${inp('members.taekbaeRef')}<td class="au" colspan="4" style="text-align:left;color:var(--sub);font-size:12px">택배 출고 재고 차감용 (온라인몰, 마켓 택배 등) — 매출에 더하지 않아요</td></tr>
     <tr><td class="lb"></td><td class="au" colspan="5" style="text-align:left;color:var(--sub);font-size:12px">판공+사내 합계는 보고 반영 시 매출현황 마켓매출 비고칸에 자동으로 적혀요.</td></tr>
   </table>
   <div class="hint" style="background:#f0f7ff;border:1px dashed #93c5fd;border-radius:8px;padding:8px 10px">📂 <b>회원구매현황 엑셀로 자동 입력</b> — <input type="file" accept=".xlsx" onchange="mbPick(this)" style="font-size:12px"> 회원분석(일자별회원구매내역) 엑셀을 넣으면 인사동·보자기·판공·사내가 자동으로 채워져요 (반품 차감, 면세 자동). 판공·사내는 포스에서 서비스로 찍혀서 매출액+할인액으로 가져와요.</div>
-  ${m.members.taekbaeRef?`<div class="hint" style="margin-top:6px">참고 — 꽃밥택배(택배 출고) <b>${fmt(m.members.taekbaeRef)}원</b> : 스마트스토어, 카페24, 아이디어스, 마켓 택배 등으로 보낸 물건을 재고에서 뺀 금액(포스 판매가)이에요. 매출은 각 온라인 채널 쪽에서 잡히니 여기 합계에는 넣지 않아요.</div>`:""}
   <div class="hint">인사동+보자기 합계가 매출확정의 '꽃밥(세금계산서)'로 자동 반영됩니다.</div></div>`;
   // ③ 보자기포스
   h+=`<div class="card"><h2>③ 보자기꽃밥 — 보자기포스</h2>
