@@ -478,7 +478,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v273</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v274</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -12837,7 +12837,7 @@ window.pnlLedgerOpen=function(key,encName,f){
   const isAd=S.user&&S.user.role==="admin";
   if(!isAd&&!plHas(key,name)){toast("이 계정은 아직 내역이 없어요");return;}
   window.__pl={key,name,f:(f||S.ui.pnlLedgerF||"all"),paste:false};
-  let o=document.getElementById("plOv");if(!o){o=document.createElement("div");o.id="plOv";document.body.appendChild(o);o.addEventListener("click",e=>{if(e.target===o)plClose();});}
+  let o=document.getElementById("plOv");if(!o){o=document.createElement("div");o.id="plOv";document.body.appendChild(o);}
   o.classList.add("on");document.body.style.overflow="hidden";o.scrollTop=0;plRender();
 };
 document.addEventListener("keydown",e=>{if(e.key==="Escape"){const o=document.getElementById("plOv");if(o&&o.classList.contains("on"))plClose();}});
@@ -13426,9 +13426,26 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   // 모달
   document.getElementById("modal-close").addEventListener("click", closeModal);
-  document.getElementById("modal-backdrop").addEventListener("click", (e) => {
-    if (e.target === e.currentTarget) closeModal();
-  });
+  (function () {
+    let locked = false;
+    const isOpen = () => {
+      const a = document.getElementById("modal-backdrop"), r = document.getElementById("report-overlay"), pl = document.getElementById("plOv");
+      return !!((a && !a.classList.contains("hidden")) || (r && !r.classList.contains("hidden")) || (pl && pl.classList.contains("on")) || document.getElementById("buyQuickOv"));
+    };
+    const sync = () => {
+      const o = isOpen();
+      if (o === locked) return;
+      locked = o;
+      const de = document.documentElement, b = document.body;
+      if (o) { const sw = window.innerWidth - de.clientWidth; de.style.overflow = "hidden"; if (sw > 0) b.style.paddingRight = sw + "px"; }
+      else { de.style.overflow = ""; b.style.paddingRight = ""; }
+    };
+    const seen = new WeakSet();
+    const watch = (el) => { if (!el || seen.has(el)) return; seen.add(el); new MutationObserver(sync).observe(el, { attributes: true, attributeFilter: ["class"] }); };
+    const scan = () => { ["modal-backdrop", "report-overlay", "plOv"].forEach((id) => watch(document.getElementById(id))); sync(); };
+    new MutationObserver(scan).observe(document.body, { childList: true });
+    scan();
+  })();
   // 초기 설정이 아직 안 된 서버면 안내 (초기설정은 별도 로컬 파일로 실행)
   if (!IS_DEMO) {
     fsCol("config").doc("setupDone").get()
