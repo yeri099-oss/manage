@@ -478,7 +478,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v268</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v269</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -1974,7 +1974,9 @@ async function exportSalesAll(){
       MONTHS.forEach((m,i)=>{
         const r=5+i,c=monthlyCalc(yearM,m);
         sh.setN("B"+r,c.insadong);sh.setN("C"+r,c.market);sh.setN("D"+r,c.online);sh.setN("E"+r,c.bojagi);
-        if(c.note)sh.setT("H"+r,c.note);
+        const evT=c.ev?(Number(c.ev.insadong)||0)+(Number(c.ev.market)||0)+(Number(c.ev.bojagi)||0):0;
+        const nt=[c.note,evT?(c.ev.n||"행사")+" "+fmt(evT)+" 포함":""].filter(Boolean).join(" / ");
+        if(nt)sh.setT("H"+r,nt);
       });
       await sh.save();
     }
@@ -2332,6 +2334,16 @@ async function expMonthly() {
   for (const m of MONTHS) {
     const c = monthlyCalc(year, m);
     if (c.has) { sum.i += c.insadong || 0; sum.m += c.market || 0; sum.o += c.online || 0; sum.b += c.bojagi || 0; sum.bk += c.bukchon || 0; sum.t += c.total || 0; }
+    const ee = c.ev || {}; const ei = Number(ee.insadong) || 0, em = Number(ee.market) || 0, eb = Number(ee.bojagi) || 0, et = ei + em + eb;
+    if (c.has && et > 0) {
+      const nv = (v, e) => v == null ? "" : v - e;
+      rows.push([xh(m + "월"), xc(nv(c.insadong, ei), { fmt: "n", fill: XF.G }), xc(nv(c.market, em), { fmt: "n", fill: XF.Y }),
+        xc(c.online, { fmt: "n" }), xc(nv(c.bojagi, eb), { fmt: "n", fill: XF.P }), xc(c.bukchon - em - eb, { fmt: "n" }),
+        xc(c.total - et, { fmt: "n", bold: true, fill: XF.B }), xc(c.note || "", { align: "left" })]);
+      rows.push([xh(ee.n || "행사"), xc(ei || "", { fmt: "n", fill: XF.G }), xc(em || "", { fmt: "n", fill: XF.Y }),
+        xc("", { fmt: "n" }), xc(eb || "", { fmt: "n", fill: XF.P }), xc(em + eb || "", { fmt: "n" }),
+        xc(et, { fmt: "n", bold: true, fill: XF.B }), xc(m + "월 합계 " + fmt(c.total), { align: "left" })]);
+    } else
     rows.push([xh(m + "월"), xc(c.insadong, { fmt: "n", fill: XF.G }), xc(c.market, { fmt: "n", fill: XF.Y }),
       xc(c.online, { fmt: "n" }), xc(c.bojagi, { fmt: "n", fill: XF.P }), xc(c.has ? c.bukchon : "", { fmt: "n" }),
       xc(c.has ? c.total : "", { fmt: "n", bold: true, fill: XF.B }), xc(c.note || "", { align: "left" })]);
@@ -2819,14 +2831,29 @@ function renderMonthly() {
   S.ui.monthlyYear = year;
   let rows = "", sum = { insadong: 0, market: 0, online: 0, bojagi: 0, bukchon: 0, total: 0 };
   const evSub = (c, k) => c.ev && c.ev[k] ? `<div style="font-size:10.5px;color:#8a5a00;font-weight:500;white-space:nowrap;line-height:1.3">그중 ${esc(c.ev.n || "행사")} ${fmt(c.ev[k])}</div>` : "";
+  const evOf = (c) => { const e = c.ev || {}; const i = Number(e.insadong) || 0, mk = Number(e.market) || 0, b = Number(e.bojagi) || 0; return { i, mk, b, t: i + mk + b, n: e.n || "행사" }; };
   let anyEv = false;
   for (const m of MONTHS) {
     const c = monthlyCalc(year, m);
-    if (c.ev) anyEv = true;
+    if (evOf(c).t > 0) anyEv = true;
     if (c.has) {
       ["insadong", "market", "online", "bojagi", "bukchon", "total"].forEach((k) => (sum[k] += c[k] || 0));
     }
     const ds = (k) => `data-t="mo" data-y="${year}" data-m="${m}" data-k="${k}"`;
+    const E = evOf(c);
+    if (c.has && E.t > 0 && !S.ui.editMode) {
+      const net = (v, e) => v == null ? "" : fmt(v - e);
+      rows += `<tr>
+      <td class="lab sticky">${m}월</td>
+      <td class="cg">${net(c.insadong, E.i)}</td><td class="cy">${net(c.market, E.mk)}</td><td>${edNum(c.online, ds("online"))}</td><td class="cp">${net(c.bojagi, E.b)}</td>
+      <td>${fmt(c.bukchon - E.mk - E.b)}</td><td class="cb"><b>${fmt(c.total - E.t)}</b></td>
+      <td class="note">${edText(c.note, ds("note"))}</td></tr>
+      <tr>
+      <td class="lab sticky" style="font-size:11px;color:#8a5a00;white-space:nowrap">${esc(E.n)}</td>
+      <td class="cg">${E.i ? fmt(E.i) : ""}</td><td class="cy">${E.mk ? fmt(E.mk) : ""}</td><td></td><td class="cp">${E.b ? fmt(E.b) : ""}</td>
+      <td>${E.mk + E.b ? fmt(E.mk + E.b) : ""}</td><td class="cb"><b>${fmt(E.t)}</b></td>
+      <td class="note" style="color:#999;font-size:11px;white-space:nowrap">${m}월 합계 ${fmt(c.total)}</td></tr>`;
+    } else
     rows += `<tr>
       <td class="lab sticky">${m}월</td>
       <td class="cg">${edNum(c.insadong, ds("insadong"))}${evSub(c,"insadong")}</td><td class="cy">${edNum(c.market, ds("market"))}${evSub(c,"market")}</td><td>${edNum(c.online, ds("online"))}</td><td class="cp">${edNum(c.bojagi, ds("bojagi"))}${evSub(c,"bojagi")}</td>
@@ -2852,7 +2879,7 @@ function renderMonthly() {
         </tbody>
       </table>
     </div>
-    <div class="footnote">* 온라인 판매는 매 분기 국세청 자료로 정산해요. 1~3월분은 4월 17일경, 4~6월분은 7월 17일경, 7~9월분은 10월 17일경, 10~12월분은 이듬해 1월 17일경 반영돼요.<br>보자기 매출에는 쿠팡이츠가 포함돼요.${anyEv ? "<br>금액 아래 '그중 ○○'은 그 달 매출에 포함된 행사·예약 매출이에요 (따로 더해지지 않아요)." : ""}</div>
+    <div class="footnote">* 온라인 판매는 매 분기 국세청 자료로 정산해요. 1~3월분은 4월 17일경, 4~6월분은 7월 17일경, 7~9월분은 10월 17일경, 10~12월분은 이듬해 1월 17일경 반영돼요.<br>보자기 매출에는 쿠팡이츠가 포함돼요.${anyEv ? (S.ui.editMode ? "<br>바로입력 중에는 행사·예약 매출까지 합친 전체 금액으로 보여요. 입력을 마치면 다시 줄이 나뉘어요." : "<br>행사·예약 매출이 있는 달은 줄을 나눠 보여줘요. 월 줄은 행사분을 뺀 금액이고, 맨 아래 합계에는 둘 다 들어가요.") : ""}</div>
   </div>
   <div class="card">
     <div class="card-title">${year}년 사업장별 매출 구성</div>
@@ -8338,7 +8365,7 @@ function openMonthlyForm(year, month) {
      <div style="border-top:1px dashed var(--line,#ddd);margin:10px 0 6px;padding-top:8px;font-size:12.5px;font-weight:700">행사·예약 매출 따로 표시 <span style="font-weight:400;color:var(--sub)">(선택)</span></div>
      <div class="form-row"><div class="form-field"><label>이름</label><input type="text" id="f-evn" placeholder="예: 추석 예약"></div></div>
      <div class="form-row">${moneyInput("f-evi", "그중 인사동", null)}${moneyInput("f-evm", "그중 마켓", null)}${moneyInput("f-evb", "그중 보자기", null)}</div>
-     <div class="form-hint">위 매출 금액에 이미 들어 있는 금액 중 행사분만 적어요. 표에서 금액 아래 '그중 ○○'으로 보이고, 합계에 따로 더해지지 않아요.</div>
+     <div class="form-hint">위 매출 칸에는 행사분까지 합친 전체 금액을 적고, 여기에는 그중 행사분만 적어요. 표에서는 그 달 아래에 줄을 따로 만들어 나눠서 보여줘요.</div>
      <div class="form-row">${moneyInput("f-eai", "포스 밖 금액 (인사동)", null)}${moneyInput("f-eam", "포스 밖 금액 (마켓)", null)}${moneyInput("f-eab", "포스 밖 금액 (보자기)", null)}</div>
      <div class="form-hint">계좌이체처럼 포스에 안 찍힌 매출이에요. 여기 적어두면 '매출확정에서 불러오기'나 '보고 탭에 반영'을 할 때마다 포스 금액에 자동으로 더해져요. 직접 금액을 적을 때는 위 매출 칸에 이미 더한 금액을 적으세요.</div>`,
     saveBtn("saveMonthlyForm()"));
@@ -16079,11 +16106,11 @@ function preview(raw){
   const bojagi=V.F26+V.D38+d.extraBoj;
   return {
     coupangTemp: !!(m.bpos&&m.bpos.coupangTemp),
-    pos:{ insadong: kb.all, market: V.F8, online: m.ss.gwase+m.ss.myeon, bojagi: V.F15+m.bpos.coupangGye },
+    pos:{ insadong: kb.all, market: (d.marketGye>0?d.marketGye:V.F8), online: m.ss.gwase+m.ss.myeon, bojagi: V.F15+m.bpos.coupangGye },
     nts: (m.nts.card>0
       ? { total: epida+market+bojagi, epida, market, bojagi }
       : { total:0, epida:0, market:0, bojagi:0, notReady:true }),
-    mk:{ total: V.F8, internal: m.members.insadongGye+m.members.bojagiGye, pgsn: (m.members.pangongGye||0)+(m.members.sanaeGye||0), hanwoo: m.market.jeongyukMyeon, pork: m.market.jeongyukGwase },
+    mk:{ total: (d.marketGye>0?d.marketGye:V.F8), internal: m.members.insadongGye+m.members.bojagiGye, pgsn: (m.members.pangongGye||0)+(m.members.sanaeGye||0), hanwoo: m.market.jeongyukMyeon, pork: m.market.jeongyukGwase },
     ag:{ coupang: m.bpos.coupangGye, smartstore: m.ss.gwase+m.ss.myeon }
   };
 }
@@ -16412,10 +16439,11 @@ async function cfmCheckMismatch(){
     };
     const ys=String(y);
     const mrow=(S.data.monthly[ys]?.months||{})[mo]||{};
-    cmp("월별 인사동",mrow.insadong,c.pos.insadong);
-    cmp("월별 마켓",mrow.market,c.pos.market);
+    const evA=(mrow.ev&&mrow.ev.add)||{};const lessA=(v,k)=>v==null?v:v-(Number(evA[k])||0);
+    cmp("월별 인사동",lessA(mrow.insadong,"insadong"),c.pos.insadong);
+    cmp("월별 마켓",lessA(mrow.market,"market"),c.pos.market);
     cmp("월별 온라인",mrow.online,c.pos.online);
-    cmp("월별 보자기",mrow.bojagi,c.pos.bojagi);
+    cmp("월별 보자기",lessA(mrow.bojagi,"bojagi"),c.pos.bojagi);
     cmp("매출비교 전체",scGet(ys,mo,"total"),c.nts.total);
     cmp("매출비교 피다",scGet(ys,mo,"epida"),c.nts.epida);
     cmp("매출비교 마켓",scGet(ys,mo,"market"),c.nts.market);
