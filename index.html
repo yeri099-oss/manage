@@ -478,7 +478,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v270</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v271</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -2339,11 +2339,11 @@ async function expMonthly() {
       const nv = (v, e) => v == null ? "" : v - e;
       rows.push([xh(m + "월"), xc(nv(c.insadong, ei), { fmt: "n", fill: XF.G }), xc(nv(c.market, em), { fmt: "n", fill: XF.Y }),
         xc(c.online, { fmt: "n" }), xc(nv(c.bojagi, eb), { fmt: "n", fill: XF.P }), xc(c.bukchon - em - eb, { fmt: "n" }),
-        xc(c.total - et, { fmt: "n", bold: true, fill: XF.B }), xc(c.note || "", { align: "left" })]);
+        xc(c.total - et, { fmt: "n", bold: true, fill: XF.B }), xc([c.note, ee.t ? [ee.t.insadong, ee.t.market, ee.t.bojagi].filter(Boolean).join(", ") : "", m + "월 총 " + fmt(c.total)].filter(Boolean).join(" / "), { align: "left" })]);
       rows.push([xh(ee.n || "행사"), xc(ei || "", { fmt: "n", fill: XF.G }), xc(em || "", { fmt: "n", fill: XF.Y }),
         xc("", { fmt: "n" }), xc(eb || "", { fmt: "n", fill: XF.P }), xc(em + eb || "", { fmt: "n" }),
-        xc(et, { fmt: "n", bold: true, fill: XF.B }), xc((ee.t ? [ee.t.insadong, ee.t.market, ee.t.bojagi].filter(Boolean).join(", ") + " / " : "") + m + "월 합계 " + fmt(c.total), { align: "left" })]);
-      { const r2 = rows.length - 1, r1 = r2 - 1; if (!ei) evMerges.push(M(r1, 1, r2, 1)); if (!em) evMerges.push(M(r1, 2, r2, 2)); evMerges.push(M(r1, 3, r2, 3)); if (!eb) evMerges.push(M(r1, 4, r2, 4)); if (!(em + eb)) evMerges.push(M(r1, 5, r2, 5)); }
+        xc(et, { fmt: "n", bold: true, fill: XF.B }), xc("", { align: "left" })]);
+      { const r2 = rows.length - 1, r1 = r2 - 1; if (!ei) evMerges.push(M(r1, 1, r2, 1)); if (!em) evMerges.push(M(r1, 2, r2, 2)); evMerges.push(M(r1, 3, r2, 3)); if (!eb) evMerges.push(M(r1, 4, r2, 4)); if (!(em + eb)) evMerges.push(M(r1, 5, r2, 5)); evMerges.push(M(r1, 7, r2, 7)); }
     } else
     rows.push([xh(m + "월"), xc(c.insadong, { fmt: "n", fill: XF.G }), xc(c.market, { fmt: "n", fill: XF.Y }),
       xc(c.online, { fmt: "n" }), xc(c.bojagi, { fmt: "n", fill: XF.P }), xc(c.has ? c.bukchon : "", { fmt: "n" }),
@@ -2857,11 +2857,10 @@ function renderMonthly() {
       rows += `<tr>
       <td class="lab sticky" style="${dv}">${m}월</td>
       ${cI[0]}${cM[0]}${cO[0]}${cB[0]}${cK[0]}<td class="cb" style="${dv}"><b>${fmt(c.total - E.t)}</b></td>
-      <td class="note" style="${dv}">${edText(c.note, ds("note"))}</td></tr>
+      <td class="note" rowspan="2" style="vertical-align:middle">${edText(c.note, ds("note"))}<div style="color:#999;font-size:11px;white-space:nowrap">${m}월 총 ${fmt(c.total)}</div></td></tr>
       <tr>
       <td class="lab sticky" style="${tp};font-size:11px;color:#8a5a00;white-space:nowrap">${esc(E.n)}</td>
-      ${cI[1]}${cM[1]}${cO[1]}${cB[1]}${cK[1]}<td class="cb" style="${tp}"><b>${fmt(E.t)}</b></td>
-      <td class="note" style="${tp};color:#999;font-size:11px;white-space:nowrap">${m}월 합계 ${fmt(c.total)}</td></tr>`;
+      ${cI[1]}${cM[1]}${cO[1]}${cB[1]}${cK[1]}<td class="cb" style="${tp}"><b>${fmt(E.t)}</b></td></tr>`;
     } else
     rows += `<tr>
       <td class="lab sticky">${m}월</td>
@@ -2878,7 +2877,7 @@ function renderMonthly() {
     <div class="table-wrap">
       <table class="rpt">
         <thead>
-          <tr><th class="c sticky" rowspan="2">월별</th><th rowspan="2" class="cg">인사동</th><th colspan="4" class="c">북촌</th><th rowspan="2" class="cb">합계</th><th rowspan="2" class="l">비고</th></tr>
+          <tr><th class="c sticky" rowspan="2">월별</th><th rowspan="2" class="cg">인사동</th><th colspan="4" class="c">북촌</th><th rowspan="2" class="cb">합계</th><th rowspan="2" class="c">비고</th></tr>
           <tr><th class="cy">마켓</th><th>온라인*</th><th class="cp">보자기<br><span style="font-weight:500;font-size:10px">(쿠팡이츠포함)</span></th><th>계</th></tr>
         </thead>
         <tbody>${rows}
