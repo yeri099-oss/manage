@@ -478,7 +478,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v267</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v268</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -2818,15 +2818,18 @@ function renderMonthly() {
   const year = S.ui.monthlyYear || latestYearOf("monthly");
   S.ui.monthlyYear = year;
   let rows = "", sum = { insadong: 0, market: 0, online: 0, bojagi: 0, bukchon: 0, total: 0 };
+  const evSub = (c, k) => c.ev && c.ev[k] ? `<div style="font-size:10.5px;color:#8a5a00;font-weight:500;white-space:nowrap;line-height:1.3">그중 ${esc(c.ev.n || "행사")} ${fmt(c.ev[k])}</div>` : "";
+  let anyEv = false;
   for (const m of MONTHS) {
     const c = monthlyCalc(year, m);
+    if (c.ev) anyEv = true;
     if (c.has) {
       ["insadong", "market", "online", "bojagi", "bukchon", "total"].forEach((k) => (sum[k] += c[k] || 0));
     }
     const ds = (k) => `data-t="mo" data-y="${year}" data-m="${m}" data-k="${k}"`;
     rows += `<tr>
       <td class="lab sticky">${m}월</td>
-      <td class="cg">${edNum(c.insadong, ds("insadong"))}</td><td class="cy">${edNum(c.market, ds("market"))}</td><td>${edNum(c.online, ds("online"))}</td><td class="cp">${edNum(c.bojagi, ds("bojagi"))}</td>
+      <td class="cg">${edNum(c.insadong, ds("insadong"))}${evSub(c,"insadong")}</td><td class="cy">${edNum(c.market, ds("market"))}${evSub(c,"market")}</td><td>${edNum(c.online, ds("online"))}</td><td class="cp">${edNum(c.bojagi, ds("bojagi"))}${evSub(c,"bojagi")}</td>
       <td>${c.has ? fmt(c.bukchon) : ""}</td><td class="cb"><b>${c.has ? fmt(c.total) : ""}</b></td>
       <td class="note">${edText(c.note, ds("note"))}</td></tr>`;
   }
@@ -2849,7 +2852,7 @@ function renderMonthly() {
         </tbody>
       </table>
     </div>
-    <div class="footnote">* 온라인 판매는 매 분기 국세청 자료로 정산해요. 1~3월분은 4월 17일경, 4~6월분은 7월 17일경, 7~9월분은 10월 17일경, 10~12월분은 이듬해 1월 17일경 반영돼요.<br>보자기 매출에는 쿠팡이츠가 포함돼요.</div>
+    <div class="footnote">* 온라인 판매는 매 분기 국세청 자료로 정산해요. 1~3월분은 4월 17일경, 4~6월분은 7월 17일경, 7~9월분은 10월 17일경, 10~12월분은 이듬해 1월 17일경 반영돼요.<br>보자기 매출에는 쿠팡이츠가 포함돼요.${anyEv ? "<br>금액 아래 '그중 ○○'은 그 달 매출에 포함된 행사·예약 매출이에요 (따로 더해지지 않아요)." : ""}</div>
   </div>
   <div class="card">
     <div class="card-title">${year}년 사업장별 매출 구성</div>
@@ -8331,7 +8334,13 @@ function openMonthlyForm(year, month) {
     ymSelector(year, lastM, yearsOf("monthly")) +
     `<div class="form-row">${moneyInput("f-insa", "인사동", null)}${moneyInput("f-market", "마켓", null)}</div>
      <div class="form-row">${moneyInput("f-online", "온라인", null)}${moneyInput("f-bojagi", "보자기(쿠팡이츠 포함)", null)}</div>
-     <div class="form-row"><div class="form-field"><label>비고</label><input type="text" id="f-note" placeholder="예: 명절음식 포함"></div></div>`,
+     <div class="form-row"><div class="form-field"><label>비고</label><input type="text" id="f-note" placeholder="예: 명절음식 포함"></div></div>
+     <div style="border-top:1px dashed var(--line,#ddd);margin:10px 0 6px;padding-top:8px;font-size:12.5px;font-weight:700">행사·예약 매출 따로 표시 <span style="font-weight:400;color:var(--sub)">(선택)</span></div>
+     <div class="form-row"><div class="form-field"><label>이름</label><input type="text" id="f-evn" placeholder="예: 추석 예약"></div></div>
+     <div class="form-row">${moneyInput("f-evi", "그중 인사동", null)}${moneyInput("f-evm", "그중 마켓", null)}${moneyInput("f-evb", "그중 보자기", null)}</div>
+     <div class="form-hint">위 매출 금액에 이미 들어 있는 금액 중 행사분만 적어요. 표에서 금액 아래 '그중 ○○'으로 보이고, 합계에 따로 더해지지 않아요.</div>
+     <div class="form-row">${moneyInput("f-eai", "포스 밖 금액 (인사동)", null)}${moneyInput("f-eam", "포스 밖 금액 (마켓)", null)}${moneyInput("f-eab", "포스 밖 금액 (보자기)", null)}</div>
+     <div class="form-hint">계좌이체처럼 포스에 안 찍힌 매출이에요. 여기 적어두면 '매출확정에서 불러오기'나 '보고 탭에 반영'을 할 때마다 포스 금액에 자동으로 더해져요. 직접 금액을 적을 때는 위 매출 칸에 이미 더한 금액을 적으세요.</div>`,
     saveBtn("saveMonthlyForm()"));
   const refresh = () => {
     const y = val("f-year"), m = val("f-month");
@@ -8341,6 +8350,15 @@ function openMonthlyForm(year, month) {
     document.getElementById("f-online").value = cur.online != null ? fmt(cur.online) : "";
     document.getElementById("f-bojagi").value = cur.bojagi != null ? fmt(cur.bojagi) : "";
     document.getElementById("f-note").value = cur.note || "";
+    const ev = cur.ev || {};
+    document.getElementById("f-evn").value = ev.n || "";
+    document.getElementById("f-evi").value = ev.insadong ? fmt(ev.insadong) : "";
+    document.getElementById("f-evm").value = ev.market ? fmt(ev.market) : "";
+    document.getElementById("f-evb").value = ev.bojagi ? fmt(ev.bojagi) : "";
+    const ea = ev.add || {};
+    document.getElementById("f-eai").value = ea.insadong ? fmt(ea.insadong) : "";
+    document.getElementById("f-eam").value = ea.market ? fmt(ea.market) : "";
+    document.getElementById("f-eab").value = ea.bojagi ? fmt(ea.bojagi) : "";
   };
   document.getElementById("f-year").onchange = refresh;
   document.getElementById("f-month").onchange = refresh;
@@ -8356,6 +8374,12 @@ function saveMonthlyForm() {
     set("insadong", numVal("f-insa")); set("market", numVal("f-market"));
     set("online", numVal("f-online")); set("bojagi", numVal("f-bojagi"));
     const note = val("f-note")?.trim(); if (note) d.note = note;
+    { const ev = {}; const en = val("f-evn")?.trim(); const ei = numVal("f-evi"), em = numVal("f-evm"), eb = numVal("f-evb");
+      if (ei) ev.insadong = ei; if (em) ev.market = em; if (eb) ev.bojagi = eb;
+      const add = {}; const ai = numVal("f-eai"), am = numVal("f-eam"), ab = numVal("f-eab");
+      if (ai) add.insadong = ai; if (am) add.market = am; if (ab) add.bojagi = ab;
+      if (Object.keys(add).length) ev.add = add;
+      if (Object.keys(ev).length) { ev.n = en || "행사"; d.ev = ev; } }
     if (Object.keys(d).length) doc.months[m] = d; else delete doc.months[m];
     await saveYearDoc("monthly", y, doc);
   });
@@ -8416,6 +8440,15 @@ function openMarketForm(year, month) {
       document.getElementById("f-" + k).value = cur[k] != null ? fmt(cur[k]) : "";
     });
     document.getElementById("f-note").value = cur.note || "";
+    const ev = cur.ev || {};
+    document.getElementById("f-evn").value = ev.n || "";
+    document.getElementById("f-evi").value = ev.insadong ? fmt(ev.insadong) : "";
+    document.getElementById("f-evm").value = ev.market ? fmt(ev.market) : "";
+    document.getElementById("f-evb").value = ev.bojagi ? fmt(ev.bojagi) : "";
+    const ea = ev.add || {};
+    document.getElementById("f-eai").value = ea.insadong ? fmt(ea.insadong) : "";
+    document.getElementById("f-eam").value = ea.market ? fmt(ea.market) : "";
+    document.getElementById("f-eab").value = ea.bojagi ? fmt(ea.bojagi) : "";
   };
   document.getElementById("f-year").onchange = refresh;
   document.getElementById("f-month").onchange = refresh;
@@ -16097,8 +16130,9 @@ async function pull(kind,hint){
     const warn=c.coupangTemp?" · ⏳쿠팡 임시값 포함":"";
     const setV=(id,v)=>{const el=document.getElementById(id);if(el&&v!=null&&!isNaN(v))el.value=Math.round(v).toLocaleString("ko-KR");};
     if(kind==="monthly"){
-      setV("f-insa",c.pos.insadong);setV("f-market",c.pos.market);
-      setV("f-online",c.pos.online);setV("f-bojagi",c.pos.bojagi);
+      const ad=id=>{const e2=document.getElementById(id);return e2?Number(String(e2.value).replace(/[^\d-]/g,""))||0:0;};
+      setV("f-insa",c.pos.insadong+ad("f-eai"));setV("f-market",c.pos.market+ad("f-eam"));
+      setV("f-online",c.pos.online);setV("f-bojagi",c.pos.bojagi+ad("f-eab"));
       hint.textContent="불러왔어요 — 온라인은 분기 정산 후 값이 다를 수 있어요. 확인 후 저장!"+warn;
     }else if(kind==="compare"){
       const entEl=document.getElementById("f-ent");
@@ -16286,6 +16320,7 @@ async function cfmDoPush(){
     const cur=Object.assign({},md.months[mo]||{});
     setIf(cur,"insadong",c.pos.insadong);setIf(cur,"market",c.pos.market);
     setIf(cur,"online",c.pos.online);setIf(cur,"bojagi",c.pos.bojagi);
+    if(cur.ev&&cur.ev.add){for(const k of["insadong","market","bojagi"]){const a=Number(cur.ev.add[k])||0;if(a&&c.pos[k]>0)cur[k]=R(c.pos[k])+a;}}
     let note=(cur.note||"").replace(/\s*\/\s*쿠팡이츠 임시값|쿠팡이츠 임시값\s*\/\s*|쿠팡이츠 임시값/g,"").trim();
     if(c.coupangTemp)note=note?note+" / 쿠팡이츠 임시값":"쿠팡이츠 임시값";
     if(note)cur.note=note;else delete cur.note;
