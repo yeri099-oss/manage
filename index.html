@@ -478,7 +478,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v269</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v270</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -2330,7 +2330,7 @@ async function expMonthly() {
     [xh("월별", XF.GRAY), xh("인사동", XF.G), xh("북촌", XF.GRAY), xh(""), xh(""), xh(""), xh("합계", XF.B), xh("비고", XF.GRAY)],
     [xh("", XF.GRAY), xh("", XF.G), xh("마켓", XF.Y), xh("온라인", XF.GRAY), xh("보자기(쿠팡이츠포함)", XF.P), xh("계", XF.GRAY), xh("", XF.B), xh("", XF.GRAY)],
   ];
-  const sum = { i: 0, m: 0, o: 0, b: 0, bk: 0, t: 0 };
+  const sum = { i: 0, m: 0, o: 0, b: 0, bk: 0, t: 0 }; const evMerges = [];
   for (const m of MONTHS) {
     const c = monthlyCalc(year, m);
     if (c.has) { sum.i += c.insadong || 0; sum.m += c.market || 0; sum.o += c.online || 0; sum.b += c.bojagi || 0; sum.bk += c.bukchon || 0; sum.t += c.total || 0; }
@@ -2342,7 +2342,8 @@ async function expMonthly() {
         xc(c.total - et, { fmt: "n", bold: true, fill: XF.B }), xc(c.note || "", { align: "left" })]);
       rows.push([xh(ee.n || "행사"), xc(ei || "", { fmt: "n", fill: XF.G }), xc(em || "", { fmt: "n", fill: XF.Y }),
         xc("", { fmt: "n" }), xc(eb || "", { fmt: "n", fill: XF.P }), xc(em + eb || "", { fmt: "n" }),
-        xc(et, { fmt: "n", bold: true, fill: XF.B }), xc(m + "월 합계 " + fmt(c.total), { align: "left" })]);
+        xc(et, { fmt: "n", bold: true, fill: XF.B }), xc((ee.t ? [ee.t.insadong, ee.t.market, ee.t.bojagi].filter(Boolean).join(", ") + " / " : "") + m + "월 합계 " + fmt(c.total), { align: "left" })]);
+      { const r2 = rows.length - 1, r1 = r2 - 1; if (!ei) evMerges.push(M(r1, 1, r2, 1)); if (!em) evMerges.push(M(r1, 2, r2, 2)); evMerges.push(M(r1, 3, r2, 3)); if (!eb) evMerges.push(M(r1, 4, r2, 4)); if (!(em + eb)) evMerges.push(M(r1, 5, r2, 5)); }
     } else
     rows.push([xh(m + "월"), xc(c.insadong, { fmt: "n", fill: XF.G }), xc(c.market, { fmt: "n", fill: XF.Y }),
       xc(c.online, { fmt: "n" }), xc(c.bojagi, { fmt: "n", fill: XF.P }), xc(c.has ? c.bukchon : "", { fmt: "n" }),
@@ -2353,7 +2354,7 @@ async function expMonthly() {
     xc(sum.t, { fmt: "n", bold: true, fill: XF.B }), xc("")]);
   await makeWorkbook([applyFrame({
     name: `${year}년 월별`, rows,
-    merges: [M(1, 0, 2, 0), M(1, 1, 2, 1), M(1, 2, 1, 5), M(1, 6, 2, 6), M(1, 7, 2, 7)],
+    merges: [M(1, 0, 2, 0), M(1, 1, 2, 1), M(1, 2, 1, 5), M(1, 6, 2, 6), M(1, 7, 2, 7)].concat(evMerges),
     widths: [10.2, 17.6, 13.6, 13.6, 13.6, 14.9, 17.5, 20.5],
   }, { headerEnd: 2, totalRows: [rows.length - 1], vSplit: [0, 1, 5, 6], titleSz: 16, titleH: 36, headerH: 25.5, dataH: 25.1 })], `월별매출_${year}.xlsx`);
 }
@@ -2843,16 +2844,24 @@ function renderMonthly() {
     const E = evOf(c);
     if (c.has && E.t > 0 && !S.ui.editMode) {
       const net = (v, e) => v == null ? "" : fmt(v - e);
+      const dv = "border-bottom:1px dashed #cfcdc4", tp = "border-top:0";
+      const tx = (k) => { const t = c.ev && c.ev.t && c.ev.t[k]; return t ? `<div style="font-size:10.5px;color:#8a5a00;font-weight:500;line-height:1.25;white-space:nowrap">(${esc(t)})</div>` : ""; };
+      const pair = (cls, top, bot, e, k) => e
+        ? [`<td class="${cls}" style="${dv}">${top}</td>`, `<td class="${cls}" style="${tp}">${bot}${k ? tx(k) : ""}</td>`]
+        : [`<td class="${cls}" rowspan="2" style="vertical-align:middle">${top}</td>`, ""];
+      const cI = pair("cg", net(c.insadong, E.i), fmt(E.i), E.i, "insadong");
+      const cM = pair("cy", net(c.market, E.mk), fmt(E.mk), E.mk, "market");
+      const cO = pair("", edNum(c.online, ds("online")), "", 0);
+      const cB = pair("cp", net(c.bojagi, E.b), fmt(E.b), E.b, "bojagi");
+      const cK = pair("", fmt(c.bukchon - E.mk - E.b), fmt(E.mk + E.b), E.mk + E.b);
       rows += `<tr>
-      <td class="lab sticky">${m}월</td>
-      <td class="cg">${net(c.insadong, E.i)}</td><td class="cy">${net(c.market, E.mk)}</td><td>${edNum(c.online, ds("online"))}</td><td class="cp">${net(c.bojagi, E.b)}</td>
-      <td>${fmt(c.bukchon - E.mk - E.b)}</td><td class="cb"><b>${fmt(c.total - E.t)}</b></td>
-      <td class="note">${edText(c.note, ds("note"))}</td></tr>
+      <td class="lab sticky" style="${dv}">${m}월</td>
+      ${cI[0]}${cM[0]}${cO[0]}${cB[0]}${cK[0]}<td class="cb" style="${dv}"><b>${fmt(c.total - E.t)}</b></td>
+      <td class="note" style="${dv}">${edText(c.note, ds("note"))}</td></tr>
       <tr>
-      <td class="lab sticky" style="font-size:11px;color:#8a5a00;white-space:nowrap">${esc(E.n)}</td>
-      <td class="cg">${E.i ? fmt(E.i) : ""}</td><td class="cy">${E.mk ? fmt(E.mk) : ""}</td><td></td><td class="cp">${E.b ? fmt(E.b) : ""}</td>
-      <td>${E.mk + E.b ? fmt(E.mk + E.b) : ""}</td><td class="cb"><b>${fmt(E.t)}</b></td>
-      <td class="note" style="color:#999;font-size:11px;white-space:nowrap">${m}월 합계 ${fmt(c.total)}</td></tr>`;
+      <td class="lab sticky" style="${tp};font-size:11px;color:#8a5a00;white-space:nowrap">${esc(E.n)}</td>
+      ${cI[1]}${cM[1]}${cO[1]}${cB[1]}${cK[1]}<td class="cb" style="${tp}"><b>${fmt(E.t)}</b></td>
+      <td class="note" style="${tp};color:#999;font-size:11px;white-space:nowrap">${m}월 합계 ${fmt(c.total)}</td></tr>`;
     } else
     rows += `<tr>
       <td class="lab sticky">${m}월</td>
@@ -8365,7 +8374,8 @@ function openMonthlyForm(year, month) {
      <div style="border-top:1px dashed var(--line,#ddd);margin:10px 0 6px;padding-top:8px;font-size:12.5px;font-weight:700">행사·예약 매출 따로 표시 <span style="font-weight:400;color:var(--sub)">(선택)</span></div>
      <div class="form-row"><div class="form-field"><label>이름</label><input type="text" id="f-evn" placeholder="예: 추석 예약"></div></div>
      <div class="form-row">${moneyInput("f-evi", "그중 인사동", null)}${moneyInput("f-evm", "그중 마켓", null)}${moneyInput("f-evb", "그중 보자기", null)}</div>
-     <div class="form-hint">위 매출 칸에는 행사분까지 합친 전체 금액을 적고, 여기에는 그중 행사분만 적어요. 표에서는 그 달 아래에 줄을 따로 만들어 나눠서 보여줘요.</div>
+     <div class="form-row"><div class="form-field"><label>품목 (인사동)</label><input type="text" id="f-evti" placeholder=""></div><div class="form-field"><label>품목 (마켓)</label><input type="text" id="f-evtm" placeholder="예: 송편, 식혜"></div><div class="form-field"><label>품목 (보자기)</label><input type="text" id="f-evtb" placeholder="예: 완자전"></div></div>
+     <div class="form-hint">위 매출 칸에는 행사분까지 합친 전체 금액을 적고, 여기에는 그중 행사분만 적어요. 표에서는 그 달 아래에 줄을 따로 만들어 나눠서 보여주고, 품목을 적으면 금액 아래에 작게 나와요.</div>
      <div class="form-row">${moneyInput("f-eai", "포스 밖 금액 (인사동)", null)}${moneyInput("f-eam", "포스 밖 금액 (마켓)", null)}${moneyInput("f-eab", "포스 밖 금액 (보자기)", null)}</div>
      <div class="form-hint">계좌이체처럼 포스에 안 찍힌 매출이에요. 여기 적어두면 '매출확정에서 불러오기'나 '보고 탭에 반영'을 할 때마다 포스 금액에 자동으로 더해져요. 직접 금액을 적을 때는 위 매출 칸에 이미 더한 금액을 적으세요.</div>`,
     saveBtn("saveMonthlyForm()"));
@@ -8382,6 +8392,7 @@ function openMonthlyForm(year, month) {
     document.getElementById("f-evi").value = ev.insadong ? fmt(ev.insadong) : "";
     document.getElementById("f-evm").value = ev.market ? fmt(ev.market) : "";
     document.getElementById("f-evb").value = ev.bojagi ? fmt(ev.bojagi) : "";
+    { const et = ev.t || {}; document.getElementById("f-evti").value = et.insadong || ""; document.getElementById("f-evtm").value = et.market || ""; document.getElementById("f-evtb").value = et.bojagi || ""; }
     const ea = ev.add || {};
     document.getElementById("f-eai").value = ea.insadong ? fmt(ea.insadong) : "";
     document.getElementById("f-eam").value = ea.market ? fmt(ea.market) : "";
@@ -8406,6 +8417,9 @@ function saveMonthlyForm() {
       const add = {}; const ai = numVal("f-eai"), am = numVal("f-eam"), ab = numVal("f-eab");
       if (ai) add.insadong = ai; if (am) add.market = am; if (ab) add.bojagi = ab;
       if (Object.keys(add).length) ev.add = add;
+      { const t = {}; const ti = val("f-evti")?.trim(), tm = val("f-evtm")?.trim(), tb = val("f-evtb")?.trim();
+        if (ti && ev.insadong) t.insadong = ti; if (tm && ev.market) t.market = tm; if (tb && ev.bojagi) t.bojagi = tb;
+        if (Object.keys(t).length) ev.t = t; }
       if (Object.keys(ev).length) { ev.n = en || "행사"; d.ev = ev; } }
     if (Object.keys(d).length) doc.months[m] = d; else delete doc.months[m];
     await saveYearDoc("monthly", y, doc);
@@ -8472,6 +8486,7 @@ function openMarketForm(year, month) {
     document.getElementById("f-evi").value = ev.insadong ? fmt(ev.insadong) : "";
     document.getElementById("f-evm").value = ev.market ? fmt(ev.market) : "";
     document.getElementById("f-evb").value = ev.bojagi ? fmt(ev.bojagi) : "";
+    { const et = ev.t || {}; document.getElementById("f-evti").value = et.insadong || ""; document.getElementById("f-evtm").value = et.market || ""; document.getElementById("f-evtb").value = et.bojagi || ""; }
     const ea = ev.add || {};
     document.getElementById("f-eai").value = ea.insadong ? fmt(ea.insadong) : "";
     document.getElementById("f-eam").value = ea.market ? fmt(ea.market) : "";
