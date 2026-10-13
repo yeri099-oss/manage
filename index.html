@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v291</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v292</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -13924,7 +13924,7 @@ function cardParseSheet(nm,aoa){
     const h=String(r[cH]==null?"":r[cH]).trim();if(!holder&&h)holder=h;
     const acRaw=cAc>=0?String(r[cAc]==null?"":r[cAc]).trim():"";
     const x=cX>=0?String(r[cX]==null?"":r[cX]).trim():"";
-    const fit=/체력/.test(acRaw+" "+x)||/개인주문/.test(x);
+    const fit=/체력/.test(acRaw+" "+x)||/개인주문/.test(x)||r.some((v,ci)=>ci!==cA&&typeof v==="string"&&/체력/.test(v));
     return {h,d:String(r[cD]==null?"":r[cD]).trim(),m:String(r[cM]==null?"":r[cM]).trim(),a:Math.round(cardNum(r[cA])),x,ac:cardNormAcct(acRaw),fit};
   });
   return {name:nm,holder,rows,hasAcct:cAc>=0,labels};
@@ -13997,6 +13997,14 @@ window.cardPick=async function(inp){
     let key=cardMonthKey(P.sheets);
     if(!key){const m=/(\d{4})/.exec(f.name);key=m?m[1]:expYm().key;}
     const B=cardStore();
+    /* 이미 올린 달에 소지자별 엑셀(내역을 채운 것)을 다시 올리면: 바꾸지 않고 같은 건을 찾아 세부내역·비고만 채움 */
+    if(B[key]&&!P.fromRaw&&P.sheets.every(sh=>B[key].sheets.some(o=>o.name===sh.name))){
+      const R=cardFillBack(key,P.sheets);
+      window.__exp.ui.y=2000+Number(key.slice(0,2));window.__exp.ui.m=Number(key.slice(2));
+      cardSaveNow(key);renderExpense();
+      toast(R.names.join(", ")+" "+R.total+"건 중 "+R.matched+"건을 찾아 세부내역과 비고를 채웠어요"+(R.changed?" (바뀐 건 "+R.changed+"건)":"")+(R.miss.length?" — 못 찾은 "+R.miss.length+"건: "+R.miss.slice(0,3).join(", ")+(R.miss.length>3?" 외":""):""),!!R.miss.length);
+      return;
+    }
     let kept=0;
     if(B[key]){
       if(!confirm("20"+key.slice(0,2)+"년 "+Number(key.slice(2))+"월 법인카드 자료가 이미 있어요. 새 파일로 바꿀까요?\n(행별로 바꿔둔 계정은 같은 건이면 그대로 유지돼요)"))return;
@@ -14013,6 +14021,40 @@ window.cardPick=async function(inp){
   }catch(e){console.error(e);toast("엑셀 읽기 실패: "+(e.message||e),true);}
   finally{inp.value="";}
 };
+/* 소지자별 엑셀에 적은 세부내역·비고(계정)·체력단련 표시를 같은 건(소지자 탭, 승인일, 가맹점, 금액, 같은 건이 여럿이면 순서)에 채움 */
+function cardFillBack(key,upSheets){
+  const doc=cardStore()[key];
+  const R={total:0,matched:0,changed:0,miss:[],names:[]};
+  upSheets.forEach(us=>{
+    const sh=doc.sheets.find(o=>o.name===us.name);
+    if(!sh)return;
+    R.names.push(us.name);
+    const pool={};
+    sh.rows.forEach(r=>{const k=cardRowKey(sh,r);(pool[k]=pool[k]||[]).push(r);});
+    const used={};
+    us.rows.forEach(u=>{
+      R.total++;
+      const k=cardRowKey(sh,u);
+      const i=used[k]||0;
+      const r=(pool[k]||[])[i];
+      if(!r){R.miss.push(cardApDate(u)+" "+u.m+" "+fmt(u.a));return;}
+      used[k]=i+1;R.matched++;
+      let ch=false;
+      const x=String(u.x||"").trim();
+      if(x&&x!==String(r.x||"")){r.x=x;r.xE=1;ch=true;}
+      const ac=u.ac;
+      if(ac){
+        const before=JSON.stringify([r.ov||null,r.fitOv==null?null:r.fitOv]);
+        if(ac==="복리후생비"){r.ov=(r.ac==="복리후생비")?null:"복리후생비";r.fitOv=!!u.fit;}
+        else{r.ov=(ac===r.ac)?null:ac;r.fitOv=null;}
+        if(r.ov==null)delete r.ov;if(r.fitOv==null)delete r.fitOv;
+        if(JSON.stringify([r.ov||null,r.fitOv==null?null:r.fitOv])!==before)ch=true;
+      }
+      if(ch)R.changed++;
+    });
+  });
+  return R;
+}
 async function cardSaveNow(key){
   if(typeof IS_DEMO!=="undefined"&&IS_DEMO)return;
   const doc=cardStore()[key];
