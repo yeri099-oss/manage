@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v295</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v296</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -16006,6 +16006,25 @@ document.addEventListener("DOMContentLoaded", () => {
 #cfm-root table.cf.ec tr.gh td{background:#f1f5f9;color:#334155;font-weight:700;text-align:left;font-size:12px;padding:4px 9px}
 #cfm-root table.cf.ec tr:not(.gh):not(.sub):not(.tot) td.lb{padding-left:20px;font-weight:500}
 #cfm-root table.cf.ec .z{color:#c7cbd1}
+#cfm-root table.cf.ec td.lb.clk{color:#2563eb;cursor:pointer}
+#cfm-root table.cf.ec td.lb.clk:hover{text-decoration:underline;background:#eff6ff}
+#ecSlipOv{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;z-index:9999;padding:16px}
+#ecSlipOv .ecbox{background:#fff;border-radius:12px;padding:16px 18px;width:min(560px,100%);max-height:92vh;overflow:auto;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+#ecSlipOv .echd{display:flex;align-items:center;gap:10px;font-size:16px;margin-bottom:10px}
+#ecSlipOv .ecn{color:#6b7280;font-size:12px;margin-left:auto}
+#ecSlipOv .ecx{border:0;background:none;font-size:22px;cursor:pointer;color:#6b7280;line-height:1}
+#ecSlipOv table.ecf{border-collapse:collapse;width:100%}
+#ecSlipOv table.ecf th{width:90px;text-align:left;color:#6b7280;font-weight:500;font-size:13px;padding:7px 4px;vertical-align:middle}
+#ecSlipOv table.ecf td{padding:5px 4px;font-size:14px;border-bottom:1px solid #f1f5f9}
+#ecSlipOv tr.amt td{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
+#ecSlipOv .ecv{display:inline-block;padding:3px 8px;border:1px solid #cbd5e1;border-radius:6px;cursor:pointer;background:#f8fafc}
+#ecSlipOv .ecv:hover{border-color:#2563eb;background:#eff6ff}
+#ecSlipOv .ecv.ok{border-color:#16a34a;background:#dcfce7}
+#ecSlipOv .ecv.ok::after{content:' ✓ 복사됨';color:#16a34a;font-size:12px;font-weight:500}
+#ecSlipOv .ecin{font:inherit;font-size:13px;padding:4px 6px;border:1px solid #e5e7eb;border-radius:6px}
+#ecSlipOv .ecsub{color:#6b7280;font-size:12px}
+#ecSlipOv .ecwarn{color:#dc2626;font-size:12px}
+#ecSlipOv .ecft{display:flex;gap:8px;justify-content:space-between;margin-top:12px}
 #cfm-root td.redcell{background:#fecaca !important;font-weight:700}
 #cfm-root td.pinkcell{background:#fee2e2 !important;font-weight:700}
 #cfm-root .warnbox{background:var(--warnbg);border:1px solid #fcd34d;border-radius:10px;padding:11px 14px;margin-bottom:12px}
@@ -17953,6 +17972,90 @@ function renderConfirm(){
   });
 }
 
+/* ============ v296: 이카운트 전표 입력 도우미 (이카운트 입력용 표의 행 클릭 → 팝업) ============ */
+const EC_SLIP_DEF={
+  'boj.card':{dc:'00003',dn:'보자기꽃밥',ty:'카드매출',cc:'3001',cn:'포스매출',memo:'보자기 카드매출'},
+  'boj.somae':{dc:'00003',dn:'보자기꽃밥',ty:'소매매출',cc:'3001',cn:'포스매출',memo:'보자기 소매매출'},
+  'onl.card':{dc:'00006',dn:'온라인판매',ty:'카드매출',cc:'1244',cn:'스마트스토어',memo:'스토어 카드매출'},
+  'onl.hyeon':{dc:'00006',dn:'온라인판매',ty:'현금영수증',cc:'1244',cn:'스마트스토어',memo:'스토어 현영매출'},
+  'onl.somae':{dc:'00006',dn:'온라인판매',ty:'소매매출',cc:'1244',cn:'스마트스토어',memo:'스토어 소매매출'},
+  'mkt.card':{dc:'00004',dn:'꽃밥마켓',ty:'카드매출',cc:'3001',cn:'포스매출',memo:'마켓 카드매출'},
+  'mkt.hyeon':{dc:'00004',dn:'꽃밥마켓',ty:'현금영수증',cc:'3001',cn:'포스매출',memo:'마켓 현영매출'},
+  'mkt.somae':{dc:'00004',dn:'꽃밥마켓',ty:'소매매출',cc:'3001',cn:'포스매출',memo:'마켓 소매매출'},
+  'pida.card':{dc:'00002',dn:'꽃밥에피다',ty:'카드매출',cc:'3001',cn:'포스매출',memo:'피다 카드매출'},
+  'pida.hyeon':{dc:'00002',dn:'꽃밥에피다',ty:'현금영수증',cc:'3001',cn:'포스매출',memo:'피다 현영매출'},
+  'pida.somae':{dc:'00002',dn:'꽃밥에피다',ty:'소매매출',cc:'3001',cn:'포스매출',memo:'피다 소매매출'},
+  'pida.catch':{dc:'00002',dn:'꽃밥에피다',ty:'소매매출',cc:'6148800597',cn:'(주)와드(꽃밥)',memo:'피다 와드매출'},
+  'cp':{dc:'00003',dn:'보자기꽃밥',ty:'소매매출',cc:'',cn:'쿠팡이츠',memo:'쿠팡이츠매출'}
+};
+let EC_SLIP={};try{EC_SLIP=JSON.parse(localStorage.getItem('ssv2_ecSlip')||'{}');}catch(e){}
+let EC_SLIP_CLOUD=false,EC_SLIPS=[],EC_SLIP_YM=null;
+function ecSlipCfg(key,name){
+  const base=key.indexOf('pida.ex.')===0?{dc:'00002',dn:'꽃밥에피다',ty:'소매매출',cc:'',cn:name,memo:'피다 '+name+'매출'}:EC_SLIP_DEF[key.replace(/\.m$/,'')];
+  let d=Object.assign({},base);
+  if(/\.m$/.test(key)){d.ty=d.ty+'(면세)';d.memo=d.memo+'(면세)';}
+  return Object.assign(d,EC_SLIP[key]||{});
+}
+async function ecSlipLoadCloud(){
+  if(EC_SLIP_CLOUD||!FB)return;EC_SLIP_CLOUD=true;
+  try{const s=await db.collection('salesStatus_months').doc('_ecountSlip').get();if(s.exists){EC_SLIP=Object.assign({},(s.data()||{}).map||{},EC_SLIP);}}catch(e){}
+}
+async function ecSlipSave(key,cfg){
+  EC_SLIP[key]=cfg;
+  try{localStorage.setItem('ssv2_ecSlip',JSON.stringify(EC_SLIP));}catch(e){}
+  if(FB){try{await db.collection('salesStatus_months').doc('_ecountSlip').set({v:1,map:EC_SLIP});}catch(e){console.warn(e);}}
+}
+function ecCopy(txt,el){
+  const done=()=>{if(!el)return;el.classList.add('ok');setTimeout(()=>el.classList.remove('ok'),900);};
+  if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(txt).then(done,()=>{});return;}
+  const ta=document.createElement('textarea');ta.value=txt;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');done();}catch(e){}ta.remove();
+}
+function ecSlipOpen(idx){
+  const it=EC_SLIPS[idx];if(!it)return;
+  const ym=EC_SLIP_YM,y=2000+Number(ym.slice(0,2)),mo=Number(ym.slice(2)),last=new Date(y,mo,0).getDate();
+  const cfg=ecSlipCfg(it.key,it.name);
+  let ov=document.getElementById('ecSlipOv');
+  if(!ov){ov=document.createElement('div');ov.id='ecSlipOv';(document.getElementById('cfm-root')||document.body).appendChild(ov);
+    ov.addEventListener('click',e=>{if(e.target===ov)ov.style.display='none';});
+    document.addEventListener('keydown',e=>{if(ov.style.display!=='flex')return;if(e.key==='Escape')ov.style.display='none';
+      if(e.target&&/INPUT|SELECT|TEXTAREA/.test(e.target.tagName))return;
+      if(e.key==='ArrowRight')ecSlipOpen(+ov.dataset.idx+1);if(e.key==='ArrowLeft')ecSlipOpen(+ov.dataset.idx-1);});}
+  ov.dataset.idx=idx;
+  const memo=ym+' '+cfg.memo;
+  const cp=(v,show)=>`<span class="ecv" data-cp="${esc(String(v))}" title="눌러서 복사">${show!=null?show:esc(String(v))}</span>`;
+  const ed=(f,v,w)=>`<input class="ecin" data-f="${f}" value="${esc(v||'')}" style="width:${w||120}px">`;
+  ov.innerHTML=`<div class="ecbox">
+    <div class="echd"><b>${esc(it.label)}</b><span class="ecn">${idx+1} / ${EC_SLIPS.length}</span><button class="ecx" data-act="x">×</button></div>
+    <table class="ecf">
+      <tr><th>일자</th><td>${cp(`${y}/${String(mo).padStart(2,'0')}/${last}`)}</td></tr>
+      <tr><th>부서</th><td>${ed('dc',cfg.dc,80)} ${ed('dn',cfg.dn,130)} ${cp(cfg.dc,'코드 복사')}</td></tr>
+      <tr><th>부가세유형</th><td>${ed('ty',cfg.ty,150)}</td></tr>
+      <tr><th>거래처</th><td>${ed('cc',cfg.cc,110)} ${ed('cn',cfg.cn,130)} ${cfg.cc?cp(cfg.cc,'코드 복사'):'<span class="ecwarn">코드 입력 필요</span>'}</td></tr>
+      <tr class="amt"><th>공급가액</th><td>${cp(it.g,fmt(it.g))}</td></tr>
+      <tr class="amt"><th>부가세</th><td>${cp(it.v,fmt(it.v))}</td></tr>
+      <tr><th>적요</th><td>${cp(memo)} <span class="ecsub">(${ed('memo',cfg.memo,170)} 앞에 ${ym} 자동)</span></td></tr>
+      <tr><th>매출계정</th><td>4019 상품매출</td></tr>
+      <tr><th>입금계좌</th><td>1089 외상매출금</td></tr>
+      <tr><th>수수료</th><td>0</td></tr>
+    </table>
+    <div class="ecft">
+      <button class="btn sm line" data-act="prev" ${idx>0?'':'disabled'}>◀ 이전</button>
+      <button class="btn sm line" data-act="save">이 항목 설정 기억</button>
+      <button class="btn sm" data-act="next" ${idx<EC_SLIPS.length-1?'':'disabled'}>다음 ▶</button>
+    </div>
+    <div class="ecsub" style="margin-top:6px">값을 누르면 복사돼요 · 금액은 쉼표 없이 복사 · ←/→ 키로 이동 · 부서/유형/거래처/적요는 고친 뒤 '설정 기억'을 누르면 다음 달에도 적용돼요</div>
+  </div>`;
+  ov.style.display='flex';
+  ov.querySelectorAll('[data-cp]').forEach(el=>el.addEventListener('click',()=>ecCopy(el.dataset.cp,el)));
+  ov.querySelector('[data-act="x"]').addEventListener('click',()=>{ov.style.display='none';});
+  ov.querySelector('[data-act="prev"]').addEventListener('click',()=>ecSlipOpen(idx-1));
+  ov.querySelector('[data-act="next"]').addEventListener('click',()=>ecSlipOpen(idx+1));
+  ov.querySelector('[data-act="save"]').addEventListener('click',async e=>{
+    const c={};ov.querySelectorAll('.ecin').forEach(x=>{c[x.dataset.f]=x.value.trim();});
+    await ecSlipSave(it.key,c);e.target.textContent='✓ 기억됨';setTimeout(()=>ecSlipOpen(idx),600);
+  });
+}
+
 /* ============ 월별 요약 탭 ============ */
 function renderMonths(){
   const pg=$("#pg-months");
@@ -17970,43 +18073,52 @@ function renderMonths(){
     const m=MONTHS[CUR],V=compute(m),kb=kkotbapCalc(m);
     /* v295: 가독성 — 꽃밥이야기(5칸) / 꽃밥에피다·쿠팡이츠(전부 과세, 3칸) 두 표로 나눠 나란히, 0은 흐리게 */
     const nf=v=>v?fmt(v):'<span class="z">0</span>';
-    const grp=(t,n)=>`<tr class="gh"><td colspan="${n}">${t}</td></tr>`;
-    const row5=(lb,g,v,gw,my,gye,cls)=>`<tr${cls?` class="${cls}"`:''}><td class="lb">${lb}</td><td>${nf(g)}</td><td>${nf(v)}</td><td>${nf(gw)}</td><td>${nf(my)}</td><td>${nf(gye)}</td></tr>`;
-    const row3=(lb,g,v,gye,cls)=>`<tr${cls?` class="${cls}"`:''}><td class="lb">${lb}</td><td>${nf(g)}</td><td>${nf(v)}</td><td>${nf(gye)}</td></tr>`;
+    /* v296: key 있는 행은 눌러서 이카운트 전표 도우미 열기 (과세분 + 면세분 각각 전표) */
+    EC_SLIPS=[];EC_SLIP_YM=CUR;let gName='';
+    const grp=(t,n)=>{gName=t;return `<tr class="gh"><td colspan="${n}">${t}</td></tr>`;};
+    const slip=(key,lb,g,v,my,nm)=>{
+      if(!key)return '';const i=EC_SLIPS.length;
+      if(g||v)EC_SLIPS.push({key,name:nm,label:gName+' · '+lb,g,v});
+      if(my>0)EC_SLIPS.push({key:key+'.m',name:nm,label:gName+' · '+lb+' (면세)',g:my,v:0});
+      return EC_SLIPS.length>i?` data-slip="${i}"`:'';
+    };
+    const lbc=(lb,at)=>`<td class="lb${at?' clk':''}"${at}>${lb}</td>`;
+    const row5=(lb,g,v,gw,my,gye,cls,key)=>`<tr${cls?` class="${cls}"`:''}>${lbc(lb,slip(key,lb,g,v,my))}<td>${nf(g)}</td><td>${nf(v)}</td><td>${nf(gw)}</td><td>${nf(my)}</td><td>${nf(gye)}</td></tr>`;
+    const row3=(lb,g,v,gye,cls,key,nm)=>`<tr${cls?` class="${cls}"`:''}>${lbc(lb,slip(key,lb,g,v,0,nm))}<td>${nf(g)}</td><td>${nf(v)}</td><td>${nf(gye)}</td></tr>`;
     let a='';
     a+=grp('보자기꽃밥',6);
-    a+=row5('카드',V.B24,V.C24,V.D24,V.E24,V.F24);
-    a+=row5('소매',V.B25,V.C25,V.D25,V.E25,V.F25);
+    a+=row5('카드',V.B24,V.C24,V.D24,V.E24,V.F24,'','boj.card');
+    a+=row5('소매',V.B25,V.C25,V.D25,V.E25,V.F25,'','boj.somae');
     a+=row5('보자기 계',V.B26,V.C26,V.D26,V.E26,V.F26,'sub');
     a+=grp('온라인 (스마트스토어)',6);
-    a+=row5('카드',V.B27,V.C27,V.D27,V.E27,V.F27);
-    a+=row5('현영',V.B28,V.C28,V.D28,V.E28,V.F28);
-    a+=row5('소매',V.B29,V.C29,V.D29,V.E29,V.F29);
+    a+=row5('카드',V.B27,V.C27,V.D27,V.E27,V.F27,'','onl.card');
+    a+=row5('현영',V.B28,V.C28,V.D28,V.E28,V.F28,'','onl.hyeon');
+    a+=row5('소매',V.B29,V.C29,V.D29,V.E29,V.F29,'','onl.somae');
     a+=row5('온라인 계',V.B30,V.C30,V.D30,V.E30,V.F30,'sub');
     a+=grp('꽃밥마켓',6);
-    a+=row5('카드',V.B31,V.C31,V.D31,V.E31,V.F31);
-    a+=row5('현영',V.B32,V.C32,V.D32,V.E32,V.F32);
-    a+=row5('소매',V.B33,V.C33,V.D33,V.E33,V.F33);
+    a+=row5('카드',V.B31,V.C31,V.D31,V.E31,V.F31,'','mkt.card');
+    a+=row5('현영',V.B32,V.C32,V.D32,V.E32,V.F32,'','mkt.hyeon');
+    a+=row5('소매',V.B33,V.C33,V.D33,V.E33,V.F33,'','mkt.somae');
     a+=row5('마켓 계',V.B34,V.C34,V.D34,V.E34,V.F34,'sub');
     a+=row5('합계',V.B35,V.C35,V.D35,V.E35,V.F35,'tot');
     let b='';
     const smBuga=kb.somae-kb.somaeGong;
     b+=grp('꽃밥에피다 (인사동)',4);
-    b+=row3('카드',m.kkotbap.ntsCardGong,m.kkotbap.ntsCardBuga,m.kkotbap.ntsCard);
-    b+=row3('현영',m.kkotbap.ntsHyeonGong,m.kkotbap.ntsHyeonBuga,m.kkotbap.ntsHyeon);
-    b+=row3('소매',kb.somaeGong,smBuga,kb.somae);
-    b+=row3('캐치테이블',m.kkotbap.catchGong,m.kkotbap.catchBuga,m.kkotbap.catchGye);
+    b+=row3('카드',m.kkotbap.ntsCardGong,m.kkotbap.ntsCardBuga,m.kkotbap.ntsCard,'','pida.card');
+    b+=row3('현영',m.kkotbap.ntsHyeonGong,m.kkotbap.ntsHyeonBuga,m.kkotbap.ntsHyeon,'','pida.hyeon');
+    b+=row3('소매',kb.somaeGong,smBuga,kb.somae,'','pida.somae');
+    b+=row3('캐치테이블',m.kkotbap.catchGong,m.kkotbap.catchBuga,m.kkotbap.catchGye,'','pida.catch');
     const insG=m.kkotbap.ntsCardGong+m.kkotbap.ntsHyeonGong+kb.somaeGong+m.kkotbap.catchGong,insV=m.kkotbap.ntsCardBuga+m.kkotbap.ntsHyeonBuga+smBuga+m.kkotbap.catchBuga;
     /* v294: ⑩ 기타 거래처 중 소속 '인사동' (네이버파이낸셜 등 판매대행) — 전부 과세로 보고 공급가/부가세 분리 */
     const insEx=(m.extra||[]).filter(x=>x.unit==='insadong'&&x.amt);
     b+=row3(insEx.length?'계 (캐치 포함)':'인사동 계',insG,insV,kb.all,insEx.length?'sub':'tot');
     if(insEx.length){
       let exG=0,exV=0,exT=0;
-      for(const x of insEx){const g=exVat(x.amt);exG+=g;exV+=x.amt-g;exT+=x.amt;b+=row3(esc(x.name||'기타 거래처'),g,x.amt-g,x.amt);}
+      for(const x of insEx){const g=exVat(x.amt);exG+=g;exV+=x.amt-g;exT+=x.amt;const nm=x.name||'기타 거래처';b+=row3(esc(nm),g,x.amt-g,x.amt,'','pida.ex.'+nm,nm);}
       b+=row3('인사동 계 (기타 포함)',insG+exG,insV+exV,kb.all+exT,'tot');
     }
     b+=grp('쿠팡이츠',4);
-    b+=row3('소매',V.B38,V.C38,V.D38,'sub');
+    b+=row3('소매',V.B38,V.C38,V.D38,'sub','cp');
     const hd5=`<tr><th class="c0">구분</th><th>공급가</th><th>부가세</th><th>과세 계</th><th>면세</th><th>계</th></tr>`;
     const hd3=`<tr><th class="c0">구분</th><th>공급가</th><th>부가세</th><th>계</th></tr>`;
     let h2=`<div class="card"><h2>💼 이카운트 입력용 — ${ymLabel(CUR)} <small>매출확정과 같은 값 · 위의 월 선택으로 다른 달 보기</small></h2>
@@ -18014,8 +18126,10 @@ function renderMonths(){
       <div><div class="ecttl">꽃밥이야기 <small>보자기 · 온라인 · 마켓</small></div><table class="cf ec">${hd5}${a}</table></div>
       <div><div class="ecttl">꽃밥에피다 · 쿠팡이츠 <small>전부 과세 (면세 없음)</small></div><table class="cf ec">${hd3}${b}</table></div>
     </div>
-    <div class="hint">표 값은 입력 탭 숫자에서 자동 계산됩니다. 0은 흐리게 표시돼요.</div></div>`;
+    <div class="hint">파란 글씨 항목을 누르면 이카운트 전표 입력 순서대로 보여줘요 (과세·면세 따로). 표 값은 입력 탭 숫자에서 자동 계산됩니다. 0은 흐리게 표시돼요.</div></div>`;
     pg.innerHTML=h2+pg_monthsHtml(h);
+    ecSlipLoadCloud();
+    pg.querySelectorAll("[data-slip]").forEach(el=>el.addEventListener("click",()=>ecSlipOpen(+el.dataset.slip)));
   }else pg.innerHTML=h;
   pg.querySelectorAll("[data-goym]").forEach(el=>el.addEventListener("click",()=>{selectMonth(el.dataset.goym);showTab('months');}));
 }
