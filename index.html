@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v316</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v317</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -11075,6 +11075,60 @@ function vatGroups(sum){
     ["매입 계산서 총금액",[["전자 계산서","매입(전자계산서)","n"],["종이 계산서","매입(종이계산서)","n"],["기타매입","매입(기타매입)","n"],["현금영수증(면세)","매입(현영면세)","h"],["신용카드(면세)","매입(신용카드면세)","h"]].concat(sum["매입(기타)"]?[["기타","매입(기타)","n"]]:[])]
   ];
 }
+/* v317: 전체요약 시트 — 1기 세무사무실 양식과 같은 서식 (굴림체, 가운데 정렬, 굵은/가는 테두리, 0은 "-") */
+const VAT_SUM_XF0=19; /* cardBuildXlsx 기본 cellXfs 19개 뒤에 이어 붙임 */
+function vatSumStyles(sty){
+  const fc=+(sty.match(/<fonts count="(\d+)"/)||[])[1],bc=+(sty.match(/<borders count="(\d+)"/)||[])[1],xc=+(sty.match(/<cellXfs count="(\d+)"/)||[])[1];
+  if(xc!==VAT_SUM_XF0)throw new Error("엑셀 서식 구성이 바뀌었어요 (cellXfs "+xc+")");
+  const F=n=>`<font><sz val="${n.sz}"/>${n.b?"<b/>":""}${n.u?'<u/>':""}<name val="${n.name}"/><family val="3"/><charset val="129"/></font>`;
+  const fonts=[{sz:11,name:"굴림체"},{sz:10,name:"굴림체"},{sz:15,name:"굴림체",b:1,u:1},{sz:14,name:"굴림체",b:1},{sz:11,name:"맑은 고딕"}];
+  const fi=k=>fc+k;
+  const side=(n,w)=>w?`<${n} style="${w}"><color indexed="64"/></${n}>`:`<${n}/>`;
+  /* 열: A(구분) B(공급가) C(세액) D(합계) / 행: 0 머리·그룹(위아래 굵게) 1 항목(위아래 가늘게) 2 마지막 항목(아래 굵게) */
+  const V={A:["medium","medium"],B:["medium","thin"],C:["thin","medium"],D:["medium","medium"]},H=[["medium","medium"],["thin","thin"],["thin","medium"]];
+  const borders=[];for(const c of"ABCD")for(const h of H)borders.push(`<border>${side("left",V[c][0])}${side("right",V[c][1])}${side("top",h[0])}${side("bottom",h[1])}<diagonal/></border>`);
+  const bi=(c,r)=>bc+"ABCD".indexOf(c)*3+r;
+  const al='<alignment horizontal="center" vertical="center"/>';
+  const xfs=[];
+  /* 19 제목, 20 회사, 21 건수(오른쪽) */
+  xfs.push(`<xf numFmtId="0" fontId="${fi(2)}" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1">${al}</xf>`);
+  xfs.push(`<xf numFmtId="0" fontId="${fi(3)}" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1">${al}</xf>`);
+  xfs.push(`<xf numFmtId="164" fontId="${fi(4)}" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>`);
+  /* 22~: 열×행종류 (A는 11pt·10pt 두 가지) */
+  for(const c of"ABCD")for(let r=0;r<3;r++){
+    xfs.push(`<xf numFmtId="${c==="A"?0:164}" fontId="${fi(0)}" fillId="0" borderId="${bi(c,r)}" xfId="0" applyNumberFormat="1" applyFont="1" applyBorder="1" applyAlignment="1">${al}</xf>`);
+    if(c==="A")xfs.push(`<xf numFmtId="0" fontId="${fi(1)}" fillId="0" borderId="${bi(c,r)}" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1">${al}</xf>`);
+  }
+  return sty.replace(/<fonts count="\d+">/,`<fonts count="${fc+fonts.length}">`).replace("</fonts>",fonts.map(F).join("")+"</fonts>")
+    .replace(/<borders count="\d+">/,`<borders count="${bc+borders.length}">`).replace("</borders>",borders.join("")+"</borders>")
+    .replace(/<cellXfs count="\d+">/,`<cellXfs count="${xc+xfs.length}">`).replace("</cellXfs>",xfs.join("")+"</cellXfs>");
+}
+/* 셀 서식 번호: c=열(A~D), r=0 머리/그룹 1 항목 2 마지막 항목, small=A열 10pt */
+function vatSX(c,r,small){let k=VAT_SUM_XF0+3;for(const cc of"ABCD"){for(let rr=0;rr<3;rr++){if(cc===c&&rr===r)return cc==="A"&&small?k+1:k;k+=cc==="A"?2:1;}}return 0;}
+function vatSummarySheet(R,groups,S){
+  const ep=window.__vat.ui.co==="epida";
+  const rows=[[{v:R.period||"부가가치세 정리내역",s:VAT_SUM_XF0}],[{v:`(${R.short||R.company})`,s:VAT_SUM_XF0+1}],
+    [{v:"구  분",s:vatSX("A",0)},{v:"공급가액",s:vatSX("B",0)},{v:"세액",s:vatSX("C",0)},{v:"합  계",s:vatSX("D",0)}]];
+  const rowHt={1:31.5,2:18,3:24};
+  /* 1기 양식처럼 '매출 세금계산서'·'매입 세금계산서' 묶음 끝에는 빈 줄 하나 */
+  const spacer=gi=>gi===0||gi===2;
+  const lastG=groups.length-1;
+  groups.forEach(([gl,items],gi)=>{
+    const n=items.length+(spacer(gi)?1:0),gr=rows.length+1,c0=gr+1,c1=gr+n;
+    const gg=items.reduce((a,it)=>a+S(it[1]).g,0),gv=items.reduce((a,it)=>a+S(it[1]).v,0);
+    rows.push([{v:gl,s:vatSX("A",0)},{f:`SUM(B${c0}:B${c1})`,v:gg,s:vatSX("B",0)},{f:`SUM(C${c0}:C${c1})`,v:gv,s:vatSX("C",0)},{f:`SUM(D${c0}:D${c1})`,v:gg+gv,s:vatSX("D",0)}]);
+    const lines=items.map(it=>({it})).concat(spacer(gi)?[{blank:1}]:[]);
+    lines.forEach((ln,li)=>{
+      const rr=rows.length+1,last=gi===lastG&&li===lines.length-1,rt=last?2:1;
+      if(ln.blank){rows.push([{v:"",s:vatSX("A",rt)},{v:"",s:vatSX("B",rt)},{v:"",s:vatSX("C",rt)},{f:`SUM(B${rr}:C${rr})`,v:0,s:vatSX("D",rt)}]);return;}
+      const it=ln.it,o=S(it[1]),small=/불공제제외|고정자산/.test(it[0]);
+      rows.push([{v:it[0],s:vatSX("A",rt,small)},{v:o.g,s:vatSX("B",rt)},{v:o.v,s:vatSX("C",rt)},{f:`SUM(B${rr}:C${rr})`,v:o.g+o.v,s:vatSX("D",rt)},
+        {v:it[2]==="h"?"홈택스 자료":it[2]==="n"&&o.n?o.n+" 건":"",s:VAT_SUM_XF0+2}]);
+    });
+  });
+  for(let r=4;r<=rows.length;r++)rowHt[r]=18;
+  return {name:"전체요약",rows,cols:[25.13,15.5,15.5,20.13,12.25],merges:["A1:D1","A2:D2"],rowHt};
+}
 async function vatBuildReport(only){
   const R=window.__vat.rep;const {sheets,sum}=vatCollect();
   const z={g:0,v:0,n:0},S=n=>sum[n]||z,groups=vatGroups(sum);
@@ -11090,13 +11144,13 @@ async function vatBuildReport(only){
   const tpl=VAT_TPL[window.__vat.ui.co]||VAT_TPL.kkotbap;
   const list=[];
   for(const k of tpl){
-    if(k==="전체요약"){list.push({name:"전체요약",rows:sr,cols:[30,16,16,16,12],merges:smerge});continue;}
+    if(k==="전체요약"){list.push(vatSummarySheet(R,groups,S));continue;}
     const sh=sheets[k]||vatEmptySheet(k);list.push(Object.assign({},sh,{name:vatSN(k)}));
   }
   /* 양식에 없는 유형인데 자료가 있으면 끝에 붙임 (빠뜨리지 않게) */
   for(const k in sheets)if(!tpl.includes(k))list.push(Object.assign({},sheets[k],{name:vatSN(k)}));
-  if(only){const one=list.filter(x=>x.name===vatSN(only));if(!one.length)throw new Error("'"+only+"' 시트를 찾지 못했어요");return await cardBuildXlsx(one);}
-  return await cardBuildXlsx(list);
+  if(only){const one=list.filter(x=>x.name===vatSN(only));if(!one.length)throw new Error("'"+only+"' 시트를 찾지 못했어요");return await cardBuildXlsx(one,vatSumStyles);}
+  return await cardBuildXlsx(list,vatSumStyles);
 }
 window.vatReportDownload=async function(only){
   try{
@@ -15360,7 +15414,7 @@ function cardDateOrder(sh){return sh.rows.map((r,i)=>i).sort((a,b)=>{const ka=ca
 /* ---- 세무사무소용 엑셀 (보낸 2607 양식: 카드소지자 / 날짜 / 가맹점 / 금액 / 비고=계정, 합 계, 원본 탭) ---- */
 function cardXEsc(v){return String(v==null?"":v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,"");}
 function cardColL(i){let s="";i++;while(i>0){const m=(i-1)%26;s=String.fromCharCode(65+m)+s;i=Math.floor((i-1)/26);}return s;}
-async function cardBuildXlsx(sheets){
+async function cardBuildXlsx(sheets,ext){
   const zip=new JSZip();
   const n=sheets.length;
   zip.file("[Content_Types].xml",`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${sheets.map((s,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")}</Types>`);
@@ -15370,7 +15424,7 @@ async function cardBuildXlsx(sheets){
   const B='<border><left style="thin"><color indexed="64"/></left><right style="thin"><color indexed="64"/></right><top style="thin"><color indexed="64"/></top><bottom style="thin"><color indexed="64"/></bottom><diagonal/></border>';
   /* xf: 0 기본 / 1 머리글 / 2 본문 가운데 / 3 본문 날짜(오른쪽) / 4 본문 가맹점(왼쪽) / 5 금액 / 6 비고 / 7 합계 라벨 / 8 합계 빈칸 / 9 합계 금액 / 10 원본 탭 본문 / 11 원본 탭 숫자
      체크카드용: 12 제목(굵게 14) / 13 머리글(연회색) / 14 본문 왼쪽 / 15 본문 가운데 / 16 금액 #,##0 / 17 합계 라벨 / 18 합계 금액 */
-  zip.file("xl/styles.xml",`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="_-* #,##0_-;\\-* #,##0_-;_-* &quot;-&quot;_-;_-@_-"/></numFmts>
+  let __sty=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="_-* #,##0_-;\\-* #,##0_-;_-* &quot;-&quot;_-;_-@_-"/></numFmts>
 <fonts count="7"><font><sz val="11"/><name val="맑은 고딕"/><family val="3"/><charset val="129"/></font><font><sz val="10"/><name val="Arial"/><family val="2"/></font><font><b/><sz val="10"/><name val="Arial"/><family val="2"/></font><font><sz val="10"/><name val="맑은 고딕"/><family val="3"/><charset val="129"/></font><font><b/><sz val="10"/><name val="맑은 고딕"/><family val="3"/><charset val="129"/></font><font><b/><sz val="14"/><name val="맑은 고딕"/><family val="3"/><charset val="129"/></font><font><sz val="10"/><name val="Arial"/><family val="2"/></font></fonts>
 <fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor indexed="22"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF2F2F2"/><bgColor indexed="64"/></patternFill></fill></fills>
 <borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>${B}</borders>
@@ -15394,7 +15448,9 @@ async function cardBuildXlsx(sheets){
 <xf numFmtId="3" fontId="6" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
 <xf numFmtId="0" fontId="4" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
 <xf numFmtId="3" fontId="2" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf></cellXfs>
-<cellStyles count="1"><cellStyle name="표준" xfId="0" builtinId="0"/></cellStyles></styleSheet>`);
+<cellStyles count="1"><cellStyle name="표준" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+  if(ext)__sty=ext(__sty);
+  zip.file("xl/styles.xml",__sty);
   sheets.forEach((sh,si)=>{
     let maxC=0;
     const rowsXml=sh.rows.map((row,ri)=>{maxC=Math.max(maxC,row.length);const ht=sh.rowHt&&sh.rowHt[ri+1];return `<row r="${ri+1}"${ht?` ht="${ht}" customHeight="1"`:""}>`+row.map((c,ci)=>{
