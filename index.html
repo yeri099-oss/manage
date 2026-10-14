@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v310</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v311</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -17097,6 +17097,13 @@ function splitAddr(a){const m=a.match(/^([A-Z]+)(\d+)$/);return [m[1],parseInt(m
 function fmt(n){if(n===''||n===null||n===undefined||isNaN(n))return'';return Math.round(n).toLocaleString('ko-KR');}
 function parseNum(s){const v=parseFloat(String(s).replace(/[,\s원]/g,''));return isNaN(v)?0:v;}
 function exVat(t){return Math.floor(t/1.1+1e-6);}
+/* v311: ⑩ 기타 거래처 한 줄의 과세/면세·공급가·부가세 (예전 자료는 과세로 보고 계에서 나눔) */
+function exSplit(it){
+  const amt=it.amt||0;
+  if(it.tax==="면세")return{g:amt,v:0,m:amt,tax:"면세"};
+  if(it.gong!=null&&it.buga!=null&&(it.gong+it.buga)===amt)return{g:it.gong,v:it.buga,m:0,tax:"과세"};
+  const g=exVat(amt);return{g,v:amt-g,m:0,tax:"과세"};
+}
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function ymLabel(ym){return `20${ym.slice(0,2)}년 ${parseInt(ym.slice(2))}월 (${ym})`;}
 function getPath(o,p){return p.split('.').reduce((a,k)=>a==null?undefined:a[k],o);}
@@ -18533,16 +18540,20 @@ function renderInput(){
     <tr><td class="lb">합계</td>`+autoCell('buy_pd_tot',mm=>mm.buyPida.reduce((a,b)=>a+(b.amt||0),0),true)+`<td class="au" colspan="4"></td></tr>
   </table></div>`;
   const exUnits=[['insadong','인사동'],['market','마켓'],['bojagi','보자기']];
-  const exRows=(m.extra||[]).map((it,i)=>`<tr>
+  const selSt='font:inherit;font-size:13px;padding:4px 6px;border:1px solid var(--line);border-radius:6px';
+  const exRows=(m.extra||[]).map((it,i)=>{const sp=exSplit(it);return `<tr>
     <td class="lb"><input class="txt" data-ex="${i}.name" value="${esc(it.name)}" style="width:150px"></td>
-    <td><input data-ex="${i}.amt" value="${it.amt?fmt(it.amt):''}"></td>
-    <td style="text-align:center"><select data-ex="${i}.unit" style="font:inherit;font-size:13px;padding:4px 6px;border:1px solid var(--line);border-radius:6px">${exUnits.map(([k,n])=>`<option value="${k}" ${it.unit===k?'selected':''}>${n}</option>`).join('')}</select></td>
-    <td class="au" style="text-align:center"><span class="addrow" data-exdel="${i}">삭제</span></td><td class="au" colspan="2"></td></tr>`).join('');
+    <td style="text-align:center"><select data-ex="${i}.tax" style="${selSt}"><option value="과세" ${sp.tax==='과세'?'selected':''}>과세</option><option value="면세" ${sp.tax==='면세'?'selected':''}>면세</option></select></td>
+    <td><input data-ex="${i}.gong" value="${sp.g?fmt(sp.g):''}" title="공급가액을 넣으면 계가 자동 계산"></td>
+    <td>${sp.tax==='면세'?'<span style="color:#94a3b8">— (면세)</span>':`<input data-ex="${i}.buga" value="${sp.v?fmt(sp.v):''}" title="부가세를 넣으면 계가 자동 계산">`}</td>
+    <td><input data-ex="${i}.amt" value="${it.amt?fmt(it.amt):''}" title="계를 넣으면 공급가·부가세로 자동으로 나눠요" style="font-weight:600"></td>
+    <td style="text-align:center"><select data-ex="${i}.unit" style="${selSt}">${exUnits.map(([k,n])=>`<option value="${k}" ${it.unit===k?'selected':''}>${n}</option>`).join('')}</select></td>
+    <td class="au" style="text-align:center"><span class="addrow" data-exdel="${i}">삭제</span></td></tr>`;}).join('');
   h+=`<div class="card"><h2>⑩ 기타 거래처 매출 <small>이카운트에 별도 입력하는 거래처 (농림부·네니아·비즈플레이·백패커 등) — 보고앱 매출비교에 합산됩니다</small></h2>
-  <table class="g"><tr><th style="width:160px">거래처명</th><th>금액 (계)</th><th style="width:90px">소속</th><th style="width:70px"></th><th colspan="2"></th></tr>
+  <table class="g"><tr><th style="width:160px">거래처명</th><th style="width:80px">구분</th><th>공급가액</th><th>부가세</th><th>계</th><th style="width:90px">소속</th><th style="width:60px"></th></tr>
     ${exRows}
-    <tr><td colspan="6" style="text-align:left;border:1px solid var(--line);padding:6px"><span class="addrow" id="exAdd">+ 거래처 추가</span></td></tr>
-    <tr><td class="lb">합계</td>`+autoCell('ex_tot',mm=>(mm.extra||[]).reduce((a,b)=>a+(b.amt||0),0),true)+`<td class="au" colspan="4"></td></tr>
+    <tr><td colspan="7" style="text-align:left;border:1px solid var(--line);padding:6px"><span class="addrow" id="exAdd">+ 거래처 추가</span> <span style="color:var(--sub);font-size:12px;margin-left:8px">공급가액·부가세를 넣으면 계가, 계를 넣으면 공급가·부가세가 자동으로 채워져요 · 과세·면세가 같이 있는 거래처(네니아 등)는 두 줄로 넣어주세요</span></td></tr>
+    <tr><td class="lb">합계</td><td class="au"></td>`+autoCell('ex_totg',mm=>(mm.extra||[]).reduce((a,b)=>a+exSplit(b).g,0))+autoCell('ex_totv',mm=>(mm.extra||[]).reduce((a,b)=>a+exSplit(b).v,0))+autoCell('ex_tot',mm=>(mm.extra||[]).reduce((a,b)=>a+(b.amt||0),0),true)+`<td class="au" colspan="2"></td></tr>
   </table>
   <div class="flex" style="margin-top:10px"><span class="addrow" id="ecPasteBtn">📋 이카운트 거래처별 표 붙여넣기 (여러 달 한꺼번에 자동 채움)</span></div>
   <div id="ecPasteBox" style="display:none;margin-top:8px">
@@ -18616,10 +18627,19 @@ function renderInput(){
   pg.querySelectorAll("[data-ex]").forEach(el=>{
     el.addEventListener("change",()=>{
       const[i,f]=el.dataset.ex.split('.');
-      if(f==='name')m.extra[+i].name=el.value;
-      else if(f==='unit')m.extra[+i].unit=el.value;
-      else{const n=parseNum(el.value);m.extra[+i].amt=n==null?0:Math.round(n);el.value=m.extra[+i].amt?fmt(m.extra[+i].amt):'';}
-      touch();recalcAutos();
+      const it=m.extra[+i];
+      if(f==='name'){it.name=el.value;touch();return;}
+      if(f==='unit'){it.unit=el.value;touch();recalcAutos();return;}
+      const sp=exSplit(it);
+      if(f==='tax'){it.tax=el.value;if(it.tax==='면세'){it.gong=it.amt||0;it.buga=0;}else{it.gong=exVat(it.amt||0);it.buga=(it.amt||0)-it.gong;}}
+      else{
+        const n=parseNum(el.value),v=n==null?0:Math.round(n);
+        if(f==='amt'){it.amt=v;if(sp.tax==='면세'){it.gong=v;it.buga=0;}else{it.gong=exVat(v);it.buga=v-it.gong;}}
+        else if(f==='gong'){it.gong=v;it.buga=sp.tax==='면세'?0:sp.v;it.amt=it.gong+it.buga;}
+        else if(f==='buga'){it.gong=sp.g;it.buga=v;it.amt=it.gong+it.buga;}
+        it.tax=sp.tax;
+      }
+      touch();renderInput();
     });
   });
   pg.querySelectorAll("[data-exdel]").forEach(el=>el.addEventListener("click",()=>{m.extra.splice(+el.dataset.exdel,1);touch();renderInput();}));
@@ -18638,7 +18658,7 @@ function renderInput(){
       touch();recalcAutos();
     });
   }
-  const exAdd=$("#exAdd");if(exAdd)exAdd.addEventListener("click",()=>{m.extra.push({name:'',amt:0,unit:'market'});touch();renderInput();});
+  const exAdd=$("#exAdd");if(exAdd)exAdd.addEventListener("click",()=>{m.extra.push({name:'',amt:0,unit:'market',tax:'과세',gong:0,buga:0});touch();renderInput();});
   const ecB=$("#ecPasteBtn");if(ecB)ecB.addEventListener("click",()=>{const b=$("#ecPasteBox");b.style.display=b.style.display==='none'?'block':'none';});
   pg.querySelectorAll(".hyBtn").forEach(btn=>btn.addEventListener("click",()=>{const w=btn.closest(".flex").nextElementSibling;if(w)w.style.display=w.style.display==='none'?'block':'none';}));
   pg.querySelectorAll(".hy-wrap .hyGo").forEach(b=>b.addEventListener("click",()=>hyParseClickW(b.closest(".hy-wrap"))));
@@ -19044,8 +19064,8 @@ function renderMonths(){
     a+=row5('소매',V.B25,V.C25,V.D25,V.E25,V.F25,'','boj.somae');
     a+=row5('보자기 계',V.B26,V.C26,V.D26,V.E26,V.F26,'sub');
     /* v297: ⑩ 기타 거래처 중 소속 보자기/마켓 (카페24·비바리퍼블리카 등) — 전부 과세로 보고 공급가/부가세 분리 */
-    const exT={G:0,V:0,T:0};
-    const exRows=(unit,pre)=>{let r='';for(const x of(m.extra||[]).filter(x=>x.unit===unit&&x.amt)){const g=exVat(x.amt),nm=x.name||'기타 거래처';exT.G+=g;exT.V+=x.amt-g;exT.T+=x.amt;r+=row5(esc(nm),g,x.amt-g,x.amt,0,x.amt,'',pre+nm,nm);}return r;};
+    const exT={G:0,V:0,M:0,T:0};
+    const exRows=(unit,pre)=>{let r='';for(const x of(m.extra||[]).filter(x=>x.unit===unit&&x.amt)){const sp=exSplit(x),nm=x.name||'기타 거래처';exT.G+=sp.g-sp.m;exT.V+=sp.v;exT.M+=sp.m;exT.T+=x.amt;r+=row5(esc(nm)+(sp.tax==='면세'?' (면세)':''),sp.g-sp.m,sp.v,sp.g-sp.m+sp.v,sp.m,x.amt,'',pre+nm+(sp.tax==='면세'?'#m':''),nm);}return r;};
     a+=exRows('bojagi','boj.ex.');
     a+=grp('온라인 (스마트스토어)',6);
     a+=row5('카드',V.B27,V.C27,V.D27,V.E27,V.F27,'','onl.card');
@@ -19060,7 +19080,7 @@ function renderMonths(){
     a+=exRows('market','mkt.ex.');
     if(exT.T){
       a+=row5('합계',V.B35,V.C35,V.D35,V.E35,V.F35,'sub');
-      a+=row5('합계 (기타 포함)',V.B35+exT.G,V.C35+exT.V,V.D35+exT.T,V.E35,V.F35+exT.T,'tot');
+      a+=row5('합계 (기타 포함)',V.B35+exT.G,V.C35+exT.V,V.D35+exT.G+exT.V,V.E35+exT.M,V.F35+exT.T,'tot');
     }else a+=row5('합계',V.B35,V.C35,V.D35,V.E35,V.F35,'tot');
     let b='';
     const smBuga=kb.somae-kb.somaeGong;
@@ -19075,7 +19095,7 @@ function renderMonths(){
     b+=row3(insEx.length?'계 (캐치 포함)':'인사동 계',insG,insV,kb.all,insEx.length?'sub':'tot');
     if(insEx.length){
       let exG=0,exV=0,exT=0;
-      for(const x of insEx){const g=exVat(x.amt);exG+=g;exV+=x.amt-g;exT+=x.amt;const nm=x.name||'기타 거래처';b+=row3(esc(nm),g,x.amt-g,x.amt,'','pida.ex.'+nm,nm);}
+      for(const x of insEx){const sp=exSplit(x);exG+=sp.g;exV+=sp.v;exT+=x.amt;const nm=x.name||'기타 거래처';b+=row3(esc(nm)+(sp.tax==='면세'?' (면세)':''),sp.g,sp.v,x.amt,'','pida.ex.'+nm,nm);}
       b+=row3('인사동 계 (기타 포함)',insG+exG,insV+exV,kb.all+exT,'tot');
     }
     b+=grp('쿠팡이츠',4);
