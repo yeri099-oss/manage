@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v309</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v310</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -17176,6 +17176,19 @@ function derived(m){
   d.gwase=d.marketGye-m.market.myeon;                             // D4
   d.cashMyeonAuto=(d.marketGye>0&&m.market.myeon>0)?Math.round(d.cashGye*m.market.myeon/d.marketGye):0; // 면세 = 현금/마켓계 × 마켓면세계
   d.cardMyeonAuto=(d.marketGye>0&&m.market.myeon>0)?Math.round(d.cardGye*m.market.myeon/d.marketGye):0;
+  /* 2026년 7월(2607)부터: 회원분석 세금계산서·계산서(대부분 외상, 면세 비중 큼)와 기타 세금계산서를 뺀
+     '일반 손님 매출'의 면세 비율로 현금·카드 면세를 나눔 — 마켓 전체 비율을 쓰면 카드 면세가 커져서
+     소매 면세가 0으로 눌리던 문제 수정. 2606 이전(신고 끝난 달)은 기존 방식 그대로 */
+  d.myeonRetail=false;d.cashMyeonOld=d.cashMyeonAuto;d.cardMyeonOld=d.cardMyeonAuto;
+  {const ym=(m&&m.__ym)||(function(){try{for(const k in MONTHS)if(MONTHS[k]===m)return k;}catch(e){}return null;})();
+   if(ym&&ym>="2607"&&d.marketGye>0&&m.market.myeon>0){
+     let tiG=0,tiM=0;
+     for(const x of['insadong','bojagi','siksa']){const g=m.members[x+'Gye']||0;tiG+=g;tiM+=g-((m.members[x+'Gong']||0)+(m.members[x+'Buga']||0));}
+     const te=m.taxEtc||{};tiG+=(te.gong||0)+(te.buga||0)+(te.myeon||0);tiM+=(te.myeon||0);
+     const rG=d.marketGye-tiG,rM=m.market.myeon-tiM;
+     if(rG>0&&rM>=0&&rM<=rG){d.myeonRetail=true;d.retailMyeonRate=rM/rG;
+       d.cashMyeonAuto=Math.round(d.cashGye*rM/rG);d.cardMyeonAuto=Math.round(d.cardGye*rM/rG);}
+   }}
   d.cashMyeonEff=m.market.cashMyeon>0?m.market.cashMyeon:d.cashMyeonAuto;
   d.cardMyeonEff=m.market.cardMyeon>0?m.market.cardMyeon:d.cardMyeonAuto;
   d.cashGwase=d.cashGye-d.cashMyeonEff;
@@ -17204,10 +17217,27 @@ function derived(m){
   }
   return d;
 }
+/* 2607부터 면세 비율을 바꿨을 때, 예전 방식으로 자동 채워져 저장된 현금·카드 공급가/부가세는 새 비율로 다시 나눔
+   (직접 입력한 값 = 예전 자동값과 다르면 그대로 둠) */
+function vatStaleSplit(m,d){
+  const o={cardGong:m.market.cardGong,cardBuga:m.market.cardBuga,cashGong:m.market.cashGong,cashBuga:m.market.cashBuga,changed:false};
+  if(!d.myeonRetail)return o;
+  const fix=(gK,bK,gye,oldM,manualM,newGw)=>{
+    const g=o[gK]||0,b=o[bK]||0;
+    if(manualM>0||!(g||b))return;
+    if(Math.abs((g+b)-(gye-oldM))>1)return;
+    if(Math.abs((g+b)-newGw)<=1)return;
+    o[gK]=exVat(newGw);o[bK]=newGw-o[gK];o.changed=true;
+  };
+  fix("cardGong","cardBuga",d.cardGye,d.cardMyeonOld,m.market.cardMyeon,d.cardGwase);
+  fix("cashGong","cashBuga",d.cashGye,d.cashMyeonOld,m.market.cashMyeon,d.cashGwase);
+  return o;
+}
 function deriveInputs(m){
   const d=derived(m);
-  const card={g:m.market.cardGong,v:m.market.cardBuga,m:d.cardMyeonEff};
-  const cash={g:m.market.cashGong,v:m.market.cashBuga,m:d.cashMyeonEff};
+  const ef=vatStaleSplit(m,d);
+  const card={g:ef.cardGong,v:ef.cardBuga,m:d.cardMyeonEff};
+  const cash={g:ef.cashGong,v:ef.cashBuga,m:d.cashMyeonEff};
   const tot={g:m.market.gong,v:m.market.buga,m:m.market.myeon};
   const kb={g:d.taxinvGong,v:d.taxinvBuga,m:d.taxinvMyeon};
   const bjCashG=exVat(d.cashBojagi),bjCardG=exVat(m.corner.cardBojagi);
@@ -17333,7 +17363,7 @@ function validations(m){
   const compSum=d.cashGye+d.cardGye+m.market.zeropay+m.market.point+m.market.credit;
   if(d.marketGye>0&&!near(d.marketGye,compSum))w.push(`마켓 계(${fmt(d.marketGye)})와 현금+카드+제로페이+포인트+외상 합(${fmt(compSum)})이 ${fmt(Math.abs(d.marketGye-compSum))}원 차이납니다. 전체 계·승인현황 숫자를 확인하세요.`);
   if(d.cashBojagi<0)w.push(`보자기 현금이 음수입니다 — 보자기포스 '마켓포스' 계와 승인현황 '카드 보자기' 값을 확인하세요.`);
-  const pairChk=[["마켓 계",d.gwase,m.market.gong,m.market.buga],["마켓 현금",d.cashGwase,m.market.cashGong,m.market.cashBuga],["마켓 카드",d.cardGwase,m.market.cardGong,m.market.cardBuga],["키오스크",m.bpos.kioskGye,m.bpos.kioskGong,m.bpos.kioskBuga],["쿠팡이츠",m.bpos.coupangGye,m.bpos.coupangGong,m.bpos.coupangBuga]];
+  const pairChk=[["마켓 계",d.gwase,m.market.gong,m.market.buga],["마켓 현금",d.cashGwase,vatStaleSplit(m,d).cashGong,vatStaleSplit(m,d).cashBuga],["마켓 카드",d.cardGwase,vatStaleSplit(m,d).cardGong,vatStaleSplit(m,d).cardBuga],["키오스크",m.bpos.kioskGye,m.bpos.kioskGong,m.bpos.kioskBuga],["쿠팡이츠",m.bpos.coupangGye,m.bpos.coupangGong,m.bpos.coupangBuga]];
   for(const[nm,gw,go,bu]of pairChk){
     if((go||bu)&&!near(gw,go+bu))w.push(`${nm}: 공급가+부가세(${fmt(go+bu)})가 과세 계(${fmt(gw)})와 다릅니다.`);
   }
@@ -18330,7 +18360,7 @@ function renderInput(){
     <tr><td class="lb">마켓 계</td>`+autoCell('mk_gye',mm=>derived(mm).marketGye,true)+`${inp('market.myeon')}`+autoCell('mk_gw',mm=>derived(mm).gwase)+`${inp('market.gong')}${inp('market.buga')}</tr>
     <tr><td class="lb">현금</td>`+autoCell('mk_cash',mm=>derived(mm).cashGye)+`<td><input data-p="market.cashMyeon" class="auinp"></td>`+autoCell('mk_cashgw',mm=>derived(mm).cashGwase)+`${inp('market.cashGong')}${inp('market.cashBuga')}</tr>
     <tr><td class="lb">카드</td>`+autoCell('mk_card',mm=>derived(mm).cardGye)+`<td><input data-p="market.cardMyeon" class="auinp"></td>`+autoCell('mk_cardgw',mm=>derived(mm).cardGwase)+`${inp('market.cardGong')}${inp('market.cardBuga')}</tr>
-    <tr><td class="lb" style="font-weight:400;color:var(--sub);font-size:12px" colspan="6">현금·카드 면세는 자동 안분: 각 금액 ÷ 마켓 계 × 마켓 면세 · 다르면 클릭해서 직접 입력, 비우면 다시 자동</td></tr>
+    <tr><td class="lb" style="font-weight:400;color:var(--sub);font-size:12px" colspan="6">${derived(m).myeonRetail?`현금·카드 면세는 자동 안분: 각 금액 × 일반 손님 매출의 면세 비율 <b>${(derived(m).retailMyeonRate*100).toFixed(1)}%</b> (마켓 계·면세에서 회원분석 세금계산서·계산서와 기타 세금계산서를 뺀 비율 · 2607부터)`:"현금·카드 면세는 자동 안분: 각 금액 ÷ 마켓 계 × 마켓 면세"} · 다르면 클릭해서 직접 입력, 비우면 다시 자동</td></tr>
     <tr><td class="lb">제로페이·기타수단 (계)</td>${inp('market.zeropay')}${blank(4)}</tr>
     <tr><td class="lb">포인트 사용 (계)</td>${inp('market.point')}${blank(4)}</tr>
     <tr><td class="lb">외상 (계)</td>${inp('market.credit')}${blank(4)}</tr>
@@ -18665,6 +18695,7 @@ function parseSmartstore(text){
 }
 function autofillEmpty(m){
   const d=derived(m);
+  {const ef=vatStaleSplit(m,d);if(ef.changed){m.market.cardGong=ef.cardGong;m.market.cardBuga=ef.cardBuga;m.market.cashGong=ef.cashGong;m.market.cashBuga=ef.cashBuga;}}
   const fill=(goK,buK,gwase,obj)=>{
     obj=obj||m.market;
     if(!obj[goK]&&!obj[buK]&&gwase>0){obj[goK]=exVat(gwase);obj[buK]=gwase-obj[goK];}
@@ -19703,8 +19734,8 @@ function migrate(raw){return _cfm().migrate(raw);}
 function derived(m){return _cfm().derived(m);}
 function compute(m){return _cfm().compute(m);}
 function kkotbapCalc(m){return _cfm().kkotbapCalc(m);}
-function preview(raw){
-  const m=migrate(raw);
+function preview(raw,ym){
+  const m=migrate(raw);if(ym)m.__ym=ym;
   const V=compute(m), kb=kkotbapCalc(m), d=derived(m);
   const taxinv=d.taxinvGye+V.F10; // 세금계산서 (꽃밥에피다 거래처 + 기타)
   const epida=kb.all+d.extraIns;
@@ -19724,13 +19755,13 @@ async function fetchConfirm(year, month){
   const ym=String(year).slice(2)+String(month).padStart(2,"0");
   try{
     const app=window.__cfmApp;
-    if(app&&app.MONTHS&&app.MONTHS[ym])return preview(JSON.parse(JSON.stringify(app.MONTHS[ym])));
+    if(app&&app.MONTHS&&app.MONTHS[ym])return preview(JSON.parse(JSON.stringify(app.MONTHS[ym])),ym);
   }catch(e){}
   const snap=await db.collection("salesStatus_months").doc(ym).get();
   if(!snap.exists)return null;
   const raw=snap.data()&&snap.data().data;
   if(!raw)return null;
-  return preview(raw);
+  return preview(raw,ym);
 }
 window.kbConfirm={fetch:fetchConfirm,preview};
 /* ---- 입력 모달에 불러오기 버튼 주입 ---- */
