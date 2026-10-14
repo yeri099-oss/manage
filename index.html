@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v308</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v309</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -11121,20 +11121,39 @@ function vatCoCheck(R2){
   return true;
 }
 /* R2를 현재 회사 자료에 합치기 — tab을 주면 그 탭 자료는 교체 */
+/* v309: 덮어쓰기 — 새 파일에 들어있는 유형(탭)은 기존 줄을 지우고 새 파일 내용으로 교체.
+   파일에 없는 유형은 그대로. 바뀌지 않은 줄은 제외 체크·직접 분류·적요/부서 수정을 이어받음 */
+/* 덮어쓰기 기준 탭: 앱 분류(고정자산 등)와 상관없이 이카운트 유형 그대로 */
+function vatTypeTab(k,x){
+  if(k!=="purch")return vatRowTab(k,x);
+  const C=window.__vat.rep.purch.C;return vatPurchBase({a:x.a,kind:x.a[C.kind]||"",elec:C.elec>=0?x.a[C.elec]||"":""});
+}
 function vatMergeInto(R2,fs,name,src){
   const st=window.__vat,ov=vatOverrides(),R=st.rep||vatEmptyRep();st.rep=R;
-  if(name&&R[src])R[src].rows=R[src].rows.filter(x=>vatRowTab(src,x)!==name);
-  let here=0,other=0,added=0;
-  for(const k of["sales","purch","card","hyeon"]){const B2=R2[k];if(!B2)continue;
+  let here=0,other=0,added=0,removed=0;const tabsAll=new Set();
+  for(const k of["sales","purch","card","hyeon"]){
+    const B2=R2[k];
+    if(!B2){if(name&&src===k&&R[k]){const n0=R[k].rows.length;R[k].rows=R[k].rows.filter(x=>vatTypeTab(k,{a:x.a0||x.a})!==name);removed+=n0-R[k].rows.length;tabsAll.add(name);}continue;}
     if(!R[k])R[k]={title:B2.title,head:B2.head,C:B2.C,rows:[]};
-    if(!R[k].title&&B2.title)R[k].title=B2.title;
-    R[k].keys=new Set(R[k].rows.map(x=>(x.a0||x.a).join("|")));
+    if(B2.title)R[k].title=B2.title;
     const m=R[k].head.join("|")!==B2.head.join("|")?R[k].head.map(h=>B2.head.indexOf(h)):null;
-    for(const x of B2.rows){const a=m?m.map(j=>j>=0?x.a[j]:""):x.a,key=a.join("|");if(R[k].keys.has(key))continue;R[k].keys.add(key);const nx={a,rn:x.rn};R[k].rows.push(nx);added++;if(name){if(vatRowTab(k,nx)===name)here++;else other++;}}
+    const seen=new Set(),news=[];
+    for(const x of B2.rows){const a=m?m.map(j=>j>=0?x.a[j]:""):x.a,key=a.join("|");if(seen.has(key))continue;seen.add(key);news.push({a,rn:x.rn});}
+    const tabs=new Set(news.map(x=>vatTypeTab(k,x)));if(name&&src===k)tabs.add(name);
+    const old=new Map();
+    R[k].rows=R[k].rows.filter(x=>{if(tabs.has(vatTypeTab(k,{a:x.a0||x.a}))){old.set((x.a0||x.a).join("|"),x);removed++;return false;}return true;});
+    for(const nx of news){
+      const o=old.get(nx.a.join("|"));
+      if(o){if(o.ex)nx.ex=true;if(o.a0){nx.a0=nx.a;nx.a=o.a;}if(o.me)nx.me=o.me;}
+      R[k].rows.push(nx);added++;
+      if(name){if(vatRowTab(k,nx)===name)here++;else other++;}
+    }
+    R[k].keys=new Set(R[k].rows.map(x=>(x.a0||x.a).join("|")));
+    tabs.forEach(t=>tabsAll.add(t));
   }
   for(const f of fs)if(!R.files.includes(f.name))R.files.push(f.name);
   vatRefresh(ov);
-  return {here,other,added};
+  return {here,other,added,removed,tabs:[...tabsAll]};
 }
 window.vatPick=async function(inp){
   const fs=[...(inp.files||[])];if(!fs.length)return;
@@ -11142,7 +11161,7 @@ window.vatPick=async function(inp){
     const R2=await vatParseFiles(fs);
     if(!vatCoCheck(R2)){inp.value="";return;}
     const o=vatMergeInto(R2,fs);
-    renderVat();toast(`${VAT_CO[window.__vat.ui.co]} — ${o.added}건 탭별로 정리했어요`);
+    renderVat();toast(`${VAT_CO[window.__vat.ui.co]} ${vatPkLabel(window.__vat.ui.pk)} — ${o.tabs.length}개 탭을 새 파일로 교체했어요 (${o.added}건)`);
   }catch(e){console.error(e);toast(e.message||"엑셀을 읽지 못했어요",true);}
   inp.value="";
 };
@@ -11358,7 +11377,7 @@ window.vatPickTab=async function(inp,name,src){
     if(!vatCoCheck(R2)){inp.value="";return;}
     window.__vat.ui.sub=name;
     const o=vatMergeInto(R2,fs,name,src);
-    renderVat();toast(name+" "+o.here+"건"+(o.other?" · 다른 유형 "+o.other+"건은 해당 탭으로 정리했어요":""));
+    renderVat();toast(vatSN(name)+" 새 파일로 교체 — "+o.here+"건"+(o.other?" · 같이 든 다른 유형 "+(o.tabs.length-1)+"개 탭도 교체":""));
   }catch(e){console.error(e);toast(e.message||"엑셀을 읽지 못했어요",true);}
   inp.value="";
 };
@@ -11421,7 +11440,7 @@ function vatSummaryHtml(){
       <label class="btn btn-primary" style="cursor:pointer">📂 한꺼번에 올리기 (.xlsx 여러 개)<input type="file" accept=".xlsx" multiple style="display:none" onchange="vatPick(this)"></label>
       ${R?`<button class="btn btn-primary" onclick="vatReportDownload()">📥 세무사무실용 엑셀 받기 (전체)</button><button class="btn" onclick="vatAllClear()">전체 지우기</button>`:""}
     </div>
-    <div class="hintb">이카운트 매출장·매입장(유형별 파일 여러 개 OK) + 홈택스 신용카드·현금영수증 매입 파일을 한꺼번에 올리면 탭별로 자동 정리돼요. 탭마다 따로 올려도 돼요. 자료는 <b>회사·신고기간별로 클라우드에 저장</b>돼서 다른 컴퓨터에서도, 다음 분기에도 다시 열어볼 수 있어요.</div>
+    <div class="hintb">이카운트 매출장·매입장(유형별 파일 여러 개 OK) + 홈택스 신용카드·현금영수증 매입 파일을 한꺼번에 올리면 탭별로 자동 정리돼요. 탭마다 따로 올려도 돼요. <b>다시 올리면 파일에 든 유형(탭)은 새 파일 내용으로 덮어써요</b> — 이카운트에서 고친 뒤 다시 받아 올리면 돼요. 자료는 <b>회사·신고기간별로 클라우드에 저장</b>돼서 다른 컴퓨터에서도, 다음 분기에도 다시 열어볼 수 있어요.</div>
     ${vatRepPanel()}${vatSavedListHtml()}`;
   if(R){
     let col;try{col=vatCollect();}catch(e){col={sum:{}};}
@@ -11479,7 +11498,7 @@ function vatSheetHtml(def){
   return `<div class="card"><div class="card-head"><div class="card-title">${esc(vatSN(name))} <span class="unit">${n}건 · 공급가액 ${fmt(tg)} · 세액 ${fmt(tv)}</span></div></div>
     <div class="hintb">📎 올릴 파일: ${hint}</div>${src==="purch"&&/세금계산서/.test(name)&&!moveOnly?vatRulesHtml():""}
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0">
-      ${moveOnly||name.indexOf("(기타)")>=0?"":`<label class="btn btn-primary" style="cursor:pointer">📂 이 탭 엑셀 올리기<input type="file" accept=".xlsx" multiple style="display:none" onchange="vatPickTab(this,'${name}','${src}')"></label>`}
+      ${moveOnly||name.indexOf("(기타)")>=0?"":`<label class="btn btn-primary" style="cursor:pointer" title="이 탭 자료를 새 파일로 덮어써요">📂 이 탭 엑셀 올리기 (덮어쓰기)<input type="file" accept=".xlsx" multiple style="display:none" onchange="vatPickTab(this,'${name}','${src}')"></label>`}
       ${n?`<button class="btn" onclick="vatReportDownload('${name}')">⬇ 이 시트만 엑셀 받기</button>`:""}
       ${R?`<button class="btn" onclick="vatReportDownload()">📥 전체 엑셀 받기</button>`:""}
       ${list.length&&!moveOnly?`<button class="btn" onclick="vatTabClear('${name}','${src}')">이 탭 비우기</button>`:""}
