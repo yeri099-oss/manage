@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v297</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v298</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -17993,7 +17993,7 @@ let EC_SLIP_CLOUD=false,EC_SLIPS=[],EC_SLIP_YM=null;
 function ecSlipCfg(key,name){
   const EXD={'pida.ex.':['00002','꽃밥에피다','피다'],'mkt.ex.':['00004','꽃밥마켓','마켓'],'boj.ex.':['00003','보자기꽃밥','보자기']};
   const xp=Object.keys(EXD).find(p=>key.indexOf(p)===0);
-  const base=xp?{dc:EXD[xp][0],dn:EXD[xp][1],ty:'카드매출',cc:'',cn:name,memo:EXD[xp][2]+' '+name+'매출'}:EC_SLIP_DEF[key.replace(/\.m$/,'')];
+  const base=xp?{dc:EXD[xp][0],dn:EXD[xp][1],ty:'소매매출',cc:'',cn:name,memo:EXD[xp][2]+' '+name+'매출'}:EC_SLIP_DEF[key.replace(/\.m$/,'')];
   let d=Object.assign({},base);
   if(/\.m$/.test(key)){d.ty=d.ty+'(면세)';d.memo=d.memo+'(면세)';}
   return Object.assign(d,EC_SLIP[key]||{});
