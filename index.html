@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v314</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v315</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -10787,6 +10787,7 @@ function vatClassify(r){
   return {cls,why:why+(notes.length?" · "+notes.join(" · "):"")};
 }
 function vatOX(cls){return cls==="공통"?"O":cls==="확인"?"△":"X";}
+function vatClsList(){return window.__vat.ui.co==="epida"&&window.__vat.rep?VAT_CLS.filter(c=>c!=="공통"&&c!=="면세전용"):VAT_CLS;}
 const VAT_CLS_SH={"공통":"공통","과세전용":"과세전용","면세전용":"면세전용","불공제":"불공제","세액없음":"세액없음","확인":"확인","고정자산":"고정자산","제외":"제외"};
 const VAT_GUIDE={"공통":"공통매입세액에 넣어요. 신고 때 면세비율만큼은 불공제, 나머지는 공제돼요.",
   "과세전용":"공통에 넣지 말고 일반 매입세액으로 전액 공제받아요.",
@@ -10935,7 +10936,10 @@ function vatRepReview(R){
     x.kind=kind;x.elec=C.elec>=0?a[C.elec]||"":"";
     if(!/세금계산서/.test(kind))continue;
     const r={rn:x.rn,raw:a,date:a[C.date]||"",kind,vendor:a[C.vendor]||"",memo:a[C.memo]||"",dept:C.dept>=0?a[C.dept]||"":"",g:vatNum(a[C.g]),v:vatNum(a[C.v]),src:x};
-    const k=vatClassify(r);r.cls=k.cls;r.auto=k.cls;r.why=k.why;x.r=r;
+    const k=vatClassify(r);
+    /* v315: 꽃밥에피다는 면세 매출이 없어 공통·면세전용 분류가 없음 → 과세전용 */
+    if(window.__vat.ui.co==="epida"&&(k.cls==="공통"||k.cls==="면세전용")){k.why="꽃밥에피다는 매출이 전부 과세(면세 상품 없음) → 공통 안분 없이 전액 공제 · 원래 판정: "+k.why;k.cls="과세전용";}
+    r.cls=k.cls;r.auto=k.cls;r.why=k.why;x.r=r;
     st.rows.push(r);
   }
   st.head=R.purch.head;st.col={g:C.g,v:C.v,memo:C.memo,vendor:C.vendor};st.file="이카운트 매입장 (세금계산서 "+st.rows.length+"건)";st.ui.f="all";
@@ -11198,7 +11202,7 @@ window.vatOpen=function(i){
       <dt>금액</dt><dd>공급가액 <b>${fmt(r.g)}</b> · 부가세 <b>${fmt(r.v)}</b></dd></dl>
     <div class="big"><span class="ox ${vatOXc(o)}">${o}</span><div><b>${VAT_CLS_LB[r.cls]}</b>${r.cls!==r.auto?` <span style="font-size:12px;color:#b45309">(직접 변경 · 자동 판정: ${VAT_CLS_LB[r.auto]})</span>`:""}<div style="font-size:13px;color:#475569;margin-top:2px">${VAT_GUIDE[r.cls]}</div></div></div>
     <div style="font-size:13px;font-weight:600">왜 이렇게 판정했나요?</div><ul>${pts}</ul>
-    <div style="margin-top:12px;font-size:13px">분류 바꾸기 <select class="vs" style="font:inherit;font-size:13px;padding:3px 6px;border:1px solid #e5e7eb;border-radius:6px" onchange="vatSetCls(${i},this.value)">${VAT_CLS.map(c=>`<option value="${c}" ${c===r.cls?"selected":""}>${VAT_CLS_LB[c]}</option>`).join("")}</select></div>
+    <div style="margin-top:12px;font-size:13px">분류 바꾸기 <select class="vs" style="font:inherit;font-size:13px;padding:3px 6px;border:1px solid #e5e7eb;border-radius:6px" onchange="vatSetCls(${i},this.value)">${vatClsList().map(c=>`<option value="${c}" ${c===r.cls?"selected":""}>${VAT_CLS_LB[c]}</option>`).join("")}</select></div>
     <div class="ft"><button class="btn" ${pos>0?"":"disabled"} onclick="vatOpen(${pos>0?L[pos-1]:i})">◀ 이전</button><button class="btn" ${pos>=0&&pos<L.length-1?"":"disabled"} onclick="vatOpen(${pos>=0&&pos<L.length-1?L[pos+1]:i})">다음 ▶</button></div>
   </div>`;
 };
@@ -11314,7 +11318,7 @@ function vatSave(quiet,del){
   }catch(e){console.warn(e);}
   finally{if(!quiet)vatCloudQueue(del);}
 }
-function vatRefresh(ov){const st=window.__vat,R=st.rep;if(!R)return;ov=ov||vatOverrides();vatRepMeta(R);vatBuildView(R);vatRepReview(R);for(const r of st.rows){const k=ov[vatROK(r)]||ov[r.raw.join("|")];if(k)r.cls=k;}vatSave();}
+function vatRefresh(ov){const st=window.__vat,R=st.rep;if(!R)return;ov=ov||vatOverrides();vatRepMeta(R);vatBuildView(R);vatRepReview(R);for(const r of st.rows){const k=ov[vatROK(r)]||ov[r.raw.join("|")];if(k)r.cls=k;if(st.ui.co==="epida"&&(r.cls==="공통"||r.cls==="면세전용"))r.cls="과세전용";}vatSave();}
 function vatLoad(){
   try{
     /* v302 이전 단일 보관분 → 회사별로 옮기기 */
@@ -11508,7 +11512,7 @@ function vatSheetHtml(def){
     if(!ex){tg+=g;tv+=v;n++;mg+=g;mv+=v;mc++;}
     let extra="";
     if(isTI&&x.r){const r=x.r,o=vatOX(r.cls),ri=st.rows.indexOf(r);
-      extra=`${ep?"":`<td style="text-align:center"><span class="ox clk ${vatOXc(o)}" onclick="vatOpen(${ri})">${o}</span></td>`}<td><select class="vs" onchange="vatSetCls(${ri},this.value)">${VAT_CLS.map(c=>`<option value="${c}" ${c===r.cls?"selected":""}>${VAT_CLS_SH[c]}</option>`).join("")}</select></td>`;}
+      extra=`${ep?"":`<td style="text-align:center"><span class="ox clk ${vatOXc(o)}" onclick="vatOpen(${ri})">${o}</span></td>`}<td><select class="vs" onchange="vatSetCls(${ri},this.value)">${vatClsList().map(c=>`<option value="${c}" ${c===r.cls?"selected":""}>${VAT_CLS_SH[c]}</option>`).join("")}</select></td>`;}
     html+=`<tr class="${ex?"exr":""}"><td class="rn">${x.rn||""}</td>${cols.slice(0,cut).map(c=>cell(c,x,i)).join("")}${extra}${cols.slice(cut).map(c=>cell(c,x,i)).join("")}<td class="ck" style="text-align:center"><input type="checkbox" title="자료에서 제외" ${x.ex?"checked":""} onchange="vatEx('${src}',${i},this.checked)">${x.a0||x.me?`<a title="고친 내용 되돌리기" style="cursor:pointer;margin-left:3px" onclick="vatEditReset('${src}',${i})">↩</a>`:""}</td></tr>`;
   }
   flush();
@@ -11549,7 +11553,7 @@ function vatCommonHtml(){
     const deptTd=r.src?`<td class="edc${(r.src.a0&&r.src.a0[st.rep.purch.C.dept]!==r.dept)||(r.src.me&&r.src.me[st.rep.purch.C.dept]!=null)?" edd":""}" title="눌러서 고치기" onclick="vatEditRow(this,${i},'dept')">${esc(r.dept)}</td>`:`<td>${esc(r.dept)}</td>`;
     return `<tr class="${r.cls==="제외"?"exr":""}"><td class="rn">${r.rn}</td><td class="tx" title="${esc(r.vendor)}">${esc(r.vendor)}</td>${memoTd}
     <td style="text-align:center"><span class="ox clk ${vatOXc(o)}" onclick="vatOpen(${i})" title="눌러서 설명 보기">${o}</span></td>
-    <td><select class="vs" onchange="vatSetCls(${i},this.value)">${VAT_CLS.map(c=>`<option value="${c}" ${c===r.cls?"selected":""}>${VAT_CLS_SH[c]}</option>`).join("")}</select>${r.cls!==r.auto?' <span style="font-size:11px;color:#b45309" title="직접 변경">✎</span>':""}</td>
+    <td><select class="vs" onchange="vatSetCls(${i},this.value)">${vatClsList().map(c=>`<option value="${c}" ${c===r.cls?"selected":""}>${VAT_CLS_SH[c]}</option>`).join("")}</select>${r.cls!==r.auto?' <span style="font-size:11px;color:#b45309" title="직접 변경">✎</span>':""}</td>
     ${deptTd}<td class="n">${fmt(r.g)}</td><td class="n">${fmt(r.v)}</td></tr>`;}).join("");
   return head+`<div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0">
       ${st.rep&&S2["공통"].n?`<button class="btn" onclick="vatReportDownload('공통매입세액')">⬇ 공통매입세액 시트만 받기</button>`:""}
