@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v305</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v307</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -10659,14 +10659,74 @@ window.payPick=payPick;window.payDownload=payDownload;window.payCellEdit=payCell
 window.__vat=window.__vat||{head:null,rows:[],col:null,ui:{f:"all",ratio:""},file:""};
 const VAT_CO={kkotbap:"꽃밥이야기",epida:"꽃밥에피다"};
 try{const c=localStorage.getItem("salesApp_vatCo");window.__vat.ui.co=VAT_CO[c]?c:"kkotbap";}catch(e){window.__vat.ui.co="kkotbap";}
-function vatKey(){return "salesApp_vatRep_"+window.__vat.ui.co;}
+/* v307: 신고기간(예: 2026-2-예정)별로 저장 — 브라우저 + 클라우드(salesApp_vat) */
+const VAT_PK_M={"1-예정":[1,3],"1-확정":[4,6],"2-예정":[7,9],"2-확정":[10,12]};
+function vatPkDefault(){const d=new Date();d.setMonth(d.getMonth()-1);const q=Math.floor(d.getMonth()/3)+1;return d.getFullYear()+"-"+(q<=2?1:2)+"-"+(q%2?"예정":"확정");}
+function vatPkParts(pk){const m=String(pk||"").match(/^(\d{4})-(\d)-(예정|확정)$/);return m?{y:+m[1],h:+m[2],k:m[3]}:null;}
+function vatPkLabel(pk){const p=vatPkParts(pk);return p?`${p.y}년 ${p.h}기 ${p.k}`:pk;}
+function vatPkTitle(pk){const p=vatPkParts(pk);if(!p)return "";const[m1,m2]=VAT_PK_M[p.h+"-"+p.k];return `${p.y}년 ${p.h}기 ${p.k} 부가가치세 정리내역(${m1}/1~${m2}/${new Date(p.y,m2,0).getDate()})`;}
+function vatPkOfDates(ds){if(!ds.length)return null;ds=ds.slice().sort();const l=ds[ds.length-1],y=+l.slice(0,4),q=Math.ceil(+l.slice(5,7)/3);return y+"-"+(q<=2?1:2)+"-"+(q%2?"예정":"확정");}
+try{const v=localStorage.getItem("salesApp_vatPk");window.__vat.ui.pk=vatPkParts(v)?v:vatPkDefault();}catch(e){window.__vat.ui.pk=vatPkDefault();}
+function vatKey(){return "salesApp_vatRep_"+window.__vat.ui.co+"_"+window.__vat.ui.pk;}
+function vatDocId(){return window.__vat.ui.co+"_"+window.__vat.ui.pk;}
+function vatResetState(){const st=window.__vat;st.rep=null;st.rows=[];st.head=null;st.list=null;st.ui.f="all";st.ui.ratio="";const ov=document.getElementById("vatOv");if(ov)ov.remove();}
+function vatPkSwitch(pk){
+  const st=window.__vat;if(!vatPkParts(pk)||pk===st.ui.pk)return;
+  vatCloudFlush();
+  st.ui.pk=pk;try{localStorage.setItem("salesApp_vatPk",pk);}catch(e){}
+  vatResetState();st.loaded=true;vatLoad();
+}
+window.vatPk=function(pk){vatPkSwitch(pk);renderVat();};
+/* 클라우드 */
+function vatFs(){return (typeof IS_DEMO!=="undefined"&&!IS_DEMO&&typeof db!=="undefined"&&db)?fsCol("vat"):null;}
+let VAT_CT=null,VAT_PEND=null;
+/* 저장 예약은 그 시점의 회사·기간에 묶어 둠 (기간을 바꿔도 엉뚱한 곳에 저장되지 않게) */
+function vatCloudQueue(del){
+  const st=window.__vat,k=st.ui.co+"_"+st.ui.pk;
+  if(VAT_PEND&&VAT_PEND.k!==k)vatCloudFlush();
+  clearTimeout(VAT_CT);st.cloud="saving";VAT_PEND={k,co:st.ui.co,pk:st.ui.pk,del:!!del||(VAT_PEND&&VAT_PEND.k===k&&VAT_PEND.del)};
+  VAT_CT=setTimeout(vatCloudFlush,1500);
+}
+function vatCloudFlush(){clearTimeout(VAT_CT);const p=VAT_PEND;VAT_PEND=null;if(p)vatCloudSave(p.co,p.pk,p.del);}
+async function vatCloudSave(co,pk,del){
+  const st=window.__vat,col=vatFs();if(!col){st.cloud="local";vatCloudTick();return;}
+  const raw=localStorage.getItem("salesApp_vatRep_"+co+"_"+pk);
+  try{
+    if(!raw){if(!del){st.cloud="";return;}await col.doc(co+"_"+pk).delete();await col.doc("_index_"+co).set({items:{[pk]:firebase.firestore.FieldValue.delete()}},{merge:true});st.cloud="saved";vatCloudTick();return;}
+    if(raw.length>950000)throw new Error("자료가 너무 커서 클라우드에 못 올렸어요 (이 브라우저에는 저장됨)");
+    const o=JSON.parse(raw),cnt={};for(const k of["sales","purch","card","hyeon"])cnt[k]=o[k]?o[k].rows.length:0;
+    await col.doc(co+"_"+pk).set({co,pk,label:vatPkLabel(pk),savedAt:o.savedAt||Date.now(),by:(typeof S!=="undefined"&&S.user&&S.user.username)||"",data:raw});
+    await col.doc("_index_"+co).set({items:{[pk]:{label:vatPkLabel(pk),savedAt:o.savedAt||Date.now(),cnt}}},{merge:true});
+    st.idx=st.idx||{};st.idx[co]=st.idx[co]||{};const fresh=!st.idx[co][pk];st.idx[co][pk]={label:vatPkLabel(pk),savedAt:o.savedAt||Date.now(),cnt};
+    st.cloud="saved";if(fresh&&st.ui.co===co)renderVat();
+  }catch(e){console.warn(e);st.cloud="err:"+(e.message||e);}
+  vatCloudTick();
+}
+function vatCloudTick(){const el=document.getElementById("vatCloud");if(el)el.innerHTML=vatCloudBadge();}
+function vatCloudBadge(){const c=window.__vat.cloud||"";
+  return c==="saving"?'<span style="color:#b45309">☁ 저장 중…</span>':c==="saved"?'<span style="color:#16a34a">☁ 클라우드에 저장됨</span>':c==="local"?'<span style="color:#64748b">이 브라우저에만 저장(데모)</span>':c.indexOf("err:")===0?`<span style="color:#dc2626">☁ 저장 실패 — ${esc(c.slice(4))}</span>`:"";}
+async function vatIndexLoad(co){
+  const st=window.__vat,col=vatFs();st.idx=st.idx||{};if(!col||st.idxLoaded&&st.idxLoaded[co])return;
+  st.idxLoaded=st.idxLoaded||{};st.idxLoaded[co]=true;
+  try{const d=await col.doc("_index_"+co).get();st.idx[co]=(d.exists&&d.data().items)||{};}catch(e){console.warn(e);}
+  if(window.__vat.ui.co===co)renderVat();
+}
+/* 클라우드 자료가 더 새것이면 받아오기 */
+async function vatCloudLoad(){
+  const st=window.__vat,col=vatFs();if(!col)return;const co=st.ui.co,pk=st.ui.pk,key=vatKey();
+  try{const d=await col.doc(co+"_"+pk).get();if(!d.exists)return;const c=d.data();
+    let loc=null;try{loc=JSON.parse(localStorage.getItem(key)||"null");}catch(e){}
+    if(loc&&(loc.savedAt||0)>=(c.savedAt||0))return;
+    if(st.ui.co!==co||st.ui.pk!==pk)return;
+    localStorage.setItem(key,c.data);vatResetState();vatLoad(true);st.cloud="saved";renderVat();
+  }catch(e){console.warn(e);}
+}
 function vatCoSwitch(co){
   const st=window.__vat;if(!VAT_CO[co]||co===st.ui.co)return;
-  if(st.rep)vatSave();
+  vatCloudFlush();
   st.ui.co=co;try{localStorage.setItem("salesApp_vatCo",co);}catch(e){}
-  st.rep=null;st.rows=[];st.head=null;st.list=null;st.loaded=false;st.ui.f="all";st.ui.ratio="";
+  vatResetState();
   if(co==="epida"&&st.ui.sub==="공통매입세액")st.ui.sub="전체요약";
-  const ov=document.getElementById("vatOv");if(ov)ov.remove();
   st.loaded=true;vatLoad();
 }
 window.vatCo=function(co){vatCoSwitch(co);renderVat();};
@@ -10731,7 +10791,7 @@ const VAT_CLS_SH={"공통":"공통","과세전용":"과세전용","면세전용"
 const VAT_GUIDE={"공통":"공통매입세액에 넣어요. 신고 때 면세비율만큼은 불공제, 나머지는 공제돼요.",
   "과세전용":"공통에 넣지 말고 일반 매입세액으로 전액 공제받아요.",
   "면세전용":"면세사업에만 쓴 비용이라 매입세액을 공제받지 않아요(불공제).",
-  "불공제":"매입세액 불공제 대상이에요. 신고서 '공제받지 못할 매입세액'으로 넣어요.",
+  "불공제":"매입세액 불공제 대상이에요. 매입(전자세금계산서) 시트에는 그대로 남고, 전체요약에서 '전자세금계산서(불공제)' 줄로 따로 잡혀요.",
   "세액없음":"부가세가 없는 매입이라 매입세액 공제와 무관해요. 계산서합계표에만 들어가요.",
   "확인":"자동으로 판단하기 어려워요. 실제 용도를 확인한 뒤 분류를 골라주세요.",
   "고정자산":"세무사무실 자료에서 '매입(고정자산)' 시트로 따로 보내요 (공통매입세액 시트에는 안 들어가요).",
@@ -10850,11 +10910,7 @@ function vatRepMeta(R){
   const title=(R.purch&&R.purch.title)||(R.sales&&R.sales.title)||"";
   const cm=title.match(/회사명\s*:\s*([^/]+)/);
   if(cm&&!R.company){R.company=cm[1].trim();R.short=VAT_CO[window.__vat.ui.co]||R.company.replace(/주식회사|\(주\)|㈜/g,"").trim();}
-  if(ds.length&&!R.period){
-    const y=+ds[0].slice(0,4),m1=+ds[0].slice(5,7),m2=+ds[ds.length-1].slice(5,7),last=new Date(y,m2,0).getDate();
-    const h=m1<=6?1:2,kind=(m2-m1<=2&&(m1===1||m1===7))?"예정":"확정";
-    R.period=`${y}년 ${h}기 ${kind} 부가가치세 정리내역(${m1}/1~${m2}/${last})`;
-  }
+  if(!R.period)R.period=vatPkTitle(window.__vat.ui.pk);
 }
 /* 매입 세금계산서 줄 → 공통 판정 목록 */
 function vatRepReview(R){
@@ -10881,7 +10937,6 @@ function vatPurchBase(x){
   const k=x.kind||"",paper=/종이/.test(x.elec||"");
   if(/세금계산서/.test(k)){
     if(x.r&&x.r.cls==="고정자산")return "매입(고정자산)";
-    if(x.r&&x.r.cls==="불공제")return "매입(불공제)";
     return paper?"매입(종이세금계산서)":"매입(전자세금계산서)";
   }
   if(/계산서/.test(k))return paper?"매입(종이계산서)":"매입(전자계산서)";
@@ -10927,6 +10982,29 @@ function vatHometaxSheet(name,B,list,isHyeon){
   const gi=numC.indexOf(B.C.g),vi=numC.indexOf(B.C.v);
   return {sheet:{name,rows,cols:W},g:gi>=0?tot[gi]:0,v:vi>=0?tot[vi]:0,n:list.length};
 }
+/* v306: 세무사무실 양식 그대로 — 회사별 시트 이름·순서, 빈 시트도 머리글만 넣어 항상 포함, 불공제는 별도 시트 없이 요약 줄로만 */
+const VAT_TPL={
+  kkotbap:["전체요약","공통매입세액","매출(세금계산서)","매출(카드)","매출(현금영수증)","매출(소매)","매출(계산서)","매출(카드면세)","매출(현영면세)","매출(소매면세)",
+    "매입(전자세금계산서)","매입(종이세금계산서)","매입(고정자산)","매입(현금영수증)","매입(신용카드과세)","매입(전자계산서)","매입(종이계산서)","매입(기타매입)","매입(현영면세)","매입(신용카드면세)"],
+  epida:["전체요약","매출(카드)","매출(현금영수증)","매출(소매)","매입(전자세금계산서)","매입(고정자산)","매입(종이세금계산서)","매입(현금영수증)","매입(신용카드과세)",
+    "매입(전자계산서)","매입(종이계산서)","매입(기타매입)","매입(현영면세)","매입(신용카드면세)"]
+};
+const VAT_SHEETNAME={epida:{"매입(고정자산)":"매입전자세금계산서(고정자산)","매입(현금영수증)":"매입(현금영수증과세)","매입(신용카드과세)":"매입(신용카드)","매입(현영면세)":"매입(현금영수증면세)"}};
+function vatSN(k){return (VAT_SHEETNAME[window.__vat.ui.co]||{})[k]||k;}
+const VAT_HEAD={
+  sales:["월/일","유형명","전자구분","거래처명","적요","매출공급가액","매출부가세","매출합계","부서명"],
+  purch:["월/일","유형명","전자구분","거래처코드","대표자명","거래처명","적요","매입공급가액","매입부가세","부서명"],
+  card:["카드사","카드번호","가맹점 사업자번호","가맹점명","공급가액","세액","비과세","합계","건수","유형"],
+  hyeon:["매입일시","사용자명","가맹점사업자번호","가맹점명","업종코드","업종","업태","공급가액","부가세","봉사료","매입금액","승인번호","발급수단","거래구분","공제여부"]};
+function vatSrcOf(k){return k==="공통매입세액"?"purch":/^매출/.test(k)?"sales":/신용카드/.test(k)?"card":/현금영수증|현영/.test(k)?"hyeon":"purch";}
+function vatEmptySheet(k){
+  const R=window.__vat.rep||{},src=vatSrcOf(k),B=R[src],head=B?B.head:VAT_HEAD[src];
+  const rows=[];
+  if(src==="sales"||src==="purch")rows.push([{v:(B&&B.title)||`회사명 : ${R.company||("주식회사 "+(R.short||""))} / ${src==="sales"?"매출장":"매입장"}`}]);
+  else if(src==="hyeon")rows.push(head.map(()=>({v:""})));
+  rows.push(head.map(h=>({v:h,s:13})));
+  return {name:k,rows,cols:head.map(h=>/거래처명|적요|가맹점명|업종/.test(h)?26:/월\/일|카드번호|사업자번호|매입일시/.test(h)?16:VAT_NUMH.test(h)?13:11)};
+}
 function vatCollect(){
   const R=window.__vat.rep;if(!R)throw new Error("먼저 파일을 올려주세요");
   const sheets={},sum={};
@@ -10936,12 +11014,21 @@ function vatCollect(){
     for(const n in by)put(n,vatLedgerSheet(n,R.sales.title||`회사명 : ${R.company} / 매출장`,R.sales.head,R.sales.C,by[n],true));
   }
   if(R.purch){
-    const by={};for(const x of vatRows("purch")){if(x.kind==null)x.kind=x.a[R.purch.C.kind]||"";if(x.elec==null)x.elec=R.purch.C.elec>=0?x.a[R.purch.C.elec]||"":"";const n=vatPurchSheet(x);if(n)(by[n]=by[n]||[]).push(x);}
+    const C=R.purch.C;
+    const by={};for(const x of vatRows("purch")){if(x.kind==null)x.kind=x.a[C.kind]||"";if(x.elec==null)x.elec=C.elec>=0?x.a[C.elec]||"":"";const n=vatPurchSheet(x);if(n)(by[n]=by[n]||[]).push(x);}
     const pt=R.purch.title||`회사명 : ${R.company} / 매입장`;
-    for(const n in by)put(n,vatLedgerSheet(n,pt,R.purch.head,R.purch.C,by[n],false));
+    for(const n in by)put(n,vatLedgerSheet(n,pt,R.purch.head,C,by[n],false));
+    /* 요약용: 전자세금계산서 중 불공제 / 고정자산 중 종이 */
+    const add=(k,x)=>{const o=sum[k]=sum[k]||{g:0,v:0,n:0};o.g+=vatNum(x.a[C.g]);o.v+=vatNum(x.a[C.v]);o.n++;};
+    for(const x of by["매입(전자세금계산서)"]||[])if(x.r&&x.r.cls==="불공제")add("_불공제",x);
+    for(const x of by["매입(고정자산)"]||[])if(/종이/.test(x.elec||""))add("_고정종이",x);
+    const e=sum["매입(전자세금계산서)"]||{g:0,v:0,n:0},nb=sum["_불공제"]||{g:0,v:0,n:0};
+    sum["_전자불공제제외"]={g:e.g-nb.g,v:e.v-nb.v,n:e.n-nb.n};
+    const fa=sum["매입(고정자산)"]||{g:0,v:0,n:0},fp=window.__vat.ui.co==="epida"?(sum["_고정종이"]||{g:0,v:0,n:0}):{g:0,v:0,n:0};
+    sum["_고정전자"]={g:fa.g-fp.g,v:fa.v-fp.v,n:fa.n-fp.n};
     const com=window.__vat.ui.co==="epida"?[]:vatRows("purch").filter(x=>!x.ex&&x.r&&x.r.cls==="공통");
     if(com.length){
-      const C=R.purch.C,head=R.purch.head,rows=[[{v:pt}],head.map(h=>({v:h,s:13}))];
+      const head=R.purch.head,rows=[[{v:pt}],head.map(h=>({v:h,s:13}))];
       for(const x of com)rows.push(head.map((_,i)=>i===C.g||i===C.v?{v:vatNum(x.a[i]),s:16}:{v:String(x.a[i]==null?"":x.a[i]),s:14}));
       const r1=rows.length,tr=head.map(()=>({v:"",s:17}));let g=0,v=0;for(const x of com){g+=vatNum(x.a[C.g]);v+=vatNum(x.a[C.v]);}
       tr[C.g]={f:`SUM(${cardColL(C.g)}3:${cardColL(C.g)}${r1})`,v:g,s:18};tr[C.v]={f:`SUM(${cardColL(C.v)}3:${cardColL(C.v)}${r1})`,v:v,s:18};rows.push(tr);
@@ -10958,11 +11045,16 @@ function vatCollect(){
     if(fr.length)put("매입(현영면세)",vatHometaxSheet("매입(현영면세)",R.hyeon,fr,true));}
   return {sheets,sum};
 }
+/* 전체요약 줄 구성 — 각 회사 1기 양식 그대로 (tab: 눌렀을 때 갈 탭) */
 function vatGroups(sum){
+  const ep=window.__vat.ui.co==="epida";
+  const T=[["전자세금계산서(불공제제외)","_전자불공제제외","n","매입(전자세금계산서)"],["전자세금계산서(고정자산)","_고정전자","n","매입(고정자산)"]]
+    .concat(ep?[["종이세금계산서(고정자산)","_고정종이","n","매입(고정자산)"]]:[])
+    .concat([["전자세금계산서(불공제)","_불공제","n","매입(전자세금계산서)"],["종이세금계산서","매입(종이세금계산서)","n"],["현금영수증 과세","매입(현금영수증)","h"],["신용카드 과세","매입(신용카드과세)","h"]]);
   return [
     ["매출 세금계산서 총금액",[["전자세금계산서","매출(세금계산서)","n"],["신용카드 과세","매출(카드)"],["현금영수증 과세","매출(현금영수증)"],["소매 과세","매출(소매)"]].concat(sum["매출(기타)"]?[["기타 매출","매출(기타)","n"]]:[])],
     ["매출 계산서 총금액",[[" 전자 계산서","매출(계산서)","n"],["신용카드 면세","매출(카드면세)"],["현금영수증 면세","매출(현영면세)"],["소매 면세","매출(소매면세)"]]],
-    ["매입 세금계산서 총금액",[["전자세금계산서(불공제제외)","매입(전자세금계산서)","n"],["전자세금계산서(고정자산)","매입(고정자산)","n"],["전자세금계산서(불공제)","매입(불공제)","n"],["종이세금계산서","매입(종이세금계산서)","n"],["현금영수증 과세","매입(현금영수증)","h"],["신용카드 과세","매입(신용카드과세)","h"]]],
+    ["매입 세금계산서 총금액",T],
     ["매입 계산서 총금액",[["전자 계산서","매입(전자계산서)","n"],["종이 계산서","매입(종이계산서)","n"],["기타매입","매입(기타매입)","n"],["현금영수증(면세)","매입(현영면세)","h"],["신용카드(면세)","매입(신용카드면세)","h"]].concat(sum["매입(기타)"]?[["기타","매입(기타)","n"]]:[])]
   ];
 }
@@ -10978,14 +11070,15 @@ async function vatBuildReport(only){
     for(const it of items){const o=S(it[1]),rr=sr.length+1;
       sr.push([{v:it[0],s:14},{v:o.g,s:16},{v:o.v,s:16},{f:`SUM(B${rr}:C${rr})`,v:o.g+o.v,s:16},{v:it[2]==="h"?"홈택스 자료":it[2]==="n"&&o.n?o.n+" 건":"",s:15}]);}
   }
-  if(sum["공통매입세액"]){const o=sum["공통매입세액"],rr=sr.length+2;
-    sr.push([]);sr.push([{v:"(참고) 공통매입세액",s:17},{v:o.g,s:18},{v:o.v,s:18},{f:`SUM(B${rr}:C${rr})`,v:o.g+o.v,s:18},{v:o.n+" 건",s:15}]);}
-  const order=["매출(세금계산서)","매출(카드)","매출(현금영수증)","매출(소매)","매출(계산서)","매출(카드면세)","매출(현영면세)","매출(소매면세)","매출(기타)",
-    "매입(전자세금계산서)","매입(종이세금계산서)","매입(고정자산)","매입(불공제)","매입(현금영수증)","매입(신용카드과세)","매입(전자계산서)","매입(종이계산서)","매입(기타매입)","매입(현영면세)","매입(신용카드면세)","매입(기타)"];
-  const list=[{name:"전체요약",rows:sr,cols:[30,16,16,16,12],merges:smerge}];
-  if(sheets["공통매입세액"])list.push(sheets["공통매입세액"]);
-  for(const n of order)if(sheets[n])list.push(sheets[n]);
-  if(only){const one=list.filter(x=>x.name===only);if(!one.length)throw new Error("'"+only+"' 시트에 들어갈 내용이 없어요");return await cardBuildXlsx(one);}
+  const tpl=VAT_TPL[window.__vat.ui.co]||VAT_TPL.kkotbap;
+  const list=[];
+  for(const k of tpl){
+    if(k==="전체요약"){list.push({name:"전체요약",rows:sr,cols:[30,16,16,16,12],merges:smerge});continue;}
+    const sh=sheets[k]||vatEmptySheet(k);list.push(Object.assign({},sh,{name:vatSN(k)}));
+  }
+  /* 양식에 없는 유형인데 자료가 있으면 끝에 붙임 (빠뜨리지 않게) */
+  for(const k in sheets)if(!tpl.includes(k))list.push(Object.assign({},sheets[k],{name:vatSN(k)}));
+  if(only){const one=list.filter(x=>x.name===vatSN(only));if(!one.length)throw new Error("'"+only+"' 시트를 찾지 못했어요");return await cardBuildXlsx(one);}
   return await cardBuildXlsx(list);
 }
 window.vatReportDownload=async function(only){
@@ -10993,7 +11086,7 @@ window.vatReportDownload=async function(only){
     const R=window.__vat.rep;const blob=await vatBuildReport(only);
     const a=document.createElement("a");a.href=URL.createObjectURL(blob);
     const pm=(R.period||"").match(/(\d{4})년\s*(\d)기\s*(예정|확정)/);
-    a.download=`${R.short||"부가세"} ${pm?pm[1].slice(2)+"년 "+pm[2]+"기 "+pm[3]:""} ${only||"부가세자료"}.xlsx`.replace(/\s+/g," ");
+    a.download=`${R.short||"부가세"} ${pm?pm[1].slice(2)+"년 "+pm[2]+"기 "+pm[3]:""} ${only?vatSN(only):"부가세자료"}.xlsx`.replace(/\s+/g," ");
     document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},2000);
   }catch(e){console.error(e);toast(e.message||"엑셀 생성 실패",true);}
 };
@@ -11014,9 +11107,18 @@ function vatDetectCo(R2){
 /* 회사가 다르면 물어보고 전환. false면 취소 */
 function vatCoCheck(R2){
   const co=vatDetectCo(R2),cur=window.__vat.ui.co;
-  if(!co||co===cur)return true;
-  if(!confirm(`이 파일은 '${VAT_CO[co]}' 자료 같아요. 지금은 '${VAT_CO[cur]}'를 보고 있어요.\n\n'${VAT_CO[co]}'로 바꿔서 올릴까요? (취소하면 올리지 않아요)`))return false;
-  vatCoSwitch(co);return true;
+  if(co&&co!==cur){
+    if(!confirm(`이 파일은 '${VAT_CO[co]}' 자료 같아요. 지금은 '${VAT_CO[cur]}'를 보고 있어요.\n\n'${VAT_CO[co]}'로 바꿔서 올릴까요? (취소하면 올리지 않아요)`))return false;
+    vatCoSwitch(co);
+  }
+  const ds=[];for(const k of["sales","purch"])if(R2[k])for(const r of R2[k].rows)ds.push(String(r.a[0]).slice(0,10));
+  if(!ds.length)for(const k of["hyeon"])if(R2[k])for(const r of R2[k].rows)ds.push(String(r.a[0]).slice(0,10).replace(/-/g,"/"));
+  const pk=vatPkOfDates(ds),cp=window.__vat.ui.pk;
+  if(pk&&pk!==cp){
+    if(!confirm(`이 파일은 '${vatPkLabel(pk)}' 기간 자료 같아요. 지금은 '${vatPkLabel(cp)}'를 보고 있어요.\n\n'${vatPkLabel(pk)}'로 바꿔서 올릴까요? (취소하면 올리지 않아요)`))return false;
+    vatPkSwitch(pk);
+  }
+  return true;
 }
 /* R2를 현재 회사 자료에 합치기 — tab을 주면 그 탭 자료는 교체 */
 function vatMergeInto(R2,fs,name,src){
@@ -11114,7 +11216,7 @@ window.vatDownload=async function(){
 };
 /* ===== v302: 부가세 하위탭 — 세무사무실 엑셀 시트와 같은 탭, 탭마다 올리기·정리·받기, 브라우저에 보관 ===== */
 const VAT_SUBS=[["전체요약",null],["공통매입세액",null],["매출(세금계산서)","sales","세금계산서"],["매출(카드)","sales","카드매출"],["매출(현금영수증)","sales","현금영수증"],["매출(소매)","sales","소매매출"],["매출(계산서)","sales","계산서"],["매출(카드면세)","sales","카드매출(면세)"],["매출(현영면세)","sales","현금영수증(면세)"],["매출(소매면세)","sales","소매(면세)"],["매출(기타)","sales",""],
-  ["매입(전자세금계산서)","purch","세금계산서 (전자)"],["매입(종이세금계산서)","purch","세금계산서 (종이)"],["매입(고정자산)","purch",""],["매입(불공제)","purch",""],["매입(현금영수증)","hyeon"],["매입(신용카드과세)","card"],["매입(전자계산서)","purch","계산서 (전자)"],["매입(종이계산서)","purch","계산서 (종이)"],["매입(기타매입)","purch","기타매입"],["매입(현영면세)","hyeon"],["매입(신용카드면세)","card"],["매입(기타)","purch",""]];
+  ["매입(전자세금계산서)","purch","세금계산서 (전자)"],["매입(종이세금계산서)","purch","세금계산서 (종이)"],["매입(고정자산)","purch",""],["매입(현금영수증)","hyeon"],["매입(신용카드과세)","card"],["매입(전자계산서)","purch","계산서 (전자)"],["매입(종이계산서)","purch","계산서 (종이)"],["매입(기타매입)","purch","기타매입"],["매입(현영면세)","hyeon"],["매입(신용카드면세)","card"],["매입(기타)","purch",""]];
 function vatOverrides(){const m={};for(const r of window.__vat.rows||[])if(r.cls!==r.auto)m[r.raw.join("|")]=r.cls;return m;}
 /* ===== v305: 합치기 규칙 — 이카운트에서 부서별(마켓/보자기)로 나눠 넣은 같은 세금계산서를 '꽃밥이야기' 한 줄로 =====
    원본 줄은 그대로 두고(R.purch.rows) 화면·엑셀은 합친 목록(R.purch.view)을 씀 → 규칙을 지우면 원래대로 */
@@ -11169,11 +11271,13 @@ function vatRulesHtml(){
     ${cands.length?`<div style="margin-top:6px;color:#b45309">💡 같은 날 부서만 다르게 나뉜 세금계산서가 있어요: ${cands.map(c=>`${esc(c.name)} (${esc(c.memo)}, ${c.n}번) <a style="color:#2563eb;cursor:pointer" onclick="vatRuleAdd('${c.code}','${esc(c.name).replace(/'/g,"")}')">[합치기 규칙 추가]</a>`).join(" · ")} <span style="color:#94a3b8">— 원래 따로 발행된 세금계산서(예: 회선별 전화요금)면 그대로 두세요</span></div>`:""}
   </div>`;
 }
-function vatSave(){
+function vatSave(quiet,del){
+  const st0=window.__vat;if(st0.loading)return;
   try{const st=window.__vat,R=st.rep;if(!R){localStorage.removeItem(vatKey());return;}
     const ser=k=>R[k]?{title:R[k].title,head:R[k].head,C:R[k].C,rows:R[k].rows.map(x=>({a:x.a,rn:x.rn,ex:x.ex?1:0}))}:null;
-    localStorage.setItem(vatKey(),JSON.stringify({v:1,sales:ser("sales"),purch:ser("purch"),card:ser("card"),hyeon:ser("hyeon"),files:R.files,company:R.company,short:R.short,period:R.period,ov:vatOverrides(),ratio:st.ui.ratio}));
+    localStorage.setItem(vatKey(),JSON.stringify({v:1,sales:ser("sales"),purch:ser("purch"),card:ser("card"),hyeon:ser("hyeon"),files:R.files,company:R.company,short:R.short,period:R.period,ov:vatOverrides(),ratio:st.ui.ratio,savedAt:Date.now()}));
   }catch(e){console.warn(e);}
+  finally{if(!quiet)vatCloudQueue(del);}
 }
 function vatRefresh(ov){const st=window.__vat,R=st.rep;if(!R)return;ov=ov||vatOverrides();vatRepMeta(R);vatBuildView(R);vatRepReview(R);for(const r of st.rows){const k=ov[r.raw.join("|")];if(k)r.cls=k;}vatSave();}
 function vatLoad(){
@@ -11181,12 +11285,19 @@ function vatLoad(){
     /* v302 이전 단일 보관분 → 회사별로 옮기기 */
     const old=localStorage.getItem("salesApp_vatRep");
     if(old){try{const oo=JSON.parse(old);const c=/에피다/.test((oo&&oo.short||"")+(oo&&oo.company||""))?"epida":"kkotbap";if(!localStorage.getItem("salesApp_vatRep_"+c))localStorage.setItem("salesApp_vatRep_"+c,old);}catch(e){}localStorage.removeItem("salesApp_vatRep");}
+    /* v303~v306 회사별(기간 없음) 보관분 → 자료의 기간으로 옮기기 */
+    for(const c of Object.keys(VAT_CO)){const ok="salesApp_vatRep_"+c,ov=localStorage.getItem(ok);if(!ov)continue;
+      try{const oo=JSON.parse(ov);const m=String(oo.period||"").match(/(\d{4})년\s*(\d)기\s*(예정|확정)/);const pk=m?m[1]+"-"+m[2]+"-"+m[3]:vatPkDefault();
+        if(!localStorage.getItem(ok+"_"+pk))localStorage.setItem(ok+"_"+pk,ov);}catch(e){}
+      localStorage.removeItem(ok);}
+    if(!arguments[0])setTimeout(vatCloudLoad,0);
     const o=JSON.parse(localStorage.getItem(vatKey())||"null");if(!o||o.v!==1)return;
     const R=vatEmptyRep();
     for(const k of["sales","purch","card","hyeon"])if(o[k]){R[k]={title:o[k].title||"",head:o[k].head,C:o[k].C,rows:o[k].rows.map(x=>({a:x.a,rn:x.rn,ex:!!x.ex}))};R[k].keys=new Set(R[k].rows.map(x=>x.a.join("|")));}
     Object.assign(R,{files:o.files||[],company:o.company||"",short:o.short||"",period:o.period||""});
-    window.__vat.rep=R;window.__vat.ui.ratio=o.ratio||"";vatRefresh(o.ov||{});
-  }catch(e){console.warn(e);}
+    window.__vat.rep=R;window.__vat.ui.ratio=o.ratio||"";
+    window.__vat.loading=true;try{vatRefresh(o.ov||{});}finally{window.__vat.loading=false;}
+  }catch(e){window.__vat.loading=false;console.warn(e);}
 }
 function vatRowTab(src,x){
   const R=window.__vat.rep,B=R[src];
@@ -11204,7 +11315,7 @@ window.vatTabClear=function(name,src){
   const ov=vatOverrides();R[src].rows=R[src].rows.filter(x=>vatRowTab(src,x)!==name);R[src].keys=new Set(R[src].rows.map(x=>x.a.join("|")));
   vatRefresh(ov);renderVat();
 };
-window.vatAllClear=function(){if(!confirm(VAT_CO[window.__vat.ui.co]+" 부가세 자료를 모두 지울까요? (다른 회사 자료는 그대로)"))return;window.__vat.rows=[];window.__vat.head=null;window.__vat.rep=null;vatSave();renderVat();};
+window.vatAllClear=function(){const st=window.__vat;if(!confirm(VAT_CO[st.ui.co]+" "+vatPkLabel(st.ui.pk)+" 부가세 자료를 지울까요? (클라우드 보관분도 지워져요 · 다른 회사·기간은 그대로)"))return;st.rows=[];st.head=null;st.rep=null;vatSave(false,true);if(st.idx&&st.idx[st.ui.co])delete st.idx[st.ui.co][st.ui.pk];renderVat();};
 /* 탭에서 올리기: 이 탭 자료는 새 파일로 교체, 같이 들어있는 다른 유형은 해당 탭으로 자동 분류 */
 window.vatPickTab=async function(inp,name,src){
   const fs=[...(inp.files||[])];if(!fs.length)return;
@@ -11259,6 +11370,14 @@ function vatRepPanel(){
 }
 window.vatRepSet=function(k,v){const R=window.__vat.rep;if(R){R[k]=v;vatSave();}};
 /* 전체요약 탭 */
+function vatSavedListHtml(){
+  const st=window.__vat,idx=(st.idx&&st.idx[st.ui.co])||{};
+  const ord=pk=>{const p=vatPkParts(pk);return p?p.y*10+(p.h-1)*2+(p.k==="확정"?1:0):0;};
+  const ks=Object.keys(idx).filter(vatPkParts).sort((a,b)=>ord(b)-ord(a));
+  if(!ks.length)return `<div style="font-size:12px;color:#94a3b8;margin-top:8px">📚 저장된 신고기간이 아직 없어요 — 자료를 올리면 '${vatPkLabel(st.ui.pk)}'로 자동 저장돼요.</div>`;
+  return `<div style="margin-top:10px"><div style="font-weight:600;font-size:13px;margin-bottom:4px">📚 ${VAT_CO[st.ui.co]} 저장된 신고기간</div><div style="display:flex;gap:6px;flex-wrap:wrap">${ks.map(pk=>{const it=idx[pk],c=it.cnt||{};const dt=it.savedAt?new Date(it.savedAt):null;
+    return `<div onclick="vatPk('${pk}')" style="cursor:pointer;border:1px solid ${pk===st.ui.pk?"#1e293b":"#e5e7eb"};border-radius:8px;padding:6px 10px;font-size:12px;${pk===st.ui.pk?"background:#f1f5f9":""}"><b>${vatPkLabel(pk)}</b><div style="color:#64748b">매출 ${c.sales||0} · 매입 ${c.purch||0} · 카드 ${c.card||0} · 현영 ${c.hyeon||0}${dt?` · ${dt.getMonth()+1}/${dt.getDate()} 저장`:""}</div></div>`;}).join("")}</div></div>`;
+}
 function vatSummaryHtml(){
   const st=window.__vat,R=st.rep;
   let body=`<div class="card"><div class="card-head"><div class="card-title">🧾 전체요약 <span class="unit">세무사무실에 보내는 엑셀의 첫 시트와 같아요 · 줄 이름을 누르면 해당 탭으로 가요</span></div></div>
@@ -11266,8 +11385,8 @@ function vatSummaryHtml(){
       <label class="btn btn-primary" style="cursor:pointer">📂 한꺼번에 올리기 (.xlsx 여러 개)<input type="file" accept=".xlsx" multiple style="display:none" onchange="vatPick(this)"></label>
       ${R?`<button class="btn btn-primary" onclick="vatReportDownload()">📥 세무사무실용 엑셀 받기 (전체)</button><button class="btn" onclick="vatAllClear()">전체 지우기</button>`:""}
     </div>
-    <div class="hintb">이카운트 매출장·매입장(유형별 파일 여러 개 OK) + 홈택스 신용카드·현금영수증 매입 파일을 한꺼번에 올리면 탭별로 자동 정리돼요. 탭마다 따로 올려도 돼요. 올린 자료는 이 브라우저에 보관돼서 새로고침해도 남아요.</div>
-    ${vatRepPanel()}`;
+    <div class="hintb">이카운트 매출장·매입장(유형별 파일 여러 개 OK) + 홈택스 신용카드·현금영수증 매입 파일을 한꺼번에 올리면 탭별로 자동 정리돼요. 탭마다 따로 올려도 돼요. 자료는 <b>회사·신고기간별로 클라우드에 저장</b>돼서 다른 컴퓨터에서도, 다음 분기에도 다시 열어볼 수 있어요.</div>
+    ${vatRepPanel()}${vatSavedListHtml()}`;
   if(R){
     let col;try{col=vatCollect();}catch(e){col={sum:{}};}
     const sum=col.sum,z={g:0,v:0,n:0},S=n=>sum[n]||z;
@@ -11275,9 +11394,9 @@ function vatSummaryHtml(){
     for(const[gl,items]of vatGroups(sum)){
       const gg=items.reduce((a,it)=>a+S(it[1]).g,0),gv=items.reduce((a,it)=>a+S(it[1]).v,0);
       rows+=`<tr class="tt"><td>${gl}</td><td class="n">${fmt(gg)}</td><td class="n">${fmt(gv)}</td><td class="n">${fmt(gg+gv)}</td><td></td></tr>`;
-      for(const it of items){const o=S(it[1]);rows+=`<tr><td class="lk" onclick="vatSub('${it[1]}')">${esc(it[0].trim())}</td><td class="n">${fmt(o.g)}</td><td class="n">${fmt(o.v)}</td><td class="n">${fmt(o.g+o.v)}</td><td style="color:#64748b;font-size:12px">${it[2]==="h"?(o.n?"홈택스 자료":""):o.n?o.n+" 건":""}</td></tr>`;}
+      for(const it of items){const o=S(it[1]);rows+=`<tr><td class="lk" onclick="vatSub('${it[3]||it[1]}')">${esc(it[0].trim())}</td><td class="n">${fmt(o.g)}</td><td class="n">${fmt(o.v)}</td><td class="n">${fmt(o.g+o.v)}</td><td style="color:#64748b;font-size:12px">${it[2]==="h"?(o.n?"홈택스 자료":""):o.n?o.n+" 건":""}</td></tr>`;}
     }
-    if(sum["공통매입세액"]){const o=sum["공통매입세액"];rows+=`<tr><td colspan="5" style="border:0;height:8px"></td></tr><tr class="tt"><td class="lk" onclick="vatSub('공통매입세액')">(참고) 공통매입세액</td><td class="n">${fmt(o.g)}</td><td class="n">${fmt(o.v)}</td><td class="n">${fmt(o.g+o.v)}</td><td>${o.n} 건</td></tr>`;}
+    if(sum["공통매입세액"]){const o=sum["공통매입세액"];rows+=`<tr><td colspan="5" style="border:0;height:8px"></td></tr><tr class="tt"><td class="lk" onclick="vatSub('공통매입세액')">(참고·엑셀 요약엔 없음) 공통매입세액</td><td class="n">${fmt(o.g)}</td><td class="n">${fmt(o.v)}</td><td class="n">${fmt(o.g+o.v)}</td><td>${o.n} 건</td></tr>`;}
     body+=`<div style="font-weight:700;margin:10px 0 4px">${esc(R.period||"")} <span style="font-weight:400;color:#64748b">(${esc(R.short||R.company||"")})</span></div>
       <div style="overflow-x:auto"><table class="vt st"><tr><th>구분</th><th>공급가액</th><th>세액</th><th>합계</th><th></th></tr>${rows}</table></div>`;
   }
@@ -11288,12 +11407,12 @@ function vatSheetHtml(def){
   const[name,src,ty]=def,st=window.__vat,R=st.rep;
   const list=R?vatTabRows(name,src):[];
   const B=R&&R[src];
-  const moveOnly=name==="매입(고정자산)"||name==="매입(불공제)";
+  const moveOnly=name==="매입(고정자산)";
   const hint=src==="card"?"홈택스 → 신용카드 매입 → 사업용 신용카드 사용내역을 엑셀로 받은 파일 (과세·면세가 같이 있어도 세액 유무로 자동으로 나눠요)"
     :src==="hyeon"?"홈택스 → 현금영수증 → 매입내역(지출증빙) 조회를 엑셀로 받은 파일 (부가세 유무로 과세·면세 자동 구분)"
-    :moveOnly?`'매입(전자세금계산서)' 탭이나 '공통매입세액' 탭에서 분류를 '${name==="매입(고정자산)"?"고정자산":"불공제"}'로 바꾸면 여기로 옮겨져요`
+    :moveOnly?`'매입(전자세금계산서)' 탭에서 분류를 '고정자산'으로 바꾸면 여기로 옮겨져요 (공사·인테리어·설비 등 100만원 이상은 자동)`
     :ty?`이카운트 → 매입매출장(${src==="sales"?"매출":"매입"})에서 부가세유형 '<b>${ty}</b>'로 조회해 엑셀로 받은 파일`:"이카운트 유형이 다른 탭에 맞지 않는 줄이 여기 모여요";
-  const isTI=src==="purch"&&/세금계산서|고정자산|불공제/.test(name),ep=st.ui.co==="epida";
+  const isTI=src==="purch"&&/세금계산서|고정자산/.test(name),ep=st.ui.co==="epida";
   let cols;
   if(src==="sales"||src==="purch"){const C=B?B.C:{};cols=[["월/일",C.date,"d"],["거래처명",C.vendor,"tx"],["적요",C.memo,"tx"],["부서명",C.dept],["공급가액",C.g,"n"],["부가세",C.v,"n"]];}
   else if(B){const H=B.head,ix=re=>H.findIndex(h=>re.test(h));
@@ -11319,7 +11438,7 @@ function vatSheetHtml(def){
   flush();
   if(list.length)html+=`<tr class="tt"><td></td><td colspan="${gi}">누계 (${n} 건)</td><td class="n">${fmt(tg)}</td><td class="n">${fmt(tv)}</td><td colspan="${(isTI?(ep?1:2):0)+1}"></td></tr>`;
   if(isTI)st.list=sorted.filter(o=>o.x.r).map(o=>st.rows.indexOf(o.x.r));
-  return `<div class="card"><div class="card-head"><div class="card-title">${esc(name)} <span class="unit">${n}건 · 공급가액 ${fmt(tg)} · 세액 ${fmt(tv)}</span></div></div>
+  return `<div class="card"><div class="card-head"><div class="card-title">${esc(vatSN(name))} <span class="unit">${n}건 · 공급가액 ${fmt(tg)} · 세액 ${fmt(tv)}</span></div></div>
     <div class="hintb">📎 올릴 파일: ${hint}</div>${src==="purch"&&/세금계산서/.test(name)&&!moveOnly?vatRulesHtml():""}
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0">
       ${moveOnly||name.indexOf("(기타)")>=0?"":`<label class="btn btn-primary" style="cursor:pointer">📂 이 탭 엑셀 올리기<input type="file" accept=".xlsx" multiple style="display:none" onchange="vatPickTab(this,'${name}','${src}')"></label>`}
@@ -11381,11 +11500,19 @@ function renderVat(){
   const count=d=>{if(d[0]==="전체요약")return "";if(d[0]==="공통매입세액"){const n=st.rows.filter(r=>r.cls==="공통").length;return n||"";}
     if(!R)return "";return vatTabRows(d[0],d[1]).filter(o=>!o.x.ex&&!(o.x.r&&o.x.r.cls==="제외")).length||"";};
   const ep=st.ui.co==="epida";
-  const vis=VAT_SUBS.filter(d=>!(d[0].indexOf("(기타)")>=0&&!count(d))&&!(ep&&d[0]==="공통매입세액"));
-  const bar=`<div class="subtabs" style="flex-wrap:wrap;margin-bottom:10px">${vis.map(d=>{const c=count(d);return `<button class="subtab ${d[0]===sub?"active":""} ${c===""&&d[0]!=="전체요약"?"empty":""}" onclick="vatSub('${d[0]}')">${d[0]}${c!==""?`<span class="cn">${c}</span>`:""}</button>`;}).join("")}</div>`;
+  const tpl=VAT_TPL[st.ui.co]||VAT_TPL.kkotbap;
+  const vis=tpl.map(k=>VAT_SUBS.find(d=>d[0]===k)).filter(Boolean).concat(VAT_SUBS.filter(d=>!tpl.includes(d[0])&&count(d)));
+  const bar=`<div class="subtabs" style="flex-wrap:wrap;margin-bottom:10px">${vis.map(d=>{const c=count(d);return `<button class="subtab ${d[0]===sub?"active":""} ${c===""&&d[0]!=="전체요약"?"empty":""}" onclick="vatSub('${d[0]}')">${vatSN(d[0])}${c!==""?`<span class="cn">${c}</span>`:""}</button>`;}).join("")}</div>`;
   const def=VAT_SUBS.find(d=>d[0]===sub)||VAT_SUBS[0];
   const body=def[0]==="전체요약"?vatSummaryHtml():def[0]==="공통매입세액"?vatCommonHtml():vatSheetHtml(def);
-  const coBar=`<div style="display:flex;gap:6px;align-items:center;margin:2px 0 8px;flex-wrap:wrap">${Object.entries(VAT_CO).map(([k,n])=>`<button class="btn ${k===st.ui.co?"btn-primary":""}" style="min-width:110px" onclick="vatCo('${k}')">${k===st.ui.co?"● ":""}${n}</button>`).join("")}<span style="font-size:12px;color:#64748b">회사별로 자료가 따로 보관돼요</span></div>`;
+  vatIndexLoad(st.ui.co);
+  const idx=(st.idx&&st.idx[st.ui.co])||{};
+  const pks=new Set(Object.keys(idx));{const d=vatPkParts(vatPkDefault());for(let y=d.y-1;y<=d.y+1;y++)for(const hk of Object.keys(VAT_PK_M))pks.add(y+"-"+hk);}pks.add(st.ui.pk);
+  const ord=pk=>{const p=vatPkParts(pk);return p?p.y*10+(p.h-1)*2+(p.k==="확정"?1:0):0;};
+  const opts=[...pks].filter(vatPkParts).sort((a,b)=>ord(b)-ord(a)).map(pk=>`<option value="${pk}" ${pk===st.ui.pk?"selected":""}>${idx[pk]?"💾 ":"　 "}${vatPkLabel(pk)}${pk===vatPkDefault()?" (이번 신고)":""}</option>`).join("");
+  const coBar=`<div style="display:flex;gap:6px;align-items:center;margin:2px 0 8px;flex-wrap:wrap">${Object.entries(VAT_CO).map(([k,n])=>`<button class="btn ${k===st.ui.co?"btn-primary":""}" style="min-width:110px" onclick="vatCo('${k}')">${k===st.ui.co?"● ":""}${n}</button>`).join("")}
+    <select class="ctl" style="font-weight:600" onchange="vatPk(this.value)">${opts}</select>
+    <span id="vatCloud" style="font-size:12px">${vatCloudBadge()}</span></div>`;
   el.innerHTML=vatCss()+coBar+bar+body;
 }
 const RENDERERS = {
