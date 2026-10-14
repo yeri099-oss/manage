@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v312</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v313</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -11398,7 +11398,11 @@ function vatCss(){return `<style>#tab-vat .vt{border-collapse:collapse;width:100
 #tab-vat .vt td.tx{max-width:140px;overflow:hidden;text-overflow:ellipsis}#tab-vat .vt td.rn{color:#94a3b8;text-align:center;font-size:11px}
 #tab-vat .vt tr.mo td{background:#f8fafc;font-weight:600;color:#334155}#tab-vat .vt tr.tt td{background:#e2e8f0;font-weight:700}
 #tab-vat .vt td.edc{cursor:text}#tab-vat .vt td.edc:hover{outline:1px dashed #94a3b8;outline-offset:-2px;background:#fff}
-#tab-vat .vt td.edd{background:#fef9c3!important}
+#tab-vat .vt td.edd::after{content:" ✎";color:#b45309;font-size:11px}
+#tab-vat .vt td.cO{background:#dcfce7!important;color:#14532d;box-shadow:inset 3px 0 0 #16a34a}
+#tab-vat .vt td.cX{background:#fee2e2!important;color:#7f1d1d;box-shadow:inset 3px 0 0 #dc2626}
+#tab-vat .vt td.cT{background:#fef3c7!important;color:#78350f;box-shadow:inset 3px 0 0 #d97706}
+#tab-vat .vt tr.exr td.cO,#tab-vat .vt tr.exr td.cX,#tab-vat .vt tr.exr td.cT{background:transparent!important;box-shadow:none;color:#cbd5e1}
 #tab-vat .vt tr.exr td{color:#cbd5e1;text-decoration:line-through}#tab-vat .vt tr.exr td.ck{text-decoration:none}
 #tab-vat .vt tr:not(.mo):not(.tt):hover td{background:#f8fafc}
 #tab-vat .ox{display:inline-block;min-width:22px;text-align:center;font-weight:700;border-radius:6px;padding:1px 6px}
@@ -11490,7 +11494,8 @@ function vatSheetHtml(def){
   let tg=0,tv=0,n=0,html="",mon=null,mg=0,mv=0,mc=0;
   const cell=(c,x,i)=>{const v=c[1]>=0?x.a[c[1]]:"";
     if(c[3]==="e"&&c[1]>=0){const was=x.parts?(x.me&&x.me[c[1]]!=null?"(합친 줄 자동값)":null):(x.a0&&x.a0[c[1]]!==x.a[c[1]]?x.a0[c[1]]:null);
-      return `<td class="${c[2]||""} edc${was!=null?" edd":""}" title="${was!=null?"원래: "+esc(was||"(빈칸)")+" · ":""}눌러서 고치기" onclick="vatEditStart(this,'${src}',${i},${c[1]})">${esc(v||"")}</td>`;}
+      const cc=c[0]==="적요"&&isTI&&!ep&&x.r?" c"+vatOXc(vatOX(x.r.cls)):"";
+      return `<td class="${c[2]||""} edc${was!=null?" edd":""}${cc}" title="${was!=null?"원래: "+esc(was||"(빈칸)")+" · ":""}눌러서 고치기" onclick="vatEditStart(this,'${src}',${i},${c[1]})">${esc(v||"")}</td>`;}
     if(x.parts&&c[0]==="거래처명"){const C2=B.C;return `<td class="tx" title="${esc(x.parts.map(p=>(p.a[C2.dept]||"")+" "+fmt(vatNum(p.a[C2.g]))).join(" + "))}"><span style="font-size:10.5px;background:#e0e7ff;color:#3730a3;border-radius:4px;padding:0 4px">🔗${x.parts.length}줄</span> ${esc(v||"")}</td>`;}if(c[2]==="d")return `<td title="${esc(v||"")}">${esc(String(v||"").slice(5,10))}</td>`;return c[2]==="n"?`<td class="n">${v===""||v==null?"":fmt(vatNum(v))}</td>`:`<td class="${c[2]||""}" title="${esc(v||"")}">${esc(v||"")}</td>`;};
   const flush=()=>{if(mon==null||src==="card"||src==="hyeon")return;html+=`<tr class="mo"><td></td><td colspan="${gi}">${esc(mon)} 계 (${mc} 건)</td><td class="n">${fmt(mg)}</td><td class="n">${fmt(mv)}</td><td colspan="${(isTI?(ep?1:2):0)+1}"></td></tr>`;};
   const sorted=list.slice();if(src==="sales"||src==="purch")sorted.sort((p,q)=>{const a=p.x.a[0],b=q.x.a[0];if(a.slice(0,10)!==b.slice(0,10))return a<b?-1:1;return (parseInt(a.split("-")[1])||0)-(parseInt(b.split("-")[1])||0);});
@@ -11516,7 +11521,7 @@ function vatSheetHtml(def){
       ${list.length&&!moveOnly?`<button class="btn" onclick="vatTabClear('${name}','${src}')">이 탭 비우기</button>`:""}
     </div>
     ${list.length?`<div style="overflow-x:auto"><table class="vt"><tr><th title="올린 엑셀의 줄 번호">행</th>${cols.map(c=>`<th>${c[0]}</th>`).join("")}${isTI?(ep?"":"<th>공통</th>")+"<th>분류</th>":""}<th title="체크하면 세무사무실 자료에서 빠져요">제외</th></tr>${html}</table></div>
-      <div style="font-size:12px;color:#64748b;margin-top:6px">${src==="sales"||src==="purch"?"적요·부서명 칸을 누르면 고칠 수 있어요 (노란 칸 = 고친 칸, ↩ = 되돌리기) · ":""}'제외'를 체크한 줄은 회색 줄로 남고 엑셀에서는 빠져요${isTI?" · O / X / △ 를 누르면 공통매입 판정 설명이 떠요":""}</div>`
+      <div style="font-size:12px;color:#64748b;margin-top:6px">${src==="sales"||src==="purch"?(isTI&&!ep?'적요 색: <b style="color:#16a34a">초록 = 공통(O)</b> · <b style="color:#dc2626">빨강 = 공통 아님(X)</b> · <b style="color:#d97706">노랑 = 확인(△)</b> · ':'')+"적요·부서명 칸을 누르면 고칠 수 있어요 (✎ = 고친 칸, ↩ = 되돌리기) · ":""}'제외'를 체크한 줄은 회색 줄로 남고 엑셀에서는 빠져요${isTI?" · O / X / △ 를 누르면 공통매입 판정 설명이 떠요":""}</div>`
       :`<div style="color:#94a3b8;font-size:13px;padding:14px 0">아직 자료가 없어요.</div>`}
   </div>`;
 }
@@ -11538,7 +11543,7 @@ function vatCommonHtml(){
   const list=st.rows.map((r,i)=>({r,i})).filter(({r})=>{const o=vatOX(r.cls);return f==="all"||(f==="O"&&o==="O")||(f==="X"&&o==="X")||(f==="T"&&o==="△");});
   st.list=list.map(x=>x.i);
   const body=list.map(({r,i})=>{const o=vatOX(r.cls);
-    return `<tr class="${r.cls==="제외"?"exr":""}"><td class="rn">${r.rn}</td><td class="tx" title="${esc(r.vendor)}">${esc(r.vendor)}</td>${r.src?`<td class="tx edc${(r.src.a0&&r.src.a0[st.rep.purch.C.memo]!==r.memo)||(r.src.me&&r.src.me[st.rep.purch.C.memo]!=null)?" edd":""}" title="${esc(r.memo)} · 눌러서 고치기" onclick="vatEditRow(this,${i},'memo')">${esc(r.memo)}</td><td class="edc${(r.src.a0&&r.src.a0[st.rep.purch.C.dept]!==r.dept)||(r.src.me&&r.src.me[st.rep.purch.C.dept]!=null)?" edd":""}" title="눌러서 고치기" onclick="vatEditRow(this,${i},'dept')">${esc(r.dept)}</td>`:`<td class="tx" title="${esc(r.memo)}">${esc(r.memo)}</td><td>${esc(r.dept)}</td>`}<td class="n">${fmt(r.g)}</td><td class="n">${fmt(r.v)}</td>
+    return `<tr class="${r.cls==="제외"?"exr":""}"><td class="rn">${r.rn}</td><td class="tx" title="${esc(r.vendor)}">${esc(r.vendor)}</td>${r.src?`<td class="tx edc c${vatOXc(o)}${(r.src.a0&&r.src.a0[st.rep.purch.C.memo]!==r.memo)||(r.src.me&&r.src.me[st.rep.purch.C.memo]!=null)?" edd":""}" title="${esc(r.memo)} · 눌러서 고치기" onclick="vatEditRow(this,${i},'memo')">${esc(r.memo)}</td><td class="edc${(r.src.a0&&r.src.a0[st.rep.purch.C.dept]!==r.dept)||(r.src.me&&r.src.me[st.rep.purch.C.dept]!=null)?" edd":""}" title="눌러서 고치기" onclick="vatEditRow(this,${i},'dept')">${esc(r.dept)}</td>`:`<td class="tx c${vatOXc(o)}" title="${esc(r.memo)}">${esc(r.memo)}</td><td>${esc(r.dept)}</td>`}<td class="n">${fmt(r.g)}</td><td class="n">${fmt(r.v)}</td>
     <td style="text-align:center"><span class="ox clk ${vatOXc(o)}" onclick="vatOpen(${i})" title="눌러서 설명 보기">${o}</span></td>
     <td><select class="vs" onchange="vatSetCls(${i},this.value)">${VAT_CLS.map(c=>`<option value="${c}" ${c===r.cls?"selected":""}>${VAT_CLS_SH[c]}</option>`).join("")}</select>${r.cls!==r.auto?' <span style="font-size:11px;color:#b45309" title="직접 변경">✎</span>':""}</td></tr>`;}).join("");
   return head+`<div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0">
