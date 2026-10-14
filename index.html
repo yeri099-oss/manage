@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v311</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v312</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -10799,6 +10799,7 @@ const VAT_GUIDE={"공통":"공통매입세액에 넣어요. 신고 때 면세비
 function vatOXc(o){return o==="O"?"O":o==="X"?"X":"T";}
 /* 엑셀 행 번호(r)를 그대로 살려서 읽기 — 옆에 띄운 엑셀과 줄 맞춰 보기용 */
 async function vatReadX(file){
+  if(/\.xls$/i.test(file.name||""))return (await vatReadXls(file))[0].rows;
   const zip=await JSZip.loadAsync(await file.arrayBuffer());
   const par=new DOMParser();let sst=[];
   const ssf=zip.file("xl/sharedStrings.xml");
@@ -10839,7 +10840,19 @@ function vatLoadAoa(aoa,fileName){
   st.head=C.hi>=0?aoa[C.hi]:["일자-No.","구분","전자","사업자번호","대표자","거래처","적요","공급가액","부가세","부서"];st.col=C;st.rows=rows;st.file=fileName||"붙여넣기";st.ui.f="all";
 }
 /* ===== v301: 세무사무실용 부가세 자료 만들기 — 이카운트 매출장/매입장(유형별 여러 파일) + 홈택스 카드·현금영수증 매입 → 1기 양식 엑셀 ===== */
+/* v312: 예전 엑셀(.xls — 홈택스 현금영수증 등)은 SheetJS로 읽기 (앱의 다른 기능과 같은 라이브러리, 필요할 때만 불러옴) */
+async function vatReadXls(file){
+  await loadScript("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");
+  const wb=XLSX.read(new Uint8Array(await file.arrayBuffer()),{type:"array"});
+  return wb.SheetNames.map(n=>{
+    const ws=wb.Sheets[n],ref=ws["!ref"];if(!ref)return{name:n,rows:[]};
+    const rg=XLSX.utils.decode_range(ref),rows=[];
+    for(let r=0;r<=rg.e.r;r++){const a=[];for(let c=0;c<=rg.e.c;c++){const cl=ws[XLSX.utils.encode_cell({r,c})];a.push(cl==null||cl.v==null?"":(cl.t==="n"?String(cl.v):String(cl.w!=null&&cl.t!=="s"?cl.w:cl.v)));}rows.push(a);}
+    return{name:n,rows};
+  });
+}
 async function vatReadXAll(file){
+  if(!/\.xlsx$/i.test(file.name||"")){try{return await vatReadXls(file);}catch(e){console.warn(e);if(/\.xls$/i.test(file.name||""))throw new Error("엑셀(.xls)을 읽지 못했어요 — "+(e.message||e));}}
   const zip=await JSZip.loadAsync(await file.arrayBuffer());
   const par=new DOMParser();let sst=[];
   const ssf=zip.file("xl/sharedStrings.xml");
@@ -11093,7 +11106,6 @@ window.vatReportDownload=async function(only){
 window.vatRepSet=function(k,v){const R=window.__vat.rep;if(R){R[k]=v;}};
 /* v303: 회사별(꽃밥이야기/꽃밥에피다) 따로 보관 — 파일 회사명이 다르면 확인 후 그 회사로 전환 */
 async function vatParseFiles(fs){
-  if(fs.some(f=>/\.xls$/i.test(f.name)))throw new Error("예전 .xls 형식은 못 읽어요 — 엑셀에서 '다른 이름으로 저장 → .xlsx'로 바꿔주세요.");
   const R2=vatEmptyRep();
   for(const f of fs)for(const sh of await vatReadXAll(f))vatParseSheet(R2,sh.rows);
   if(!["sales","purch","card","hyeon"].some(k=>R2[k]&&R2[k].rows.length))throw new Error("이카운트 매출장/매입장이나 홈택스 매입 자료를 찾지 못했어요 — 단순 매입 목록 판정은 '공통매입세액' 탭 아래 '다른 매입 목록만 판정하기'를 써주세요.");
@@ -11437,7 +11449,7 @@ function vatSummaryHtml(){
   const st=window.__vat,R=st.rep;
   let body=`<div class="card"><div class="card-head"><div class="card-title">🧾 전체요약 <span class="unit">세무사무실에 보내는 엑셀의 첫 시트와 같아요 · 줄 이름을 누르면 해당 탭으로 가요</span></div></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0">
-      <label class="btn btn-primary" style="cursor:pointer">📂 한꺼번에 올리기 (.xlsx 여러 개)<input type="file" accept=".xlsx" multiple style="display:none" onchange="vatPick(this)"></label>
+      <label class="btn btn-primary" style="cursor:pointer">📂 한꺼번에 올리기 (.xlsx·.xls 여러 개)<input type="file" accept=".xlsx,.xls" multiple style="display:none" onchange="vatPick(this)"></label>
       ${R?`<button class="btn btn-primary" onclick="vatReportDownload()">📥 세무사무실용 엑셀 받기 (전체)</button><button class="btn" onclick="vatAllClear()">전체 지우기</button>`:""}
     </div>
     <div class="hintb">이카운트 매출장·매입장(유형별 파일 여러 개 OK) + 홈택스 신용카드·현금영수증 매입 파일을 한꺼번에 올리면 탭별로 자동 정리돼요. 탭마다 따로 올려도 돼요. <b>다시 올리면 파일에 든 유형(탭)은 새 파일 내용으로 덮어써요</b> — 이카운트에서 고친 뒤 다시 받아 올리면 돼요. 자료는 <b>회사·신고기간별로 클라우드에 저장</b>돼서 다른 컴퓨터에서도, 다음 분기에도 다시 열어볼 수 있어요.</div>
@@ -11498,7 +11510,7 @@ function vatSheetHtml(def){
   return `<div class="card"><div class="card-head"><div class="card-title">${esc(vatSN(name))} <span class="unit">${n}건 · 공급가액 ${fmt(tg)} · 세액 ${fmt(tv)}</span></div></div>
     <div class="hintb">📎 올릴 파일: ${hint}</div>${src==="purch"&&/세금계산서/.test(name)&&!moveOnly?vatRulesHtml():""}
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0">
-      ${moveOnly||name.indexOf("(기타)")>=0?"":`<label class="btn btn-primary" style="cursor:pointer" title="이 탭 자료를 새 파일로 덮어써요">📂 이 탭 엑셀 올리기 (덮어쓰기)<input type="file" accept=".xlsx" multiple style="display:none" onchange="vatPickTab(this,'${name}','${src}')"></label>`}
+      ${moveOnly||name.indexOf("(기타)")>=0?"":`<label class="btn btn-primary" style="cursor:pointer" title="이 탭 자료를 새 파일로 덮어써요">📂 이 탭 엑셀 올리기 (덮어쓰기)<input type="file" accept=".xlsx,.xls" multiple style="display:none" onchange="vatPickTab(this,'${name}','${src}')"></label>`}
       ${n?`<button class="btn" onclick="vatReportDownload('${name}')">⬇ 이 시트만 엑셀 받기</button>`:""}
       ${R?`<button class="btn" onclick="vatReportDownload()">📥 전체 엑셀 받기</button>`:""}
       ${list.length&&!moveOnly?`<button class="btn" onclick="vatTabClear('${name}','${src}')">이 탭 비우기</button>`:""}
@@ -11512,7 +11524,7 @@ function vatSheetHtml(def){
 function vatCommonHtml(){
   const st=window.__vat,f=st.ui.f;
   const tools=`<details style="margin-top:8px"><summary style="cursor:pointer;font-size:13px">다른 매입 목록만 판정하기 (엑셀·붙여넣기)</summary>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0"><label class="btn" style="cursor:pointer">📂 목록 엑셀 올리기<input type="file" accept=".xlsx" style="display:none" onchange="vatPickList(this)"></label></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0"><label class="btn" style="cursor:pointer">📂 목록 엑셀 올리기<input type="file" accept=".xlsx,.xls" style="display:none" onchange="vatPickList(this)"></label></div>
       <textarea id="vatPasteTa" style="width:100%;height:90px;font:12px monospace" placeholder="이카운트 매입 목록을 머리글 줄부터 복사해서 붙여넣으세요"></textarea>
       <button class="btn" style="margin-top:6px" onclick="vatPaste()">판정하기</button>
       <div style="font-size:12px;color:#94a3b8;margin-top:4px">여기서 판정한 목록은 세무사무실 자료와 별개예요.</div></details>`;
