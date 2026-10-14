@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v299</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v300</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -10703,6 +10703,37 @@ function vatClassify(r){
   return {cls,why:why+(notes.length?" · "+notes.join(" · "):"")};
 }
 function vatOX(cls){return cls==="공통"?"O":cls==="확인"?"△":"X";}
+const VAT_CLS_SH={"공통":"공통","과세전용":"과세전용","면세전용":"면세전용","불공제":"불공제","세액없음":"세액없음","확인":"확인"};
+const VAT_GUIDE={"공통":"공통매입세액에 넣어요. 신고 때 면세비율만큼은 불공제, 나머지는 공제돼요.",
+  "과세전용":"공통에 넣지 말고 일반 매입세액으로 전액 공제받아요.",
+  "면세전용":"면세사업에만 쓴 비용이라 매입세액을 공제받지 않아요(불공제).",
+  "불공제":"매입세액 불공제 대상이에요. 신고서 '공제받지 못할 매입세액'으로 넣어요.",
+  "세액없음":"부가세가 없는 매입이라 매입세액 공제와 무관해요. 계산서합계표에만 들어가요.",
+  "확인":"자동으로 판단하기 어려워요. 실제 용도를 확인한 뒤 분류를 골라주세요."};
+function vatOXc(o){return o==="O"?"O":o==="X"?"X":"T";}
+/* 엑셀 행 번호(r)를 그대로 살려서 읽기 — 옆에 띄운 엑셀과 줄 맞춰 보기용 */
+async function vatReadX(file){
+  const zip=await JSZip.loadAsync(await file.arrayBuffer());
+  const par=new DOMParser();let sst=[];
+  const ssf=zip.file("xl/sharedStrings.xml");
+  if(ssf){const d=par.parseFromString(await ssf.async("string"),"application/xml");sst=[...d.getElementsByTagName("si")].map(x=>x.textContent);}
+  const shp=Object.keys(zip.files).filter(n=>/^xl\/worksheets\/sheet\d+\.xml$/.test(n)).sort((a,b)=>Number(a.match(/\d+/)[0])-Number(b.match(/\d+/)[0]))[0];
+  const doc=par.parseFromString(await zip.file(shp).async("string"),"application/xml");
+  const rows=[];
+  for(const r of doc.getElementsByTagName("row")){
+    const arr=[];
+    for(const c of r.getElementsByTagName("c")){
+      const ref=c.getAttribute("r")||"",col=ref.replace(/\d+/g,"");
+      let idx=0;for(let k=0;k<col.length;k++)idx=idx*26+(col.charCodeAt(k)-64);idx--;
+      const t=c.getAttribute("t");let v="";const vEl=c.getElementsByTagName("v")[0];
+      if(vEl){v=vEl.textContent;if(t==="s")v=sst[+v]!=null?sst[+v]:"";}else if(t==="inlineStr")v=c.textContent;
+      while(arr.length<idx)arr.push("");arr[idx]=v;
+    }
+    const rn=+r.getAttribute("r")||rows.length+1;
+    while(rows.length<rn-1)rows.push([]);rows[rn-1]=arr;
+  }
+  return rows;
+}
 function vatLoadAoa(aoa,fileName){
   const C=vatFindCols(aoa);const st=window.__vat;
   const rows=[];
@@ -10713,7 +10744,7 @@ function vatLoadAoa(aoa,fileName){
     const first=String(a[0]||"")+String(a[1]||"");
     if(/합계|소계|총계/.test(first)&&!String(a[C.vendor]||"").trim())continue;
     if(!g&&!v)continue;
-    const r={raw:a,date:String(a[C.date]==null?"":a[C.date]).trim(),kind:C.kind>=0?String(a[C.kind]||"").trim():"",vendor:C.vendor>=0?String(a[C.vendor]||"").trim():"",
+    const r={rn:i+1,raw:a,date:String(a[C.date]==null?"":a[C.date]).trim(),kind:C.kind>=0?String(a[C.kind]||"").trim():"",vendor:C.vendor>=0?String(a[C.vendor]||"").trim():"",
       memo:C.memo>=0?String(a[C.memo]||"").trim():"",dept:C.dept>=0?String(a[C.dept]||"").trim():"",g,v};
     const k=vatClassify(r);r.cls=k.cls;r.auto=k.cls;r.why=k.why;
     rows.push(r);
@@ -10725,7 +10756,7 @@ window.vatPick=async function(inp){
   const f=inp.files&&inp.files[0];if(!f)return;
   try{
     if(/\.xls$/i.test(f.name))throw new Error("예전 .xls 형식은 못 읽어요 — 엑셀에서 '다른 이름으로 저장 → .xlsx'로 바꾸거나, 표를 복사해서 붙여넣어 주세요.");
-    vatLoadAoa(await payReadX(f),f.name);renderVat();toast(window.__vat.rows.length+"건 판정했어요");
+    vatLoadAoa(await vatReadX(f),f.name);renderVat();toast(window.__vat.rows.length+"건 판정했어요");
   }catch(e){console.error(e);toast(e.message||"엑셀을 읽지 못했어요",true);}
   inp.value="";
 };
@@ -10734,7 +10765,31 @@ window.vatPaste=function(){
   try{vatLoadAoa(ta.value.split(/\r?\n/).map(l=>l.split("\t")),"붙여넣기");renderVat();toast(window.__vat.rows.length+"건 판정했어요");}
   catch(e){toast(e.message,true);}
 };
-window.vatSetCls=function(i,v){const r=window.__vat.rows[+i];if(!r)return;r.cls=v;renderVat();};
+window.vatSetCls=function(i,v){const r=window.__vat.rows[+i];if(!r)return;r.cls=v;renderVat();const ov=document.getElementById("vatOv");if(ov&&+ov.dataset.i===+i)vatOpen(+i);};
+window.vatOpen=function(i){
+  const st=window.__vat,r=st.rows[+i];if(!r)return;
+  let ov=document.getElementById("vatOv");
+  if(!ov){ov=document.createElement("div");ov.id="vatOv";document.body.appendChild(ov);
+    ov.addEventListener("click",e=>{if(e.target===ov)ov.remove();});}
+  ov.dataset.i=i;
+  const L=st.list||[],pos=L.indexOf(+i),o=vatOX(r.cls);
+  const pts=r.why.split(" · ").map(x=>`<li>${esc(x)}</li>`).join("");
+  ov.innerHTML=`<div class="bx">
+    <div class="hd"><b>행 ${r.rn}</b><span style="color:#64748b;font-size:12px">${pos>=0?(pos+1)+" / "+L.length:""}</span><button class="x" onclick="document.getElementById('vatOv').remove()">×</button></div>
+    <dl><dt>거래처</dt><dd>${esc(r.vendor)}</dd><dt>적요</dt><dd>${esc(r.memo)}</dd><dt>부서</dt><dd>${esc(r.dept)||"-"}</dd>
+      ${r.date?`<dt>일자</dt><dd>${esc(r.date)}</dd>`:""}${r.kind?`<dt>구분</dt><dd>${esc(r.kind)}</dd>`:""}
+      <dt>금액</dt><dd>공급가액 <b>${fmt(r.g)}</b> · 부가세 <b>${fmt(r.v)}</b></dd></dl>
+    <div class="big"><span class="ox ${vatOXc(o)}">${o}</span><div><b>${VAT_CLS_LB[r.cls]}</b>${r.cls!==r.auto?` <span style="font-size:12px;color:#b45309">(직접 변경 · 자동 판정: ${VAT_CLS_LB[r.auto]})</span>`:""}<div style="font-size:13px;color:#475569;margin-top:2px">${VAT_GUIDE[r.cls]}</div></div></div>
+    <div style="font-size:13px;font-weight:600">왜 이렇게 판정했나요?</div><ul>${pts}</ul>
+    <div style="margin-top:12px;font-size:13px">분류 바꾸기 <select class="vs" style="font:inherit;font-size:13px;padding:3px 6px;border:1px solid #e5e7eb;border-radius:6px" onchange="vatSetCls(${i},this.value)">${VAT_CLS.map(c=>`<option value="${c}" ${c===r.cls?"selected":""}>${VAT_CLS_LB[c]}</option>`).join("")}</select></div>
+    <div class="ft"><button class="btn" ${pos>0?"":"disabled"} onclick="vatOpen(${pos>0?L[pos-1]:i})">◀ 이전</button><button class="btn" ${pos>=0&&pos<L.length-1?"":"disabled"} onclick="vatOpen(${pos>=0&&pos<L.length-1?L[pos+1]:i})">다음 ▶</button></div>
+  </div>`;
+};
+document.addEventListener("keydown",e=>{const ov=document.getElementById("vatOv");if(!ov)return;
+  if(e.key==="Escape"){ov.remove();return;}
+  if(e.target&&/SELECT|INPUT|TEXTAREA/.test(e.target.tagName))return;
+  const L=window.__vat.list||[],pos=L.indexOf(+ov.dataset.i);
+  if(e.key==="ArrowRight"&&pos>=0&&pos<L.length-1)vatOpen(L[pos+1]);if(e.key==="ArrowLeft"&&pos>0)vatOpen(L[pos-1]);});
 window.vatFilter=function(f){window.__vat.ui.f=f;renderVat();};
 window.vatRatio=function(v){window.__vat.ui.ratio=v;renderVat();};
 window.vatClear=function(){window.__vat.rows=[];window.__vat.head=null;renderVat();};
@@ -10777,14 +10832,24 @@ function renderVat(){
   const el=document.getElementById("tab-vat");if(!el)return;
   if(typeof S==="undefined"||!S.user||S.user.role!=="admin"){el.innerHTML='<div class="card">관리자만 볼 수 있어요.</div>';return;}
   const st=window.__vat,f=st.ui.f;
-  const css=`<style>#tab-vat .vt{border-collapse:collapse;width:100%;font-size:13px}#tab-vat .vt th,#tab-vat .vt td{border:1px solid #e5e7eb;padding:5px 8px;vertical-align:top}
+  const css=`<style>#tab-vat .vt{border-collapse:collapse;width:100%;font-size:12.5px;table-layout:auto}#tab-vat .vt th,#tab-vat .vt td{border:1px solid #e5e7eb;padding:4px 6px;vertical-align:middle;white-space:nowrap}
+#tab-vat .vt td.tx{max-width:150px;overflow:hidden;text-overflow:ellipsis}#tab-vat .vt td.rn{color:#94a3b8;text-align:center;font-size:11px}
+#tab-vat .vt tr:hover td{background:#f8fafc}#tab-vat .ox.clk{cursor:pointer;min-width:30px;padding:3px 8px;font-size:13px}#tab-vat .ox.clk:hover{outline:2px solid #94a3b8}
+#vatOv{position:fixed;inset:0;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px}
+#vatOv .bx{background:#fff;border-radius:12px;padding:16px 18px;width:min(520px,100%);max-height:92vh;overflow:auto;box-shadow:0 10px 30px rgba(0,0,0,.25);font-size:14px}
+#vatOv .hd{display:flex;align-items:center;gap:8px;margin-bottom:10px}#vatOv .hd .x{margin-left:auto;border:0;background:none;font-size:22px;cursor:pointer;color:#64748b}
+#vatOv dl{display:grid;grid-template-columns:80px 1fr;gap:6px 10px;margin:0 0 12px}#vatOv dt{color:#64748b;font-size:13px}#vatOv dd{margin:0;word-break:break-all}
+#vatOv .big{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;background:#f8fafc;margin-bottom:10px}
+#vatOv .ox{display:inline-block;font-weight:700;border-radius:6px}#vatOv .ox.O{background:#dcfce7;color:#166534}#vatOv .ox.X{background:#fee2e2;color:#991b1b}#vatOv .ox.T{background:#fef3c7;color:#92400e}
+#vatOv .big .ox{font-size:20px;padding:4px 12px}#vatOv ul{margin:6px 0 0 18px;padding:0;color:#334155;line-height:1.6}
+#vatOv .ft{display:flex;justify-content:space-between;gap:8px;margin-top:14px}
 #tab-vat .vt th{background:#f1f5f9;white-space:nowrap}#tab-vat .vt td.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
 #tab-vat .ox{display:inline-block;min-width:22px;text-align:center;font-weight:700;border-radius:6px;padding:1px 6px}
 #tab-vat .ox.O{background:#dcfce7;color:#166534}#tab-vat .ox.X{background:#fee2e2;color:#991b1b}#tab-vat .ox.T{background:#fef3c7;color:#92400e}
 #tab-vat .why{color:#475569;font-size:12px;min-width:260px}#tab-vat .chips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
 #tab-vat .chip{border:1px solid #e5e7eb;border-radius:999px;padding:4px 10px;background:#fff;cursor:pointer;font-size:12px}#tab-vat .chip.on{background:#1e293b;color:#fff;border-color:#1e293b}
-#tab-vat .sumg{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:8px 0}
-#tab-vat .sumg div{border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;font-size:12px;color:#475569}#tab-vat .sumg b{display:block;font-size:15px;color:#0f172a}
+#tab-vat .sumg{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:6px;margin:8px 0}
+#tab-vat .sumg div{border:1px solid #e5e7eb;border-radius:8px;padding:6px 8px;font-size:11.5px;color:#475569}#tab-vat .sumg b{display:block;font-size:14px;color:#0f172a}
 #tab-vat select.vs{font:inherit;font-size:12px;padding:2px 4px;border:1px solid #e5e7eb;border-radius:6px}</style>`;
   const up=`<div class="card">
     <div class="card-head"><div class="card-title">🧮 공통매입세액 판정 <span class="unit">이카운트 매입 내역 엑셀을 넣으면 줄마다 공통매입에 넣어도 되는지 O / X / △ 로 알려줘요</span></div></div>
@@ -10800,15 +10865,15 @@ function renderVat(){
   if(!st.rows.length){el.innerHTML=css+up;return;}
   const S2=vatSums(),ratio=parseFloat(st.ui.ratio);
   const nd=isNaN(ratio)?null:Math.floor(S2["공통"].v*ratio/100);
-  const card=c=>`<div><span class="ox ${vatOX(c)==="O"?"O":vatOX(c)==="X"?"X":"T"}">${vatOX(c)}</span> ${VAT_CLS_LB[c]} ${S2[c].n}건<b>${fmt(S2[c].v)}</b>부가세</div>`;
+  const card=c=>`<div><span class="ox ${vatOXc(vatOX(c))}">${vatOX(c)}</span> ${VAT_CLS_SH[c]} ${S2[c].n}건<b>${fmt(S2[c].v)}</b></div>`;
   const cnt={all:st.rows.length,O:0,X:0,T:0};for(const r of st.rows){const o=vatOX(r.cls);cnt[o==="O"?"O":o==="X"?"X":"T"]++;}
   const chip=(k,lb)=>`<span class="chip ${f===k?"on":""}" onclick="vatFilter('${k}')">${lb} ${cnt[k]}</span>`;
   const list=st.rows.map((r,i)=>({r,i})).filter(({r})=>{const o=vatOX(r.cls);return f==="all"||(f==="O"&&o==="O")||(f==="X"&&o==="X")||(f==="T"&&o==="△");});
+  window.__vat.list=list.map(x=>x.i);
   const body=list.map(({r,i})=>{const o=vatOX(r.cls);
-    return `<tr><td>${esc(r.date)}</td><td>${esc(r.vendor)}</td><td>${esc(r.memo)}</td><td>${esc(r.dept)}</td><td class="n">${fmt(r.g)}</td><td class="n">${fmt(r.v)}</td>
-    <td style="text-align:center"><span class="ox ${o==="O"?"O":o==="X"?"X":"T"}">${o}</span></td>
-    <td><select class="vs" onchange="vatSetCls(${i},this.value)">${VAT_CLS.map(c=>`<option value="${c}" ${c===r.cls?"selected":""}>${VAT_CLS_LB[c]}</option>`).join("")}</select>${r.cls!==r.auto?'<div style="font-size:11px;color:#b45309">직접 변경</div>':""}</td>
-    <td class="why">${esc(r.why)}</td></tr>`;}).join("");
+    return `<tr><td class="rn">${r.rn}</td><td class="tx" title="${esc(r.vendor)}">${esc(r.vendor)}</td><td class="tx" title="${esc(r.memo)}">${esc(r.memo)}</td><td>${esc(r.dept)}</td><td class="n">${fmt(r.g)}</td><td class="n">${fmt(r.v)}</td>
+    <td style="text-align:center"><span class="ox clk ${vatOXc(o)}" onclick="vatOpen(${i})" title="눌러서 설명 보기">${o}</span></td>
+    <td><select class="vs" onchange="vatSetCls(${i},this.value)">${VAT_CLS.map(c=>`<option value="${c}" ${c===r.cls?"selected":""}>${VAT_CLS_SH[c]}</option>`).join("")}</select>${r.cls!==r.auto?' <span style="font-size:11px;color:#b45309" title="직접 변경">✎</span>':""}</td></tr>`;}).join("");
   el.innerHTML=css+up+`<div class="card">
     <div class="card-head"><div class="card-title">판정 결과 <span class="unit">${esc(st.file)} · ${st.rows.length}건</span></div></div>
     <div class="sumg">${VAT_CLS.map(card).join("")}</div>
@@ -10817,7 +10882,8 @@ function renderVat(){
       ${nd!=null?`→ 공통매입세액 ${fmt(S2["공통"].v)} 중 <b>불공제 ${fmt(nd)}</b> / 공제 ${fmt(S2["공통"].v-nd)}`:`<span style="color:#64748b">(해당 신고기간 면세공급가액 ÷ 총공급가액 — 넣으면 불공제액을 계산해요)</span>`}
     </div>
     <div class="chips">${chip("all","전체")}${chip("O","O 공통 적합")}${chip("X","X 공통 아님")}${chip("T","△ 확인")}</div>
-    <div style="overflow-x:auto"><table class="vt"><tr><th>일자</th><th>거래처</th><th>적요</th><th>부서</th><th>공급가액</th><th>부가세</th><th>공통</th><th>분류</th><th>설명</th></tr>${body}</table></div>
+    <div style="overflow-x:auto"><table class="vt"><tr><th title="엑셀 행 번호">행</th><th>거래처</th><th>적요</th><th>부서</th><th>공급가액</th><th>부가세</th><th>판정</th><th>분류</th></tr>${body}</table></div>
+    <div style="font-size:12px;color:#64748b;margin-top:6px">'행'은 올린 엑셀의 줄 번호예요 · O / X / △ 를 누르면 설명이 떠요</div>
   </div>`;
 }
 const RENDERERS = {
