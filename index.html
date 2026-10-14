@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v293</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v294</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -17982,7 +17982,15 @@ function renderMonths(){
     e+=row('인사동 현영',m.kkotbap.ntsHyeonGong,m.kkotbap.ntsHyeonBuga,m.kkotbap.ntsHyeon,null,m.kkotbap.ntsHyeon);
     e+=row('인사동 소매',kb.somaeGong,smBuga,kb.somae,null,kb.somae);
     e+=row('인사동 캐치테이블',m.kkotbap.catchGong,m.kkotbap.catchBuga,m.kkotbap.catchGye,null,m.kkotbap.catchGye);
-    e+=row('인사동 계 (캐치 포함)',m.kkotbap.ntsCardGong+m.kkotbap.ntsHyeonGong+kb.somaeGong+m.kkotbap.catchGong,m.kkotbap.ntsCardBuga+m.kkotbap.ntsHyeonBuga+smBuga+m.kkotbap.catchBuga,kb.all,null,kb.all,'sub');
+    const insG=m.kkotbap.ntsCardGong+m.kkotbap.ntsHyeonGong+kb.somaeGong+m.kkotbap.catchGong,insV=m.kkotbap.ntsCardBuga+m.kkotbap.ntsHyeonBuga+smBuga+m.kkotbap.catchBuga;
+    e+=row('인사동 계 (캐치 포함)',insG,insV,kb.all,null,kb.all,'sub');
+    /* v294: ⑩ 기타 거래처 중 소속 '인사동' (네이버파이낸셜 등 판매대행) — 전부 과세로 보고 공급가/부가세 분리 */
+    const insEx=(m.extra||[]).filter(x=>x.unit==='insadong'&&x.amt);
+    if(insEx.length){
+      let exG=0,exV=0,exT=0;
+      for(const x of insEx){const g=exVat(x.amt);exG+=g;exV+=x.amt-g;exT+=x.amt;e+=row('인사동 '+esc(x.name||'기타 거래처'),g,x.amt-g,x.amt,null,x.amt);}
+      e+=row('인사동 계 (캐치·기타 포함)',insG+exG,insV+exV,kb.all+exT,null,kb.all+exT,'sub');
+    }
     let h2=`<div class="card"><h2>💼 이카운트 입력용 — ${ymLabel(CUR)} <small>매출확정과 같은 값 · 위의 월 선택으로 다른 달 보기</small></h2>
     <table class="cf"><tr><th style="width:170px">구분</th><th>공급가</th><th>부가세</th><th>과세 계</th><th>면세</th><th>계</th></tr>${e}</table>
     <div class="hint">인사동·쿠팡이츠는 전부 과세라 면세 칸이 없습니다(—). 표 값은 입력 탭 숫자에서 자동 계산됩니다.</div></div>`;
