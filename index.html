@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v325</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v326</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -13076,6 +13076,15 @@ function buyStatFlash(names){
   trs.forEach(t=>t.classList.add("buy-flash"));
   setTimeout(()=>trs.forEach(t=>t.classList.remove("buy-flash")),3500);
 }
+/* 거래처 줄은 항상 가나다순 (이름을 바꾼 줄도 제자리로) — 순서가 바뀌었으면 true */
+function buySortYear(y){
+  const d=bd().stat[y];if(!d||!d.scopes)return false;
+  const cmp=(a,b)=>String(a.name||"").localeCompare(String(b.name||""),"ko");
+  let ch=false;
+  for(const k in d.scopes){const rows=d.scopes[k].rows||[];
+    for(let i=1;i<rows.length;i++)if(cmp(rows[i-1],rows[i])>0){rows.sort(cmp);ch=true;break;}}
+  return ch;
+}
 function renderBuyStatCore(){
   const el=document.getElementById("tab-buystat");
   if(!el)return;
@@ -13090,6 +13099,7 @@ function renderBuyStatCore(){
   }
   const mig=buySplitEnsure(y);/* 2026~ 피다/보자기 분리 (1회) */
   const d=D.stat[y];
+  if(buySortYear(y)){d.savedAt=Date.now();buyMark("stat_"+y);}
   const ms=buyStatMonths(y);
   if(!d.scopes[B.ui.statScope])B.ui.statScope="all";
   const sc=B.ui.statScope;
