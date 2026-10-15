@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v319</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v320</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -12583,6 +12583,7 @@ async function removeChannel(kind, name) {
 .buy-chip.on{background:#2F6B3F;color:#fff;border-color:#2F6B3F}
 .buy-warn{color:#b3261e;font-weight:600}
 .buy-tbl th.bdel,.buy-tbl td.bdel{position:sticky;right:0;z-index:2;background:var(--surface-1,#fff);box-shadow:-4px 0 5px -3px rgba(0,0,0,.15);text-align:center}
+tr.bcut>td{border-top:3px solid #334155 !important}
 td.bchunk{background:#f2f6f2 !important;text-align:right;vertical-align:middle;border-left:2px solid #dfe7df;min-width:104px;padding:4px 8px}
 </style>
 <script>
@@ -12789,7 +12790,7 @@ function renderBuyClose(){
       <div class="table-wrap"><table class="rpt buy-tbl" style="max-width:760px"><thead><tr><th style="width:36px">확인</th><th class="l">거래처</th><th style="width:130px">금액</th><th class="l" style="width:140px">비고</th><th style="width:30px"></th><th style="width:110px">이체 합계</th></tr></thead><tbody>`;
     const CH=15; /* 은행 다건이체 한 번에 15곳까지 */
     g.rows.forEach((r,ri)=>{
-      html+=`<tr class="${r.ok?"":"buy-yel"}">
+      html+=`<tr class="${r.ok?"":"buy-yel"}${ri&&ri%CH===0?" bcut":""}">
         <td style="text-align:center"><input type="checkbox" ${r.ok?"checked":""} onchange="buyCloseOk(${gi},${ri},this.checked)"></td>
         <td><input type="text" value="${esc(r.name)}" onchange="buyCloseEdit(${gi},${ri},'name',this.value)"></td>
         <td><input type="text" inputmode="numeric" style="text-align:right" value="${r.amt==null?"":fmt(r.amt)}" onchange="buyCloseEdit(${gi},${ri},'amt',this.value)"></td>
