@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v324</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v325</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -12587,6 +12587,7 @@ tr.bcut>td{border-top:3px solid #334155 !important}
 #tab-buystat .buy-tbl thead th{position:relative;z-index:3}
 #tab-buystat .buy-tbl thead th.bdel{position:sticky;z-index:4}
 #tab-buystat .buy-tbl.buy-stuck thead th{box-shadow:0 2px 0 #a9a79d}
+tr.buy-flash>td{background:#fff3ad !important;transition:background .4s}
 td.bchunk{background:#f2f6f2 !important;text-align:right;vertical-align:middle;border-left:2px solid #dfe7df;min-width:104px;padding:4px 8px}
 </style>
 <script>
@@ -13067,6 +13068,14 @@ function buyStickHead(){
 }
 window.addEventListener("scroll",()=>buyStickHead(),{passive:true});
 window.addEventListener("resize",()=>buyStickHead());
+/* 방금 추가·수정한 거래처 줄로 화면 이동 + 잠깐 노랗게 표시 */
+function buyStatFlash(names){
+  const trs=[...document.querySelectorAll("#tab-buystat tbody tr[data-nm]")].filter(t=>names.includes(t.dataset.nm));
+  if(!trs.length)return;
+  trs[0].scrollIntoView({block:"center",behavior:"smooth"});
+  trs.forEach(t=>t.classList.add("buy-flash"));
+  setTimeout(()=>trs.forEach(t=>t.classList.remove("buy-flash")),3500);
+}
 function renderBuyStatCore(){
   const el=document.getElementById("tab-buystat");
   if(!el)return;
@@ -14391,6 +14400,7 @@ function buyQuickApply(){
   buyQuickClose();
   window.__buy.ui.statYear=y;window.__buy.ui.statScope="all";
   renderBuyStat();
+  buyStatFlash([...touched]);
   toast(n+"건을 "+y+"년 "+m+"월에 반영했어요 — 전체(꽃밥이야기)는 합으로 자동 입력 ✓");
 }
 /* ---------- 전체 입력 후 사업장 배분 창 ---------- */
