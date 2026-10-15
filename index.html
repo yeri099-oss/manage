@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v322</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v323</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -12584,6 +12584,9 @@ async function removeChannel(kind, name) {
 .buy-warn{color:#b3261e;font-weight:600}
 .buy-tbl th.bdel,.buy-tbl td.bdel{position:sticky;right:0;z-index:2;background:var(--surface-1,#fff);box-shadow:-4px 0 5px -3px rgba(0,0,0,.15);text-align:center}
 tr.bcut>td{border-top:3px solid #334155 !important}
+#tab-buystat .buy-tbl thead th{position:relative;z-index:3}
+#tab-buystat .buy-tbl thead th.bdel{position:sticky;z-index:4}
+#tab-buystat .buy-tbl.buy-stuck thead th{box-shadow:0 2px 0 #a9a79d}
 td.bchunk{background:#f2f6f2 !important;text-align:right;vertical-align:middle;border-left:2px solid #dfe7df;min-width:104px;padding:4px 8px}
 </style>
 <script>
@@ -13042,7 +13045,25 @@ function renderBuyStat(){
   const ws=[...document.querySelectorAll("#tab-buystat .table-wrap")];
   ws.forEach((w,i)=>{if(sc0[i]){w.scrollTop=sc0[i][0];w.scrollLeft=sc0[i][1];}});
   window.scrollTo(0,sy);
+  buyStickHead();
 }
+/* 매입현황 머리줄(월) 고정 — 표가 가로 스크롤 상자 안이라 CSS sticky가 안 먹어서, 페이지 스크롤에 맞춰 머리줄을 내려줌 */
+function buyStickTop(){
+  let top=0;
+  for(const sel of[".topbar",".tabbar"]){const e=document.querySelector(sel);if(!e)continue;
+    const r=e.getBoundingClientRect();if(r.width>innerWidth*.5&&r.height>0&&r.top<=top+2&&r.bottom>top)top=r.bottom;}
+  return top;
+}
+function buyStickHead(){
+  const t=document.querySelector("#tab-buystat table.buy-tbl");
+  if(!t||!t.tHead||!t.offsetParent)return;
+  const r=t.getBoundingClientRect(),hh=t.tHead.offsetHeight,fh=t.tFoot?t.tFoot.offsetHeight:0;
+  const dy=Math.round(Math.min(Math.max(0,buyStickTop()-r.top),Math.max(0,r.height-hh-fh)));
+  t.classList.toggle("buy-stuck",dy>0);
+  for(const th of t.tHead.querySelectorAll("th"))th.style.transform=dy?"translateY("+dy+"px)":"";
+}
+window.addEventListener("scroll",()=>buyStickHead(),{passive:true});
+window.addEventListener("resize",()=>buyStickHead());
 function renderBuyStatCore(){
   const el=document.getElementById("tab-buystat");
   if(!el)return;
