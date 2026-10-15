@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v320</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v321</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -12751,6 +12751,9 @@ function buyCloseCur(){const B=window.__buy;const ks=buyCloseKeys();if(!ks.lengt
 function buyKeyLabel(k){return "20"+k.slice(0,2)+"년 "+Number(k.slice(2))+"월";}
 function buyNextKey(k){let y=+k.slice(0,2),m=+k.slice(2);m++;if(m>12){m=1;y++;}return String(y).padStart(2,"0")+String(m).padStart(2,"0");}
 function buyGroupSum(g){return g.rows.reduce((a,r)=>a+(r.amt||0),0);}
+/* 화면 합계용: 확인(✓)된 금액만 / 미확인 금액 따로 */
+function buyGroupOk(g){return g.rows.reduce((a,r)=>a+(r.ok?(r.amt||0):0),0);}
+function buyGroupUn(g){return g.rows.reduce((a,r)=>a+(r.ok?0:(r.amt||0)),0);}
 /* ---------- 월마감 렌더 ---------- */
 function renderBuyClose(){
   const el=document.getElementById("tab-buyclose");
@@ -12774,7 +12777,7 @@ function renderBuyClose(){
   const dlYear=B.ui.closeDlYear&&years.includes(B.ui.closeDlYear)?B.ui.closeDlYear:years[0];
   B.ui.closeDlYear=dlYear;
   let unconf=0,total=0;
-  doc.groups.forEach(g=>g.rows.forEach(r=>{if(!r.ok)unconf++;total+=r.amt||0;}));
+  let unAmt=0;doc.groups.forEach(g=>g.rows.forEach(r=>{if(!r.ok){unconf++;unAmt+=r.amt||0;}else total+=r.amt||0;}));
   const dateIso=/^\d{4}-\d{2}-\d{2}$/.test(doc.payDate||"");
   let html=`<div class="card"><div class="card-title" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">월마감결제
       <select onchange="buyCloseSel(this.value)">${ks.map(k=>`<option value="${k}" ${k===key?"selected":""}>${buyKeyLabel(k)}</option>`).join("")}</select>
@@ -12785,8 +12788,8 @@ function renderBuyClose(){
       <span class="footnote">노란 줄 = 아직 금액 확인 전(거래명세서·계산서 대조 전) · 확인되면 ✓ 체크</span>
     </div>`;
   doc.groups.forEach((g,gi)=>{
-    const sum=buyGroupSum(g);
-    html+=`<div style="margin-top:10px"><b>${esc(g.dept)}</b> <span class="unit">소계 ${fmt(sum)}원 · ${g.rows.length}곳</span>
+    const sum=buyGroupOk(g),gun=buyGroupUn(g);
+    html+=`<div style="margin-top:10px"><b>${esc(g.dept)}</b> <span class="unit">소계 ${fmt(sum)}원 · ${g.rows.length}곳</span>${gun?` <span class="buy-warn" style="font-size:12px">미확인 ${fmt(gun)}원 제외</span>`:""}
       <div class="table-wrap"><table class="rpt buy-tbl" style="max-width:760px"><thead><tr><th style="width:36px">확인</th><th class="l">거래처</th><th style="width:130px">금액</th><th class="l" style="width:140px">비고</th><th style="width:30px"></th><th style="width:110px">이체 합계</th></tr></thead><tbody>`;
     const CH=15; /* 은행 다건이체 한 번에 15곳까지 */
     g.rows.forEach((r,ri)=>{
@@ -12798,7 +12801,7 @@ function renderBuyClose(){
         <td><button class="btn btn-sm" style="padding:1px 7px" onclick="buyCloseDel(${gi},${ri})">×</button></td>`;
       if(ri%CH===0){
         const end=Math.min(ri+CH,g.rows.length);
-        let cs=0,un=0;for(let k=ri;k<end;k++){cs+=g.rows[k].amt||0;if(!g.rows[k].ok)un++;}
+        let cs=0,un=0;for(let k=ri;k<end;k++){if(g.rows[k].ok)cs+=g.rows[k].amt||0;else un++;}
         const lab=g.rows.length>CH?(ri+1)+"~"+end+"번":"총액";
         html+=`<td class="bchunk" rowspan="${end-ri}"><div style="font-size:11px;color:var(--sub,#777)">${lab}${un?' <span class=\"buy-warn\">⚠미확인 '+un+'</span>':""}</div><b>${fmt(cs)}</b></td>`;
       }
@@ -12807,9 +12810,9 @@ function renderBuyClose(){
     html+=`</tbody></table></div><button class="btn btn-sm" onclick="buyCloseAdd(${gi})">＋ 거래처 추가</button></div>`;
   });
   html+=`<div style="margin-top:14px;padding:10px;border:1px solid var(--line,#ddd);border-radius:10px;max-width:640px">
-      ${doc.groups.map(g=>`<span style="margin-right:16px">${esc(g.dept)} <b>${fmt(buyGroupSum(g))}</b></span>`).join("")}
-      <span style="margin-right:16px">총 합계 <b style="font-size:15px">${fmt(total)}</b>원</span>
-      ${unconf?`<span class="buy-warn">미확인 ${unconf}건</span>`:`<span style="color:#2F6B3F">모두 확인됨 ✓</span>`}
+      ${doc.groups.map(g=>`<span style="margin-right:16px">${esc(g.dept)} <b>${fmt(buyGroupOk(g))}</b></span>`).join("")}
+      <span style="margin-right:16px">총 합계(확인분) <b style="font-size:15px">${fmt(total)}</b>원</span>
+      ${unconf?`<span class="buy-warn">미확인 ${unconf}건 ${fmt(unAmt)}원은 합계에서 뺐어요</span>`:`<span style="color:#2F6B3F">모두 확인됨 ✓</span>`}
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;align-items:center">
       <button class="btn btn-primary" onclick="buyApplyOpen()">📤 매입현황에 바로 반영</button>
