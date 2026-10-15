@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v327</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v328</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -13076,6 +13076,32 @@ function buyStatFlash(names){
   trs.forEach(t=>t.classList.add("buy-flash"));
   setTimeout(()=>trs.forEach(t=>t.classList.remove("buy-flash")),3500);
 }
+/* '쿠팡' 줄 = 비용정리 › 체크카드 월별 사용 합계 (계정 분류 상관없이, 제외·삭제 건 빼고) — 체크카드 자료가 있는 달만 덮어씀.
+   사업장 칸은 쿠팡 줄이 금액을 갖고 있던 칸(없으면 마켓), 전체는 합으로. 바뀌었으면 true */
+function buyDebitTotal(key){
+  const doc=(bd().debit||{})[key];if(!doc||!doc.rows||!doc.rows.length)return null;
+  return doc.rows.reduce((a,r)=>a+(debitIsOut(r)?0:(r.amt||0)),0);
+}
+function buyCoupangName(y){const d=bd().stat[y];for(const sc of buyScopeKeys(y)){const r=(d.scopes[sc].rows||[]).find(x=>/^쿠팡$/.test(String(x.name).trim()));if(r)return r.name;}return null;}
+function buyCoupangSync(y){
+  const d=bd().stat[y];if(!d||!d.scopes||typeof debitIsOut!=="function")return false;
+  const nm=buyCoupangName(y);if(!nm)return false;
+  const yy=String(y).slice(2);let ch=false;
+  const biz=buyBizKeys(y);
+  const has=biz.filter(sc=>{const r=buyFindRow(y,sc,nm);return r&&Object.values(r.m||{}).some(v=>v);});
+  const sc0=has.length===1?has[0]:(has.includes("market")||!has.length?"market":has[0]);
+  for(let mo=1;mo<=12;mo++){
+    const key=yy+String(mo).padStart(2,"0"),tot=buyDebitTotal(key);
+    if(tot==null)continue;
+    const mk=String(mo);
+    if(!(d.months||[]).includes(mo)){if(!tot)continue;d.months=[...(d.months||[]),mo].sort((a,b)=>a-b);d.labels=d.labels||{};d.labels[mk]=d.labels[mk]||mo+"월";ch=true;}
+    /* 다른 사업장 칸에 들어 있던 쿠팡 금액은 비우고 한 칸으로 */
+    for(const sc of biz){const r=buyFindRow(y,sc,nm);const want=sc===sc0?tot:0;const cur=(r&&r.m[mk])||0;
+      if(cur!==want){const rr=r||buyEnsureRow(y,sc,nm,"");if(want)rr.m[mk]=want;else delete rr.m[mk];ch=true;}}
+    const ra=buyFindRow(y,"all",nm);if(!ra||(ra.m[mk]||0)!==tot){buyBizFix1(y,nm,mo);ch=true;}
+  }
+  return ch;
+}
 /* 거래처 줄은 항상 가나다순 (이름을 바꾼 줄도 제자리로) — 순서가 바뀌었으면 true */
 function buySortYear(y){
   const d=bd().stat[y];if(!d||!d.scopes)return false;
@@ -13099,7 +13125,7 @@ function renderBuyStatCore(){
   }
   const mig=buySplitEnsure(y);/* 2026~ 피다/보자기 분리 (1회) */
   const d=D.stat[y];
-  if(buySortYear(y)){d.savedAt=Date.now();buyMark("stat_"+y);}
+  if(buySortYear(y)|buyCoupangSync(y)){d.savedAt=Date.now();buyMark("stat_"+y);}
   const ms=buyStatMonths(y);
   if(!d.scopes[B.ui.statScope])B.ui.statScope="all";
   const sc=B.ui.statScope;
@@ -13130,7 +13156,8 @@ function renderBuyStatCore(){
   list.forEach((r)=>{
     const ri=rows.indexOf(r);
     let sum=0;
-    const tds=ms.map(m=>{const v=r.m[String(m)];if(v!=null){sum+=v;totals[m]=(totals[m]||0)+v;}return `<td class="bsc" onclick="buyStatCell(this,'${sc}',${ri},${m})">${v!=null?fmt(v):""}</td>`;}).join("");
+    const cpg=/^쿠팡$/.test(String(r.name).trim());
+    const tds=ms.map(m=>{const v=r.m[String(m)];if(v!=null){sum+=v;totals[m]=(totals[m]||0)+v;}const au=cpg&&buyDebitTotal(String(y).slice(2)+String(m).padStart(2,"0"))!=null;return `<td class="bsc"${au?' style="background:#EAF2FB" title="비용정리 › 체크카드 월 합계 (자동 — 체크카드에서 고치면 여기도 바뀌어요)"':""} onclick="buyStatCell(this,'${sc}',${ri},${m})">${v!=null?fmt(v):""}</td>`;}).join("");
     grand+=sum;
     let flag="";
     if(sc==="all"){const bad=xs.some(x=>x.name===r.name);if(bad)flag=` <span class="buy-warn" title="${buyBizLabel(y)} 합과 달라요">⚠</span>`;}
