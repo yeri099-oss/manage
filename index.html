@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v328</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v329</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -13077,7 +13077,7 @@ function buyStatFlash(names){
   setTimeout(()=>trs.forEach(t=>t.classList.remove("buy-flash")),3500);
 }
 /* '쿠팡' 줄 = 비용정리 › 체크카드 월별 사용 합계 (계정 분류 상관없이, 제외·삭제 건 빼고) — 체크카드 자료가 있는 달만 덮어씀.
-   사업장 칸은 쿠팡 줄이 금액을 갖고 있던 칸(없으면 마켓), 전체는 합으로. 바뀌었으면 true */
+   사업장은 피다 칸, 전체는 합으로. 바뀌었으면 true */
 function buyDebitTotal(key){
   const doc=(bd().debit||{})[key];if(!doc||!doc.rows||!doc.rows.length)return null;
   return doc.rows.reduce((a,r)=>a+(debitIsOut(r)?0:(r.amt||0)),0);
@@ -13088,8 +13088,8 @@ function buyCoupangSync(y){
   const nm=buyCoupangName(y);if(!nm)return false;
   const yy=String(y).slice(2);let ch=false;
   const biz=buyBizKeys(y);
-  const has=biz.filter(sc=>{const r=buyFindRow(y,sc,nm);return r&&Object.values(r.m||{}).some(v=>v);});
-  const sc0=has.length===1?has[0]:(has.includes("market")||!has.length?"market":has[0]);
+  /* 체크카드는 피다 사용분 → 피다 칸 (2025 이전 구조면 인사동+보자기 칸) */
+  const sc0=biz.includes("pida")?"pida":biz.includes("insa")?"insa":biz[0];
   for(let mo=1;mo<=12;mo++){
     const key=yy+String(mo).padStart(2,"0"),tot=buyDebitTotal(key);
     if(tot==null)continue;
