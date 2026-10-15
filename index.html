@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v318</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v319</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -12787,7 +12787,7 @@ function renderBuyClose(){
     const sum=buyGroupSum(g);
     html+=`<div style="margin-top:10px"><b>${esc(g.dept)}</b> <span class="unit">소계 ${fmt(sum)}원 · ${g.rows.length}곳</span>
       <div class="table-wrap"><table class="rpt buy-tbl" style="max-width:760px"><thead><tr><th style="width:36px">확인</th><th class="l">거래처</th><th style="width:130px">금액</th><th class="l" style="width:140px">비고</th><th style="width:30px"></th><th style="width:110px">이체 합계</th></tr></thead><tbody>`;
-    const CH=20;
+    const CH=15; /* 은행 다건이체 한 번에 15곳까지 */
     g.rows.forEach((r,ri)=>{
       html+=`<tr class="${r.ok?"":"buy-yel"}">
         <td style="text-align:center"><input type="checkbox" ${r.ok?"checked":""} onchange="buyCloseOk(${gi},${ri},this.checked)"></td>
