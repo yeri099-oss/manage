@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v326</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v327</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -13992,9 +13992,59 @@ async function buyJsRender(ym){
       <tr><td colspan="3"><button class="btn btn-sm" onclick="buyJsAdd('${ym}','buyPida')">＋ 항목 추가</button></td></tr>
       <tr style="background:#eef3ee"><td class="l"><b>합계</b></td><td style="text-align:right"><b>${fmt(sp)}</b></td><td></td></tr>
     </tbody></table>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap">
+      <button class="btn btn-primary btn-sm" onclick="buyJsToStat('${ym}')">📤 매입현황에 반영</button>
+      <span class="unit">${buyJsAppliedNote(ym)}</span></div>
   </div>
   ${buyJsVoucherHtml(ym,gye+sb,sp)}`;
 }
+/* ---------- 매입정산 → 매입현황 반영 ----------
+   보자기 매입정산(꽃밥마켓 자동 = (주)꽃밥이야기 줄 + 항목): 그 달 피다 칸 → 보자기 칸으로 옮김
+   피다 매입정산 항목: 보자기 칸 → 피다 칸으로 옮김 · 전체(합) 금액은 그대로
+   다시 누르면 지난번 반영분을 되돌린 뒤 새로 반영 (두 번 옮겨지지 않음) */
+function buyJsStatY(ym){return String(2000+Number(String(ym).slice(0,2)));}
+function buyJsAppliedNote(ym){
+  try{const y=buyJsStatY(ym),d=bd().stat[y],a=d&&d.jsApplied&&d.jsApplied[String(+String(ym).slice(2))];
+    return a?"마지막 반영 "+new Date(a.at).toLocaleString("ko-KR",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"})+" · 고친 뒤 다시 누르면 바뀐 만큼만 다시 맞춰요":"피다 칸 → 보자기 칸으로 옮겨요 (피다 매입정산은 반대로) · 전체 금액은 그대로";}catch(e){return "";}
+}
+window.buyJsToStat=function(ym){
+  const M=buyJsMonths(),m=M&&M[ym];if(!m){toast("매입정산 자료가 없어요",true);return;}
+  const y=buyJsStatY(ym),mo=+String(ym).slice(2),mk=String(mo),d=bd().stat[y];
+  if(!d||!buySplitYear(y)){toast(y+"년 매입현황(마켓·피다·보자기)이 없어요",true);return;}
+  const names=buyVendorNames(y).filter(n=>n),map=bd().vendorMap||{};
+  const mv=[];
+  const add=(nm,amt,from,to)=>{nm=String(nm||"").trim();if(!nm||!amt)return;const t=buyGuessTo(nm,names,map);mv.push({src:nm,name:t,isNew:!names.includes(t),from,to,amt});};
+  const gye=(m.members&&m.members.bojagiGye)||0;
+  if(gye){const mk2=names.find(n=>/꽃밥이야기/.test(n))||"(주)꽃밥이야기";mv.push({src:"꽃밥마켓 (자동)",name:mk2,isNew:!names.includes(mk2),from:"pida",to:"bojagi",amt:gye});}
+  (m.buyBojagi||[]).forEach(it=>add(it.name,it.amt,"pida","bojagi"));
+  (m.buyPida||[]).forEach(it=>add(it.name,it.amt,"bojagi","pida"));
+  const prev=(d.jsApplied&&d.jsApplied[mk])||null;
+  if(!mv.length&&!prev){toast("반영할 금액이 없어요",true);return;}
+  const val=(sc,nm)=>{const r=buyFindRow(y,sc,nm);return (r&&r.m[mk])||0;};
+  /* 미리보기: 지난 반영분 되돌린 뒤 새 값 */
+  const sim={};const key=(sc,nm)=>sc+"|"+nm;
+  const get=(sc,nm)=>key(sc,nm) in sim?sim[key(sc,nm)]:val(sc,nm);
+  const put=(sc,nm,v)=>{sim[key(sc,nm)]=v;};
+  /* 옮길 칸에 금액이 모자라면 있는 만큼만 빼고(take), 나머지는 새 매입으로 더해져 전체도 늘어남 */
+  if(prev)for(const x of prev.list){const tk=x.take!=null?x.take:x.amt;put(x.from,x.name,get(x.from,x.name)+tk);put(x.to,x.name,get(x.to,x.name)-x.amt);}
+  for(const x of mv){x.take=Math.min(x.amt,Math.max(0,get(x.from,x.name)));put(x.from,x.name,get(x.from,x.name)-x.take);put(x.to,x.name,get(x.to,x.name)+x.amt);}
+  const L={pida:"피다",bojagi:"보자기"};
+  const lines=mv.map(x=>`· ${x.src}${x.src!==x.name?" → "+x.name:""}${x.isNew?" (새 거래처)":""}: ${fmt(x.amt)}원  ${x.take>=x.amt?L[x.from]+"→"+L[x.to]:x.take>0?L[x.from]+"에서 "+fmt(x.take)+"원만 옮기고 나머지는 "+L[x.to]+"에 추가":L[x.to]+"에 추가 ("+L[x.from]+" 칸에 금액 없음)"}`);
+  const neg=Object.keys(sim).filter(k=>sim[k]<0).map(k=>{const [sc,nm]=k.split("|");return `${nm} ${L[sc]||sc} ${fmt(sim[k])}`;});
+  const msg=`${y}년 ${mo}월 매입현황에 반영할까요?\n\n${lines.join("\n")||"(이번엔 옮길 항목 없음)"}${prev?"\n\n※ 지난번 반영분("+prev.list.length+"건)은 되돌리고 새로 맞춰요":""}${neg.length?"\n\n⚠ 옮긴 뒤 마이너스가 되는 칸: "+neg.join(", ")+"\n   (거래처 이름이 맞는지 확인하세요)":""}`;
+  if(!confirm(msg))return;
+  if(!(d.months||[]).includes(mo)){d.months=[...(d.months||[]),mo].sort((a,b)=>a-b);d.labels=d.labels||{};d.labels[mk]=d.labels[mk]||mo+"월";}
+  const setv=(sc,nm,v)=>{const r=buyEnsureRow(y,sc,nm,"");if(v)r.m[mk]=v;else delete r.m[mk];};
+  for(const k in sim){const [sc,nm]=k.split("|");setv(sc,nm,sim[k]);}
+  d.jsApplied=d.jsApplied||{};
+  d.jsApplied[mk]=mv.length?{at:Date.now(),list:mv.map(x=>({name:x.name,from:x.from,to:x.to,amt:x.amt,take:x.take}))}:undefined;
+  if(!mv.length)delete d.jsApplied[mk];
+  /* 전체 칸 = 사업장 합 (옮기기만 했으면 그대로, 모자라 더한 만큼은 늘어남) */
+  new Set(mv.map(x=>x.name).concat(prev?prev.list.map(x=>x.name):[])).forEach(nm=>buyBizFix1(y,nm,mo));
+  d.savedAt=Date.now();buyMark("stat_"+y);
+  toast(y+"년 "+mo+"월 매입현황에 "+mv.length+"건 반영했어요 ✓");
+  buyJsRender(ym);
+};
 /* 이카운트 전표: 1469 상품 / 거래처 95263 매입(손익)정산 — 보자기 +, 피다 − (피다 정산이 있으면 반대 짝 한 줄 더) */
 function buyJsVoucherRows(ym,bj,pd){
   const rows=[];
