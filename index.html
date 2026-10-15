@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v329</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v330</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -13181,6 +13181,7 @@ function renderBuyStatCore(){
       <button class="btn btn-sm" onclick="buySkipOpen()">🚫 제외 목록</button>
       <span style="margin-left:auto"></span>
       <select onchange="window.__buy.ui.statDlM=this.value">${ms.map(m=>`<option value="${m}" ${m===dlM?"selected":""}>${m}월까지</option>`).join("")}</select>
+      <button class="btn" onclick="buySumOpen()">📋 월 요약</button>
       <button class="btn" onclick="buyStatDl()">📥 엑셀 받기</button>
       ${upBtn}
     </div>
@@ -14025,6 +14026,123 @@ async function buyJsRender(ym){
   </div>
   ${buyJsVoucherHtml(ym,gye+sb,sp)}`;
 }
+
+/* ---------- 매입현황 월 요약 (보고용: ① 사업장별 합계 ② 증감 큰 거래처 ③ 특이사항) — 이미지·텍스트 복사 ---------- */
+function buySumScopeTot(y,sc,mo){const d=bd().stat[String(y)];if(!d||!d.scopes||!d.scopes[sc])return null;const mk=String(mo);let t=0,any=false;for(const r of d.scopes[sc].rows||[]){const v=r.m&&r.m[mk];if(v!=null){t+=v;any=true;}}return any?t:null;}
+function buySumVal(y,nm,mo){const d=bd().stat[String(y)];if(!d||!d.scopes||!d.scopes.all)return 0;const r=(d.scopes.all.rows||[]).find(x=>x.name===nm);return (r&&r.m&&r.m[String(mo)])||0;}
+function buySumPrev(y,mo){return mo>1?{y:+y,mo:mo-1}:{y:+y-1,mo:12};}
+function buySumSales(y,mo){
+  try{const c=monthlyCalc(+y,mo);if(!c||!c.has)return null;
+    return {market:(c.market||0)+(c.online||0)||null,pida:c.insadong||null,bojagi:c.bojagi||null,all:c.total||null};}catch(e){return null;}
+}
+function buySumNotes(y,mo){const d=bd().stat[String(y)];d.sumNotes=d.sumNotes||{};const k=String(mo);d.sumNotes[k]=d.sumNotes[k]||{why:{},memo:""};d.sumNotes[k].why=d.sumNotes[k].why||{};return d.sumNotes[k];}
+function buySumData(y,mo){
+  y=String(y);const d=bd().stat[y];const pv=buySumPrev(y,mo),ly=String(+y-1);
+  const sales=buySumSales(y,mo);
+  const scs=buyBizKeys(y);
+  const lines=scs.concat(["all"]).map(sc=>{
+    const cur=buySumScopeTot(y,sc,mo),prev=buySumScopeTot(pv.y,sc,pv.mo),last=buySumScopeTot(ly,sc,mo);
+    const sl=sales?sales[sc]:null;
+    return {sc,label:sc==="all"?"합계":BUY_SC_LABEL[sc],cur,prev,diff:cur!=null&&prev!=null?cur-prev:null,last,rate:cur!=null&&sl?cur/sl:null};
+  });
+  /* 증감 큰 거래처 Top5 (전체 기준) */
+  const names=new Set();
+  for(const yy of[y,String(pv.y)]){const dd=bd().stat[yy];if(dd&&dd.scopes&&dd.scopes.all)(dd.scopes.all.rows||[]).forEach(r=>r.name&&names.add(r.name));}
+  const ch=[...names].map(nm=>{const a=buySumVal(y,nm,mo),b=buySumVal(pv.y,nm,pv.mo);return {nm,cur:a,prev:b,diff:a-b};})
+    .filter(x=>x.diff).sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff)).slice(0,5);
+  /* 특이사항 (자동) */
+  const auto=[];
+  const allRows=(d.scopes.all.rows||[]);
+  const hadBefore=(nm)=>{for(let m=1;m<mo;m++)if(buySumVal(y,nm,m))return true;const l=bd().stat[ly];if(l&&l.scopes&&l.scopes.all){const r=l.scopes.all.rows.find(x=>x.name===nm);if(r&&Object.values(r.m||{}).some(v=>v))return true;}return false;};
+  const nw=allRows.filter(r=>buySumVal(y,r.name,mo)&&!hadBefore(r.name)).map(r=>r.name+" "+fmt(buySumVal(y,r.name,mo)));
+  if(nw.length)auto.push("새 거래처 "+nw.length+"곳: "+nw.join(", "));
+  const p3=[];let q={y:+y,mo};for(let i=0;i<3;i++){q=buySumPrev(q.y,q.mo);p3.push(q);}
+  const gone=[...names].filter(nm=>!buySumVal(y,nm,mo)&&p3.every(t=>buySumVal(t.y,nm,t.mo)>0));
+  if(gone.length)auto.push("최근 3개월 매달 있었는데 이번 달 매입 없음: "+gone.join(", "));
+  const ja=d.jsApplied&&d.jsApplied[String(mo)];
+  if(ja&&ja.list&&ja.list.length){const t=ja.list.reduce((a,x)=>a+x.amt,0);auto.push("매입정산 반영 "+ja.list.length+"건 "+fmt(t)+"원 (피다↔보자기 칸 옮김)");}
+  const ck=y.slice(2)+String(mo).padStart(2,"0"),cd=bd().close&&bd().close[ck];
+  if(cd&&cd.groups){let n=0,a=0;cd.groups.forEach(g=>g.rows.forEach(r=>{if(!r.ok){n++;a+=r.amt||0;}}));if(n)auto.push("월마감결제 미확인 "+n+"건 "+fmt(a)+"원 (금액 확인 전)");}
+  return {y,mo,pv,ly,lines,ch,auto,hasSales:!!sales,notes:buySumNotes(y,mo)};
+}
+function buySumFmtD(v){return v==null?"—":(v>0?"+":v<0?"−":"")+fmt(Math.abs(v));}
+function buySumReportHtml(D){
+  const th="border:1px solid #c9c7bd;padding:6px 10px;background:#eef3ee;font-size:12.5px;white-space:nowrap";
+  const td="border:1px solid #c9c7bd;padding:6px 10px;text-align:right;font-size:13px;white-space:nowrap";
+  const tdl=td.replace("text-align:right","text-align:left");
+  const col=(v)=>v>0?"#b3261e":v<0?"#1d4ed8":"#333";
+  const rows=D.lines.map(l=>`<tr${l.sc==="all"?' style="font-weight:700;background:#f6f5f1"':""}><td style="${tdl}">${esc(l.label)}</td><td style="${td}"><b>${l.cur==null?"—":fmt(l.cur)}</b></td><td style="${td}">${l.prev==null?"—":fmt(l.prev)}</td><td style="${td};color:${col(l.diff)}">${buySumFmtD(l.diff)}</td><td style="${td}">${l.last==null?"—":fmt(l.last)}</td>${D.hasSales?`<td style="${td}">${l.rate==null?"—":(l.rate*100).toFixed(1)+"%"}</td>`:""}</tr>`).join("");
+  const ch=D.ch.length?D.ch.map(x=>{const w=D.notes.why[x.nm];return `<tr><td style="${tdl}">${esc(x.nm)}</td><td style="${td}">${fmt(x.prev)}</td><td style="${td}">${fmt(x.cur)}</td><td style="${td};color:${col(x.diff)}"><b>${buySumFmtD(x.diff)}</b></td><td style="${tdl};white-space:normal;max-width:220px;color:#444">${w?esc(w):""}</td></tr>`;}).join(""):`<tr><td colspan="5" style="${tdl};color:#777">지난달과 달라진 거래처가 없어요</td></tr>`;
+  const notes=D.auto.concat(D.notes.memo?String(D.notes.memo).split(/\n/).filter(x=>x.trim()):[]);
+  return `<div id="buySumReport" style="background:#fff;color:#222;padding:18px 20px;font-family:inherit;width:max-content;max-width:760px">
+    <div style="font-size:17px;font-weight:800;margin-bottom:2px">${D.y}년 ${D.mo}월 매입 요약</div>
+    <div style="font-size:12px;color:#666;margin-bottom:12px">꽃밥이야기 매입현황 · 단위 원</div>
+    <div style="font-weight:700;margin:4px 0 6px">① 사업장별 매입</div>
+    <table style="border-collapse:collapse"><thead><tr><th style="${th}">사업장</th><th style="${th}">${D.mo}월</th><th style="${th}">${D.pv.mo}월</th><th style="${th}">지난달 대비</th><th style="${th}">${D.ly}년 ${D.mo}월</th>${D.hasSales?`<th style="${th}">매출 대비</th>`:""}</tr></thead><tbody>${rows}</tbody></table>
+    <div style="font-weight:700;margin:16px 0 6px">② 지난달보다 많이 바뀐 거래처</div>
+    <table style="border-collapse:collapse"><thead><tr><th style="${th}">거래처</th><th style="${th}">${D.pv.mo}월</th><th style="${th}">${D.mo}월</th><th style="${th}">증감</th><th style="${th}">이유</th></tr></thead><tbody>${ch}</tbody></table>
+    <div style="font-weight:700;margin:16px 0 6px">③ 특이사항</div>
+    ${notes.length?`<ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.7">${notes.map(n=>`<li>${esc(n)}</li>`).join("")}</ul>`:`<div style="font-size:13px;color:#777">특이사항 없음</div>`}
+  </div>`;
+}
+function buySumText(D){
+  const L=[`[${D.y}년 ${D.mo}월 매입 요약]`,"","① 사업장별 매입"];
+  D.lines.forEach(l=>L.push(`· ${l.label} ${l.cur==null?"—":fmt(l.cur)+"원"} (지난달 대비 ${buySumFmtD(l.diff)} / ${D.ly}년 ${D.mo}월 ${l.last==null?"—":fmt(l.last)}${D.hasSales&&l.rate!=null?" / 매출 대비 "+(l.rate*100).toFixed(1)+"%":""})`));
+  L.push("","② 지난달보다 많이 바뀐 거래처");
+  if(D.ch.length)D.ch.forEach(x=>{const w=D.notes.why[x.nm];L.push(`· ${x.nm} ${fmt(x.prev)} → ${fmt(x.cur)} (${buySumFmtD(x.diff)})${w?" "+w:""}`);});else L.push("· 없음");
+  L.push("","③ 특이사항");
+  const notes=D.auto.concat(D.notes.memo?String(D.notes.memo).split(/\n/).filter(x=>x.trim()):[]);
+  if(notes.length)notes.forEach(n=>L.push("· "+n));else L.push("· 없음");
+  return L.join("\n");
+}
+window.buySumOpen=function(mo){
+  const y=buyStatCurY();if(!y)return;
+  const ms=buyStatMonths(y);if(!ms.length){toast("매입현황에 달이 없어요",true);return;}
+  mo=+mo||+(window.__buy.ui.sumM&&ms.includes(+window.__buy.ui.sumM)?window.__buy.ui.sumM:ms[0]);window.__buy.ui.sumM=mo;
+  let ov=document.getElementById("buySumOv");
+  if(!ov){ov=document.createElement("div");ov.id="buySumOv";document.body.appendChild(ov);}
+  ov.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:flex-start;justify-content:center;padding:24px 16px;overflow:auto";
+  const D=buySumData(y,mo);
+  const inpS="font:inherit;font-size:12.5px;padding:3px 6px;border:1px solid var(--line,#ddd);border-radius:6px";
+  ov.innerHTML=`<div style="background:var(--card,#fff);border-radius:14px;max-width:820px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.25)">
+    <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line,#eee);flex-wrap:wrap">
+      <b style="font-size:16px">📋 월 요약</b>
+      <select style="${inpS}" onchange="buySumOpen(this.value)">${ms.map(m=>`<option value="${m}" ${m===mo?"selected":""}>${y}년 ${m}월</option>`).join("")}</select>
+      <span style="margin-left:auto"></span>
+      <button class="btn btn-primary btn-sm" onclick="buySumCopy('img')">🖼 이미지 복사</button>
+      <button class="btn btn-sm" onclick="buySumCopy('text')">📄 텍스트 복사</button>
+      <button class="btn btn-sm" onclick="buySumCopy('dl')">💾 이미지 저장</button>
+      <button class="btn btn-sm" onclick="document.getElementById('buySumOv').remove()">✕ 닫기</button>
+    </div>
+    <div style="padding:12px 16px">
+      <div id="buySumPrev" style="border:1px solid var(--line,#e5e5e5);border-radius:10px;overflow:auto">${buySumReportHtml(D)}</div>
+      ${D.hasSales?"":`<div class="footnote" style="margin-top:6px">매출현황(월별)에 ${mo}월 매출이 아직 없어 '매출 대비' 칸은 빠졌어요.</div>`}
+      <div style="margin-top:12px;font-weight:700">이유·메모 적기 <span class="unit" style="font-weight:400">적으면 위 요약에 바로 들어가고 저장돼요</span></div>
+      ${D.ch.map(x=>`<div style="display:flex;gap:8px;align-items:center;margin-top:6px"><span style="min-width:150px;font-size:13px">${esc(x.nm)} <span class="unit">${buySumFmtD(x.diff)}</span></span><input type="text" style="${inpS};flex:1" placeholder="예: 추석 선물세트" value="${esc(D.notes.why[x.nm]||"")}" data-nm="${esc(x.nm)}" oninput="buySumWhy(this)"></div>`).join("")}
+      <textarea style="${inpS};width:100%;box-sizing:border-box;margin-top:8px;min-height:60px" placeholder="특이사항 직접 메모 (줄마다 한 항목)" oninput="buySumMemo(this.value)">${esc(D.notes.memo||"")}</textarea>
+      <div class="footnote" style="margin-top:6px">사업장별 합계는 매입현황 각 탭 그대로예요(합계에는 마켓→피다·보자기 내부 매입 '(주)꽃밥이야기' 포함). 매출 대비 = 매입 ÷ 매출현황 월 매출(마켓은 온라인 포함, 피다는 인사동).</div>
+    </div></div>`;
+};
+function buySumRefresh(){const y=buyStatCurY(),mo=+window.__buy.ui.sumM;const el=document.getElementById("buySumPrev");if(el)el.innerHTML=buySumReportHtml(buySumData(y,mo));clearTimeout(window.__buySumT);window.__buySumT=setTimeout(()=>{const d=bd().stat[y];d.savedAt=Date.now();buyMark("stat_"+y);},800);}
+window.buySumWhy=function(inp){const N=buySumNotes(buyStatCurY(),+window.__buy.ui.sumM);const v=inp.value.trim();if(v)N.why[inp.dataset.nm]=v;else delete N.why[inp.dataset.nm];buySumRefresh();};
+window.buySumMemo=function(v){buySumNotes(buyStatCurY(),+window.__buy.ui.sumM).memo=v;buySumRefresh();};
+window.buySumCopy=async function(mode){
+  const y=buyStatCurY(),mo=+window.__buy.ui.sumM;const D=buySumData(y,mo);
+  try{
+    if(mode==="text"){const t=buySumText(D);
+      try{await navigator.clipboard.writeText(t);toast("요약 글을 복사했어요 — 카톡·메일에 붙여넣으세요");}
+      catch(e){const ta=document.createElement("textarea");ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand("copy");ta.remove();toast("요약 글을 복사했어요");}
+      return;}
+    const el=document.getElementById("buySumReport");if(!el)return;
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
+    const cv=await html2canvas(el,{backgroundColor:"#ffffff",scale:2});
+    const blob=await new Promise(r=>cv.toBlob(r,"image/png"));
+    const dl=()=>{const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="매입요약_"+y+"_"+String(mo).padStart(2,"0")+".png";document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);};
+    if(mode==="dl"||!navigator.clipboard||typeof ClipboardItem==="undefined"){dl();toast("요약 이미지를 저장했어요");return;}
+    try{await navigator.clipboard.write([new ClipboardItem({"image/png":blob})]);toast("요약 이미지를 복사했어요 — 보고 창에 Ctrl+V로 붙여넣으세요");}
+    catch(e){dl();toast("복사가 막혀서 이미지 파일로 저장했어요");}
+  }catch(e){console.error(e);toast("복사 실패: "+(e.message||e),true);}
+};
 /* ---------- 매입정산 → 매입현황 반영 ----------
    보자기 매입정산(꽃밥마켓 자동 = (주)꽃밥이야기 줄 + 항목): 그 달 피다 칸 → 보자기 칸으로 옮김
    피다 매입정산 항목: 보자기 칸 → 피다 칸으로 옮김 · 전체(합) 금액은 그대로
