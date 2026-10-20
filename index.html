@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v336</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v337</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -523,7 +523,7 @@ window.FIREBASE_CONFIG = {
     <section id="tab-vat" class="tab-panel hidden"></section>
     <section id="tab-jagum" class="tab-panel hidden"></section>
     <section id="tab-settings" class="tab-panel hidden"></section>
-    <section id="tab-withdraw" class="tab-panel hidden" style="max-width:1080px"></section>
+    <section id="tab-withdraw" class="tab-panel hidden" style="max-width:1080px;margin:0 auto"></section>
   </main>
 </div>
 <!-- ===== 모달 ===== -->
@@ -17493,7 +17493,7 @@ async function showApp() {
     <section id="tab-vat" class="tab-panel hidden"></section>
     <section id="tab-jagum" class="tab-panel hidden"></section>
     <section id="tab-settings" class="tab-panel hidden"></section>
-    <section id="tab-withdraw" class="tab-panel hidden" style="max-width:1080px"></section>`;
+    <section id="tab-withdraw" class="tab-panel hidden" style="max-width:1080px;margin:0 auto"></section>`;
   document.getElementById("tab-home").innerHTML = `<div class="loading"><span class="spin"></span><br>데이터를 불러오는 중…</div>`;
   try {
     await loadAllData();
