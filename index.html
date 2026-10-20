@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v345</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v346</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -12961,6 +12961,12 @@ tr.buy-flash>td{background:#fff3ad !important;transition:background .4s}
 .rpt.rpt-clean .sticky{background:var(--surface-1)}
 /* v343: 모든 중앙 화면의 표는 글자 폭에 맞게(꽉 채우지 않음) + 가운데 정렬 */
 .tab-panel table{width:auto !important;min-width:0 !important;margin-left:auto !important;margin-right:auto !important}
+/* v346: 모든 탭의 표 = 자금일보처럼 단정하게 — 칸 구분은 연한 점선, 머리줄 아래·합계 위만 실선 (엑셀 원본을 그대로 옮긴 표(class 없음)·급여 명세 표는 제외) */
+.tab-panel table[class]:not(.payws) th,.tab-panel table[class]:not(.payws) td{border-left:none !important;border-top:none !important;border-right:1px dashed #d9d7cf !important;border-bottom:1px dashed #e3e1da !important}
+.tab-panel table[class]:not(.payws) tr>:last-child{border-right:none !important}
+.tab-panel table[class]:not(.payws) thead th{border-bottom:1.5px solid #b9b7ae !important}
+.tab-panel table[class]:not(.payws) tr.total td{border-top:1.5px solid #9d9b93 !important}
+.tab-panel table[class]:not(.payws) tr.bcut>td{border-top:3px solid #334155 !important}
 td.bchunk{background:#f2f6f2 !important;text-align:right;vertical-align:middle;border-left:2px solid #dfe7df;min-width:104px;padding:4px 8px}
 </style>
 <script>
