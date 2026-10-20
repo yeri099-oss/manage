@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v344</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v345</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -12951,9 +12951,10 @@ tr.bcut>td{border-top:3px solid #334155 !important}
 #tab-buystat .buy-tbl thead th.bdel{position:sticky;z-index:4}
 #tab-buystat .buy-tbl.buy-stuck thead th{box-shadow:0 2px 0 #a9a79d}
 tr.buy-flash>td{background:#fff3ad !important;transition:background .4s}
-/* v344: 자금일보 — 화면 폭을 줄이고 표는 격자 없이 단정하게 (가로줄만 연하게, 합계·소계만 강조) */
+/* v344~345: 자금일보 — 화면 폭을 줄이고 표는 단정하게 (칸 구분은 연한 점선, 합계·소계만 강조) */
 #tab-jagum{max-width:1080px;margin-left:auto;margin-right:auto}
-.rpt.rpt-clean th,.rpt.rpt-clean td{border-left:none !important;border-right:none !important;border-bottom:1px solid #ecebe6;padding:8px 16px}
+.rpt.rpt-clean th,.rpt.rpt-clean td{border-left:none !important;border-right:1px dashed #d9d7cf !important;border-bottom:1px dashed #e3e1da;padding:8px 16px}
+.rpt.rpt-clean th:last-child,.rpt.rpt-clean td:last-child{border-right:none !important}
 .rpt.rpt-clean thead th{border-bottom:1.5px solid #b9b7ae;background:transparent;color:var(--ink-2);font-weight:600;font-size:12px}
 .rpt.rpt-clean tr.total td{border-top:1.5px solid #9d9b93;border-bottom:none;background:#f6f5f1}
 .rpt.rpt-clean tbody tr:hover td{background:#fafaf6}
