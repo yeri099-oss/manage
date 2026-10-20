@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v334</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v335</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -523,7 +523,7 @@ window.FIREBASE_CONFIG = {
     <section id="tab-vat" class="tab-panel hidden"></section>
     <section id="tab-jagum" class="tab-panel hidden"></section>
     <section id="tab-settings" class="tab-panel hidden"></section>
-    <section id="tab-withdraw" class="tab-panel hidden"></section>
+    <section id="tab-withdraw" class="tab-panel hidden" style="max-width:1080px"></section>
   </main>
 </div>
 <!-- ===== 모달 ===== -->
@@ -11865,10 +11865,10 @@ async function renderWithdraw() {
   const listTot = list.reduce((s, r) => s + r.amount, 0);
   const rows = list.map((r) => `<tr${r.confirmed ? ' style="background:#f0faf0"' : ""}>
       <td class="c" style="white-space:nowrap">${esc(r.date)}</td>
-      <td class="l"><a href="#" onclick="wdAcct('${esc(r.id)}');return false" style="color:${r.account ? "#185FA5" : "inherit"};${r.account ? "text-decoration:underline dotted;text-underline-offset:3px" : "text-decoration:none"}">${esc(r.vendor)}</a></td>
-      <td style="font-weight:700;color:#0F6E56">${fmt(r.amount)}</td>
-      <td class="note" style="max-width:280px">${esc(r.content) || "-"}</td>
-      <td class="note">${esc(r.note) || "-"}</td>
+      <td class="l" style="white-space:nowrap"><a href="#" onclick="wdAcct('${esc(r.id)}');return false" style="color:${r.account ? "#185FA5" : "inherit"};${r.account ? "text-decoration:underline dotted;text-underline-offset:3px" : "text-decoration:none"}">${esc(r.vendor)}</a></td>
+      <td style="font-weight:700;color:#0F6E56;white-space:nowrap">${fmt(r.amount)}</td>
+      <td class="note" style="max-width:300px">${esc(r.content) || "-"}</td>
+      <td class="note" style="max-width:140px">${esc(r.note) || "-"}</td>
       <td class="c" style="white-space:nowrap"><label style="cursor:pointer;font-size:12px;color:${r.confirmed ? "#27ae60;font-weight:700" : "var(--ink-muted)"}"><input type="checkbox" ${r.confirmed ? "checked" : ""} onchange="wdToggle('${esc(r.id)}',this)" style="accent-color:#27ae60;vertical-align:-2px"> ${r.confirmed ? "확인" : "미확인"}</label></td>
       <td class="c" style="white-space:nowrap"><button class="btn btn-sm" onclick="wdForm('${esc(r.id)}')">수정</button> <button class="btn btn-sm" onclick="wdDel('${esc(r.id)}')">삭제</button></td>
     </tr>`).join("");
@@ -11895,8 +11895,8 @@ async function renderWithdraw() {
           <select class="ctl" onchange="window.__wd.month=this.value;renderWithdraw()">${months.map((m) => `<option value="${m}" ${m === W.month ? "selected" : ""}>${m.slice(0, 4)}년 ${Number(m.slice(5))}월</option>`).join("")}</select>
         </div>
       </div>
-      <div class="table-wrap"><table class="rpt" style="width:100%;white-space:normal">
-        <thead><tr><th style="cursor:pointer;width:96px" onclick="wdSortDate()">날짜 ↕</th><th class="l" style="width:140px">거래처</th><th style="width:110px">금액</th><th class="l">내용</th><th class="l" style="width:120px">비고</th><th style="width:82px">입금확인</th><th style="width:110px">수정/삭제</th></tr></thead>
+      <div class="table-wrap"><table class="rpt" style="white-space:normal">
+        <thead><tr><th style="cursor:pointer" onclick="wdSortDate()">날짜 ↕</th><th class="l">거래처</th><th>금액</th><th class="l">내용</th><th class="l">비고</th><th>입금확인</th><th>수정/삭제</th></tr></thead>
         <tbody>${rows || `<tr><td colspan="7" class="c dim" style="padding:30px">등록된 출금 내역이 없어요.</td></tr>`}</tbody>
       </table></div>
       <div class="footnote">거래처 이름을 누르면 계좌 정보를 볼 수 있어요(파란 밑줄 = 계좌 등록됨).</div>
@@ -17492,7 +17492,7 @@ async function showApp() {
     <section id="tab-vat" class="tab-panel hidden"></section>
     <section id="tab-jagum" class="tab-panel hidden"></section>
     <section id="tab-settings" class="tab-panel hidden"></section>
-    <section id="tab-withdraw" class="tab-panel hidden"></section>`;
+    <section id="tab-withdraw" class="tab-panel hidden" style="max-width:1080px"></section>`;
   document.getElementById("tab-home").innerHTML = `<div class="loading"><span class="spin"></span><br>데이터를 불러오는 중…</div>`;
   try {
     await loadAllData();
