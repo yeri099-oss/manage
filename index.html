@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>꽃밥이야기 매출현황</title>
 <meta name="theme-color" content="#2a6b46">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E%F0%9F%8C%B8%3C/text%3E%3C/svg%3E">
+<link rel="icon" id="page-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E%F0%9F%8C%B8%3C/text%3E%3C/svg%3E">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="매출현황">
@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v339</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v340</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -12107,11 +12107,21 @@ function switchTab(tab) {
   if(["buy","pay","expense","free","vat","settings","confirmapp"].includes(tab)&&(!S.user||S.user.role!=="admin"))tab="home";
   S.ui.tab = tab;
   try{history.replaceState(null,"","#"+tab);}catch(e){}
+  pageIdentity(tab);
   document.querySelectorAll(".tabbar .tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
   document.querySelectorAll(".tab-panel").forEach((p) => p.classList.toggle("hidden", p.id !== "tab-" + tab));
   RENDERERS[tab]?.();
   window.scrollTo({ top: 0 });
 }
+// 출금기록부 탭이 열려 있으면 브라우저 탭 이름·아이콘을 바꿔서 즐겨찾기를 매출현황과 따로 구분
+function pageIdentity(tab) {
+  const wd = tab === "withdraw";
+  document.title = wd ? "출금기록부 · 꽃밥이야기" : "꽃밥이야기 매출현황";
+  const ic = document.getElementById("page-icon");
+  if (ic) ic.href = "data:image/svg+xml," + encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>${wd ? "💸" : "🌸"}</text></svg>`);
+}
+// 로그인 전에도 주소(#withdraw)만 보고 이름·아이콘을 맞춤 → 로그인 화면에서 즐겨찾기해도 구분됨
+try { pageIdentity(/^#(withdraw|출금)/.test(decodeURIComponent(location.hash)) ? "withdraw" : "home"); } catch (e) {}
 function rerenderCurrent() { RENDERERS[S.ui.tab]?.(); }
 /* ── 넓은 화면: 서브탭을 왼쪽 사이드바로 복제 이동 ── */
 function relocateSubtabs(){
@@ -17572,9 +17582,9 @@ function deepLinkTab(){
   try{
     let h=decodeURIComponent((location.hash||"").replace(/^#/,"")).trim();
     if(!h)return null;
-    const KO={"요약":"home","자금일보":"jagum","자금":"jagum","매출비교":"compare","매출현황":"sales","매출":"sales","월별손익":"pnl","손익":"pnl","매입":"buy","급여":"pay","비용정리":"expense","부가세":"vat","비용":"expense","임의결제":"free","설정":"settings","매출확정":"confirmapp"};
+    const KO={"출금기록부":"withdraw","출금":"withdraw","요약":"home","자금일보":"jagum","자금":"jagum","매출비교":"compare","매출현황":"sales","매출":"sales","월별손익":"pnl","손익":"pnl","매입":"buy","급여":"pay","비용정리":"expense","부가세":"vat","비용":"expense","임의결제":"free","설정":"settings","매출확정":"confirmapp"};
     if(KO[h])h=KO[h];
-    const OK=["home","jagum","compare","sales","pnl","buy","pay","expense","free","vat","settings","confirmapp","monthly","daily","market","bojagi","agency"];
+    const OK=["home","withdraw","jagum","compare","sales","pnl","buy","pay","expense","free","vat","settings","confirmapp","monthly","daily","market","bojagi","agency"];
     if(OK.indexOf(h)<0)return null;
     const ADMIN=["buy","pay","expense","free","vat","settings","confirmapp"];
     if(ADMIN.indexOf(h)>=0&&(!S.user||S.user.role!=="admin"))return null;
