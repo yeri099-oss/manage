@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v337</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v338</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -11883,7 +11883,8 @@ async function renderWithdraw() {
         </div>
       </div>
       <div class="stat-tiles" style="margin-bottom:4px">
-        <div class="stat-tile"><div class="k">날짜별 총금액 <input type="date" value="${W.date}" onchange="window.__wd.date=this.value||wdToday();renderWithdraw()" style="font-family:inherit;font-size:12px;border:1px solid var(--grid);border-radius:6px;padding:1px 4px;margin-left:4px"></div><div class="v" style="color:#0F6E56">${wdWon(dayTot)}</div></div>
+        <div class="stat-tile"><div class="k">날짜별 총금액 <input type="date" value="${W.date}" onchange="window.__wd.date=this.value||wdToday();renderWithdraw()" style="font-family:inherit;font-size:12px;border:1px solid var(--grid);border-radius:6px;padding:1px 4px;margin-left:4px"></div><div class="v" style="color:#0F6E56">${wdWon(dayTot)}</div>
+          <div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap"><button class="btn btn-sm" onclick="wdImage()" title="${esc(W.co)} ${W.date} 출금 내역을 보고용 이미지로 복사">📋 이 날짜 내역 이미지 복사</button><button class="btn btn-sm btn-ghost" onclick="wdImage('dl')" title="이미지 파일로 저장">⬇</button></div></div>
         <div class="stat-tile"><div class="k">${Number(ym.slice(5))}월 건수</div><div class="v">${monRecs.length}건</div></div>
         <div class="stat-tile"><div class="k">${Number(ym.slice(5))}월 총 출금액</div><div class="v" style="color:#0F6E56">${wdWon(monRecs.reduce((s, r) => s + r.amount, 0))}</div></div>
       </div>
@@ -11925,14 +11926,16 @@ function wdForm(id) {
   const f = (k, label, extra) => `<div class="form-field"><label>${label}</label><input id="wd-${k}" value="${esc(v[k])}" ${extra || ""}></div>`;
   openModal(r ? "출금 내역 수정" : `새 출금 내역 — ${W.co}`, `
     <div class="form-row">${f("date", "날짜", 'type="date"')}${f("vendor", "거래처 이름")}</div>
-    <div class="form-row"><div class="form-field"><label>금액 (원)</label><input id="wd-amount" class="num" inputmode="numeric" value="${v.amount ? Number(v.amount).toLocaleString("ko-KR") : ""}" oninput="wdAmtInput(this)"></div>${f("content", "내용")}</div>
+    <div class="form-row"><div class="form-field"><label>금액 (원)</label><input id="wd-amount" class="num" inputmode="numeric" value="${v.amount ? Number(v.amount).toLocaleString("ko-KR") : ""}" oninput="wdAmtInput(this)"></div></div>
     <div class="form-hint">금액 칸에서 + 를 누르면 000이 붙어요.</div>
+    <div class="form-row">${f("content", "내용")}</div>
     <hr class="form-sep"><div class="form-hint" style="margin:0 0 8px;font-weight:700">계좌 정보 (선택)</div>
     <div class="form-row">${f("holder", "예금주")}${f("bank", "은행명", 'placeholder="예) 국민은행"')}</div>
     <div class="form-row">${f("account", "계좌번호", 'placeholder="예) 123-456-789012"')}</div>
     <hr class="form-sep">
     <div class="form-row">${f("note", "비고")}</div>`,
-    `<button class="btn" onclick="closeModal()">취소</button><button class="btn btn-primary" onclick="wdSave('${r ? esc(r.id) : ""}')">${r ? "수정 완료" : "저장"}</button>`);
+    `<span class="dim" style="font-size:12px;margin-right:auto;align-self:center">F8 = ${r ? "수정 완료" : "저장"}</span><button class="btn" onclick="closeModal()">취소</button><button class="btn btn-primary" onclick="wdSave('${r ? esc(r.id) : ""}')">${r ? "수정 완료" : "저장"}</button>`);
+  W.formId = r ? r.id : "";
   setTimeout(() => document.getElementById(r ? "wd-amount" : "wd-vendor")?.focus(), 50);
 }
 async function wdSave(id) {
@@ -11942,6 +11945,8 @@ async function wdSave(id) {
   const r = wdClean({ ...(old || { id: Date.now() + "_" + Math.random().toString(36).slice(2), confirmed: false, company: W.co }),
     date: g("date"), vendor: g("vendor"), amount: Number(wdDigits(g("amount"))), content: g("content"), note: g("note"), holder: g("holder"), bank: g("bank"), account: g("account") });
   if (!r.date || !r.vendor || !r.amount) { toast("날짜, 거래처, 금액은 꼭 넣어주세요", true); return; }
+  if (W.saving) return; // F8 연타로 같은 내역이 두 번 들어가지 않게
+  W.saving = true;
   document.querySelectorAll("#modal-foot button").forEach((b) => (b.disabled = true));
   try {
     await wdPut(r);
@@ -11951,6 +11956,7 @@ async function wdSave(id) {
     closeModal(); toast(old ? "수정했어요" : "저장했어요");
     renderWithdraw();
   } catch (e) { wdSaveErr(e); }
+  W.saving = false;
   document.querySelectorAll("#modal-foot button").forEach((b) => (b.disabled = false));
 }
 function wdDel(id) {
@@ -11968,14 +11974,67 @@ async function wdDelGo(id) {
     closeModal(); toast("삭제했어요"); renderWithdraw();
   } catch (e) { wdSaveErr(e); }
 }
-async function wdToggle(id, box) {
+function wdToggle(id, box) {
   const r = window.__wd.recs.find((x) => x.id === id); if (!r) return;
-  if (!confirm(r.confirmed ? "입금 확인을 취소할까요?" : "입금 확인 할까요?")) { box.checked = r.confirmed; return; }
+  box.checked = r.confirmed; // 확인 누르기 전까지는 그대로
+  openModal(r.confirmed ? "입금 확인 취소" : "입금 확인",
+    `<div id="wd-ask"><b>${esc(r.date)} · ${esc(r.vendor)} · ${wdWon(r.amount)}</b><br>${r.confirmed ? "입금 확인을 취소할까요?" : "입금 확인 할까요?"}</div>`,
+    `<span class="dim" style="font-size:12px;margin-right:auto;align-self:center">Enter = 확인</span><button class="btn" onclick="closeModal()">취소</button><button class="btn btn-primary" onclick="wdToggleGo('${esc(id)}')">확인</button>`);
+  window.__wd.askId = id;
+}
+async function wdToggleGo(id) {
+  const r = window.__wd.recs.find((x) => x.id === id); if (!r) return;
+  window.__wd.askId = "";
+  closeModal();
   try {
     await wdPut({ ...r, confirmed: !r.confirmed });
     r.confirmed = !r.confirmed;
   } catch (e) { wdSaveErr(e); }
   renderWithdraw();
+}
+// 출금기록부 창 단축키: 입금확인 창 Enter = 확인, 내역 추가·수정 창 F8 = 저장
+document.addEventListener("keydown", (e) => {
+  const mb = document.getElementById("modal-backdrop");
+  if (!mb || mb.classList.contains("hidden")) return;
+  const W = window.__wd;
+  if (e.key === "Enter" && document.getElementById("wd-ask") && W.askId) { e.preventDefault(); wdToggleGo(W.askId); }
+  else if (e.key === "F8" && document.getElementById("wd-vendor")) { e.preventDefault(); wdSave(W.formId || ""); }
+});
+// 그날 출금 내역을 보고용 이미지로 (사업장별) — 클립보드 복사, 막히면 파일 저장
+async function wdImage(mode) {
+  const W = window.__wd;
+  const list = W.recs.filter((r) => r.company === W.co && r.date === W.date);
+  if (!list.length) { toast(`${W.co} ${W.date} 출금 내역이 없어요`, true); return; }
+  const tot = list.reduce((s, r) => s + r.amount, 0);
+  const wk = "일월화수목금토"[new Date(W.date + "T00:00:00").getDay()];
+  const td = "border:1px solid #c9c7bd;padding:8px 12px;font-size:14px;";
+  const th = td + "background:#f6f5f1;font-weight:700;text-align:center;font-size:13px;";
+  const box = document.createElement("div");
+  box.style.cssText = "position:fixed;left:-10000px;top:0;background:#fff;padding:18px 20px;font-family:inherit;color:#111;display:inline-block";
+  box.innerHTML = `<div style="font-size:16px;font-weight:800;margin-bottom:4px">${esc(W.co)} 출금 내역</div>
+    <div style="font-size:13px;color:#666;margin-bottom:10px">${W.date.replace(/-/g, ".")} (${wk}) · ${list.length}건 · 합계 ${fmt(tot)}원</div>
+    <table style="border-collapse:collapse">
+      <thead><tr><th style="${th}">날짜</th><th style="${th}">거래처</th><th style="${th}">금액</th><th style="${th}">내용</th><th style="${th}">비고</th><th style="${th}">입금확인</th></tr></thead>
+      <tbody>${list.map((r) => `<tr${r.confirmed ? ' style="background:#f0faf0"' : ""}>
+        <td style="${td}text-align:center;white-space:nowrap">${esc(r.date)}</td>
+        <td style="${td}white-space:nowrap">${esc(r.vendor)}</td>
+        <td style="${td}text-align:right;font-weight:700;color:#0F6E56;white-space:nowrap">${fmt(r.amount)}</td>
+        <td style="${td}color:#444;max-width:320px">${esc(r.content) || "-"}</td>
+        <td style="${td}color:#666;max-width:160px">${esc(r.note) || "-"}</td>
+        <td style="${td}text-align:center;white-space:nowrap;${r.confirmed ? "color:#27ae60;font-weight:700" : "color:#999"}">${r.confirmed ? "✔ 확인" : "미확인"}</td></tr>`).join("")}
+        <tr><td style="${td}background:#f6f5f1;font-weight:700;text-align:center" colspan="2">합계</td><td style="${td}background:#f6f5f1;text-align:right;font-weight:800;color:#0F6E56;white-space:nowrap">${fmt(tot)}</td><td style="${td}background:#f6f5f1" colspan="3"></td></tr>
+      </tbody></table>`;
+  document.body.appendChild(box);
+  try {
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
+    const cv = await html2canvas(box, { backgroundColor: "#ffffff", scale: 2 });
+    const blob = await new Promise((res) => cv.toBlob(res, "image/png"));
+    const dl = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `출금내역_${W.co}_${W.date}.png`; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); };
+    if (mode === "dl" || !navigator.clipboard || typeof ClipboardItem === "undefined") { dl(); toast("출금 내역 이미지를 저장했어요"); return; }
+    try { await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]); toast("출금 내역 이미지를 복사했어요 — 보고 창에 Ctrl+V로 붙여넣으세요"); }
+    catch (e) { dl(); toast("복사가 막혀서 이미지 파일로 저장했어요"); }
+  } catch (e) { console.error(e); toast("이미지 만들기 실패: " + (e.message || e), true); }
+  finally { box.remove(); }
 }
 function wdAcct(id) {
   const r = window.__wd.recs.find((x) => x.id === id); if (!r) return;
