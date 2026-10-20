@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v343</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v344</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -5720,9 +5720,9 @@ function jgHalvesTables(halves,groupEnds){
   const th2=halves.map((f,i)=>`<th style="${sep(i)}">${jgRange(f)}</th>`).join("");
   return `
   <div class="card"><div class="card-title">1. 자금 현황 <span class="unit">반월 원값 그대로 · 단위: 원 · 값 없는 계정은 숨김 (엑셀엔 전체)</span></div>
-    <div class="table-wrap"><table class="rpt" style="width:100%"><thead><tr><th class="l sticky" style="min-width:180px">계정</th>${th1}</tr></thead><tbody>${r1}</tbody></table></div></div>
+    <div class="table-wrap"><table class="rpt rpt-clean" style="width:100%"><thead><tr><th class="l sticky" style="min-width:180px">계정</th>${th1}</tr></thead><tbody>${r1}</tbody></table></div></div>
   <div class="card"><div class="card-title">2. 증감 내역 <span class="unit">단위: 원 · 증가, 감소 각각 금액 큰 순</span></div>
-    <div class="table-wrap"><table class="rpt" style="width:100%"><thead><tr><th class="l sticky" style="min-width:180px">계정</th>${th2}</tr></thead><tbody>${r2}</tbody></table></div></div>`;
+    <div class="table-wrap"><table class="rpt rpt-clean" style="width:100%"><thead><tr><th class="l sticky" style="min-width:180px">계정</th>${th2}</tr></thead><tbody>${r2}</tbody></table></div></div>`;
 }
 function jgMonthHalves(ym){return jgPeriods().filter(k=>k.slice(0,7)===ym).sort().reverse();} /* 후반 먼저(최신 왼쪽) */
 window.jgSetMonth=function(v){S.ui.jgMonth=v;renderJagum();};
@@ -5751,7 +5751,7 @@ function jgCmpHtml(){
     const tA=bA?jgBsTotals(bA):null,tB=bB?jgBsTotals(bB):null;
     const tr2=(l,k)=>`<tr class="total"><td class="l sticky">${l}</td>${vc(tA?tA[k]:null)}${vc(tB?tB[k]:null)}</tr>`;
     bsHtml=`<div class="card"><div class="card-title">재무상태표(월말) — 비교 <span class="unit">단위: 원 · 부채총계는 유동부채 직접 입력값</span></div>
-      <div class="table-wrap"><table class="rpt"><thead><tr><th class="l sticky">항목</th><th>${A.replace("-",".")}월</th><th>${B?B.replace("-",".")+"월":"-"}</th></tr></thead>
+      <div class="table-wrap"><table class="rpt rpt-clean"><thead><tr><th class="l sticky">항목</th><th>${A.replace("-",".")}월</th><th>${B?B.replace("-",".")+"월":"-"}</th></tr></thead>
       <tbody>${rows}${tr2("자산총계","assets")}${tr2("부채총계","debt")}${tr2("자본총계","capT")}${tr2("부채와자본총계","both")}</tbody></table></div></div>`;
   }
   return ctl2+jgKpiCards(A,B)+jgHalvesTables(halves,[ha.length])+bsHtml;
@@ -5917,7 +5917,7 @@ function jgBsViewHtml(){
   line("자본총계",calc.capT,{total:1,always:1,hl:1});
   line("부채와자본총계",calc.both,{total:1,always:1,hl:1});
   return kpi+compBar+`<div class="card"><div class="card-title">재무상태표(월말) <span class="unit">최근 ${mos.length}개월 · 단위: 원 · 부채는 유동부채 직접 입력값</span></div>
-    <div class="table-wrap"><table class="rpt" style="width:100%"><thead><tr><th class="l sticky" style="min-width:190px">재무제표표시명</th>${mos.map(ym=>`<th>${ym.replace("-",".")}월</th>`).join("")}</tr></thead>
+    <div class="table-wrap"><table class="rpt rpt-clean" style="width:100%"><thead><tr><th class="l sticky" style="min-width:190px">재무제표표시명</th>${mos.map(ym=>`<th>${ym.replace("-",".")}월</th>`).join("")}</tr></thead>
     <tbody>${rows}</tbody></table></div></div>`;
 }
 function renderJagum(){
@@ -12951,6 +12951,13 @@ tr.bcut>td{border-top:3px solid #334155 !important}
 #tab-buystat .buy-tbl thead th.bdel{position:sticky;z-index:4}
 #tab-buystat .buy-tbl.buy-stuck thead th{box-shadow:0 2px 0 #a9a79d}
 tr.buy-flash>td{background:#fff3ad !important;transition:background .4s}
+/* v344: 자금일보 — 화면 폭을 줄이고 표는 격자 없이 단정하게 (가로줄만 연하게, 합계·소계만 강조) */
+#tab-jagum{max-width:1080px;margin-left:auto;margin-right:auto}
+.rpt.rpt-clean th,.rpt.rpt-clean td{border-left:none !important;border-right:none !important;border-bottom:1px solid #ecebe6;padding:8px 16px}
+.rpt.rpt-clean thead th{border-bottom:1.5px solid #b9b7ae;background:transparent;color:var(--ink-2);font-weight:600;font-size:12px}
+.rpt.rpt-clean tr.total td{border-top:1.5px solid #9d9b93;border-bottom:none;background:#f6f5f1}
+.rpt.rpt-clean tbody tr:hover td{background:#fafaf6}
+.rpt.rpt-clean .sticky{background:var(--surface-1)}
 /* v343: 모든 중앙 화면의 표는 글자 폭에 맞게(꽉 채우지 않음) + 가운데 정렬 */
 .tab-panel table{width:auto !important;min-width:0 !important;margin-left:auto !important;margin-right:auto !important}
 td.bchunk{background:#f2f6f2 !important;text-align:right;vertical-align:middle;border-left:2px solid #dfe7df;min-width:104px;padding:4px 8px}
