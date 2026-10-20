@@ -482,17 +482,17 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v335</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v336</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
   <nav class="tabbar" id="tabbar">
     <button class="tab active" data-tab="home">요약</button>
+    <button class="tab" data-tab="withdraw">출금기록부</button>
     <button class="tab" data-tab="jagum">자금일보</button>
     <button class="tab" data-tab="sales">매출현황</button>
     <button class="tab" data-tab="compare">매출비교</button>
     <button class="tab" data-tab="pnl">월별손익</button>
-    <button class="tab admin-only" data-tab="withdraw">출금기록부</button>
     <button class="tab admin-only" data-tab="buy">매입</button>
     <button class="tab admin-only" data-tab="pay">급여</button>
     <button class="tab admin-only" data-tab="expense">비용정리</button>
@@ -11844,7 +11844,8 @@ function wdSaveErr(e) {
 }
 async function renderWithdraw() {
   const el = document.getElementById("tab-withdraw"); if (!el) return;
-  if (!S.user || S.user.role !== "admin") { el.innerHTML = '<div class="card">관리자만 볼 수 있어요.</div>'; return; }
+  if (!S.user) return;
+  const adm = S.user.role === "admin"; // 직원 계정은 보기만 (Firestore 규칙도 쓰기는 관리자만)
   const W = window.__wd;
   if (!W.date) W.date = wdToday();
   if (!W.month) W.month = W.date.slice(0, 7);
@@ -11869,8 +11870,8 @@ async function renderWithdraw() {
       <td style="font-weight:700;color:#0F6E56;white-space:nowrap">${fmt(r.amount)}</td>
       <td class="note" style="max-width:300px">${esc(r.content) || "-"}</td>
       <td class="note" style="max-width:140px">${esc(r.note) || "-"}</td>
-      <td class="c" style="white-space:nowrap"><label style="cursor:pointer;font-size:12px;color:${r.confirmed ? "#27ae60;font-weight:700" : "var(--ink-muted)"}"><input type="checkbox" ${r.confirmed ? "checked" : ""} onchange="wdToggle('${esc(r.id)}',this)" style="accent-color:#27ae60;vertical-align:-2px"> ${r.confirmed ? "확인" : "미확인"}</label></td>
-      <td class="c" style="white-space:nowrap"><button class="btn btn-sm" onclick="wdForm('${esc(r.id)}')">수정</button> <button class="btn btn-sm" onclick="wdDel('${esc(r.id)}')">삭제</button></td>
+      <td class="c" style="white-space:nowrap"><label style="${adm ? "cursor:pointer;" : ""}font-size:12px;color:${r.confirmed ? "#27ae60;font-weight:700" : "var(--ink-muted)"}"><input type="checkbox" ${r.confirmed ? "checked" : ""} ${adm ? `onchange="wdToggle('${esc(r.id)}',this)"` : "disabled"} style="accent-color:#27ae60;vertical-align:-2px"> ${r.confirmed ? "확인" : "미확인"}</label></td>
+      ${adm ? `<td class="c" style="white-space:nowrap"><button class="btn btn-sm" onclick="wdForm('${esc(r.id)}')">수정</button> <button class="btn btn-sm" onclick="wdDel('${esc(r.id)}')">삭제</button></td>` : ""}
     </tr>`).join("");
   el.innerHTML = `
     <div class="card">
@@ -11878,7 +11879,7 @@ async function renderWithdraw() {
         <div class="card-title">💸 출금기록부</div>
         <div class="card-actions">
           <div class="seg">${WD_COS.map((c) => `<button class="${c === W.co ? "active" : ""}" onclick="window.__wd.co='${c}';renderWithdraw()">${c}</button>`).join("")}</div>
-          <button class="btn btn-primary btn-sm" onclick="wdForm()">+ 내역 추가</button>
+          ${adm ? `<button class="btn btn-primary btn-sm" onclick="wdForm()">+ 내역 추가</button>` : ""}
         </div>
       </div>
       <div class="stat-tiles" style="margin-bottom:4px">
@@ -11896,13 +11897,13 @@ async function renderWithdraw() {
         </div>
       </div>
       <div class="table-wrap"><table class="rpt" style="white-space:normal">
-        <thead><tr><th style="cursor:pointer" onclick="wdSortDate()">날짜 ↕</th><th class="l">거래처</th><th>금액</th><th class="l">내용</th><th class="l">비고</th><th>입금확인</th><th>수정/삭제</th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="7" class="c dim" style="padding:30px">등록된 출금 내역이 없어요.</td></tr>`}</tbody>
+        <thead><tr><th style="cursor:pointer" onclick="wdSortDate()">날짜 ↕</th><th class="l">거래처</th><th>금액</th><th class="l">내용</th><th class="l">비고</th><th>입금확인</th>${adm ? "<th>수정/삭제</th>" : ""}</tr></thead>
+        <tbody>${rows || `<tr><td colspan="${adm ? 7 : 6}" class="c dim" style="padding:30px">등록된 출금 내역이 없어요.</td></tr>`}</tbody>
       </table></div>
       <div class="footnote">거래처 이름을 누르면 계좌 정보를 볼 수 있어요(파란 밑줄 = 계좌 등록됨).</div>
       <div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;margin-top:10px">
-        <label class="btn btn-sm" style="cursor:pointer">📂 예전 data.json 가져오기<input type="file" accept=".json,application/json" style="display:none" onchange="wdImport(this)"></label>
-        <button class="btn btn-sm" onclick="wdBackup()">💾 백업(JSON) 받기</button>
+        ${adm ? `<label class="btn btn-sm" style="cursor:pointer">📂 예전 data.json 가져오기<input type="file" accept=".json,application/json" style="display:none" onchange="wdImport(this)"></label>
+        <button class="btn btn-sm" onclick="wdBackup()">💾 백업(JSON) 받기</button>` : ""}
         <button class="btn btn-sm" onclick="wdExcel()">📥 엑셀 다운로드</button>
         <button class="btn btn-sm btn-ghost" onclick="window.__wd.loaded=false;renderWithdraw()">↻ 새로고침</button>
       </div>
@@ -12040,7 +12041,7 @@ async function wdExcel() {
 
 function switchTab(tab) {
   if(["monthly","daily","market","bojagi","agency"].includes(tab)){S.ui.salesSub=tab;tab="sales";}
-  if(["withdraw","buy","pay","expense","free","vat","settings","confirmapp"].includes(tab)&&(!S.user||S.user.role!=="admin"))tab="home";
+  if(["buy","pay","expense","free","vat","settings","confirmapp"].includes(tab)&&(!S.user||S.user.role!=="admin"))tab="home";
   S.ui.tab = tab;
   try{history.replaceState(null,"","#"+tab);}catch(e){}
   document.querySelectorAll(".tabbar .tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
