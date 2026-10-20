@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v338</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v339</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -11807,6 +11807,7 @@ const RENDERERS = {
 };
 /* ===== 출금기록부 탭 — salesApp_withdraw/{id} = {date,vendor,amount,content,note,holder,bank,account,confirmed,company} ===== */
 const WD_COS = ["꽃밥이야기", "꽃밥에피다"];
+const WD_COLOR = { "꽃밥이야기": { main: "#D4537E" }, "꽃밥에피다": { main: "#EF9F27" } }; // 예전 출금기록부 색 그대로
 window.__wd = { loaded: false, loading: false, err: "", recs: [], co: "꽃밥이야기", date: "", month: "", q: "", sortDir: -1 };
 const wdToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 const wdWon = (n) => "₩" + Number(n || 0).toLocaleString("ko-KR");
@@ -11877,14 +11878,17 @@ async function renderWithdraw() {
     <div class="card">
       <div class="card-head">
         <div class="card-title">💸 출금기록부</div>
-        <div class="card-actions">
-          <div class="seg">${WD_COS.map((c) => `<button class="${c === W.co ? "active" : ""}" onclick="window.__wd.co='${c}';renderWithdraw()">${c}</button>`).join("")}</div>
-          ${adm ? `<button class="btn btn-primary btn-sm" onclick="wdForm()">+ 내역 추가</button>` : ""}
-        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">${WD_COS.map((c) => {
+          const col = WD_COLOR[c], on = c === W.co;
+          return `<button onclick="window.__wd.co='${c}';renderWithdraw()" style="font-family:inherit;font-size:16px;font-weight:700;padding:11px 26px;border-radius:10px;cursor:pointer;border:2px solid ${on ? col.main : "#ddd"};background:${on ? col.main : "#fff"};color:${on ? "#fff" : "#888"}${on ? ";box-shadow:0 2px 8px " + col.main + "55" : ""}">${c}</button>`;
+        }).join("")}</div>
+        ${adm ? `<button onclick="wdForm()" style="font-family:inherit;font-size:16px;font-weight:700;padding:11px 26px;border-radius:10px;cursor:pointer;border:2px solid #c0392b;background:#c0392b;color:#fff;box-shadow:0 2px 8px #c0392b55">+ ${esc(W.co)} 내역 추가</button>` : ""}
       </div>
       <div class="stat-tiles" style="margin-bottom:4px">
         <div class="stat-tile"><div class="k">날짜별 총금액 <input type="date" value="${W.date}" onchange="window.__wd.date=this.value||wdToday();renderWithdraw()" style="font-family:inherit;font-size:12px;border:1px solid var(--grid);border-radius:6px;padding:1px 4px;margin-left:4px"></div><div class="v" style="color:#0F6E56">${wdWon(dayTot)}</div>
-          <div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap"><button class="btn btn-sm" onclick="wdImage()" title="${esc(W.co)} ${W.date} 출금 내역을 보고용 이미지로 복사">📋 이 날짜 내역 이미지 복사</button><button class="btn btn-sm btn-ghost" onclick="wdImage('dl')" title="이미지 파일로 저장">⬇</button></div></div>
+          <div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap"><button class="btn btn-sm" onclick="wdImage()" title="${esc(W.co)} ${W.date} 출금 내역을 보고용 이미지로 복사">📋 이미지 복사</button><button class="btn btn-sm btn-ghost" onclick="wdImage('dl')" title="이미지 파일로 저장">⬇</button></div></div>
         <div class="stat-tile"><div class="k">${Number(ym.slice(5))}월 건수</div><div class="v">${monRecs.length}건</div></div>
         <div class="stat-tile"><div class="k">${Number(ym.slice(5))}월 총 출금액</div><div class="v" style="color:#0F6E56">${wdWon(monRecs.reduce((s, r) => s + r.amount, 0))}</div></div>
       </div>
