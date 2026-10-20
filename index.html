@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v341</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v342</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -6301,7 +6301,10 @@ window.jgExportXlsx=async function(){
     const d=new Date();
     const aEl=document.createElement("a");
     aEl.href=URL.createObjectURL(blob);
-    aEl.download=`자금현황현금흐름_${String(d.getFullYear()).slice(2)}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}.xlsx`;
+    /* 파일 이름 = 자금현황_YYMM (가장 최근 입력한 반월의 달) */
+    const lastF=all[0]||"";
+    const ym=lastF?lastF.slice(2,4)+lastF.slice(5,7):String(d.getFullYear()).slice(2)+String(d.getMonth()+1).padStart(2,"0");
+    aEl.download=`자금현황_${ym}.xlsx`;
     document.body.appendChild(aEl);aEl.click();
     setTimeout(()=>{URL.revokeObjectURL(aEl.href);aEl.remove();},2000);
     toast("자금현황 엑셀을 내려받았어요 (현금흐름·재무상태표는 앱 입력값, 대여금 시트는 원본 그대로)");
