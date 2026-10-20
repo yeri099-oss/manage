@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <a href="withdraw.html" class="btn btn-ghost btn-sm" style="margin-right:6px;text-decoration:none">출금기록부</a><span style="font-size:11px;color:#999;margin-right:6px">v333</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v334</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -492,6 +492,7 @@ window.FIREBASE_CONFIG = {
     <button class="tab" data-tab="sales">매출현황</button>
     <button class="tab" data-tab="compare">매출비교</button>
     <button class="tab" data-tab="pnl">월별손익</button>
+    <button class="tab admin-only" data-tab="withdraw">출금기록부</button>
     <button class="tab admin-only" data-tab="buy">매입</button>
     <button class="tab admin-only" data-tab="pay">급여</button>
     <button class="tab admin-only" data-tab="expense">비용정리</button>
@@ -522,6 +523,7 @@ window.FIREBASE_CONFIG = {
     <section id="tab-vat" class="tab-panel hidden"></section>
     <section id="tab-jagum" class="tab-panel hidden"></section>
     <section id="tab-settings" class="tab-panel hidden"></section>
+    <section id="tab-withdraw" class="tab-panel hidden"></section>
   </main>
 </div>
 <!-- ===== 모달 ===== -->
@@ -11801,11 +11803,244 @@ function renderVat(){
 }
 const RENDERERS = {
   home: () => renderHome(),
-  compare: renderCompare, sales: renderSales, pnl: renderPnl, jagum: renderJagum, pay: renderPay, buy: () => renderBuy(), expense: () => renderExpense(), free: () => renderFree(), vat: () => renderVat(), settings: () => renderSettings(),
+  compare: renderCompare, sales: renderSales, pnl: renderPnl, jagum: renderJagum, pay: renderPay, buy: () => renderBuy(), expense: () => renderExpense(), free: () => renderFree(), vat: () => renderVat(), settings: () => renderSettings(), withdraw: () => renderWithdraw(),
 };
+/* ===== 출금기록부 탭 — salesApp_withdraw/{id} = {date,vendor,amount,content,note,holder,bank,account,confirmed,company} ===== */
+const WD_COS = ["꽃밥이야기", "꽃밥에피다"];
+window.__wd = { loaded: false, loading: false, err: "", recs: [], co: "꽃밥이야기", date: "", month: "", q: "", sortDir: -1 };
+const wdToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+const wdWon = (n) => "₩" + Number(n || 0).toLocaleString("ko-KR");
+const wdDigits = (v) => String(v || "").replace(/[^0-9]/g, "");
+function wdClean(r) {
+  return { id: String(r.id), date: String(r.date || ""), vendor: String(r.vendor || ""), amount: Number(r.amount) || 0,
+    content: r.content || "", note: r.note || "", holder: r.holder || "", bank: r.bank || "", account: r.account || "",
+    confirmed: !!r.confirmed, company: WD_COS.includes(r.company) ? r.company : WD_COS[0] };
+}
+const wdSortList = () => window.__wd.recs.sort((a, b) => b.date.localeCompare(a.date));
+async function wdLoad() {
+  const W = window.__wd;
+  W.loading = true; W.err = "";
+  try {
+    if (!IS_DEMO) {
+      const snap = await fsCol("withdraw").get();
+      const out = [];
+      snap.forEach((d) => out.push(wdClean({ ...d.data(), id: d.id })));
+      W.recs = out;
+    }
+    wdSortList();
+    W.loaded = true;
+  } catch (e) {
+    console.error(e);
+    W.err = e.code === "permission-denied" || /permission/i.test(e.message || "") ? "출금기록부를 볼 권한이 없어요." : "불러오기 실패: " + (e.message || "");
+  }
+  W.loading = false;
+}
+async function wdPut(r) {
+  if (!IS_DEMO) await fsCol("withdraw").doc(r.id).set({ ...wdClean(r), updatedBy: S.user?.username || "", updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+}
+function wdSaveErr(e) {
+  console.error(e);
+  toast(e.code === "permission-denied" || /permission/i.test(e.message || "") ? "저장 권한이 없어요. 관리자 계정으로 로그인해주세요." : "저장 실패: " + (e.message || ""), true);
+}
+async function renderWithdraw() {
+  const el = document.getElementById("tab-withdraw"); if (!el) return;
+  if (!S.user || S.user.role !== "admin") { el.innerHTML = '<div class="card">관리자만 볼 수 있어요.</div>'; return; }
+  const W = window.__wd;
+  if (!W.date) W.date = wdToday();
+  if (!W.month) W.month = W.date.slice(0, 7);
+  if (!W.loaded) {
+    el.innerHTML = W.err ? `<div class="card">${esc(W.err)} <button class="btn btn-sm" onclick="window.__wd.err='';renderWithdraw()">다시 시도</button></div>`
+      : `<div class="loading"><span class="spin"></span><br>출금기록부를 불러오는 중…</div>`;
+    if (!W.err && !W.loading) { await wdLoad(); renderWithdraw(); }
+    return;
+  }
+  const recs = W.recs.filter((r) => r.company === W.co);
+  const ym = W.date.slice(0, 7);
+  const dayTot = recs.filter((r) => r.date === W.date).reduce((s, r) => s + r.amount, 0);
+  const monRecs = recs.filter((r) => r.date.startsWith(ym));
+  const months = [...new Set([W.month, wdToday().slice(0, 7), ...recs.map((r) => r.date.slice(0, 7)).filter((m) => /^\d{4}-\d{2}$/.test(m))])].sort().reverse();
+  const q = W.q.trim().toLowerCase();
+  // 거래처 검색어가 있으면 월과 상관없이 전체 기록에서 찾음
+  const list = recs.filter((r) => q ? r.vendor.toLowerCase().includes(q) : r.date.startsWith(W.month));
+  const listTot = list.reduce((s, r) => s + r.amount, 0);
+  const rows = list.map((r) => `<tr${r.confirmed ? ' style="background:#f0faf0"' : ""}>
+      <td class="c" style="white-space:nowrap">${esc(r.date)}</td>
+      <td class="l"><a href="#" onclick="wdAcct('${esc(r.id)}');return false" style="color:${r.account ? "#185FA5" : "inherit"};${r.account ? "text-decoration:underline dotted;text-underline-offset:3px" : "text-decoration:none"}">${esc(r.vendor)}</a></td>
+      <td style="font-weight:700;color:#0F6E56">${fmt(r.amount)}</td>
+      <td class="note" style="max-width:280px">${esc(r.content) || "-"}</td>
+      <td class="note">${esc(r.note) || "-"}</td>
+      <td class="c" style="white-space:nowrap"><label style="cursor:pointer;font-size:12px;color:${r.confirmed ? "#27ae60;font-weight:700" : "var(--ink-muted)"}"><input type="checkbox" ${r.confirmed ? "checked" : ""} onchange="wdToggle('${esc(r.id)}',this)" style="accent-color:#27ae60;vertical-align:-2px"> ${r.confirmed ? "확인" : "미확인"}</label></td>
+      <td class="c" style="white-space:nowrap"><button class="btn btn-sm" onclick="wdForm('${esc(r.id)}')">수정</button> <button class="btn btn-sm" onclick="wdDel('${esc(r.id)}')">삭제</button></td>
+    </tr>`).join("");
+  el.innerHTML = `
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">💸 출금기록부</div>
+        <div class="card-actions">
+          <div class="seg">${WD_COS.map((c) => `<button class="${c === W.co ? "active" : ""}" onclick="window.__wd.co='${c}';renderWithdraw()">${c}</button>`).join("")}</div>
+          <button class="btn btn-primary btn-sm" onclick="wdForm()">+ 내역 추가</button>
+        </div>
+      </div>
+      <div class="stat-tiles" style="margin-bottom:4px">
+        <div class="stat-tile"><div class="k">날짜별 총금액 <input type="date" value="${W.date}" onchange="window.__wd.date=this.value||wdToday();renderWithdraw()" style="font-family:inherit;font-size:12px;border:1px solid var(--grid);border-radius:6px;padding:1px 4px;margin-left:4px"></div><div class="v" style="color:#0F6E56">${wdWon(dayTot)}</div></div>
+        <div class="stat-tile"><div class="k">${Number(ym.slice(5))}월 건수</div><div class="v">${monRecs.length}건</div></div>
+        <div class="stat-tile"><div class="k">${Number(ym.slice(5))}월 총 출금액</div><div class="v" style="color:#0F6E56">${wdWon(monRecs.reduce((s, r) => s + r.amount, 0))}</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">${W.co} 출금 내역 <span class="unit">${q ? "전체 기간 검색" : `${W.month.slice(0, 4)}년 ${Number(W.month.slice(5))}월`} · ${list.length}건 · ${fmt(listTot)}원</span></div>
+        <div class="card-actions">
+          <input type="search" placeholder="거래처 검색" value="${esc(W.q)}" oninput="window.__wd.q=this.value;clearTimeout(window.__wd.qt);window.__wd.qt=setTimeout(()=>{renderWithdraw();const i=document.querySelector('#tab-withdraw input[type=search]');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length);}},250)" style="font-family:inherit;font-size:13px;padding:6px 10px;border:1px solid var(--grid);border-radius:10px;width:140px">
+          <select class="ctl" onchange="window.__wd.month=this.value;renderWithdraw()">${months.map((m) => `<option value="${m}" ${m === W.month ? "selected" : ""}>${m.slice(0, 4)}년 ${Number(m.slice(5))}월</option>`).join("")}</select>
+        </div>
+      </div>
+      <div class="table-wrap"><table class="rpt" style="width:100%;white-space:normal">
+        <thead><tr><th style="cursor:pointer;width:96px" onclick="wdSortDate()">날짜 ↕</th><th class="l" style="width:140px">거래처</th><th style="width:110px">금액</th><th class="l">내용</th><th class="l" style="width:120px">비고</th><th style="width:82px">입금확인</th><th style="width:110px">수정/삭제</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="7" class="c dim" style="padding:30px">등록된 출금 내역이 없어요.</td></tr>`}</tbody>
+      </table></div>
+      <div class="footnote">거래처 이름을 누르면 계좌 정보를 볼 수 있어요(파란 밑줄 = 계좌 등록됨).</div>
+      <div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;margin-top:10px">
+        <label class="btn btn-sm" style="cursor:pointer">📂 예전 data.json 가져오기<input type="file" accept=".json,application/json" style="display:none" onchange="wdImport(this)"></label>
+        <button class="btn btn-sm" onclick="wdBackup()">💾 백업(JSON) 받기</button>
+        <button class="btn btn-sm" onclick="wdExcel()">📥 엑셀 다운로드</button>
+        <button class="btn btn-sm btn-ghost" onclick="window.__wd.loaded=false;renderWithdraw()">↻ 새로고침</button>
+      </div>
+    </div>`;
+}
+function wdSortDate() {
+  const W = window.__wd;
+  W.sortDir *= -1;
+  W.recs.sort((a, b) => W.sortDir * a.date.localeCompare(b.date));
+  renderWithdraw();
+}
+// 금액 칸: 콤마 자동 (+ 키 ×1000은 공통 키 처리가 해줌)
+function wdAmtInput(i) { const d = wdDigits(i.value); i.value = d ? Number(d).toLocaleString("ko-KR") : ""; }
+function wdForm(id) {
+  const W = window.__wd;
+  const r = id ? W.recs.find((x) => x.id === id) : null;
+  if (id && !r) return;
+  const v = r || { date: wdToday(), vendor: "", amount: "", content: "", note: "", holder: "", bank: "", account: "" };
+  const f = (k, label, extra) => `<div class="form-field"><label>${label}</label><input id="wd-${k}" value="${esc(v[k])}" ${extra || ""}></div>`;
+  openModal(r ? "출금 내역 수정" : `새 출금 내역 — ${W.co}`, `
+    <div class="form-row">${f("date", "날짜", 'type="date"')}${f("vendor", "거래처 이름")}</div>
+    <div class="form-row"><div class="form-field"><label>금액 (원)</label><input id="wd-amount" class="num" inputmode="numeric" value="${v.amount ? Number(v.amount).toLocaleString("ko-KR") : ""}" oninput="wdAmtInput(this)"></div>${f("content", "내용")}</div>
+    <div class="form-hint">금액 칸에서 + 를 누르면 000이 붙어요.</div>
+    <hr class="form-sep"><div class="form-hint" style="margin:0 0 8px;font-weight:700">계좌 정보 (선택)</div>
+    <div class="form-row">${f("holder", "예금주")}${f("bank", "은행명", 'placeholder="예) 국민은행"')}</div>
+    <div class="form-row">${f("account", "계좌번호", 'placeholder="예) 123-456-789012"')}</div>
+    <hr class="form-sep">
+    <div class="form-row">${f("note", "비고")}</div>`,
+    `<button class="btn" onclick="closeModal()">취소</button><button class="btn btn-primary" onclick="wdSave('${r ? esc(r.id) : ""}')">${r ? "수정 완료" : "저장"}</button>`);
+  setTimeout(() => document.getElementById(r ? "wd-amount" : "wd-vendor")?.focus(), 50);
+}
+async function wdSave(id) {
+  const W = window.__wd;
+  const g = (k) => (document.getElementById("wd-" + k)?.value || "").trim();
+  const old = id ? W.recs.find((x) => x.id === id) : null;
+  const r = wdClean({ ...(old || { id: Date.now() + "_" + Math.random().toString(36).slice(2), confirmed: false, company: W.co }),
+    date: g("date"), vendor: g("vendor"), amount: Number(wdDigits(g("amount"))), content: g("content"), note: g("note"), holder: g("holder"), bank: g("bank"), account: g("account") });
+  if (!r.date || !r.vendor || !r.amount) { toast("날짜, 거래처, 금액은 꼭 넣어주세요", true); return; }
+  document.querySelectorAll("#modal-foot button").forEach((b) => (b.disabled = true));
+  try {
+    await wdPut(r);
+    if (old) Object.assign(old, r); else W.recs.push(r);
+    wdSortList();
+    logAction(`출금기록부 ${old ? "수정" : "추가"}: ${r.company} ${r.date} ${r.vendor} ${fmt(r.amount)}원`);
+    closeModal(); toast(old ? "수정했어요" : "저장했어요");
+    renderWithdraw();
+  } catch (e) { wdSaveErr(e); }
+  document.querySelectorAll("#modal-foot button").forEach((b) => (b.disabled = false));
+}
+function wdDel(id) {
+  const r = window.__wd.recs.find((x) => x.id === id); if (!r) return;
+  openModal("출금 내역 삭제", `<div><b>${esc(r.date)} · ${esc(r.vendor)} · ${wdWon(r.amount)}</b>을 삭제할까요?<br><span class="dim">삭제하면 되돌릴 수 없어요.</span></div>`,
+    `<button class="btn" onclick="closeModal()">취소</button><button class="btn btn-primary" style="background:#c0392b;border-color:#c0392b" onclick="wdDelGo('${esc(id)}')">삭제</button>`);
+}
+async function wdDelGo(id) {
+  const W = window.__wd;
+  const r = W.recs.find((x) => x.id === id); if (!r) return;
+  try {
+    if (!IS_DEMO) await fsCol("withdraw").doc(id).delete();
+    W.recs = W.recs.filter((x) => x.id !== id);
+    logAction(`출금기록부 삭제: ${r.company} ${r.date} ${r.vendor} ${fmt(r.amount)}원`);
+    closeModal(); toast("삭제했어요"); renderWithdraw();
+  } catch (e) { wdSaveErr(e); }
+}
+async function wdToggle(id, box) {
+  const r = window.__wd.recs.find((x) => x.id === id); if (!r) return;
+  if (!confirm(r.confirmed ? "입금 확인을 취소할까요?" : "입금 확인 할까요?")) { box.checked = r.confirmed; return; }
+  try {
+    await wdPut({ ...r, confirmed: !r.confirmed });
+    r.confirmed = !r.confirmed;
+  } catch (e) { wdSaveErr(e); }
+  renderWithdraw();
+}
+function wdAcct(id) {
+  const r = window.__wd.recs.find((x) => x.id === id); if (!r) return;
+  openModal(r.vendor, `<div style="background:#f7f7f5;border:1px solid var(--grid);border-radius:10px;padding:14px 16px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span class="dim">예금주</span><b>${esc(r.holder) || "-"}</b></div>
+      <div style="display:flex;justify-content:space-between"><span class="dim">은행</span><b>${esc(r.bank) || "-"}</b></div>
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--grid)"><div class="dim" style="font-size:12px">계좌번호</div>
+      <div style="font-size:22px;font-weight:700;letter-spacing:1.5px;font-family:monospace">${esc(r.account) || '<span style="font-size:14px" class="dim">등록된 계좌번호가 없어요</span>'}</div></div></div>`,
+    `<button class="btn" onclick="closeModal()">닫기</button>${r.account ? `<button class="btn btn-primary" onclick="wdCopy('${esc(id)}',this)">숫자만 복사</button>` : ""}`);
+}
+function wdCopy(id, btn) {
+  const r = window.__wd.recs.find((x) => x.id === id); if (!r) return;
+  navigator.clipboard.writeText(wdDigits(r.account)).then(() => { btn.textContent = "복사됨!"; setTimeout(() => (btn.textContent = "숫자만 복사"), 2000); },
+    () => toast("복사하지 못했어요", true));
+}
+// 예전 PHP 서버의 data.json({꽃밥이야기:[…], 꽃밥에피다:[…]}) 또는 백업 파일을 그대로 가져옴. 같은 id는 덮어써서 두 번 넣어도 중복 없음
+async function wdImport(input) {
+  const file = input.files[0]; input.value = "";
+  if (!file) return;
+  let json;
+  try { json = JSON.parse(await file.text()); } catch (e) { toast("JSON 파일을 읽지 못했어요", true); return; }
+  const recs = [];
+  WD_COS.forEach((c) => (Array.isArray(json[c]) ? json[c] : []).forEach((r) => { if (r && r.id && r.date && r.vendor) recs.push(wdClean({ ...r, company: c })); }));
+  if (!recs.length) { toast("가져올 내역이 없어요 (꽃밥이야기/꽃밥에피다 형식인지 확인해주세요)", true); return; }
+  if (!confirm(`${WD_COS.map((c) => `${c} ${recs.filter((r) => r.company === c).length}건`).join(", ")}을 가져올까요?\n같은 내역이 이미 있으면 파일 내용으로 덮어써요.`)) return;
+  toast(`가져오는 중… (${recs.length}건)`);
+  try {
+    if (!IS_DEMO) {
+      for (let i = 0; i < recs.length; i += 400) {
+        const batch = db.batch();
+        recs.slice(i, i + 400).forEach((r) => batch.set(fsCol("withdraw").doc(r.id), { ...r, updatedBy: S.user?.username || "", updatedAt: firebase.firestore.FieldValue.serverTimestamp() }));
+        await batch.commit();
+      }
+    }
+    const W = window.__wd;
+    const byId = new Map(W.recs.map((r) => [r.id, r]));
+    recs.forEach((r) => byId.set(r.id, r));
+    W.recs = [...byId.values()]; wdSortList();
+    logAction(`출금기록부 가져오기: ${recs.length}건`);
+    toast(`${recs.length}건 가져왔어요`); renderWithdraw();
+  } catch (e) { wdSaveErr(e); }
+}
+function wdBackup() {
+  const out = {};
+  WD_COS.forEach((c) => (out[c] = window.__wd.recs.filter((r) => r.company === c).map(({ company, ...r }) => r)));
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)], { type: "application/json" }));
+  a.download = `출금기록부_백업_${wdToday()}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+async function wdExcel() {
+  const W = window.__wd;
+  const recs = W.recs.filter((r) => r.company === W.co);
+  if (!recs.length) { toast("다운로드할 내역이 없어요", true); return; }
+  try {
+    await makeWorkbook([{ name: W.co, widths: [12, 16, 12, 12, 20, 14, 24, 20, 10],
+      rows: [["날짜", "거래처", "예금주", "은행", "계좌번호", "금액", "내용", "비고", "입금확인"],
+        ...recs.map((r) => [r.date, r.vendor, r.holder, r.bank, r.account, r.amount, r.content, r.note, r.confirmed ? "확인" : "미확인"])] }],
+      `출금기록부_${W.co}_${wdToday()}.xlsx`);
+  } catch (e) { toast(e.message || "엑셀을 만들지 못했어요", true); }
+}
+
 function switchTab(tab) {
   if(["monthly","daily","market","bojagi","agency"].includes(tab)){S.ui.salesSub=tab;tab="sales";}
-  if(["buy","pay","expense","free","vat","settings","confirmapp"].includes(tab)&&(!S.user||S.user.role!=="admin"))tab="home";
+  if(["withdraw","buy","pay","expense","free","vat","settings","confirmapp"].includes(tab)&&(!S.user||S.user.role!=="admin"))tab="home";
   S.ui.tab = tab;
   try{history.replaceState(null,"","#"+tab);}catch(e){}
   document.querySelectorAll(".tabbar .tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
@@ -17256,7 +17491,8 @@ async function showApp() {
     <section id="tab-free" class="tab-panel hidden"></section>
     <section id="tab-vat" class="tab-panel hidden"></section>
     <section id="tab-jagum" class="tab-panel hidden"></section>
-    <section id="tab-settings" class="tab-panel hidden"></section>`;
+    <section id="tab-settings" class="tab-panel hidden"></section>
+    <section id="tab-withdraw" class="tab-panel hidden"></section>`;
   document.getElementById("tab-home").innerHTML = `<div class="loading"><span class="spin"></span><br>데이터를 불러오는 중…</div>`;
   try {
     await loadAllData();
