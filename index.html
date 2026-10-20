@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v340</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v341</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -5308,6 +5308,13 @@ function jgPeriods(){ /* 전체 반월 키 오름차순: 'YYYY-MM-DD'(마감일)
 }
 function jgGet(full){const[y]=full.split("-");return S.data.jagum[y]?.periods?.[full.slice(5)]||null;}
 function jgSum(o){let t=0;for(const k in (o||{}))t+=Number(o[k])||0;return t;}
+/* 양식에 없는 증감 계정(새 칸): p.inc/p.dec 안에 "x:계정명" 키로 저장 — 지금까지 쓴 이름 + 이번에 만든 이름 */
+function jgExtras(kind){
+  const set=new Set();
+  for(const f of jgPeriods()){const p=jgGet(f);for(const k in ((p&&p[kind])||{}))if(String(k).indexOf("x:")===0)set.add(String(k).slice(2));}
+  for(const n of ((window.__jgNewX||{})[kind]||[]))set.add(n);
+  return [...set];
+}
 function jgTotalA(p){return (Number(p.cash)||0)+jgSum(p.acc)+jgSum(p.dep);}
 function jgIncSum(p){return jgSum(p.inc);}
 function jgDecSum(p){return jgSum(p.dec);}
@@ -5365,6 +5372,10 @@ window.jgSave=function(){
     JG_DEP.forEach((a,i)=>{const v=nv("jg-dep"+i);if(v!=null)p.dep[i]=v;});
     JG_INC.forEach((a,i)=>{const v=nv("jg-inc"+i);if(v!=null)p.inc[i]=v;});
     JG_DEC.forEach((a,i)=>{const v=nv("jg-dec"+i);if(v!=null)p.dec[i]=v;});
+    for(const kind of["inc","dec"]){
+      for(const k0 in p[kind])if(String(k0).indexOf("x:")===0)delete p[kind][k0];
+      document.querySelectorAll(`#jg${kind==="inc"?"Inc":"Dec"}Box input[data-x]`).forEach(el=>{const t=String(el.value||"").replace(/[,\s]/g,"");if(t!==""&&!isNaN(Number(t)))p[kind]["x:"+el.dataset.x]=Number(t);});
+    }
     const y=full.slice(0,4),k=full.slice(5);
     const doc=(S.data.jagum[y]=S.data.jagum[y]||{periods:{}});
     doc.periods=doc.periods||{};
@@ -5449,7 +5460,7 @@ function jgFlowMsgRender(){
     if(x.done)return `<div>✅ <b>${esc(x.name)}</b> ${fmt(x.v)} → ${x.kind==="inc"?"증가":"감소"} '${esc(x.done)}'에 추가됨</div>`;
     const list=x.kind==="inc"?JG_INC:JG_DEC;
     return `<div style="margin:3px 0">⚠ 양식에 없는 계정 <b>${esc(x.name)}</b> ${fmt(x.v)} (${x.kind==="inc"?"증가":"감소"}) →
-      <select id="jgPd${i}" class="ctl" style="font-size:12px">${list.map((n,j)=>`<option value="${j}" ${j===list.length-1?"selected":""}>${esc(n)}</option>`).join("")}</select>
+      <select id="jgPd${i}" class="ctl" style="font-size:12px"><option value="new" selected>＋ 새 칸 만들기: ${esc(x.name)}</option>${jgExtras(x.kind).map(n=>`<option value="x:${esc(n)}">${esc(n)} (새 칸)</option>`).join("")}${list.map((n,j)=>`<option value="${j}">${esc(n)}</option>`).join("")}</select>
       <button class="btn btn-sm" onclick="jgAssignPending(${i})">여기에 추가</button></div>`;
   }).join("");
   msg.innerHTML=F.warn+`✅ 증감 ${F.filled}칸 채움<br>`+F.baseNote+pendHtml+F.endNote;
@@ -5458,15 +5469,17 @@ window.jgAssignPending=function(i){
   const F=window.__jgFlow;if(!F)return;
   const x=F.pending[i];if(!x||x.done)return;
   const sel=document.getElementById("jgPd"+i);
-  const slot=Number(sel.value);
   const list=x.kind==="inc"?JG_INC:JG_DEC;
-  const el=document.getElementById(`jg-${x.kind}${slot}`);
+  let el,lab;
+  if(sel.value==="new"){const n=prompt("새 칸 이름 (그대로 두면 이카운트 계정명)",x.name);if(!n)return;el=jgMakeX(x.kind,n);lab=n.trim();}
+  else if(sel.value.indexOf("x:")===0){lab=sel.value.slice(2);el=jgMakeX(x.kind,lab);}
+  else{const slot=Number(sel.value);el=document.getElementById(`jg-${x.kind}${slot}`);lab=list[slot];}
   if(!el){toast("입력 칸을 찾지 못했어요",true);return;}
   const cur=Number(String(el.value||"").replace(/[,\s]/g,""))||0;
   el.value=fmt(cur+x.v);
-  x.done=list[slot];
+  x.done=lab;
   jgFlowMsgRender();
-  toast(`'${x.name}' ${fmt(x.v)}원을 ${x.kind==="inc"?"증가":"감소"} '${list[slot]}'에 추가했어요`);
+  toast(`'${x.name}' ${fmt(x.v)}원을 ${x.kind==="inc"?"증가":"감소"} '${lab}'에 추가했어요 — 저장을 눌러주세요`);
 };
 window.jgPasteFlow=function(){
   try{
@@ -5498,7 +5511,9 @@ window.jgPasteFlow=function(){
         const list=cs[0]==="증가"?JG_INC:JG_DEC;
         const box=cs[0]==="증가"?inc:dec;
         const i=findSlot(list,name);
-        if(i<0){pending.push({kind:cs[0]==="증가"?"inc":"dec",name,v,done:null});continue;}
+        if(i<0){const kd=cs[0]==="증가"?"inc":"dec";const xn=jgExtras(kd).find(n=>core(n)===core(name));
+          if(xn){box["x:"+xn]=(box["x:"+xn]||0)+v;continue;}
+          pending.push({kind:kd,name,v,done:null});continue;}
         box[i]=(box[i]||0)+v;
       }
     }
@@ -5507,8 +5522,9 @@ window.jgPasteFlow=function(){
     if(range&&S.ui.jagumEdit&&range!==S.ui.jagumEdit)warn=`⚠ 붙여넣은 기간(${range})과 지금 입력 중인 반월(${S.ui.jagumEdit})이 달라요!<br>`;
     const set=(id,v)=>{const el=document.getElementById(id);if(el&&v!=null)el.value=fmt(v);};
     let filled=0;
-    for(const i in inc){set("jg-inc"+i,inc[i]);filled++;}
-    for(const i in dec){set("jg-dec"+i,dec[i]);filled++;}
+    const setK=(kind,k,v)=>{if(String(k).indexOf("x:")===0){const el=jgMakeX(kind,String(k).slice(2));if(el)el.value=fmt(v);}else set("jg-"+kind+k,v);};
+    for(const i in inc){setK("inc",i,inc[i]);filled++;}
+    for(const i in dec){setK("dec",i,dec[i]);filled++;}
     /* 기초잔액: 표의 값을 항상 그대로 채우고, 직전 반월 잔액과는 기초잔액 칸 아래에서 대조 */
     let baseNote="";
     if(base!=null){
@@ -5530,6 +5546,22 @@ window.jgPasteFlow=function(){
     toast(`증감 내역 ${filled}칸을 채웠어요${pending.length?` — 미배정 ${pending.length}건은 계정을 골라 추가해주세요`:" — 확인 후 저장을 눌러주세요"}`);
   }catch(e){console.error(e);toast(e.message||"붙여넣기 해석 실패",true);}
 };
+function jgXRow(kind,name,v){
+  return `<div style="display:flex;align-items:center;gap:8px;min-width:280px"><span style="width:150px;font-size:12.5px;color:var(--ink-2)">${esc(name)} <span class="unit" style="font-size:10.5px">새 칸</span></span><input class="cell-in" data-x="${esc(name)}" data-kind="${kind}" inputmode="numeric" value="${v!=null&&v!==""?fmt(v):""}" style="width:120px;text-align:right"></div>`;
+}
+function jgXInput(kind,name){return [...document.querySelectorAll(`#jg${kind==="inc"?"Inc":"Dec"}Box input[data-x]`)].find(el=>el.dataset.x===name)||null;}
+/* 새 칸 만들기 — 화면에 바로 칸을 붙이고(입력값 유지), 저장하면 그 반월에 "x:이름"으로 들어감 */
+function jgMakeX(kind,name){
+  name=String(name||"").trim();if(!name)return null;
+  const base=kind==="inc"?JG_INC:JG_DEC;
+  if(base.includes(name)){toast(`'${name}'은 이미 있는 칸이에요`,true);return document.getElementById(`jg-${kind}${base.indexOf(name)}`);}
+  let el=jgXInput(kind,name);if(el)return el;
+  window.__jgNewX=window.__jgNewX||{inc:[],dec:[]};if(!window.__jgNewX[kind].includes(name))window.__jgNewX[kind].push(name);
+  const box=document.getElementById(kind==="inc"?"jgIncBox":"jgDecBox");if(!box)return null;
+  box.insertAdjacentHTML("beforeend",jgXRow(kind,name,null));
+  return jgXInput(kind,name);
+}
+window.jgAddX=function(kind){const n=prompt((kind==="inc"?"증가":"감소")+" 칸 이름 (이카운트 계정명 그대로)");if(!n)return;const el=jgMakeX(kind,n);if(el){el.focus();toast(`'${n.trim()}' 칸을 만들었어요 — 금액을 넣고 저장하세요`);}};
 function jgFormHtml(full){
   const p=jgGet(full)||{cash:null,acc:{},dep:{},toechung:null,yudong:null,base:null,inc:{},dec:{}};
   /* 잔액 미리 채우기: 기존 입력 없으면 직전 반월 값 */
@@ -5564,10 +5596,13 @@ function jgFormHtml(full){
     <textarea id="jgFlowTa" style="width:100%;height:70px;font-size:11px;border:1px solid rgba(0,0,0,0.15);border-radius:6px;padding:6px" placeholder="구분&#9;계정명&#9;2026/08/16 ~ 2026/08/31&#10;기초잔액&#9;…"></textarea>
     <div style="margin-top:4px"><button class="btn btn-sm" onclick="jgPasteFlow()">증감 채우기</button></div>
     <div id="jgFlowMsg" style="font-size:12px;margin-top:4px;line-height:1.6"></div>
-  </div><div style="font-weight:700;font-size:13px;margin:6px 0 4px">2. 증감 내역 — 증가</div><div style="display:flex;flex-wrap:wrap;gap:8px 24px">`;
+  </div><div style="font-weight:700;font-size:13px;margin:6px 0 4px">2. 증감 내역 — 증가</div><div id="jgIncBox" style="display:flex;flex-wrap:wrap;gap:8px 24px">`;
   JG_INC.forEach((a,i)=>h+=row(a,inp("jg-inc"+i,p.inc?.[i],null)));
-  h+=`</div><div style="font-weight:700;font-size:13px;margin:12px 0 4px">증감 내역 — 감소</div><div style="display:flex;flex-wrap:wrap;gap:8px 24px">`;
+  jgExtras("inc").forEach(n=>h+=jgXRow("inc",n,p.inc?.["x:"+n]));
+  h+=`</div><div style="margin:4px 0 0"><button class="btn btn-sm" onclick="jgAddX('inc')">＋ 증가 칸 만들기</button></div><div style="font-weight:700;font-size:13px;margin:12px 0 4px">증감 내역 — 감소</div><div id="jgDecBox" style="display:flex;flex-wrap:wrap;gap:8px 24px">`;
   JG_DEC.forEach((a,i)=>h+=row(a,inp("jg-dec"+i,p.dec?.[i],null)));
+  jgExtras("dec").forEach(n=>h+=jgXRow("dec",n,p.dec?.["x:"+n]));
+  h+=`</div><div style="margin:4px 0 0"><button class="btn btn-sm" onclick="jgAddX('dec')">＋ 감소 칸 만들기</button></div><div>`;
   const prevEnd=before.length?jgEnding(before[before.length-1]):null;
   window.__jgPrevEnd=prevEnd;
   h+=`</div><div style="font-weight:700;font-size:13px;margin:12px 0 4px">기초잔액 <span class="unit">위 📋 붙여넣기가 이카운트 이월잔액 합으로 채워줘요 — 직전 반월 잔액과 일치하는지 여기서 바로 대조돼요</span></div>`;
@@ -5673,7 +5708,7 @@ function jgHalvesTables(halves,groupEnds){
     if(!o.always&&vals.every(v=>v==null||v===0))return;
     r2+=`<tr${o.total?` class="total"`:""}${o.bg?` style="background:${o.bg}"`:""}><td class="l sticky" style="padding-left:${8+(o.lv||0)*14}px${o.bg?";background:"+o.bg:""}${o.sub?";font-weight:700":""}">${esc(label)}</td>${vals.map((v,i)=>td(v,i,null,o.sub||o.total)).join("")}</tr>`;
   };
-  const rank=(list,box)=>list.map((n,i)=>({n,i,m:Math.max(...halves.map(f=>{const p=jgGet(f);return p&&p[box]&&p[box][i]?Number(p[box][i]):0;}))}))
+  const rank=(list,box)=>list.map((n,i)=>({n,i})).concat(jgExtras(box).map(n=>({n,i:"x:"+n}))).map(x=>({...x,m:Math.max(...halves.map(f=>{const p=jgGet(f);return p&&p[box]&&p[box][x.i]?Number(p[box][x.i]):0;}))}))
     .filter(x=>x.m>0).sort((x,y2)=>y2.m-x.m);
   line2("기초잔액",(p,f)=>jgBase(f),{sub:1,always:1});
   rank(JG_INC,"inc").forEach(x=>line2(x.n,p=>p.inc?.[x.i],{lv:1}));
@@ -6110,43 +6145,56 @@ window.jgExportXlsx=async function(){
     const SK=window.JG_SKEL;
     const colL=i=>pnlColL(i);
     const serial=f=>{const y=+f.slice(0,4),mo=+f.slice(5,7),d=+f.slice(8);return Math.round((Date.UTC(y,mo-1,d)-Date.UTC(1899,11,30))/86400000);};
-    /* 행별 기간 셀 내용 정의 */
+    /* 새 칸(양식에 없는 증감 계정): 증가 끝(31행)·감소 끝(62행) 뒤에 줄을 끼워 넣고 아래 행번호·합계 수식·병합을 밀어줌 */
+    const usedX=kind=>jgExtras(kind).filter(nm=>D.some(p=>p&&p[kind]&&p[kind]["x:"+nm]!=null));
+    const XI=usedX("inc"),XD=usedX("dec");
+    const M=r=>r+(r>31?XI.length:0)+(r>62?XD.length:0);
+    /* 행별 기간 셀 내용 정의 (r = 양식 행번호, 참조는 M()으로 옮긴 행) */
     const cellsFor=(r,i,f,p)=>{
       /* return {v}|{f}|{t}|null(스타일만) */
-      const X=colL(2+i);
+      const X=colL(2+i);const c=n=>X+M(n);
       switch(true){
         case r===2:return {v:serial(f)};
         case r===3:return p&&p.cash!=null?{v:Math.round(p.cash)}:null;
-        case r===4:return {f:`SUM(${X}3)`};
+        case r===4:return {f:`SUM(${c(3)})`};
         case r>=5&&r<=12:{const v=p&&p.acc?p.acc[r-5]:null;return v!=null?{v:Math.round(v)}:null;}
-        case r===13:return {f:`SUM(${X}5:${X}12)`};
+        case r===13:return {f:`SUM(${c(5)}:${c(12)})`};
         case r>=14&&r<=15:{const v=p&&p.dep?p.dep[r-14]:null;return v!=null?{v:Math.round(v)}:null;}
-        case r===16:return {f:`SUM(${X}14:${X}15)`};
-        case r===17:return {f:`SUM(${X}4+${X}13+${X}16)`};
+        case r===16:return {f:`SUM(${c(14)}:${c(15)})`};
+        case r===17:return {f:`SUM(${c(4)}+${c(13)}+${c(16)})`};
         case r===18:return p&&p.toechung!=null?{v:Math.round(p.toechung)}:null;
         case r===19:return p&&p.yudong!=null?{v:Math.round(p.yudong)}:null;
-        case r===20:return p&&(p.toechung!=null||p.yudong!=null)?{f:`SUM(${X}17-${X}18-${X}19)`}:null;
+        case r===20:return p&&(p.toechung!=null||p.yudong!=null)?{f:`SUM(${c(17)}-${c(18)}-${c(19)})`}:null;
         case r===23:return {t:jgRange(f)};
         case r===24:{const bv=p?jgBase(f):null;return bv!=null?{v:Math.round(bv)}:null;}
         case r>=25&&r<=31:{const v=p&&p.inc?p.inc[r-25]:null;return v!=null?{v:Math.round(v)}:null;}
-        case r===32:return {f:`SUM(${X}25:${X}31)`};
+        case r===32:return {f:`SUM(${c(25)}:${X}${31+XI.length})`};
         case r>=33&&r<=62:{const v=p&&p.dec?p.dec[r-33]:null;return v!=null?{v:Math.round(v)}:null;}
-        case r===63:return {f:`SUM(${X}33:${X}62)`};
-        case r===64:return {f:`SUM(${X}24+${X}32-${X}63)`};
+        case r===63:return {f:`SUM(${c(33)}:${X}${M(62)+XD.length})`};
+        case r===64:return {f:`SUM(${c(24)}+${c(32)}-${c(63)})`};
         default:return null;
       }
     };
+    const fixRefs=t=>String(t||"").replace(/r="([A-Z]+)(\d+)"/g,(m0,cl,rn)=>`r="${cl}${M(+rn)}"`);
     let x='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
       +(SK.fmtpr||"")
       +`<cols><col min="1" max="1" width="13" customWidth="1"/><col min="2" max="2" width="16.5" customWidth="1"/><col min="3" max="${2+n}" width="13.5" customWidth="1"/></cols><sheetData>`;
+    const emitX=(kind,names,tr)=>{ /* tr = 스타일을 빌려올 양식 행 */
+      const row=SK.rows[String(tr)]||SK.rows[tr];
+      const aS=(/<c r="A\d+" s="(\d+)"/.exec(row.ab)||[])[1]||"338",bS=(/<c r="B\d+" s="(\d+)"/.exec(row.ab)||[])[1]||"86";
+      names.forEach((nm,j)=>{const rr=M(tr)+1+j;
+        x+=`<row r="${rr}"><c r="A${rr}" s="${aS}"/><c r="B${rr}" s="${bS}" t="inlineStr"><is><t xml:space="preserve">${pnlXEsc(nm)}</t></is></c>`;
+        for(let i=0;i<n;i++){const v=D[i]&&D[i][kind]?D[i][kind]["x:"+nm]:null;const ref=colL(2+i)+rr;x+=v!=null?`<c r="${ref}" s="${row.s}"><v>${Math.round(v)}</v></c>`:`<c r="${ref}" s="${row.s}"/>`;}
+        x+='</row>';});
+    };
     for(let r=1;r<=65;r++){
       const row=SK.rows[String(r)]||SK.rows[r];
       const attrs=row&&row.a?" "+row.a:"";
-      x+=`<row r="${r}"${attrs}>`;
-      if(row&&row.ab)x+=row.ab;
+      x+=`<row r="${M(r)}"${attrs}>`;
+      if(row&&row.ab)x+=fixRefs(row.ab);
       if(row&&row.s!=null&&r>=2){
         for(let i=0;i<n;i++){
-          const ref=colL(2+i)+r;
+          const ref=colL(2+i)+M(r);
           const c=cellsFor(r,i,all[i],D[i]);
           if(c==null)x+=`<c r="${ref}" s="${row.s}"/>`;
           else if(c.f!=null)x+=`<c r="${ref}" s="${row.s}"><f>${c.f}</f></c>`;
@@ -6155,8 +6203,11 @@ window.jgExportXlsx=async function(){
         }
       }
       x+='</row>';
+      if(r===31&&XI.length)emitX("inc",XI,31);
+      if(r===62&&XD.length)emitX("dec",XD,62);
     }
-    x+='</sheetData>'+(SK.merges||"")+'<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/></worksheet>';
+    const merges=String(SK.merges||"").replace(/ref="([A-Z]+)(\d+):([A-Z]+)(\d+)"/g,(m0,c1,r1,c2,r2)=>{let e=M(+r2);if(+r2===32)e=M(32);if(+r2===63)e=M(63);return `ref="${c1}${M(+r1)}:${c2}${e}"`;});
+    x+='</sheetData>'+merges+'<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/></worksheet>';
     zip.file("xl/worksheets/sheet1.xml",x);
     /* 재무상태표(월말): 입력이 있으면 시트5도 원본 골격으로 재생성 */
     const bsMos=[...jgBsMonths()].reverse();
