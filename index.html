@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v352</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v353</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -14441,7 +14441,7 @@ function buySumNotes(y,mo){const d=bd().stat[String(y)];d.sumNotes=d.sumNotes||{
   if(!N.ch)N.ch=[];if(!N.items){N.items=N.memo?String(N.memo).split(/\n/).filter(x=>x.trim()):[];}delete N.memo;delete N.why;return N;}
 function buySumData(y,mo){
   y=String(y);const d=bd().stat[y];const pv=buySumPrev(y,mo),ly=String(+y-1);
-  const sales=buySumSales(y,mo);
+  const sales=null;/* v353: 매출 대비 칸은 뺌 (사용자 요청) — buySumSales는 남겨둠 */
   const scs=buyBizKeys(y);
   const lines=scs.concat(["all"]).map(sc=>{
     const cur=buySumScopeTot(y,sc,mo),prev=buySumScopeTot(pv.y,sc,pv.mo),last=buySumScopeTot(ly,sc,mo);
@@ -14538,7 +14538,6 @@ window.buySumOpen=function(mo){
     </div>
     <div style="padding:12px 16px">
       <div id="buySumPrev" style="border:1px solid var(--line,#e5e5e5);border-radius:10px;overflow:auto">${buySumReportHtml(D)}</div>
-      ${D.hasSales?"":`<div class="footnote" style="margin-top:6px">매출현황(월별)에 ${mo}월 매출이 아직 없어 '매출 대비' 칸은 빠졌어요.</div>`}
       <div style="margin-top:14px;padding:10px 12px;border:1px solid var(--line,#e5e5e5);border-radius:10px">
         <b>주요 거래처 변동</b> <span class="unit">고른 거래처만 요약에 들어가요 · 이름·금액·내용 모두 고칠 수 있어요</span>
         ${chRows||`<div class="footnote" style="margin-top:4px">아직 고른 거래처가 없어요 — 아래에서 눌러 추가하세요 (없으면 이 항목은 요약에서 빠져요)</div>`}
@@ -14552,7 +14551,7 @@ window.buySumOpen=function(mo){
         ${autoLeft.length?`<div style="margin-top:8px;font-size:12px;color:var(--sub,#666)">자동으로 찾은 것:</div><div>${autoLeft.map((t,i)=>`<span style="${chip}" onclick="buySumAddItem(${D.auto.indexOf(t)})">＋ ${esc(t)}</span>`).join("")}</div>`:""}
         <button class="btn btn-sm" style="margin-top:8px" onclick="buySumAddItem(-1)">＋ 직접 쓰기</button>
       </div>
-      <div class="footnote" style="margin-top:8px">사업장별 매입은 매입현황 숫자 그대로(고정)예요. 합계에는 마켓→피다·보자기 내부 매입 '(주)꽃밥이야기' 포함. 매출 대비 = 매입 ÷ 매출현황 월 매출 — 마켓은 총매출(피다+보자기로 넘긴 금액 포함)+온라인, 피다는 인사동, 합계는 내부 거래를 뺀 매입 ÷ 외부 매출(마켓 순매출+온라인+피다+보자기).</div>
+      <div class="footnote" style="margin-top:8px">사업장별 매입은 매입현황 숫자 그대로(고정)예요. 합계에는 마켓→피다·보자기 내부 매입 '(주)꽃밥이야기' 포함.</div>
     </div></div>`;
   ov.scrollTop=keepScroll;
 };
