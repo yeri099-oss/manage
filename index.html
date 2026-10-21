@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v351</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v352</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -14425,10 +14425,17 @@ async function buyJsRender(ym){
 function buySumScopeTot(y,sc,mo){const d=bd().stat[String(y)];if(!d||!d.scopes||!d.scopes[sc])return null;const mk=String(mo);let t=0,any=false;for(const r of d.scopes[sc].rows||[]){const v=r.m&&r.m[mk];if(v!=null){t+=v;any=true;}}return any?t:null;}
 function buySumVal(y,nm,mo){const d=bd().stat[String(y)];if(!d||!d.scopes||!d.scopes.all)return 0;const r=(d.scopes.all.rows||[]).find(x=>x.name===nm);return (r&&r.m&&r.m[String(mo)])||0;}
 function buySumPrev(y,mo){return mo>1?{y:+y,mo:mo-1}:{y:+y-1,mo:12};}
+/* 매출 대비 분모 (v352):
+   마켓 = 마켓 총매출(피다+보자기로 넘긴 내부 매출 포함 — 마켓 매입에 그 몫까지 들어 있으니) + 온라인
+   합계 = 외부 매출만(마켓 순매출 + 온라인 + 피다 + 보자기) — 합계 매입에서도 내부 매입 '(주)꽃밥이야기'를 뺌 */
 function buySumSales(y,mo){
   try{const c=monthlyCalc(+y,mo);if(!c||!c.has)return null;
-    return {market:(c.market||0)+(c.online||0)||null,pida:c.insadong||null,bojagi:c.bojagi||null,all:c.total||null};}catch(e){return null;}
+    let mg=c.market||0,mn=c.market||0;
+    try{const md=marketCalc(+y,mo);if(md&&md.has){mg=md.total||0;mn=md.net!=null?md.net:mg-(md.internal||0);}}catch(e){}
+    const on=c.online||0;
+    return {market:mg+on||null,pida:c.insadong||null,bojagi:c.bojagi||null,all:(mn+on+(c.insadong||0)+(c.bojagi||0))||null};}catch(e){return null;}
 }
+function buySumInternal(y,mo){const d=bd().stat[String(y)];if(!d||!d.scopes||!d.scopes.all)return 0;let t=0;for(const r of d.scopes.all.rows||[])if(/꽃밥이야기/.test(r.name||""))t+=(r.m&&r.m[String(mo)])||0;return t;}
 /* 보고 내용(②거래처·③특이사항)은 직접 고른 것만 — sumNotes[월] = {ch:[{nm,prev,cur,why}], items:[문장]} */
 function buySumNotes(y,mo){const d=bd().stat[String(y)];d.sumNotes=d.sumNotes||{};const k=String(mo);const N=d.sumNotes[k]=d.sumNotes[k]||{};
   if(!N.ch)N.ch=[];if(!N.items){N.items=N.memo?String(N.memo).split(/\n/).filter(x=>x.trim()):[];}delete N.memo;delete N.why;return N;}
@@ -14439,7 +14446,7 @@ function buySumData(y,mo){
   const lines=scs.concat(["all"]).map(sc=>{
     const cur=buySumScopeTot(y,sc,mo),prev=buySumScopeTot(pv.y,sc,pv.mo),last=buySumScopeTot(ly,sc,mo);
     const sl=sales?sales[sc]:null;
-    return {sc,label:sc==="all"?"합계":BUY_SC_LABEL[sc],cur,prev,diff:cur!=null&&prev!=null?cur-prev:null,last,rate:cur!=null&&sl?cur/sl:null};
+    return {sc,label:sc==="all"?"합계":BUY_SC_LABEL[sc],cur,prev,diff:cur!=null&&prev!=null?cur-prev:null,last,rate:cur!=null&&sl?(sc==="all"?cur-buySumInternal(y,mo):cur)/sl:null};
   });
   /* 증감 큰 거래처 Top5 (전체 기준) */
   const names=new Set();
@@ -14545,7 +14552,7 @@ window.buySumOpen=function(mo){
         ${autoLeft.length?`<div style="margin-top:8px;font-size:12px;color:var(--sub,#666)">자동으로 찾은 것:</div><div>${autoLeft.map((t,i)=>`<span style="${chip}" onclick="buySumAddItem(${D.auto.indexOf(t)})">＋ ${esc(t)}</span>`).join("")}</div>`:""}
         <button class="btn btn-sm" style="margin-top:8px" onclick="buySumAddItem(-1)">＋ 직접 쓰기</button>
       </div>
-      <div class="footnote" style="margin-top:8px">사업장별 매입은 매입현황 숫자 그대로(고정)예요. 합계에는 마켓→피다·보자기 내부 매입 '(주)꽃밥이야기' 포함. 매출 대비 = 매입 ÷ 매출현황 월 매출(마켓은 온라인 포함, 피다는 인사동).</div>
+      <div class="footnote" style="margin-top:8px">사업장별 매입은 매입현황 숫자 그대로(고정)예요. 합계에는 마켓→피다·보자기 내부 매입 '(주)꽃밥이야기' 포함. 매출 대비 = 매입 ÷ 매출현황 월 매출 — 마켓은 총매출(피다+보자기로 넘긴 금액 포함)+온라인, 피다는 인사동, 합계는 내부 거래를 뺀 매입 ÷ 외부 매출(마켓 순매출+온라인+피다+보자기).</div>
     </div></div>`;
   ov.scrollTop=keepScroll;
 };
