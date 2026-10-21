@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v350</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v351</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -14471,12 +14471,15 @@ function buySumReportHtml(D){
   const N=D.notes;
   const ch=N.ch.map(x=>{const df=(x.cur||0)-(x.prev||0);return `<tr><td style="${tdl}">${esc(x.nm)}</td><td style="${td}">${fmt(x.prev||0)}</td><td style="${td}">${fmt(x.cur||0)}</td><td style="${td};color:${col(df)}"><b>${buySumFmtD(df)}</b></td><td style="${tdl};white-space:normal;max-width:240px;color:#444">${esc(x.why||"")}</td></tr>`;}).join("");
   const items=N.items.filter(x=>String(x).trim());
+  const tbl1=`<table style="border-collapse:collapse"><thead><tr><th style="${th}">사업장</th><th style="${th}">${D.mo}월</th><th style="${th}">${D.pv.mo}월</th><th style="${th}">지난달 대비</th>${D.hasSales?`<th style="${th}">매출 대비</th>`:""}</tr></thead><tbody>${rows}</tbody></table>`;
+  /* 거래처 변동·특이사항을 안 고르면 이미지엔 표만 */
+  if(!N.ch.length&&!items.length)return `<div id="buySumReport" style="background:#fff;color:#222;padding:12px;font-family:inherit;width:max-content">${tbl1}</div>`;
   let n=1;
   return `<div id="buySumReport" style="background:#fff;color:#222;padding:18px 20px;font-family:inherit;width:max-content;max-width:760px">
     <div style="font-size:17px;font-weight:800;margin-bottom:2px">${D.y}년 ${D.mo}월 매입 요약</div>
     <div style="font-size:12px;color:#666;margin-bottom:12px">꽃밥이야기 매입현황 · 단위 원</div>
     <div style="font-weight:700;margin:4px 0 6px">${n++}. 사업장별 매입</div>
-    <table style="border-collapse:collapse"><thead><tr><th style="${th}">사업장</th><th style="${th}">${D.mo}월</th><th style="${th}">${D.pv.mo}월</th><th style="${th}">지난달 대비</th>${D.hasSales?`<th style="${th}">매출 대비</th>`:""}</tr></thead><tbody>${rows}</tbody></table>
+    ${tbl1}
     ${N.ch.length?`<div style="font-weight:700;margin:16px 0 6px">${n++}. 주요 거래처 변동</div>
     <table style="border-collapse:collapse"><thead><tr><th style="${th}">거래처</th><th style="${th}">${D.pv.mo}월</th><th style="${th}">${D.mo}월</th><th style="${th}">증감</th><th style="${th}">내용</th></tr></thead><tbody>${ch}</tbody></table>`:""}
     ${items.length?`<div style="font-weight:700;margin:16px 0 6px">${n++}. 특이사항</div>
