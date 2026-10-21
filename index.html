@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v349</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v350</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -14467,7 +14467,7 @@ function buySumReportHtml(D){
   const td="border:1px solid #c9c7bd;padding:6px 10px;text-align:right;font-size:13px;white-space:nowrap";
   const tdl=td.replace("text-align:right","text-align:left");
   const col=(v)=>v>0?"#b3261e":v<0?"#1d4ed8":"#333";
-  const rows=D.lines.map(l=>`<tr${l.sc==="all"?' style="font-weight:700;background:#f6f5f1"':""}><td style="${tdl}">${esc(l.label)}</td><td style="${td}"><b>${l.cur==null?"—":fmt(l.cur)}</b></td><td style="${td}">${l.prev==null?"—":fmt(l.prev)}</td><td style="${td};color:${col(l.diff)}">${buySumFmtD(l.diff)}</td><td style="${td}">${l.last==null?"—":fmt(l.last)}</td>${D.hasSales?`<td style="${td}">${l.rate==null?"—":(l.rate*100).toFixed(1)+"%"}</td>`:""}</tr>`).join("");
+  const rows=D.lines.map(l=>`<tr${l.sc==="all"?' style="font-weight:700;background:#f6f5f1"':""}><td style="${tdl}">${esc(l.label)}</td><td style="${td}"><b>${l.cur==null?"—":fmt(l.cur)}</b></td><td style="${td}">${l.prev==null?"—":fmt(l.prev)}</td><td style="${td};color:${col(l.diff)}">${buySumFmtD(l.diff)}</td>${D.hasSales?`<td style="${td}">${l.rate==null?"—":(l.rate*100).toFixed(1)+"%"}</td>`:""}</tr>`).join("");
   const N=D.notes;
   const ch=N.ch.map(x=>{const df=(x.cur||0)-(x.prev||0);return `<tr><td style="${tdl}">${esc(x.nm)}</td><td style="${td}">${fmt(x.prev||0)}</td><td style="${td}">${fmt(x.cur||0)}</td><td style="${td};color:${col(df)}"><b>${buySumFmtD(df)}</b></td><td style="${tdl};white-space:normal;max-width:240px;color:#444">${esc(x.why||"")}</td></tr>`;}).join("");
   const items=N.items.filter(x=>String(x).trim());
@@ -14476,7 +14476,7 @@ function buySumReportHtml(D){
     <div style="font-size:17px;font-weight:800;margin-bottom:2px">${D.y}년 ${D.mo}월 매입 요약</div>
     <div style="font-size:12px;color:#666;margin-bottom:12px">꽃밥이야기 매입현황 · 단위 원</div>
     <div style="font-weight:700;margin:4px 0 6px">${n++}. 사업장별 매입</div>
-    <table style="border-collapse:collapse"><thead><tr><th style="${th}">사업장</th><th style="${th}">${D.mo}월</th><th style="${th}">${D.pv.mo}월</th><th style="${th}">지난달 대비</th><th style="${th}">${D.ly}년 ${D.mo}월</th>${D.hasSales?`<th style="${th}">매출 대비</th>`:""}</tr></thead><tbody>${rows}</tbody></table>
+    <table style="border-collapse:collapse"><thead><tr><th style="${th}">사업장</th><th style="${th}">${D.mo}월</th><th style="${th}">${D.pv.mo}월</th><th style="${th}">지난달 대비</th>${D.hasSales?`<th style="${th}">매출 대비</th>`:""}</tr></thead><tbody>${rows}</tbody></table>
     ${N.ch.length?`<div style="font-weight:700;margin:16px 0 6px">${n++}. 주요 거래처 변동</div>
     <table style="border-collapse:collapse"><thead><tr><th style="${th}">거래처</th><th style="${th}">${D.pv.mo}월</th><th style="${th}">${D.mo}월</th><th style="${th}">증감</th><th style="${th}">내용</th></tr></thead><tbody>${ch}</tbody></table>`:""}
     ${items.length?`<div style="font-weight:700;margin:16px 0 6px">${n++}. 특이사항</div>
@@ -14486,7 +14486,7 @@ function buySumReportHtml(D){
 function buySumText(D){
   const N=D.notes;let n=1;
   const L=[`[${D.y}년 ${D.mo}월 매입 요약]`,"",`${n++}. 사업장별 매입`];
-  D.lines.forEach(l=>L.push(`· ${l.label} ${l.cur==null?"—":fmt(l.cur)+"원"} (지난달 대비 ${buySumFmtD(l.diff)} / ${D.ly}년 ${D.mo}월 ${l.last==null?"—":fmt(l.last)}${D.hasSales&&l.rate!=null?" / 매출 대비 "+(l.rate*100).toFixed(1)+"%":""})`));
+  D.lines.forEach(l=>L.push(`· ${l.label} ${l.cur==null?"—":fmt(l.cur)+"원"} (지난달 대비 ${buySumFmtD(l.diff)}${D.hasSales&&l.rate!=null?" / 매출 대비 "+(l.rate*100).toFixed(1)+"%":""})`));
   if(N.ch.length){L.push("",`${n++}. 주요 거래처 변동`);N.ch.forEach(x=>{const df=(x.cur||0)-(x.prev||0);L.push(`· ${x.nm} ${fmt(x.prev||0)} → ${fmt(x.cur||0)} (${buySumFmtD(df)})${x.why?" "+x.why:""}`);});}
   const items=N.items.filter(x=>String(x).trim());
   if(items.length){L.push("",`${n++}. 특이사항`);items.forEach(t=>L.push("· "+t));}
