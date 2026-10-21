@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v348</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v349</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -14307,7 +14307,7 @@ async function buyStatDl(){
     }else{
       scKeys.forEach((sc,i)=>list.push({name:targets[i],xml:genFor(sc)}));
     }
-    await buyMakeXlsx(list,styles,theme,sst,"매입현황_"+y+"-"+String(upto).padStart(2,"0")+".xlsx");
+    await buyMakeXlsx(list,styles,theme,sst,"매입현황_"+String(y).slice(2)+String(upto).padStart(2,"0")+".xlsx");
     toast(y+"년 "+upto+"월까지 반영된 매입현황 엑셀을 내려받았어요");
   }catch(e){console.error(e);toast(e.message||"다운로드 실패",true);}
 }
