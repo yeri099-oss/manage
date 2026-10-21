@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v347</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v348</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -13467,11 +13467,14 @@ function buyStatFlash(names){
   trs.forEach(t=>t.classList.add("buy-flash"));
   setTimeout(()=>trs.forEach(t=>t.classList.remove("buy-flash")),3500);
 }
-/* '쿠팡' 줄 = 비용정리 › 체크카드 월별 사용 합계 (계정 분류 상관없이, 제외·삭제 건 빼고) — 체크카드 자료가 있는 달만 덮어씀.
+/* '쿠팡' 줄 = 비용정리 › 체크카드 월별 상품·소모품비 합계 (제외·삭제 건 빼고) — 체크카드 자료가 있는 달만 덮어씀.
    사업장은 피다 칸, 전체는 합으로. 바뀌었으면 true */
+/* v348: 체크카드 중 계정이 '상품'·'소모품비'인 것만 (복리후생비·교통비 등은 매입이 아니라서 제외) */
+const BUY_DEBIT_ACC=/^(상품|소모품비)$/;
 function buyDebitTotal(key){
   const doc=(bd().debit||{})[key];if(!doc||!doc.rows||!doc.rows.length)return null;
-  return doc.rows.reduce((a,r)=>a+(debitIsOut(r)?0:(r.amt||0)),0);
+  const M=debitMatch(doc);
+  return doc.rows.reduce((a,r,i)=>{if(debitIsOut(r))return a;const A=debitAcctOf(r,M.res[i]);return a+(BUY_DEBIT_ACC.test(String(A.a||"").trim())?(r.amt||0):0);},0);
 }
 function buyCoupangName(y){const d=bd().stat[y];for(const sc of buyScopeKeys(y)){const r=(d.scopes[sc].rows||[]).find(x=>/^쿠팡$/.test(String(x.name).trim()));if(r)return r.name;}return null;}
 function buyCoupangSync(y){
@@ -13548,7 +13551,7 @@ function renderBuyStatCore(){
     const ri=rows.indexOf(r);
     let sum=0;
     const cpg=/^쿠팡$/.test(String(r.name).trim());
-    const tds=ms.map(m=>{const v=r.m[String(m)];if(v!=null){sum+=v;totals[m]=(totals[m]||0)+v;}const au=cpg&&buyDebitTotal(String(y).slice(2)+String(m).padStart(2,"0"))!=null;return `<td class="bsc"${au?' style="background:#EAF2FB" title="비용정리 › 체크카드 월 합계 (자동 — 체크카드에서 고치면 여기도 바뀌어요)"':""} onclick="buyStatCell(this,'${sc}',${ri},${m})">${v!=null?fmt(v):""}</td>`;}).join("");
+    const tds=ms.map(m=>{const v=r.m[String(m)];if(v!=null){sum+=v;totals[m]=(totals[m]||0)+v;}const au=cpg&&buyDebitTotal(String(y).slice(2)+String(m).padStart(2,"0"))!=null;return `<td class="bsc"${au?' style="background:#EAF2FB" title="비용정리 › 체크카드 중 상품·소모품비 월 합계 (자동 — 체크카드에서 계정·금액을 고치면 여기도 바뀌어요)"':""} onclick="buyStatCell(this,'${sc}',${ri},${m})">${v!=null?fmt(v):""}</td>`;}).join("");
     grand+=sum;
     let flag="";
     if(sc==="all"){const bad=xs.some(x=>x.name===r.name);if(bad)flag=` <span class="buy-warn" title="${buyBizLabel(y)} 합과 달라요">⚠</span>`;}
