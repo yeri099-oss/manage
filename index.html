@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v355</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v356</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -7545,10 +7545,22 @@ function payPnlImport(){
   }
   const pm=payPnlImport._pm;
   let n=0;const miss=[];
+  /* v356: 이번 달 상용직급여에 없는 사람 줄(이름을 지운 줄 포함)은 화면·엑셀에서 숨김 — 다시 상용직급여에 들어오면 자동으로 다시 보임 */
+  P.edits=P.edits||{};
+  const H=(P.edits["__hide"]=P.edits["__hide"]||{});
+  H["손익"]={};if(bo)H["4대보험"]={};
+  const hideRow=r=>{H["손익"][r]=1;if(bo)H["4대보험"][r]=1;};
   for(let r=2;r<=pn.maxR;r++){
     const edA=ed["A"+r];
     const a=pn.cells["A"+r];
     const nm=edA!==undefined?String(edA).trim():(a&&a.typ==="str"?String(a.v).trim():"");
+    const nm0=a&&a.typ==="str"?String(a.v).trim():"";
+    if(!nm&&nm0&&nm0!=="사원명"&&!/계$|합계|소계|총계/.test(nm0.replace(/\s+/g,""))){ /* 이름을 지운 줄 = 빼고 싶은 줄 */
+      const clr0=(sh2,ref)=>{const sh3=paySheetByName(sh2);const c3=sh3&&sh3.cells[ref];if(c3&&c3.f)return;payEdit(sh2,ref,"",true);};
+      for(const k of["tax","ltax","np","hi","ltc","ei","pay","alw","bon","sbon","tot","pre","ded","net"])if(pm[k])clr0("손익",pm[k]+r);
+      if(bo)for(const c2 of["A","B","C","E"])clr0("4대보험",c2+r);
+      hideRow(r);continue;
+    }
     if(!nm||nm==="사원명")continue;
     const emp=em.rows.find(x=>x.name.replace(/\s+/g,"")===nm.replace(/\s+/g,""));
     if(!emp){
@@ -7559,6 +7571,10 @@ function payPnlImport(){
       const clr=(sh2,ref)=>{const sh3=paySheetByName(sh2);const c3=sh3&&sh3.cells[ref];if(c3&&c3.f)return;payEdit(sh2,ref,"",true);};
       for(const k of["tax","ltax","np","hi","ltc","ei","pay","alw","bon","sbon","tot","pre","ded","net"])if(pm[k])clr("손익",pm[k]+r);
       if(bo)for(const c2 of["A","B","C","E"])clr("4대보험",c2+r);
+      /* 손으로 적은 금액이 남아 있는 줄은 일부러 관리하는 줄로 보고 숨기지 않음 */
+      const asP=((P.autoSet||{})["손익"])||{};
+      const handKept=Object.keys(ed).some(ref=>ref!=="A"+r&&ref.replace(/[A-Z]+/,"")===String(r)&&!asP[ref]&&ed[ref]!==""&&ed[ref]!=null);
+      if(!handKept)hideRow(r);
       continue;
     }
     const cmL=em.cm;
@@ -7585,7 +7601,7 @@ function payPnlImport(){
   if(!autoMode){
     paySchedSave();
     renderPay();
-    toast(n+"명 급여·수당·공제 전 항목을 가져왔어요"+(miss.length?" · 상용직급여에 없는 이름은 비웠어요: "+miss.join(", "):""));
+    toast(n+"명 급여·수당·공제 전 항목을 가져왔어요"+(miss.length?" · 상용직급여에 없는 사람은 줄을 숨겼어요: "+miss.join(", "):""));
   }
 }
 window.payPnlImport=payPnlImport;
@@ -8846,6 +8862,8 @@ async function payDownload(){
       const doc=par.parseFromString(await zip.file(sh.path).async("string"),"application/xml");
       const sd=doc.getElementsByTagName("sheetData")[0];
       const rowsByN={};for(const rw of doc.getElementsByTagName("row"))rowsByN[rw.getAttribute("r")]=rw;
+      /* v356: 숨긴 줄(퇴사 등) */
+      {const hr=((P.edits||{})["__hide"]||{})[sh.name]||{};for(const rn in hr){const rw=rowsByN[String(rn)];if(rw)rw.setAttribute("hidden","1");else{const nr=doc.createElementNS(NSX,"row");nr.setAttribute("r",String(rn));nr.setAttribute("hidden","1");let after=null;for(const x of doc.getElementsByTagName("row"))if(Number(x.getAttribute("r"))>Number(rn)){after=x;break;}sd.insertBefore(nr,after);rowsByN[String(rn)]=nr;}}}
       /* 값이 있는 열(서식만 있는 빈 칸은 빼고) / 앱이 새로 만든 열 */
       const fileCols=new Set();
       for(const k9 in sh.cells){const c0=sh.cells[k9];if((c0.v!==""&&c0.v!=null)||c0.f)fileCols.add(k9.replace(/\d+/g,""));}
@@ -10576,10 +10594,12 @@ function renderPay(){
       const KCSS={head:"background:#F3F1EA;font-weight:700;text-align:center;",sub:"background:#EEF4EA;font-weight:700;",tot:"background:#E1EBDB;font-weight:700;border-top:2px solid #9DB39A;",ret:"background:#F7F6F2;color:#9a988f;"};
       let curKind="";
       let trs="";
+      const hideR=((P.edits||{})["__hide"]||{})[sh.name]||{};
       for(let r=1;r<=sh.maxR;r++){
         let tds="";
         let hasAny=false;
         if(r===titleRow)continue;
+        if(hideR[r])continue;
         curKind=rowKind(r);
         for(let c=1;c<=useC;c++){
           if(holHide.has(c)){if(hasTxt(sh.cells[payIdxCol(c)+r]))hasAny=true;continue;}
@@ -10630,6 +10650,8 @@ function renderPay(){
         if(hasAny)trs+=`<tr>${tds}</tr>`;
       }
       let bjNote="";
+      {const hr=Object.keys(hideR);if(hr.length){const nmOf=r=>{const a9=sh.cells["A"+r];return a9&&a9.typ==="str"?String(a9.v).trim():(r+"행");};
+        bjNote+=` <span style="color:#6b7280">· 이번 달 상용직급여에 없어 숨긴 줄: <b>${hr.map(r=>esc(nmOf(r))).join(", ")}</b> (엑셀에서도 숨김 · 상용직급여에 다시 넣으면 보여요)</span>`;}}
       if(sh.name==="휴일근무수당"){
         bjNote=` <b style="color:#2F6B3F">시간을 적으면 수당이 계산되고, 맨 오른쪽 '초과근무수당 직접입력' 열(다른 엑셀에서 정리한 값)과 합쳐져 상용직급여 제수당에 자동 반영돼요.</b> <span style="color:#6B5B95"><b style="color:#2F6B3F">'휴일 일급'을 정해둔 사람은 휴일을 추가하면 수당이 바로 계산돼요(1일 기준). 그날 근무하지 않았으면 시간 칸에 0, 이틀 치면 2를 적어요.</b> 임원 일급: 시간 칸에 <b>일수</b>만 적으면 1일 = 월급여÷241.6×14 (8h×1.5+초과1h×2)로 수당이 자동 계산돼요. 평일 초과근무는 1일 = 월급여÷241.6×9.5 — 초과근무수당 직접입력 열에 금액으로 적어주세요.</span>`;
       }
