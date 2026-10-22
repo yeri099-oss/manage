@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v356</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v357</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -6795,6 +6795,9 @@ function payAutoFill(){
       BJ.added.forEach(a=>{if(a.col!==BJ.monthCol)cols.push(a.col);});
       const bv=payMkVal(BJ.sheet,(P.edits||{})["상여금"]);
       P.bjSpecialOf={};P.bjPreOf={};
+      /* 선지급(기지급) 특별상여 열 이름 (예: 추석) — 급여 전표 미지급급여 적요에 씀 */
+      {const preE=((P.edits||{})["__bjpre"]||{}),bjEd=((P.edits||{})["상여금"]||{});
+       P.bjPreLabel=cols.filter(L=>preE[L]).map(L=>{const rf=L+BJ.hdrRow;const e=bjEd[rf];const c=BJ.sheet.cells[rf];return String(e!==undefined?e:(c&&c.typ==="str"?c.v:"")).trim();}).filter(Boolean).join("·");}
       for(let r=BJ.hdrRow+1;r<=BJ.sheet.maxR;r++){
         const nb=BJ.sheet.cells["B"+r];
         if(!nb||nb.typ!=="str")continue;
@@ -15309,13 +15312,13 @@ function pecCalc(){
   const g=(c)=>c?Math.round(V(c)):0;
   const per=[];const un=[];
   const sum={mk:{},ep:{},bj:{},all:{}};
-  const F=["pay","alw","bon","tot","tax","ltax","np","hi","ltc","ei","ded","net"];
+  const F=["pay","alw","bon","tot","tax","ltax","np","hi","ltc","ei","ded","net","pre"];
   for(const k in sum)F.forEach(f=>sum[k][f]=0);
   for(const row of em.rows){
     const r=row.r;
     const x={name:row.name,biz:pecBizOf(row.name)||pecGuess(row.name),auto:!pecBizOf(row.name),
       pay:g(cm.pay+r),alw:g(cm.alw+r),bon:g(cm.bon+r)+(cm.sbon?g(cm.sbon+r):0),tot:g(cm.tot+r),
-      tax:g(cm.tax+r),ltax:g(cm.ltax+r),np:g(cm.np+r),hi:g(cm.hi+r),ltc:g(cm.ltc+r),ei:g(cm.ei+r),ded:g(cm.ded+r),net:g(cm.net+r)};
+      tax:g(cm.tax+r),ltax:g(cm.ltax+r),np:g(cm.np+r),hi:g(cm.hi+r),ltc:g(cm.ltc+r),ei:g(cm.ei+r),ded:g(cm.ded+r),net:g(cm.net+r),pre:cm.pre?g(cm.pre+r):0};
     per.push(x);
     if(!x.biz){un.push(x.name);continue;}
     F.forEach(f=>{sum[x.biz][f]+=x[f];sum.all[f]+=x[f];});
@@ -15340,6 +15343,9 @@ function pecRows(C){
   add("4대","2548","예수금(4대보험)","95151 국민건강",0,C.sum.all.hi+C.sum.all.ltc,"국민건강","all");
   add("4대","2548","예수금(4대보험)","95149 고용보험",0,C.sum.all.ei,"고용보험","all");
   B.forEach(b=>add("4대","2540","미지급급여","",0,C.sum[b].net,"직원급여",b));
+  /* v357: 먼저 지급한 특별상여(기지급액) — 실지급액에서 빠진 만큼 미지급급여 대변으로 (예전 '근로자의날 2605'처럼 사업장별) */
+  const preLb=((window.__pay||{}).bjPreLabel)||"특별상여";
+  B.forEach(b=>add("4대","2540","미지급급여","",0,C.sum[b].pre,preLb,b));
   const rows2=[];
   const add2=(grp,code,acct,sub,dr,cr,memo,biz)=>{if(!(dr||cr))return;rows2.push({grp,code,acct,sub,dr,cr,memo:memo,biz:PEC_LABEL[biz],blk:code==="2548"?"2548":code+"|"+(sub.split(" ")[0]||"")});};
   B.forEach(b=>add2("3차","8109","복리후생비(4대보험 사용자부담)","",C.emp[b].tot,0,"4대보험 사용자부담",b));
