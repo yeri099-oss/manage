@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v357</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v358</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -7552,7 +7552,8 @@ function payPnlImport(){
   P.edits=P.edits||{};
   const H=(P.edits["__hide"]=P.edits["__hide"]||{});
   H["손익"]={};if(bo)H["4대보험"]={};
-  const hideRow=r=>{H["손익"][r]=1;if(bo)H["4대보험"][r]=1;};
+  const SHOW=P.edits["__show"]||{};/* '다시 보이기'를 누른 줄은 자동으로 숨기지 않음 */
+  const hideRow=r=>{if(SHOW[r])return;H["손익"][r]=1;if(bo)H["4대보험"][r]=1;};
   for(let r=2;r<=pn.maxR;r++){
     const edA=ed["A"+r];
     const a=pn.cells["A"+r];
@@ -7615,6 +7616,20 @@ function payPnlAuto(){
   try{payPnlImport._auto=true;payPnlImport();}catch(e){console.warn("손익 자동",e);}finally{payPnlImport._auto=false;}
 }
 window.payPnlAuto=payPnlAuto;
+/* v358: 숨긴 줄 되살리기 — 지운 이름은 원래 이름으로 돌리고, 그 줄은 앞으로 자동으로 숨기지 않음 */
+window.payUnhide=function(r){
+  const P=window.__pay;if(!P)return;
+  P.edits=P.edits||{};
+  const ed=P.edits["손익"]=P.edits["손익"]||{};
+  if(ed["A"+r]===""||ed["A"+r]==null)delete ed["A"+r];
+  /* 숨기면서 자동으로 비운 칸도 원래 값으로 */
+  for(const sn of["손익","4대보험"]){const e2=P.edits[sn]||{},a2=(P.autoSet||{})[sn]||{};for(const ref in e2)if(ref.replace(/[A-Z]+/,"")===String(r)&&a2[ref]&&e2[ref]===""){delete e2[ref];delete a2[ref];}}
+  P.edits["__show"]=P.edits["__show"]||{};P.edits["__show"][r]=1;
+  const H=P.edits["__hide"]||{};for(const k in H)if(H[k])delete H[k][r];
+  try{payPnlAuto();}catch(e){}
+  paySchedSave();renderPay();
+  toast("줄을 다시 보이게 했어요 — 상용직급여에 있는 이름이면 금액도 채워져요");
+};
 /* ---------- 엔터로 아래 칸 이동 ---------- */
 function payPlus000(e,el){
   if(e.key!=="+"||e.ctrlKey||e.metaKey||e.altKey)return false;
@@ -10654,7 +10669,7 @@ function renderPay(){
       }
       let bjNote="";
       {const hr=Object.keys(hideR);if(hr.length){const nmOf=r=>{const a9=sh.cells["A"+r];return a9&&a9.typ==="str"?String(a9.v).trim():(r+"행");};
-        bjNote+=` <span style="color:#6b7280">· 이번 달 상용직급여에 없어 숨긴 줄: <b>${hr.map(r=>esc(nmOf(r))).join(", ")}</b> (엑셀에서도 숨김 · 상용직급여에 다시 넣으면 보여요)</span>`;}}
+        bjNote+=` <span style="color:#6b7280">· 이번 달 상용직급여에 없거나 이름을 지워서 숨긴 줄 (엑셀에서도 숨김): ${hr.map(r=>`<button class="btn btn-sm" style="padding:1px 8px;margin:0 2px" title="눌러서 이 줄을 다시 보이게 (지운 이름은 원래대로)" onclick="payUnhide(${r})">↩ ${esc(nmOf(r))}</button>`).join("")}</span>`;}}
       if(sh.name==="휴일근무수당"){
         bjNote=` <b style="color:#2F6B3F">시간을 적으면 수당이 계산되고, 맨 오른쪽 '초과근무수당 직접입력' 열(다른 엑셀에서 정리한 값)과 합쳐져 상용직급여 제수당에 자동 반영돼요.</b> <span style="color:#6B5B95"><b style="color:#2F6B3F">'휴일 일급'을 정해둔 사람은 휴일을 추가하면 수당이 바로 계산돼요(1일 기준). 그날 근무하지 않았으면 시간 칸에 0, 이틀 치면 2를 적어요.</b> 임원 일급: 시간 칸에 <b>일수</b>만 적으면 1일 = 월급여÷241.6×14 (8h×1.5+초과1h×2)로 수당이 자동 계산돼요. 평일 초과근무는 1일 = 월급여÷241.6×9.5 — 초과근무수당 직접입력 열에 금액으로 적어주세요.</span>`;
       }
