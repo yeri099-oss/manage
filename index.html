@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v353</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v354</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -11925,7 +11925,7 @@ async function renderWithdraw() {
       <td style="font-weight:700;color:#0F6E56;white-space:nowrap">${fmt(r.amount)}</td>
       <td class="note">${esc(r.content) || "-"}</td>
       <td class="note" style="max-width:170px">${esc(r.note) || "-"}</td>
-      <td class="c" style="white-space:nowrap"><label style="${adm ? "cursor:pointer;" : ""}font-size:14px;color:${r.confirmed ? "#27ae60;font-weight:700" : "var(--ink-muted)"}"><input type="checkbox" ${r.confirmed ? "checked" : ""} ${adm ? `onchange="wdToggle('${esc(r.id)}',this)"` : "disabled"} style="accent-color:#27ae60;vertical-align:-2px"> ${r.confirmed ? "확인" : "미확인"}</label></td>
+      <td class="c${adm ? " wd-chk" : ""}" style="white-space:nowrap;${adm ? "cursor:pointer" : ""}" ${adm ? `onclick="wdToggle('${esc(r.id)}',this.querySelector('input'))" title="눌러서 입금확인 ${r.confirmed ? "취소" : ""}"` : ""}><span style="font-size:14px;color:${r.confirmed ? "#27ae60;font-weight:700" : "var(--ink-muted)"}"><input type="checkbox" ${r.confirmed ? "checked" : ""} ${adm ? "" : "disabled"} style="accent-color:#27ae60;vertical-align:-2px;pointer-events:none"> ${r.confirmed ? "확인" : "미확인"}</span></td>
       ${adm ? `<td class="c" style="white-space:nowrap"><button class="btn btn-sm" onclick="wdForm('${esc(r.id)}')">수정</button> <button class="btn btn-sm" onclick="wdDel('${esc(r.id)}')">삭제</button></td>` : ""}
     </tr>`).join("");
   el.innerHTML = `<style>
@@ -11940,6 +11940,7 @@ async function renderWithdraw() {
     #tab-withdraw .stat-tile .v{font-size:26px}
     #tab-withdraw input[type=search],#tab-withdraw select.ctl{font-size:15px;padding:8px 12px}
     #tab-withdraw .footnote{font-size:13.5px}
+    #tab-withdraw td.wd-chk:hover{background:#e3f4e3}
   </style>
     <div class="card">
       <div class="card-head">
