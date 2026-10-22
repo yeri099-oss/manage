@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v354</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v355</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -7529,6 +7529,21 @@ function payPnlImport(){
   const autoMode=!!payPnlImport._auto;
   const put=(sh2,ref,v)=>{payEdit(sh2,ref,v===0?"":Math.round(v),autoMode);};
   payPnlImport._pm=null;
+  /* 손익 시트 자체 헤더로 열 찾기 */
+  if(!payPnlImport._pm){
+    const pm={};
+    const nm2={"소득세":"tax","지방소득세":"ltax","국민연금":"np","건강보험":"hi","장기요양보험":"ltc","고용보험":"ei","급여":"pay","제수당":"alw","상여금":"bon","특별상여금":"sbon","지급총액":"tot","기지급액":"pre","공제총액":"ded","실지급액":"net"};
+    const hTxt=(ref)=>{const e9=ed[ref];if(e9!==undefined)return String(e9).replace(/\s+/g,"");const c9=pn.cells[ref];return c9&&c9.typ==="str"?String(c9.v).replace(/\s+/g,""):"";};
+    let hRow=1;
+    for(let r9=1;r9<=6;r9++){let hit=false;for(let c9=1;c9<=Math.min(pn.maxC,6);c9++){if(hTxt(payIdxCol(c9)+r9)==="사원명"){hit=true;break;}}if(hit){hRow=r9;break;}}
+    for(let c=2;c<=pn.maxC;c++){
+      const k2=nm2[hTxt(payIdxCol(c)+hRow)];
+      if(k2&&!pm[k2])pm[k2]=payIdxCol(c);
+    }
+    pm.tax=pm.tax||"F";pm.ltax=pm.ltax||"G";pm.np=pm.np||"H";pm.hi=pm.hi||"I";pm.ltc=pm.ltc||"J";pm.ei=pm.ei||"K";
+    payPnlImport._pm=pm;
+  }
+  const pm=payPnlImport._pm;
   let n=0;const miss=[];
   for(let r=2;r<=pn.maxR;r++){
     const edA=ed["A"+r];
@@ -7536,25 +7551,19 @@ function payPnlImport(){
     const nm=edA!==undefined?String(edA).trim():(a&&a.typ==="str"?String(a.v).trim():"");
     if(!nm||nm==="사원명")continue;
     const emp=em.rows.find(x=>x.name.replace(/\s+/g,"")===nm.replace(/\s+/g,""));
-    if(!emp){miss.push(nm);continue;}
+    if(!emp){
+      /* v355: 이번 달 상용직급여에 없는 사람(퇴사 등) — 지난달 파일에서 넘어온 숫자를 비움 (손으로 고친 칸은 그대로) */
+      miss.push(nm);
+      if(/계$|합계|소계|총계/.test(nm.replace(/\s+/g,"")))continue; /* 합계 줄은 건드리지 않음 */
+      /* 수식 칸은 그대로, 숫자만 비움 */
+      const clr=(sh2,ref)=>{const sh3=paySheetByName(sh2);const c3=sh3&&sh3.cells[ref];if(c3&&c3.f)return;payEdit(sh2,ref,"",true);};
+      for(const k of["tax","ltax","np","hi","ltc","ei","pay","alw","bon","sbon","tot","pre","ded","net"])if(pm[k])clr("손익",pm[k]+r);
+      if(bo)for(const c2 of["A","B","C","E"])clr("4대보험",c2+r);
+      continue;
+    }
     const cmL=em.cm;
     const V={tax:em.val(cmL.tax+emp.r),ltax:em.val(cmL.ltax+emp.r),np:em.val(cmL.np+emp.r),hi:em.val(cmL.hi+emp.r),ltc:em.val(cmL.ltc+emp.r),ei:em.val(cmL.ei+emp.r),
       pay:em.val(cmL.pay+emp.r),alw:em.val(cmL.alw+emp.r),bon:em.val(cmL.bon+emp.r),sbon:cmL.sbon?em.val(cmL.sbon+emp.r):0,tot:em.val(cmL.tot+emp.r),pre:cmL.pre?em.val(cmL.pre+emp.r):0,ded:em.val(cmL.ded+emp.r),net:em.val(cmL.net+emp.r)};
-    /* 손익 시트 자체 헤더로 열 찾기 */
-    if(!payPnlImport._pm){
-      const pm={};
-      const nm2={"소득세":"tax","지방소득세":"ltax","국민연금":"np","건강보험":"hi","장기요양보험":"ltc","고용보험":"ei","급여":"pay","제수당":"alw","상여금":"bon","특별상여금":"sbon","지급총액":"tot","기지급액":"pre","공제총액":"ded","실지급액":"net"};
-      const hTxt=(ref)=>{const e9=ed[ref];if(e9!==undefined)return String(e9).replace(/\s+/g,"");const c9=pn.cells[ref];return c9&&c9.typ==="str"?String(c9.v).replace(/\s+/g,""):"";};
-      let hRow=1;
-      for(let r9=1;r9<=6;r9++){let hit=false;for(let c9=1;c9<=Math.min(pn.maxC,6);c9++){if(hTxt(payIdxCol(c9)+r9)==="사원명"){hit=true;break;}}if(hit){hRow=r9;break;}}
-      for(let c=2;c<=pn.maxC;c++){
-        const k2=nm2[hTxt(payIdxCol(c)+hRow)];
-        if(k2&&!pm[k2])pm[k2]=payIdxCol(c);
-      }
-      pm.tax=pm.tax||"F";pm.ltax=pm.ltax||"G";pm.np=pm.np||"H";pm.hi=pm.hi||"I";pm.ltc=pm.ltc||"J";pm.ei=pm.ei||"K";
-      payPnlImport._pm=pm;
-    }
-    const pm=payPnlImport._pm;
     put("손익",pm.tax+r,V.tax);put("손익",pm.ltax+r,V.ltax);put("손익",pm.np+r,V.np);
     put("손익",pm.hi+r,V.hi);put("손익",pm.ltc+r,V.ltc);put("손익",pm.ei+r,V.ei);
     /* 손익 시트에 급여·수당·상여·지급총액·공제총액·실지급액 열이 있으면 같이 채움 (상여금 열만 있고 특별상여 열이 없으면 합쳐서) */
@@ -7576,7 +7585,7 @@ function payPnlImport(){
   if(!autoMode){
     paySchedSave();
     renderPay();
-    toast(n+"명 급여·수당·공제 전 항목을 가져왔어요"+(miss.length?" · 상용직급여에 없는 이름: "+miss.join(", "):""));
+    toast(n+"명 급여·수당·공제 전 항목을 가져왔어요"+(miss.length?" · 상용직급여에 없는 이름은 비웠어요: "+miss.join(", "):""));
   }
 }
 window.payPnlImport=payPnlImport;
