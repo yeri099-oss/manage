@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v359</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v360</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -10481,6 +10481,7 @@ function renderPay(){
     const chips=chipList.map(s=>`<button class="paychip${s.name===active?" on":""}" onclick="window.__pay.sheet='${esc(s.name)}';renderPay()">${esc(PAY_LABEL[s.name]||s.name)}</button>`).join("")
       +`<button class="paychip${active==="__ecount"?" on":""}" style="border-style:dashed" onclick="window.__pay.sheet='__ecount';renderPay()">🧾 이카운트 입력</button>`
       +`<button class="paychip${active==="__hg"?" on":""}" style="border-style:dashed" onclick="window.__pay.sheet='__hg';renderPay()">🏛 한가람 대조</button>`
+      +`<button class="paychip${active==="__tax"?" on":""}" style="border-style:dashed" onclick="window.__pay.sheet='__tax';renderPay()">📤 세무사무실 자료</button>`
       +(active==="상용직급여"?`<button class="paychip" style="border-style:dashed;margin-left:6px" onclick="payPasteOpen()">📋 최종 표 붙여넣어 대조</button>`:"");
     let body="";
     if(active==="__cfg"){
@@ -10513,6 +10514,8 @@ function renderPay(){
       <div class="table-wrap"><table class="rpt" style="font-size:12.5px"><thead><tr><th class="l">사원</th><th>국민연금</th><th>건강보험</th><th>장기요양</th><th>고용보험</th><th>가족수(자녀 포함 전체)</th><th>8~20세 자녀</th><th>세액표</th><th>임원 일급</th><th>기준 실측(총액→소득세)</th></tr></thead><tbody>${rows3}</tbody></table></div>`;
     }else if(active==="__ecount"){
       body=(typeof payEcBody==="function")?payEcBody():"";
+    }else if(active==="__tax"){
+      body=(typeof payTaxBody==="function")?payTaxBody():"";
     }else if(active==="__hg"){
       body=(typeof payHgBody==="function")?payHgBody():"";
     }else{
@@ -15382,6 +15385,298 @@ function pecRows(C){
   add2("4대","2548","예수금(4대보험)","95151 국민건강",0,C.emp.all.hl,"4대보험 사용자부담","all");
   add2("4대","2548","예수금(4대보험)","95149 고용보험",0,C.emp.all.ei,"4대보험 사용자부담","all");
   return {rows,rows2};
+}
+/* ===== v360: 세무사무실 급여자료 — 지난달 보낸 사업장별 엑셀(꽃밥이야기 / 꽃밥에피다)을 올리면 이번 달 숫자로 채워서 내려받기
+   · 주민번호·주소 같은 개인정보는 앱에 저장하지 않고, 올린 파일에서만 이름으로 이어받음
+   · 상용직 = 상용직급여(사업장: 이카운트 입력 탭 설정 — 마켓·보자기 → 꽃밥이야기, 피다 → 꽃밥에피다)
+   · 사업소득 = 용역직급여, 일용직·출퇴근일지 = 시급직급여(파출 제외), 입사및퇴사 = 지난달 파일과 비교 ===== */
+const PTX_NS="http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+function ptxN(x){return String(x==null?"":x).replace(/\s+/g,"").replace(/\d+월$/,"");}
+function ptxCol(ref){return ref.replace(/\d+/g,"");}
+function ptxRow(ref){return Number(ref.replace(/[A-Z]+/g,""));}
+/* 시급직급여 → 일용직 사람 목록 {name,biz(mi|ep),amt,hours,days{일:시간}} */
+function ptxHourly(){
+  const P=window.__pay||{},hs=paySheetByName("시급직급여");if(!hs)return [];
+  const ed=(P.edits||{})["시급직급여"]||{};
+  const sv=(ref)=>{const e=ed[ref];if(e!==undefined&&typeof e==="string")return e.trim();const c=hs.cells[ref];return c&&c.typ==="str"?String(c.v).trim():"";};
+  const hv=payMkVal(hs,ed);
+  let hr=0;for(let r=1;r<=6&&!hr;r++)if(sv("B"+r).replace(/\s+/g,"")==="성명"||sv("A"+r).replace(/\s+/g,"")==="성명")hr=r;
+  if(!hr)return [];
+  let payC=null,hourC=null;const dayC={};
+  for(let c=3;c<=hs.maxC;c++){
+    const L=payIdxCol(c);
+    for(let r=1;r<=hr;r++){
+      const t=sv(L+r).replace(/\s+/g,"");if(!t)continue;
+      if(!payC&&t==="지급총액")payC=L;
+      else if(!hourC&&/^(총|근무)?시간(계|합계)?$/.test(t))hourC=L;
+      else{const m=t.match(/^(\d{1,2})일?$/);if(m&&+m[1]>=1&&+m[1]<=31&&dayC[+m[1]]==null)dayC[+m[1]]=L;}
+    }
+  }
+  if(!payC)return [];
+  const out=[];let grp="";
+  for(let r=hr+1;r<=hs.maxR;r++){
+    const a=sv("A"+r).replace(/\s+/g,""),b=sv("B"+r);const bn=b.replace(/\s+/g,"");
+    if(/^(합계|총계)$/.test(a)||/^(합계|총계)$/.test(bn))break;
+    if(a&&!/계$/.test(a))grp=a;
+    if(!bn||bn==="성명"||/계$|합계|소계/.test(bn)||bn.indexOf("파출")>=0)continue;
+    const amt=Math.round(hv(payC+r)||0);if(!amt)continue;
+    const days={};let hsum=0;for(const d in dayC){const v=hv(dayC[d]+r);if(v){days[d]=v;hsum+=v;}}
+    const biz=(grp.indexOf("인사")>=0||grp.indexOf("피다")>=0)?"ep":"mi";
+    out.push({name:b,biz,amt,hours:hourC?hv(hourC+r):(hsum||null),days});
+  }
+  return out;
+}
+/* 시트 XML 편집 도구 */
+function ptxSheetTools(doc){
+  const sd=doc.getElementsByTagName("sheetData")[0];
+  const rowsOf=()=>{const m={};for(const rw of sd.getElementsByTagName("row"))m[rw.getAttribute("r")]=rw;return m;};
+  const cellOf=(ref)=>{const rw=rowsOf()[String(ptxRow(ref))];if(!rw)return null;for(const c of rw.getElementsByTagName("c"))if(c.getAttribute("r")===ref)return c;return null;};
+  const sOf=(ref)=>{const c=cellOf(ref);return c?c.getAttribute("s"):null;};
+  const fOf=(ref)=>{const c=cellOf(ref);if(!c)return null;const f=c.getElementsByTagName("f")[0];return f?f.textContent:null;};
+  const rowAttrs=(r)=>{const rw=rowsOf()[String(r)];const o={};if(rw)for(const k of["ht","customHeight","s","customFormat"])if(rw.getAttribute(k)!=null)o[k]=rw.getAttribute(k);return o;};
+  const mkCell=(ref,val,s)=>{
+    const c=doc.createElementNS(PTX_NS,"c");c.setAttribute("r",ref);if(s!=null)c.setAttribute("s",s);
+    if(val==null||val==="")return c;
+    if(typeof val==="object"&&val.f){const f=doc.createElementNS(PTX_NS,"f");f.textContent=val.f;c.appendChild(f);return c;}
+    if(typeof val==="number"){const v=doc.createElementNS(PTX_NS,"v");v.textContent=String(val);c.appendChild(v);return c;}
+    c.setAttribute("t","inlineStr");const is=doc.createElementNS(PTX_NS,"is"),t=doc.createElementNS(PTX_NS,"t");t.setAttribute("xml:space","preserve");t.textContent=String(val);is.appendChild(t);c.appendChild(is);return c;
+  };
+  const mkRow=(r,attrs,cells)=>{const rw=doc.createElementNS(PTX_NS,"row");rw.setAttribute("r",String(r));for(const k in (attrs||{}))rw.setAttribute(k,attrs[k]);for(const c of cells)rw.appendChild(c);return rw;};
+  const dropFrom=(r0)=>{for(const rw of [...sd.getElementsByTagName("row")])if(Number(rw.getAttribute("r"))>=r0)sd.removeChild(rw);};
+  const setCell=(ref,val,sFallback)=>{
+    let rw=rowsOf()[String(ptxRow(ref))];
+    if(!rw){rw=mkRow(ptxRow(ref),{},[]);let after=null;for(const x of sd.getElementsByTagName("row"))if(Number(x.getAttribute("r"))>ptxRow(ref)){after=x;break;}sd.insertBefore(rw,after);}
+    let old=null;for(const c of rw.getElementsByTagName("c"))if(c.getAttribute("r")===ref){old=c;break;}
+    const nc=mkCell(ref,val,old?old.getAttribute("s"):sFallback);
+    if(old)rw.replaceChild(nc,old);
+    else{const ci=payColIdx(ptxCol(ref));let before=null;for(const c of rw.getElementsByTagName("c"))if(payColIdx(ptxCol(c.getAttribute("r")))>ci){before=c;break;}rw.insertBefore(nc,before);}
+  };
+  const setMerges=(list)=>{
+    let mc=doc.getElementsByTagName("mergeCells")[0];
+    if(mc)mc.parentNode.removeChild(mc);
+    if(!list.length)return;
+    mc=doc.createElementNS(PTX_NS,"mergeCells");mc.setAttribute("count",String(list.length));
+    for(const r of list){const m=doc.createElementNS(PTX_NS,"mergeCell");m.setAttribute("ref",r);mc.appendChild(m);}
+    /* sheetData 바로 뒤(또는 sheetProtection/autoFilter 등 뒤) 위치 규칙: sheetData 다음 형제 중 phoneticPr/conditionalFormatting/pageMargins 앞 */
+    let ref=sd.nextSibling;while(ref&&ref.nodeType===1&&/^(sheetCalcPr|sheetProtection|protectedRanges|scenarios|autoFilter|sortState|dataConsolidate|customSheetViews)$/.test(ref.localName))ref=ref.nextSibling;
+    sd.parentNode.insertBefore(mc,ref);
+  };
+  const setDim=()=>{const d=doc.getElementsByTagName("dimension")[0];if(d)d.parentNode.removeChild(d);};
+  return {sd,rowsOf,cellOf,sOf,fOf,rowAttrs,mkCell,mkRow,dropFrom,setCell,setMerges,setDim};
+}
+/* 수식의 행 번호 바꾸기 (예: SUM(B3:D3) → SUM(B7:D7)) */
+function ptxReRow(f,from,to){return String(f).replace(/(\$?[A-Z]{1,3}\$?)(\d+)/g,(m,c,n)=>Number(n)===from?c+to:m);}
+async function ptxBuild(file){
+  const P=window.__pay;
+  const buf=await file.arrayBuffer();
+  const W=await pumParse(buf);
+  const zip=await JSZip.loadAsync(buf.slice(0));
+  const par=new DOMParser(),ser=new XMLSerializer();
+  const first=W.sheets[0];
+  const biz=/에피다/.test(first.name)?"ep":"mi";
+  const inBiz=(b)=>biz==="ep"?b==="ep":(b==="mk"||b==="bj");
+  const ym=payYm();if(!ym)throw new Error("급여 달을 알 수 없어요");
+  const Y=+ym.y,M=+ym.m,yymm=String(Y).slice(2)+String(M).padStart(2,"0");
+  const notes=[];
+  const C=pecCalc();if(!C)throw new Error("상용직급여를 찾지 못했어요");
+  const un=C.per.filter(x=>!x.biz).map(x=>x.name);
+  if(un.length)notes.push("사업장 미지정(이카운트 입력 탭에서 지정): "+un.join(", "));
+  const emps=C.per.filter(x=>x.biz&&inBiz(x.biz));
+  const txt=(sh,ref)=>{const c=sh.cells[ref];return c&&c.typ==="str"?String(c.v).trim():"";};
+  const docs={};
+  const getDoc=async(sh)=>{if(!docs[sh.path])docs[sh.path]=par.parseFromString(await zip.file(sh.path).async("string"),"application/xml");return docs[sh.path];};
+  /* ---- 1) 상용직 시트 ---- */
+  let prevNames=[];
+  {
+    const sh=first;const doc=await getDoc(sh);const T=ptxSheetTools(doc);
+    let hr=0;for(let r=1;r<=6&&!hr;r++)if(txt(sh,"A"+r).replace(/\s+/g,"")==="사원명")hr=r;
+    if(!hr)throw new Error(sh.name+" 시트에서 '사원명' 머리글을 못 찾았어요");
+    const hdr={};for(let c=1;c<=sh.maxC;c++){const t=txt(sh,payIdxCol(c)+hr).replace(/\s+/g,"");if(t)hdr[t]=payIdxCol(c);}
+    let tr=0;for(let r=hr+1;r<=sh.maxR;r++){const a=txt(sh,"A"+r);if(a)prevNames.push(a);else if(sh.cells["B"+r]&&sh.cells["B"+r].f){tr=r;break;}}
+    const d0=hr+1,cols=[];for(let c=1;c<=Math.max(sh.maxC,13);c++)cols.push(payIdxCol(c));
+    const sty={},fml={},stT={};cols.forEach(L=>{sty[L]=T.sOf(L+d0);fml[L]=T.fOf(L+d0);stT[L]=tr?T.sOf(L+tr):sty[L];});
+    const ra=T.rowAttrs(d0),rt=tr?T.rowAttrs(tr):ra;
+    const F={"급여":"pay","제수당":"alw","상여금":"bon","소득세":"tax","지방소득세":"ltax","국민연금":"np","건강보험":"hi","장기요양보험":"ltc","고용보험":"ei"};
+    T.dropFrom(d0);
+    const list=emps.length?emps:[null];
+    list.forEach((x,i)=>{
+      const r=d0+i;const cells=[];
+      for(const L of cols){
+        const head=Object.keys(hdr).find(k=>hdr[k]===L)||"";
+        let v=null;
+        if(head==="사원명")v=x?x.name:"";
+        else if(fml[L])v={f:ptxReRow(fml[L],d0,r)};
+        else if(F[head]&&x){v=x[F[head]]||0;if(!v&&/^(제수당|상여금)$/.test(head))v=null;}
+        if(v===null&&sty[L]==null)continue;
+        cells.push(T.mkCell(L+r,v,sty[L]));
+      }
+      T.sd.appendChild(T.mkRow(r,ra,cells));
+    });
+    const last=d0+list.length-1,tR=last+1,tc=[];
+    for(const L of cols){if(L==="A"){tc.push(T.mkCell("A"+tR,null,stT[L]));continue;}const head=Object.keys(hdr).find(k=>hdr[k]===L);if(!head&&stT[L]==null)continue;tc.push(T.mkCell(L+tR,head?{f:`SUM(${L}${d0}:${L}${last})`}:null,stT[L]));}
+    T.sd.appendChild(T.mkRow(tR,rt,tc));
+    T.setDim();
+  }
+  /* ---- 2) 사업소득 ---- */
+  const bizSh=W.sheets.find(s=>/사업소득/.test(s.name));
+  if(bizSh){
+    const sh=bizSh,doc=await getDoc(sh),T=ptxSheetTools(doc);
+    let hr=0;for(let r=1;r<=6&&!hr;r++)if(txt(sh,"A"+r).replace(/\s+/g,"")==="성명")hr=r;
+    if(hr){
+      const hdr={};for(let c=1;c<=sh.maxC;c++){const t=txt(sh,payIdxCol(c)+hr).replace(/\s+/g,"");if(t)hdr[t]=payIdxCol(c);}
+      const keep={};let sr=0;
+      for(let r=hr+1;r<=sh.maxR;r++){const a=txt(sh,"A"+r);if(a.replace(/\s+/g,"")==="소계"){sr=r;break;}if(a){const o={};for(const k of["주민등록번호","내용","비고"])if(hdr[k])o[k]=txt(sh,hdr[k]+r)||(sh.cells[hdr[k]+r]?sh.cells[hdr[k]+r].v:"");keep[ptxN(a)]=o;}}
+      const d0=hr+1,cols=[];for(let c=1;c<=Math.max(sh.maxC,9);c++)cols.push(payIdxCol(c));
+      const sty={},fml={},stS={};cols.forEach(L=>{sty[L]=T.sOf(L+d0);fml[L]=T.fOf(L+d0);stS[L]=sr?T.sOf(L+sr):sty[L];});
+      const ra=T.rowAttrs(d0),rs=sr?T.rowAttrs(sr):ra;
+      const Yd=(typeof pecYong==="function")?pecYong():null;
+      const ppl=Yd?Yd.per.filter(x=>x.biz&&inBiz(x.biz)):[];
+      const ynb=Yd?Yd.per.filter(x=>!x.biz).map(x=>x.name):[];if(ynb.length)notes.push("용역직 사업장 미지정: "+ynb.join(", "));
+      T.dropFrom(d0);
+      const list=ppl.length?ppl:[null];
+      list.forEach((x,i)=>{
+        const r=d0+i,k=x?keep[ptxN(x.name)]||{}:{},cells=[];
+        for(const L of cols){
+          const head=Object.keys(hdr).find(h=>hdr[h]===L)||"";let v=null;
+          if(head==="성명")v=x?x.name:"";
+          else if(fml[L])v={f:ptxReRow(fml[L],d0,r)};
+          else if(head==="용역대금")v=x?x.amt:null;else if(head==="소득세")v=x?x.tax:null;else if(head==="지방소득세")v=x?x.ltax:null;
+          else if(k[head]!=null&&k[head]!=="")v=k[head];
+          if(v===null&&sty[L]==null)continue;
+          cells.push(T.mkCell(L+r,v,sty[L]));
+        }
+        T.sd.appendChild(T.mkRow(r,ra,cells));
+      });
+      const last=d0+list.length-1,sR=last+1,sc=[];
+      for(const L of cols){const head=Object.keys(hdr).find(h=>hdr[h]===L)||"";let v=null;
+        if(L==="A")v="소계";else if(/용역대금|소득세|지방소득세|공제총액|실지급액/.test(head))v={f:`SUM(${L}${d0}:${L}${last})`};
+        if(v===null&&stS[L]==null)continue;sc.push(T.mkCell(L+sR,v,stS[L]));}
+      T.sd.appendChild(T.mkRow(sR,rs,sc));T.setDim();
+      if(!ppl.length)notes.push(bizSh.name+": 이번 달 용역직 없음");
+    }
+  }
+  /* ---- 3) 일용직 ---- */
+  const H=ptxHourly().filter(x=>x.biz===biz);
+  const daySh=W.sheets.find(s=>/일용직/.test(s.name));
+  if(daySh){
+    const sh=daySh,doc=await getDoc(sh),T=ptxSheetTools(doc);
+    let hr=0;for(let r=1;r<=4&&!hr;r++)if(txt(sh,"B"+r).replace(/\s+/g,"")==="성명")hr=r;
+    if(hr){
+      const hdr={};for(let c=1;c<=sh.maxC;c++){const t=txt(sh,payIdxCol(c)+hr).replace(/\s+/g,"");if(t)hdr[t]=payIdxCol(c);}
+      const keep={};let gr=0;
+      for(let r=hr+1;r<=sh.maxR;r++){const a=txt(sh,"A"+r).replace(/\s+/g,"");if(a==="계"){gr=r;break;}const b=txt(sh,"B"+r);if(b){const o={};for(const k of["자격","국적","주민번호","비고"])if(hdr[k])o[k]=txt(sh,hdr[k]+r);keep[ptxN(b)]=o;}}
+      const d0=hr+1,cols=[];for(let c=1;c<=Math.max(sh.maxC,7);c++)cols.push(payIdxCol(c));
+      const sty={},stG={};cols.forEach(L=>{sty[L]=T.sOf(L+(d0+1))||T.sOf(L+d0);stG[L]=gr?T.sOf(L+gr):sty[L];});
+      const sA0=T.sOf("A"+d0);
+      const ra=T.rowAttrs(d0),rg=gr?T.rowAttrs(gr):ra;
+      T.dropFrom(d0);
+      const n=Math.max(H.length,1);
+      for(let i=0;i<n;i++){
+        const x=H[i]||null,r=d0+i,k=x?keep[ptxN(x.name)]||{}:{},cells=[];
+        for(const L of cols){
+          const head=Object.keys(hdr).find(h=>hdr[h]===L)||"";let v=null;
+          if(head==="성명")v=x?x.name:"";else if(head==="시급")v=x?x.amt:null;else if(head==="시간")v=x&&x.hours?x.hours:null;
+          else if(k[head])v=k[head];
+          const s=L==="A"&&i===0?sA0:sty[L];
+          if(v===null&&s==null)continue;cells.push(T.mkCell(L+r,v,s));
+        }
+        T.sd.appendChild(T.mkRow(r,ra,cells));
+      }
+      const last=d0+n-1,gR=last+1,gc=[];
+      for(const L of cols){const head=Object.keys(hdr).find(h=>hdr[h]===L)||"";let v=null;
+        if(L==="A")v="계";else if(head==="시급"||head==="시간")v={f:`SUM(${L}${d0}:${L}${last})`};
+        if(v===null&&stG[L]==null)continue;gc.push(T.mkCell(L+gR,v,stG[L]));}
+      T.sd.appendChild(T.mkRow(gR,rg,gc));
+      T.setMerges([`A${d0}:A${last}`,`A${gR}:B${gR}`].filter(m=>m!==`A${d0}:A${d0}`));T.setDim();
+    }
+  }
+  /* ---- 4) 출퇴근일지 ---- */
+  const attSh=W.sheets.find(s=>/출퇴근/.test(s.name));
+  if(attSh){
+    const sh=attSh,doc=await getDoc(sh),T=ptxSheetTools(doc);
+    const titleS=T.sOf("A1"),hA=T.sOf("A2"),hB=T.sOf("B2"),hC=T.sOf("C2")||hB,dA=T.sOf("A3"),dB=T.sOf("B3"),dC=T.sOf("C3")||dB;
+    let tRow=0;for(let r=4;r<=sh.maxR;r++){if(sh.cells["C"+r]&&sh.cells["C"+r].f){tRow=r;break;}}
+    const tA=tRow?T.sOf("A"+tRow)||dA:dA,tC=tRow?T.sOf("C"+tRow)||dC:dC;
+    const r1=T.rowAttrs(1),r2=T.rowAttrs(2),r3=T.rowAttrs(3),rT=tRow?T.rowAttrs(tRow):r3;
+    const title=txt(sh,"A1")||"일용직 출근기록부";
+    T.dropFrom(1);
+    const nm=H.map(x=>x.name);const nc=Math.max(nm.length,1);
+    const lastL=payIdxCol(2+nc),totL=payIdxCol(3+nc);
+    const c1=[T.mkCell("A1",title,titleS)];for(let c=2;c<=2+nc;c++)c1.push(T.mkCell(payIdxCol(c)+"1",null,titleS));
+    T.sd.appendChild(T.mkRow(1,r1,c1));
+    const c2=[T.mkCell("A2","날짜",hA),T.mkCell("B2","요일",hB)];nm.forEach((n,i)=>c2.push(T.mkCell(payIdxCol(3+i)+"2",n,hC)));if(!nm.length)c2.push(T.mkCell("C2",null,hC));
+    T.sd.appendChild(T.mkRow(2,r2,c2));
+    const nd=new Date(Y,M,0).getDate(),WD="일월화수목금토";
+    let anyDay=false;
+    for(let d=1;d<=nd;d++){
+      const r=2+d,cs=[T.mkCell("A"+r,d,dA),T.mkCell("B"+r,WD[new Date(Y,M-1,d).getDay()],dB)];
+      for(let i=0;i<nc;i++){const x=H[i];const v=x&&x.days[d]?x.days[d]:null;if(v)anyDay=true;cs.push(T.mkCell(payIdxCol(3+i)+r,v,dC));}
+      T.sd.appendChild(T.mkRow(r,r3,cs));
+    }
+    const tR=3+nd,ct=[T.mkCell("A"+tR,"합계",tA),T.mkCell("B"+tR,null,tA)];
+    for(let i=0;i<nc;i++){const L=payIdxCol(3+i);ct.push(T.mkCell(L+tR,{f:`SUM(${L}3:${L}${2+nd})`},tC));}
+    ct.push(T.mkCell(totL+tR,{f:`SUM(C${tR}:${lastL}${tR})`},tC));
+    T.sd.appendChild(T.mkRow(tR,rT,ct));
+    T.setMerges([`A1:${lastL}1`,`A${tR}:B${tR}`]);T.setDim();
+    if(H.length&&!anyDay)notes.push(attSh.name+": 시급직급여에 날짜별 시간 칸이 없어 이름·날짜만 채웠어요 (시간은 직접)");
+  }
+  /* ---- 5) 입사및퇴사 ---- */
+  const ioSh=W.sheets.find(s=>/입사/.test(s.name)&&/퇴사/.test(s.name));
+  if(ioSh){
+    const sh=ioSh,doc=await getDoc(sh),T=ptxSheetTools(doc);
+    let noteR=0;for(let r=3;r<=sh.maxR;r++){if(/^\s*1\./.test(txt(sh,"A"+r))){noteR=r;break;}}
+    const endR=noteR?noteR-2:Math.max(sh.maxR,8);
+    const gone=new Set();for(let r=3;r<=(noteR||sh.maxR);r++){const b=txt(sh,"B"+r);const g=txt(sh,"G"+r)||(sh.cells["G"+r]&&sh.cells["G"+r].v);if(b&&g)gone.add(ptxN(b));}
+    const now=new Set(emps.map(x=>ptxN(x.name)));
+    const before=new Set(prevNames.map(ptxN));
+    const ent=[];
+    emps.forEach(x=>{if(!before.has(ptxN(x.name)))ent.push({name:x.name,memo:"입사"});});
+    prevNames.forEach(n=>{const k=ptxN(n);if(!now.has(k)&&!gone.has(k))ent.push({name:n.replace(/\s*\d+월$/,""),memo:"퇴사"});});
+    const s3={};for(const L of["A","B","C","D","E","F","G","H"])s3[L]=T.sOf(L+"3");
+    for(let r=3;r<=endR;r++)for(const L of["B","C","D","E","F","G","H"])T.setCell(L+r,null,s3[L]);
+    ent.forEach((e,i)=>{const r=3+i;if(r>endR){notes.push("입사및퇴사: 줄이 모자라 "+e.name+" 님은 직접 적어주세요");return;}T.setCell("A"+r,i+1,s3.A);T.setCell("B"+r,e.name,s3.B);T.setCell("H"+r,e.memo+" (날짜·주민번호·주소는 직접)",s3.H);});
+    if(ent.length)notes.push("입사및퇴사: "+ent.map(e=>e.name+" "+e.memo).join(", ")+" — 입사·퇴사일과 개인정보는 직접 적어주세요");
+  }
+  for(const pth in docs)zip.file(pth,ser.serializeToString(docs[pth]));
+  /* 수식을 새로 썼으니 엑셀이 열 때 다시 계산하게 */
+  try{
+    if(zip.file("xl/calcChain.xml")){zip.remove("xl/calcChain.xml");
+      const ct=await zip.file("[Content_Types].xml").async("string");zip.file("[Content_Types].xml",ct.replace(/<Override[^>]*calcChain[^>]*\/>/g,""));
+      const rl=await zip.file("xl/_rels/workbook.xml.rels").async("string");zip.file("xl/_rels/workbook.xml.rels",rl.replace(/<Relationship[^>]*calcChain[^>]*\/>/g,""));}
+    let wx=await zip.file("xl/workbook.xml").async("string");
+    if(/<calcPr[^>]*\/>/.test(wx))wx=wx.replace(/<calcPr([^>]*?)\s*\/>/,(m,a)=>`<calcPr${a.replace(/\s*fullCalcOnLoad="[^"]*"/,"")} fullCalcOnLoad="1"/>`);
+    else wx=wx.replace("</workbook>",'<calcPr fullCalcOnLoad="1"/></workbook>');
+    zip.file("xl/workbook.xml",wx);
+  }catch(e){console.warn("calc",e);}
+  const blob=await zip.generateAsync({type:"blob",mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+  const pm=String(Y-(M===1?1:0)).slice(2)+String(M===1?12:M-1).padStart(2,"0");
+  let name=file.name.indexOf(pm)>=0?file.name.split(pm).join(yymm):file.name.replace(/(\.xlsx)$/i,"_"+yymm+"$1");
+  return {blob,name,notes,biz,n:emps.length,h:H.length};
+}
+window.payTaxPick=async function(inp){
+  const files=[...(inp.files||[])];inp.value="";
+  if(!files.length)return;
+  if(!window.__pay||!window.__pay.wb){toast("이번 달 급여품의 파일을 먼저 올려주세요",true);return;}
+  const out=[];
+  for(const f of files){
+    try{
+      toast(f.name+" 채우는 중…");
+      const R=await ptxBuild(f);
+      const a=document.createElement("a");a.href=URL.createObjectURL(R.blob);a.download=R.name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1500);
+      out.push(`<div style="margin:6px 0"><b>✅ ${esc(R.name)}</b> <span class="unit">상용직 ${R.n}명 · 일용직 ${R.h}명</span>${R.notes.length?`<ul style="margin:4px 0 0 18px;font-size:12.5px;color:#92400e">${R.notes.map(n=>`<li>${esc(n)}</li>`).join("")}</ul>`:""}</div>`);
+    }catch(e){console.error(e);out.push(`<div style="color:#b91c1c">⚠ ${esc(f.name)}: ${esc(e.message||String(e))}</div>`);}
+  }
+  const box=document.getElementById("payTaxOut");if(box)box.innerHTML=out.join("");
+};
+function payTaxBody(){
+  const ym=payYm();
+  return `<div class="card"><div class="card-title">📤 세무사무실 급여자료 <span class="unit">사업장별 엑셀 (꽃밥이야기 / 꽃밥에피다)</span></div>
+    <div class="footnote" style="margin:6px 0 10px;line-height:1.7">지난달 세무사무실에 보낸 엑셀을 올리면, 같은 모양 그대로 <b>${ym?ym.y+"년 "+ym.m+"월":"이번 달"}</b> 숫자로 채워서 바로 내려받아요. 두 파일을 한 번에 골라도 돼요.<br>
+      · 꽃밥이야기/꽃밥에피다 시트 = 상용직급여 (사업장은 🧾 이카운트 입력 탭의 사업장 설정: 마켓·보자기 → 꽃밥이야기, 피다 → 꽃밥에피다)<br>
+      · 사업소득 = 용역직급여 · 일용직·출퇴근일지 = 시급직급여 (파출 제외) · 입사및퇴사 = 지난달 파일과 비교해 이름만 표시<br>
+      · 주민번호·자격·국적·내용은 올린 파일에서 같은 이름으로 그대로 이어받아요 (앱에는 저장하지 않아요). 새로 온 사람은 직접 적어주세요.</div>
+    <label class="btn btn-primary" style="cursor:pointer">📂 지난달 보낸 엑셀 올리기 → 이번 달로 받기<input type="file" accept=".xlsx" multiple style="display:none" onchange="payTaxPick(this)"></label>
+    <div id="payTaxOut" style="margin-top:10px"></div></div>`;
 }
 /* === 용역직급여 (사업소득 3.3%) === */
 function pecYong(){
