@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v362</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v363</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -15854,7 +15854,7 @@ function payPachBody(){
   const ym=payYm(),nd=new Date(+ym.y,+ym.m,0).getDate(),WD="일월화수목금토";
   const inS="font:inherit;font-size:12.5px;padding:3px 6px;border:1px solid var(--line,#ddd);border-radius:6px";
   let bc=0,ep=0;R.forEach(r=>{if(r.loc==="ep")ep+=r.amt||0;else bc+=r.amt||0;});
-  const inp=(i,f,v,w,al)=>`<input data-f="${f}" style="${inS};width:${w}px;text-align:${al||"left"}" value="${v==null?"":esc(f==="amt"&&v?fmt(v):v)}" onchange="pachEdit(${i},'${f}',this.value)">`;
+  const inp=(i,f,v,w,al)=>`<input data-f="${f}" style="${inS};width:${w}px;text-align:${al||"left"}"${f==="h"?' placeholder="4" title="비우면 4시간"':""} value="${v==null?"":esc(f==="amt"&&v?fmt(v):v)}" onchange="pachEdit(${i},'${f}',this.value)">`;
   const rows=R.map((r,i)=>{const wd=r.d?WD[new Date(+ym.y,+ym.m-1,r.d).getDay()]:"";const same=i>0&&R[i-1].d===r.d;
     return `<tr${r.loc==="ep"?' style="background:#f3f7ee"':""}><td><select style="${inS}" onchange="pachEdit(${i},'d',this.value)">${Array.from({length:nd},(_,j)=>`<option value="${j+1}" ${r.d===j+1?"selected":""}>${j+1}일</option>`).join("")}</select></td>
       <td style="color:${wd==="일"?"#b91c1c":wd==="토"?"#1d4ed8":"inherit"}">${same?"":wd}</td>
@@ -15868,7 +15868,7 @@ function payPachBody(){
       <button class="btn btn-primary btn-sm" onclick="pachAdd()">＋ 줄 추가</button>
       <label class="btn btn-sm" style="cursor:pointer">📂 파출비용 엑셀에서 가져오기 (${k} 시트)<input type="file" accept=".xlsx" style="display:none" onchange="pachImport(this)"></label>
       <span style="margin-left:auto">북촌 <b>${fmt(bc)}</b> · 피다 <b>${fmt(ep)}</b> · 합계 <b style="font-size:15px">${fmt(bc+ep)}</b>원</span></div>
-    ${R.length?`<div class="table-wrap"><table class="rpt" id="pachTbl" style="font-size:12.5px"><thead><tr><th>날짜</th><th>요일</th><th>파출(이름)</th><th>금액</th><th>시간</th><th>위치</th><th>국적</th><th>비자</th><th>비고</th><th></th></tr></thead><tbody>${rows}</tbody>
+    ${R.length?`<div class="table-wrap"><table class="rpt" id="pachTbl" style="font-size:12.5px"><thead><tr><th>날짜</th><th>요일</th><th>파출(이름)</th><th>금액</th><th title="비우면 4시간">시간 <span class="unit" style="font-weight:400">(기본 4)</span></th><th>위치</th><th>국적</th><th>비자</th><th>비고</th><th></th></tr></thead><tbody>${rows}</tbody>
       <tfoot><tr class="total"><td colspan="3" class="l">합계 (${R.length}건)</td><td style="text-align:right">${fmt(bc+ep)}</td><td colspan="6"></td></tr></tfoot></table></div>`:`<div class="footnote">아직 내역이 없어요 — 줄을 추가하거나 엑셀에서 가져오세요.</div>`}
   </div>`;
 }
