@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v374</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v375</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -12333,6 +12333,8 @@ async function renderWithdraw() {
   const recs = W.recs.filter((r) => r.company === W.co);
   const ym = W.date.slice(0, 7);
   const dayTot = recs.filter((r) => r.date === W.date).reduce((s, r) => s + r.amount, 0);
+  const dayOpen = recs.filter((r) => r.date === W.date && !r.confirmed);
+  W.dayOpenIds = dayOpen.map((r) => r.id);
   const monRecs = recs.filter((r) => r.date.startsWith(ym));
   const months = [...new Set([W.month, wdToday().slice(0, 7), ...recs.map((r) => r.date.slice(0, 7)).filter((m) => /^\d{4}-\d{2}$/.test(m))])].sort().reverse();
   const q = W.q.trim().toLowerCase();
@@ -12346,7 +12348,7 @@ async function renderWithdraw() {
       <td class="note">${esc(r.content) || "-"}</td>
       <td class="note" style="max-width:170px">${esc(r.note) || "-"}</td>
       <td class="c${adm ? " wd-chk" : ""}" style="white-space:nowrap;${adm ? "cursor:pointer" : ""}" ${adm ? `onclick="wdToggle('${esc(r.id)}',this.querySelector('input'))" title="눌러서 입금확인 ${r.confirmed ? "취소" : ""}"` : ""}><span style="font-size:14px;color:${r.confirmed ? "#27ae60;font-weight:700" : "var(--ink-muted)"}"><input type="checkbox" ${r.confirmed ? "checked" : ""} ${adm ? "" : "disabled"} style="accent-color:#27ae60;vertical-align:-2px;pointer-events:none"> ${r.confirmed ? "확인" : "미확인"}</span></td>
-      ${adm ? `<td class="c" style="white-space:nowrap"><button class="btn btn-sm" onclick="wdForm('${esc(r.id)}')">수정</button> <button class="btn btn-sm" onclick="wdDel('${esc(r.id)}')">삭제</button></td>` : ""}
+      ${adm ? `<td class="c" style="white-space:nowrap">${r.confirmed ? "" : `<button class="btn btn-sm" onclick="wdMove(['${esc(r.id)}'])" title="결재가 안 나서 못 보낸 건 → ${wdNextDay(r.date).slice(5).replace("-", "/")}로 넘기기">⏭ 다음날</button> `}<button class="btn btn-sm" onclick="wdForm('${esc(r.id)}')">수정</button> <button class="btn btn-sm" onclick="wdDel('${esc(r.id)}')">삭제</button></td>` : ""}
     </tr>`).join("");
   el.innerHTML = `<style>
     #tab-withdraw .rpt{font-size:15.5px}
@@ -12375,7 +12377,7 @@ async function renderWithdraw() {
       </div>
       <div class="stat-tiles" style="margin-bottom:4px">
         <div class="stat-tile"><div class="k">날짜별 총금액 <input type="date" value="${W.date}" onchange="window.__wd.date=this.value||wdToday();renderWithdraw()" style="font-family:inherit;font-size:14px;border:1px solid var(--grid);border-radius:6px;padding:2px 6px;margin-left:4px"></div><div class="v" style="color:#0F6E56">${wdWon(dayTot)}</div>
-          <div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap"><button class="btn btn-sm" onclick="wdImage()" title="${esc(W.co)} ${W.date} 출금 내역을 보고용 이미지로 복사">📋 이미지 복사</button><button class="btn btn-sm btn-ghost" onclick="wdImage('dl')" title="이미지 파일로 저장">⬇</button></div></div>
+          <div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap"><button class="btn btn-sm" onclick="wdImage()" title="${esc(W.co)} ${W.date} 출금 내역을 보고용 이미지로 복사">📋 이미지 복사</button><button class="btn btn-sm btn-ghost" onclick="wdImage('dl')" title="이미지 파일로 저장">⬇</button>${adm && dayOpen.length ? `<button class="btn btn-sm" onclick="wdMove(window.__wd.dayOpenIds)" title="이 날짜의 미확인 내역을 모두 다음 영업일로">⏭ 미확인 ${dayOpen.length}건 다음날로</button>` : ""}</div></div>
         <div class="stat-tile"><div class="k">${Number(ym.slice(5))}월 건수</div><div class="v">${monRecs.length}건</div></div>
         <div class="stat-tile"><div class="k">${Number(ym.slice(5))}월 총 출금액</div><div class="v" style="color:#0F6E56">${wdWon(monRecs.reduce((s, r) => s + r.amount, 0))}</div></div>
       </div>
@@ -12389,7 +12391,7 @@ async function renderWithdraw() {
         </div>
       </div>
       <div class="table-wrap"><table class="rpt" style="white-space:normal">
-        <thead><tr><th style="cursor:pointer" onclick="wdSortDate()">날짜 ↕</th><th class="l">거래처</th><th>금액</th><th class="l">내용</th><th class="l">비고</th><th>입금확인</th>${adm ? "<th>수정/삭제</th>" : ""}</tr></thead>
+        <thead><tr><th style="cursor:pointer" onclick="wdSortDate()">날짜 ↕</th><th class="l">거래처</th><th>금액</th><th class="l">내용</th><th class="l">비고</th><th>입금확인</th>${adm ? "<th>넘기기·수정·삭제</th>" : ""}</tr></thead>
         <tbody>${rows || `<tr><td colspan="${adm ? 7 : 6}" class="c dim" style="padding:30px">등록된 출금 내역이 없어요.</td></tr>`}</tbody>
       </table></div>
       <div class="footnote">거래처 이름을 누르면 계좌 정보를 볼 수 있어요(파란 밑줄 = 계좌 등록됨).</div>
@@ -12470,12 +12472,12 @@ function wdToggle(id, box) {
   box.checked = r.confirmed; // 확인 누르기 전까지는 그대로
   openModal(r.confirmed ? "입금 확인 취소" : "입금 확인",
     `<div id="wd-ask"><b>${esc(r.date)} · ${esc(r.vendor)} · ${wdWon(r.amount)}</b><br>${r.confirmed ? "입금 확인을 취소할까요?" : "입금 확인 할까요?"}</div>`,
-    `<span class="dim" style="font-size:12px;margin-right:auto;align-self:center">Enter = 확인</span><button class="btn" onclick="closeModal()">취소</button><button class="btn btn-primary" onclick="wdToggleGo('${esc(id)}')">확인</button>`);
-  window.__wd.askId = id;
+    `<span class="dim" style="font-size:12px;margin-right:auto;align-self:center">Enter = 확인</span><button class="btn" onclick="closeModal()">취소</button><button class="btn btn-primary" onclick="window.__wd.askFn()">확인</button>`);
+  window.__wd.askFn = () => wdToggleGo(id);
 }
 async function wdToggleGo(id) {
   const r = window.__wd.recs.find((x) => x.id === id); if (!r) return;
-  window.__wd.askId = "";
+  window.__wd.askFn = null;
   closeModal();
   try {
     await wdPut({ ...r, confirmed: !r.confirmed });
@@ -12483,12 +12485,50 @@ async function wdToggleGo(id) {
   } catch (e) { wdSaveErr(e); }
   renderWithdraw();
 }
+// 다음 영업일 (토·일은 건너뜀, 공휴일은 직접 날짜 수정)
+function wdNextDay(ymd) {
+  const d = new Date(ymd + "T00:00:00");
+  do d.setDate(d.getDate() + 1); while (d.getDay() === 0 || d.getDay() === 6);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+// 결재가 안 나서 못 보낸 내역을 다음 영업일로 넘기기
+function wdMove(ids) {
+  const W = window.__wd;
+  const list = (ids || []).map((id) => W.recs.find((x) => x.id === id)).filter((r) => r && !r.confirmed);
+  if (!list.length) return;
+  const wk = (ymd) => "일월화수목금토"[new Date(ymd + "T00:00:00").getDay()];
+  const md = (ymd) => `${Number(ymd.slice(5, 7))}/${Number(ymd.slice(8))}(${wk(ymd)})`;
+  openModal("다음날로 넘기기", `<div id="wd-ask">${list.map((r) => `<div style="margin-bottom:4px"><b>${esc(r.vendor)}</b> · ${wdWon(r.amount)} — ${md(r.date)} → <b style="color:#c0392b">${md(wdNextDay(r.date))}</b></div>`).join("")}
+      <div class="dim" style="margin-top:8px">${list.length > 1 ? list.length + "건을" : ""} 다음 영업일로 넘길까요? 비고에 원래 날짜가 남아요.</div></div>`,
+    `<span class="dim" style="font-size:12px;margin-right:auto;align-self:center">Enter = 확인</span><button class="btn" onclick="closeModal()">취소</button><button class="btn btn-primary" onclick="window.__wd.askFn()">넘기기</button>`);
+  W.askFn = () => wdMoveGo(list.map((r) => r.id));
+}
+async function wdMoveGo(ids) {
+  const W = window.__wd;
+  W.askFn = null;
+  closeModal();
+  let n = 0;
+  for (const id of ids) {
+    const r = W.recs.find((x) => x.id === id); if (!r || r.confirmed) continue;
+    const from = r.date, to = wdNextDay(from);
+    const tag = `${Number(from.slice(5, 7))}/${Number(from.slice(8))}에서 넘어옴`;
+    const note = !r.note ? tag : r.note.includes("에서 넘어옴") ? r.note : `${r.note} · ${tag}`; // 여러 번 넘겨도 처음 날짜를 남김
+    try {
+      await wdPut({ ...r, date: to, note });
+      r.date = to; r.note = note; n++;
+      logAction(`출금기록부 다음날로: ${r.company} ${r.vendor} ${fmt(r.amount)}원 ${from} → ${to}`);
+    } catch (e) { wdSaveErr(e); break; }
+  }
+  wdSortList();
+  if (n) toast(`${n}건을 다음날로 넘겼어요`);
+  renderWithdraw();
+}
 // 출금기록부 창 단축키: 입금확인 창 Enter = 확인, 내역 추가·수정 창 F8 = 저장
 document.addEventListener("keydown", (e) => {
   const mb = document.getElementById("modal-backdrop");
   if (!mb || mb.classList.contains("hidden")) return;
   const W = window.__wd;
-  if (e.key === "Enter" && document.getElementById("wd-ask") && W.askId) { e.preventDefault(); wdToggleGo(W.askId); }
+  if (e.key === "Enter" && document.getElementById("wd-ask") && W.askFn) { e.preventDefault(); W.askFn(); }
   else if (e.key === "F8" && document.getElementById("wd-vendor")) { e.preventDefault(); wdSave(W.formId || ""); }
 });
 // 그날 출금 내역을 보고용 이미지로 (사업장별) — 클립보드 복사, 막히면 파일 저장
