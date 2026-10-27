@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v372</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v373</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -4270,7 +4270,7 @@ function pnlAggOf(name,vals){
 }
 function pnlUnionNames(yKeys){
   const names=[];
-  for(const k of yKeys)for(const r of S.data.pnl[k].rows)if(!names.some(x=>x.n===r.n))names.push({n:r.n,lv:r.lv});
+  for(const k of yKeys)for(const r0 of S.data.pnl[k].rows){const r=(r0.lv>0&&/접대비/.test(r0.n))?{n:"접대비",lv:r0.lv}:r0;/* 접대비 한 줄로 */if(!names.some(x=>x.n===r.n))names.push({n:r.n,lv:r.lv});}
   return names;
 }
 /* ---- 엑셀(.xlsx) 생성: 예리님 양식 그대로 ---- */
@@ -4347,7 +4347,7 @@ const PNL_STYLES=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 window.pnlExportXlsx=async function(){
   try{
     if(typeof JSZip==="undefined")throw new Error("파일 모듈이 아직 로드되지 않았어요 — 새로고침 후 다시 시도해주세요.");
-    const P=S.data.pnl||{};
+    const P=(typeof pnlMergeAll==="function")?pnlMergeAll(S.data.pnl||{}):(S.data.pnl||{});/* 접대비 한 줄로 */
     const keys=Object.keys(P).sort((a,b)=>{const[ay,am]=a.split("-").map(Number),[by,bm]=b.split("-").map(Number);return ay-by||am-bm;});
     if(!keys.length){toast("저장된 손익 데이터가 없어요",true);return;}
     const years=[...new Set(keys.map(k=>k.split("-")[0]))];
@@ -4700,8 +4700,21 @@ window.pnlDelete=async function(key){
   S.ui.pnlKey=null;rerenderCurrent();
 };
 function pnlPct(v,base){return (v!=null&&base)? '<span class="unit"> '+(v/base*100).toFixed(1)+'%</span>':"";}
+/* v373: 접대비(카드·일반 등 '접대비'가 들어간 계정)는 한 줄 '접대비'로 합쳐서 보여줌 (원본 자료는 그대로) */
+function pnlMergeDoc(doc){
+  if(!doc||!doc.rows)return doc;
+  const rows=[];let tgt=null;
+  for(const r of doc.rows){
+    if(r.lv>0&&/접대비/.test(r.n)){
+      if(!tgt){tgt={n:"접대비",lv:r.lv,v:Object.assign({},r.v)};rows.push(tgt);}
+      else for(const e in r.v){if(r.v[e]==null)continue;tgt.v[e]=(tgt.v[e]||0)+r.v[e];}
+    }else rows.push(r);
+  }
+  return Object.assign({},doc,{rows});
+}
+function pnlMergeAll(P){const o={};for(const k in (P||{}))o[k]=pnlMergeDoc(P[k]);return o;}
 function renderPnl(){
-  if(!renderPnl._in){window.__pnlReal=S.data.pnl;if((S.ui.pnlMode==="incl"||S.ui.pnlExcl)&&typeof pnlViewAll==="function"){const sv=S.data.pnl;renderPnl._in=true;S.data.pnl=pnlViewAll(sv||{});try{return renderPnl();}finally{S.data.pnl=sv;renderPnl._in=false;}}}
+  if(!renderPnl._in){window.__pnlReal=S.data.pnl;{const sv=S.data.pnl;renderPnl._in=true;let V=sv||{};if((S.ui.pnlMode==="incl"||S.ui.pnlExcl)&&typeof pnlViewAll==="function")V=pnlViewAll(V);S.data.pnl=pnlMergeAll(V);try{return renderPnl();}finally{S.data.pnl=sv;renderPnl._in=false;}}}
   const el=document.getElementById("tab-pnl");if(!el)return;
   if(!S.user){el.innerHTML="";return;}
   const canEdit=S.user.role==="admin";
