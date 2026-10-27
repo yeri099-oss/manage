@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v368</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v369</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -1135,7 +1135,7 @@ async function loadAllData() {
   jobs.push(fsCol("config").doc("bojagiDrinkItems").get().then((d) => { S.data.drinkItems = d.data()?.items || []; }));
   jobs.push(db.collection("salesStatus_months").get().then((snap) => { S.cfmYms = []; snap.forEach((d) => S.cfmYms.push(d.id)); }).catch(() => {}));
   jobs.push(fsCol("config").doc("epidaDrink").get().then((d) => { S.data.epidaDrink = d.data() || { add: [], remove: [] }; }).catch(() => {}));
-  jobs.push(fsCol("payMonthly").get().then((snap)=>{const out={},files={};snap.forEach((d)=>{if(d.id.indexOf("file_")===0)files[d.id.slice(5)]=d.data();else if(d.id==="acctConfig")S.data.payAcct=d.data().acctOf||{};else if(d.id==="taxConfig")S.data.payTax=d.data()||{byName:{}};else if(d.id==="taxTable")S.data.payTaxTable=d.data()||null;else if(d.id==="bizConfig")S.data.payBiz=d.data()||{bizOf:{}};else if(d.id.indexOf("hg_")===0){S.data.payHg=S.data.payHg||{};S.data.payHg[d.id.slice(3)]=d.data();}else if(d.id.indexOf("pach_")===0){S.data.payPach=S.data.payPach||{};S.data.payPach[d.id.slice(5)]=d.data();}else if(d.id.indexOf("taxTpl_")===0){S.data.payTaxTpl=S.data.payTaxTpl||{};S.data.payTaxTpl[d.id.slice(7)]=d.data();}else out[d.id]=d.data();});S.data.payMonthly=out;S.data.payFiles=files;}).catch(()=>{S.data.payMonthly=S.data.payMonthly||{};S.data.payFiles=S.data.payFiles||{};S.data.payAcct=S.data.payAcct||{};}));
+  jobs.push(fsCol("payMonthly").get().then((snap)=>{const out={},files={};snap.forEach((d)=>{if(d.id.indexOf("file_")===0)files[d.id.slice(5)]=d.data();else if(d.id==="acctConfig")S.data.payAcct=d.data().acctOf||{};else if(d.id==="taxConfig")S.data.payTax=d.data()||{byName:{}};else if(d.id==="taxTable")S.data.payTaxTable=d.data()||null;else if(d.id==="bizConfig")S.data.payBiz=d.data()||{bizOf:{}};else if(d.id.indexOf("hg_")===0){S.data.payHg=S.data.payHg||{};S.data.payHg[d.id.slice(3)]=d.data();}else if(d.id.indexOf("pach_")===0){S.data.payPach=S.data.payPach||{};S.data.payPach[d.id.slice(5)]=d.data();}else if(d.id.indexOf("ret_")===0){S.data.payRet=S.data.payRet||{};S.data.payRet[d.id.slice(4)]=d.data();}else if(d.id.indexOf("taxTpl_")===0){S.data.payTaxTpl=S.data.payTaxTpl||{};S.data.payTaxTpl[d.id.slice(7)]=d.data();}else out[d.id]=d.data();});S.data.payMonthly=out;S.data.payFiles=files;}).catch(()=>{S.data.payMonthly=S.data.payMonthly||{};S.data.payFiles=S.data.payFiles||{};S.data.payAcct=S.data.payAcct||{};}));
   jobs.push(fsCol("config").doc("bojagiPosMap").get().then((d) => { S.data.bojagiPosMap = (d.data() || {}).map || {}; }).catch(() => {}));
   if(S.user&&S.user.role==="admin")jobs.push(fsCol("buy").get().then((snap)=>{const B={files:{},close:{},stat:{},vendorMap:{}};snap.forEach((d)=>{const id=d.id;if(id==="file_close")B.files.close=d.data();else if(id==="file_stat")B.files.stat=d.data();else if(id.indexOf("close_")===0)B.close[id.slice(6)]=d.data();else if(id.indexOf("stat_")===0)B.stat[id.slice(5)]=d.data();else if(id==="vendorMap"){B.vendorMap=(d.data()||{}).map||{};B.vendorSkip=(d.data()||{}).skip||{};}else if(id==="expenseCheck"){B.expense=d.data()||{months:{}};}else if(id.indexOf("free_")===0){B.free=B.free||{};B.free[id.slice(5)]=d.data();}else if(id.indexOf("card_")===0){B.card=B.card||{};B.card[id.slice(5)]=d.data();}else if(id==="cardConfig"){B.cardCfg=d.data()||{};}else if(id.indexOf("debit_")===0){B.debit=B.debit||{};B.debit[id.slice(6)]=d.data();}else if(id==="debitConfig"){B.debitCfg=d.data()||{};}});S.data.buy=B;}).catch(()=>{S.data.buy=S.data.buy||{files:{},close:{},stat:{},vendorMap:{}};}));
   await Promise.all(jobs);
@@ -10482,6 +10482,7 @@ function renderPay(){
       +`<button class="paychip${active==="__ecount"?" on":""}" style="border-style:dashed" onclick="window.__pay.sheet='__ecount';renderPay()">🧾 이카운트 입력</button>`
       +`<button class="paychip${active==="__hg"?" on":""}" style="border-style:dashed" onclick="window.__pay.sheet='__hg';renderPay()">🏛 한가람 대조</button>`
       +`<button class="paychip${active==="__pach"?" on":""}" style="border-style:dashed" onclick="window.__pay.sheet='__pach';renderPay()">🧾 파출비용</button>`
+      +`<button class="paychip${active==="__ret"?" on":""}" style="border-style:dashed" onclick="window.__pay.sheet='__ret';renderPay()">💼 퇴직금</button>`
       +`<button class="paychip${active==="__tax"?" on":""}" style="border-style:dashed" onclick="window.__pay.sheet='__tax';renderPay()">📤 세무사무실 자료</button>`
       +(active==="상용직급여"?`<button class="paychip" style="border-style:dashed;margin-left:6px" onclick="payPasteOpen()">📋 최종 표 붙여넣어 대조</button>`:"");
     let body="";
@@ -10515,6 +10516,8 @@ function renderPay(){
       <div class="table-wrap"><table class="rpt" style="font-size:12.5px"><thead><tr><th class="l">사원</th><th>국민연금</th><th>건강보험</th><th>장기요양</th><th>고용보험</th><th>가족수(자녀 포함 전체)</th><th>8~20세 자녀</th><th>세액표</th><th>임원 일급</th><th>기준 실측(총액→소득세)</th></tr></thead><tbody>${rows3}</tbody></table></div>`;
     }else if(active==="__ecount"){
       body=(typeof payEcBody==="function")?payEcBody():"";
+    }else if(active==="__ret"){
+      body=(typeof payRetBody==="function")?payRetBody():"";
     }else if(active==="__pach"){
       body=(typeof payPachBody==="function")?payPachBody():"";
     }else if(active==="__tax"){
@@ -15957,6 +15960,104 @@ function payPachBody(){
       <span style="margin-left:auto">북촌 <b>${fmt(bc)}</b> · 피다 <b>${fmt(ep)}</b> · 합계 <b style="font-size:15px">${fmt(bc+ep)}</b>원</span></div>
     ${true?`<div class="table-wrap"><table class="rpt" id="pachTbl" style="font-size:12.5px"><thead><tr><th>날짜</th><th>요일</th><th>파출(이름)</th><th>금액</th><th title="비우면 4시간">시간 <span class="unit" style="font-weight:400">(기본 4)</span></th><th>위치</th><th>국적</th><th>비자</th><th>비고</th><th></th></tr></thead><tbody>${rows}</tbody>
       <tfoot><tr class="total"><td colspan="3" class="l">합계 (${R.length}건)</td><td style="text-align:right">${fmt(bc+ep)}</td><td colspan="6"></td></tr></tfoot></table></div>`:`<div class="footnote">아직 내역이 없어요 — 줄을 추가하거나 엑셀에서 가져오세요.</div>`}
+  </div>`;
+}
+/* ===== v369: 퇴직금 — 퇴직소득원천징수영수증(PDF) + 중도퇴사 근로소득원천징수영수증(PDF)을 올리면 이카운트 전표로 정리
+   퇴직금:  3차 8089 퇴직급여(판) / 거래처 이름 / 차변 퇴직급여
+            4대 2547 예수금(원천세) 95164 국세 · 95165 지방세 / 대변 차감원천징수세액
+            4대 2540 미지급급여 / 거래처 이름 / 대변 퇴직급여 − 세금
+   퇴직정산: 4대 2547 국세·지방세 / 대변 차감징수세액(환급이면 −)  ·  4대 2540 미지급급여 / 대변 −(세금 합)
+   저장: payMonthly / ret_{YYMM} = {list:[{name,ret,tax,ltax,stax,sltax,dept,src}]} ===== */
+function retKey(){const ym=payYm();return ym?String(ym.y).slice(2)+String(ym.m).padStart(2,"0"):"";}
+function retDoc(){S.data.payRet=S.data.payRet||{};const k=retKey();S.data.payRet[k]=S.data.payRet[k]||{list:[]};return S.data.payRet[k];}
+async function retSave(){const k=retKey();if(IS_DEMO||!k)return;try{await fsCol("payMonthly").doc("ret_"+k).set(JSON.parse(JSON.stringify(retDoc())));}catch(e){console.error(e);toast("퇴직금 저장 실패",true);}}
+const RET_DEPTS=["꽃밥이야기","꽃밥마켓","꽃밥에피다","보자기꽃밥"];
+function retParse(pages){
+  const lines=[].concat(...pages).map(l=>l.text);
+  const all=lines.join("\n");
+  const nums=(t)=>(t.match(/-?\d{1,3}(?:,\d{3})+|-?\d+/g)||[]).map(x=>Number(x.replace(/,/g,"")));
+  const nameOf=()=>{for(const t of lines){const m=t.replace(/\s+/g," ").match(/성\s*명\s+([가-힣A-Za-z][가-힣A-Za-z ]{0,10}?)\s+(?:⑦|\(7\)|\d)/);if(m)return m[1].replace(/\s+/g,"");}return "";};
+  if(/퇴직소득원천징수영수증/.test(all.replace(/\s+/g,""))){
+    let ret=0,tax=0,ltax=0,co="";
+    for(const t of lines){const z=t.replace(/\s+/g,"");
+      if(!ret&&/^⑮퇴직급여/.test(z)){const n=nums(t).filter(v=>v>=1000);if(n.length)ret=n[n.length-1];}
+      if(/차감원천징수세액/.test(z)){const n=nums(t.replace(/차감원천징수세액\s*\([^)]*\)/,"")).filter(v=>Math.abs(v)>=10);if(n.length>=2&&!tax){tax=n[0];ltax=n[1];}}
+      if(!co){const m=t.match(/법인명\(상호\)\s*(\S+)/);if(m)co=m[1];}
+    }
+    return {kind:"ret",name:nameOf(),ret,tax,ltax,co};
+  }
+  if(/근로소득원천징수영수증|근로소득지급명세서/.test(all.replace(/\s+/g,""))){
+    let stax=null,sltax=null;
+    for(const t of lines){const z=t.replace(/\s+/g,"");if(/차감징수세액/.test(z)&&stax==null){const n=nums(t.replace(/\(\d+\)/g,"").replace(/\(\(71\)[^)]*\)/,""));const m=n.filter(v=>Math.abs(v)>=1||v===0);if(m.length>=2){stax=m[m.length-2];sltax=m[m.length-1];}else if(m.length===1){stax=m[0];}}}
+    return {kind:"settle",name:nameOf(),stax:stax||0,sltax:sltax||0};
+  }
+  return null;
+}
+window.retPick=async function(inp){
+  const files=[...(inp.files||[])];inp.value="";if(!files.length)return;
+  const D=retDoc();const msg=[];
+  for(const f of files){
+    try{
+      toast(f.name+" 읽는 중…");
+      const P=retParse(await hgPdfLines(await f.arrayBuffer()));
+      if(!P||!P.name){msg.push("⚠ "+f.name+": 퇴직소득·근로소득 원천징수영수증이 아니거나 이름을 못 읽었어요");continue;}
+      let x=D.list.find(v=>v.name===P.name);
+      if(!x){const g=(typeof pecBizOf==="function"&&pecBizOf(P.name))||null;x={name:P.name,dept:"꽃밥이야기",ret:0,tax:0,ltax:0,stax:0,sltax:0,hasRet:false,hasSettle:false};D.list.push(x);}
+      if(P.kind==="ret"){x.ret=P.ret;x.tax=P.tax;x.ltax=P.ltax;x.hasRet=true;msg.push(`${P.name} 퇴직금 ${fmt(P.ret)} (소득세 ${fmt(P.tax)} · 지방세 ${fmt(P.ltax)})`);}
+      else{x.stax=P.stax;x.sltax=P.sltax;x.hasSettle=true;msg.push(`${P.name} 퇴직정산 소득세 ${fmt(P.stax)} · 지방세 ${fmt(P.sltax)}`);}
+    }catch(e){console.error(e);msg.push("⚠ "+f.name+": "+(e.message||e));}
+  }
+  retSave();renderPay();toast(msg.join(" / "));
+};
+window.retEdit=function(i,f,v){const x=retDoc().list[i];if(!x)return;if(f==="dept"||f==="name")x[f]=String(v).trim();else{const n=Number(String(v).replace(/[^\d.-]/g,""));x[f]=isNaN(n)?0:n;}retSave();renderPay();};
+window.retDel=function(i){const D=retDoc();if(!confirm(D.list[i].name+" 님 퇴직금 내역을 지울까요?"))return;D.list.splice(i,1);retSave();renderPay();};
+function retRows(){
+  const rows=[];
+  for(const x of retDoc().list){
+    const add=(grp,code,acct,cc,cn,dr,cr,memo)=>{if(!dr&&!cr)return;rows.push({grp,code,acct,cc,cn,dr,cr,memo,dept:x.dept||"꽃밥이야기",nm:x.name});};
+    if(x.hasRet||x.ret){
+      const m="퇴직금 "+x.name;
+      add("3차","8089","퇴직급여(판)","",x.name,x.ret,0,m);
+      add("4대","2547","예수금(원천세)","95164","국세",0,x.tax,m);
+      add("4대","2547","예수금(원천세)","95165","지방세",0,x.ltax,m);
+      add("4대","2540","미지급급여","",x.name,0,(x.ret||0)-(x.tax||0)-(x.ltax||0),m);
+    }
+    if(x.hasSettle||x.stax||x.sltax){
+      const m="퇴직정산 "+x.name;
+      add("4대","2547","예수금(원천세)","95164","국세",0,x.stax,m);
+      add("4대","2547","예수금(원천세)","95165","지방세",0,x.sltax,m);
+      add("4대","2540","미지급급여","",x.name,0,-((x.stax||0)+(x.sltax||0)),m);
+    }
+  }
+  return rows;
+}
+window.retCopy=function(){
+  const R=retRows();if(!R.length){toast("정리된 내역이 없어요",true);return;}
+  const txt=R.map(x=>[x.grp,x.code,x.acct,x.cc,x.cn,x.dr||"",x.cr||"","",x.memo,x.dept].join("\t")).join("\n");
+  navigator.clipboard.writeText(txt).then(()=>toast("전표 "+R.length+"줄을 복사했어요 — 이카운트 전표 입력 첫 칸(구분)에 붙여넣으세요")).catch(()=>toast("복사 실패",true));
+};
+function payRetBody(){
+  const D=retDoc(),R=retRows();
+  const inS="font:inherit;font-size:12.5px;padding:3px 6px;border:1px solid var(--line,#ddd);border-radius:6px";
+  const ni=(i,f,v,w)=>`<input style="${inS};width:${w}px;text-align:right" value="${v?fmt(v):""}" onchange="retEdit(${i},'${f}',this.value)">`;
+  const ppl=D.list.map((x,i)=>`<tr><td class="l"><b>${esc(x.name)}</b></td>
+    <td><select style="${inS}" onchange="retEdit(${i},'dept',this.value)">${RET_DEPTS.map(d=>`<option ${x.dept===d?"selected":""}>${d}</option>`).join("")}</select></td>
+    <td>${ni(i,"ret",x.ret,110)}</td><td>${ni(i,"tax",x.tax,90)}</td><td>${ni(i,"ltax",x.ltax,80)}</td>
+    <td>${ni(i,"stax",x.stax,90)}</td><td>${ni(i,"sltax",x.sltax,80)}</td>
+    <td><span class="unit">${x.hasRet?"✓퇴직소득":"—"} · ${x.hasSettle?"✓근로소득(정산)":"—"}</span></td>
+    <td><button class="btn btn-sm" style="padding:1px 7px" onclick="retDel(${i})">×</button></td></tr>`).join("");
+  let dr=0,cr=0;R.forEach(x=>{dr+=x.dr||0;cr+=x.cr||0;});
+  const fN=(n)=>n<0?"−"+fmt(-n):fmt(n);
+  const tr=R.map((x,i)=>{const nb=i>0&&(R[i-1].nm!==x.nm||R[i-1].memo.split(" ")[0]!==x.memo.split(" ")[0]);return `<tr${nb?' style="border-top:2.5px solid #555"':""}><td>${i+1}</td><td>${x.grp}</td><td>${x.code}</td><td class="l">${esc(x.acct)}</td><td>${x.cc}</td><td class="l">${esc(x.cn)}</td><td style="text-align:right">${x.dr?`<b>${fN(x.dr)}</b>`:""}</td><td style="text-align:right">${x.cr?fN(x.cr):""}</td><td class="l">${esc(x.memo)}</td><td class="l">${esc(x.dept)}</td></tr>`;}).join("");
+  return `<div class="card"><div class="card-title">💼 퇴직금 <span class="unit">${retKey()?("20"+retKey().slice(0,2)+"년 "+(+retKey().slice(2))+"월"):""}</span></div>
+    <div class="footnote" style="margin:6px 0 10px;line-height:1.7">세무사무실에서 받은 <b>퇴직소득원천징수영수증</b>(퇴직금)과 <b>근로소득원천징수영수증</b>(중도퇴사 정산) PDF를 올리면 이카운트 전표로 정리해요. 둘 다 같이 골라도 돼요. 숫자는 아래에서 고칠 수 있어요.</div>
+    <label class="btn btn-primary" style="cursor:pointer">📂 원천징수영수증 PDF 올리기<input type="file" accept=".pdf,application/pdf" multiple style="display:none" onchange="retPick(this)"></label>
+    ${D.list.length?`<div class="table-wrap" style="margin-top:10px"><table class="rpt" style="font-size:12.5px"><thead><tr><th class="l">이름</th><th>부서</th><th>퇴직급여</th><th>퇴직 소득세</th><th>퇴직 지방세</th><th>정산 소득세</th><th>정산 지방세</th><th>읽은 서류</th><th></th></tr></thead><tbody>${ppl}</tbody></table></div>
+    <div class="footnote">퇴직 소득세·지방세 = 퇴직소득 '차감원천징수세액' · 정산 = 근로소득 '(75) 차감징수세액' (환급이면 −)</div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:14px;flex-wrap:wrap"><b>🧾 이카운트 전표</b><button class="btn btn-sm" onclick="retCopy()">📄 표 복사</button>
+      ${dr===cr?`<span style="color:#2F6B3F">차변 ${fmt(dr)} = 대변 ${fmt(cr)} ✓</span>`:`<span class="buy-warn">차변 ${fmt(dr)} / 대변 ${fmt(cr)} — ${fmt(Math.abs(dr-cr))}원 차이</span>`}</div>
+    <div class="table-wrap" style="margin-top:4px"><table class="rpt" style="font-size:12.5px"><thead><tr><th></th><th>구분</th><th>계정코드</th><th class="l">계정명</th><th>거래처코드</th><th class="l">거래처명</th><th>차변</th><th>대변</th><th class="l">적요</th><th class="l">부서</th></tr></thead><tbody>${tr}</tbody>
+      <tfoot><tr class="total"><td colspan="6" class="l">합계</td><td style="text-align:right">${fmt(dr)}</td><td style="text-align:right">${fmt(cr)}</td><td colspan="2"></td></tr></tfoot></table></div>`:`<div class="footnote" style="margin-top:10px">아직 올린 서류가 없어요.</div>`}
   </div>`;
 }
 /* === 용역직급여 (사업소득 3.3%) === */
