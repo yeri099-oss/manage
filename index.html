@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v365</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v366</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -15353,7 +15353,8 @@ function pecCalc(){
     const r=row.r;
     const x={name:row.name,biz:pecBizOf(row.name)||pecGuess(row.name),auto:!pecBizOf(row.name),
       pay:g(cm.pay+r),alw:g(cm.alw+r),bon:g(cm.bon+r)+(cm.sbon?g(cm.sbon+r):0),tot:g(cm.tot+r),
-      tax:g(cm.tax+r),ltax:g(cm.ltax+r),np:g(cm.np+r),hi:g(cm.hi+r),ltc:g(cm.ltc+r),ei:g(cm.ei+r),ded:g(cm.ded+r),net:g(cm.net+r),pre:cm.pre?g(cm.pre+r):0};
+      tax:g(cm.tax+r),ltax:g(cm.ltax+r),np:g(cm.np+r),hi:g(cm.hi+r),ltc:g(cm.ltc+r),ei:g(cm.ei+r),ded:g(cm.ded+r),net:g(cm.net+r),pre:cm.pre?g(cm.pre+r):0,
+      bon0:g(cm.bon+r),sbon:cm.sbon?g(cm.sbon+r):0};
     per.push(x);
     if(!x.biz){un.push(x.name);continue;}
     F.forEach(f=>{sum[x.biz][f]+=x[f];sum.all[f]+=x[f];});
@@ -15513,6 +15514,20 @@ async function ptxBuild(file){
     const sty={},fml={},stT={};cols.forEach(L=>{sty[L]=T.sOf(L+d0);fml[L]=T.fOf(L+d0);stT[L]=tr?T.sOf(L+tr):sty[L];});
     const ra=T.rowAttrs(d0),rt=tr?T.rowAttrs(tr):ra;
     const F={"급여":"pay","제수당":"alw","상여금":"bon","소득세":"tax","지방소득세":"ltax","국민연금":"np","건강보험":"hi","장기요양보험":"ltc","고용보험":"ei"};
+    /* v366: 특별상여금·기지급액 — 이번 달에 있으면 앱 상용직급여처럼 실지급액 뒤에 열을 붙임
+       (지급총액 = 급여+제수당+상여금+특별상여금, 공제총액 = 공제 합+기지급액, 상여금 칸은 월 상여만) */
+    const needSb=emps.some(x=>x&&x.sbon),needPre=emps.some(x=>x&&x.pre);
+    const lastHdrI=Math.max(...Object.values(hdr).map(L=>payColIdx(L)));
+    const hdrS=T.sOf(payIdxCol(lastHdrI)+hr),hdrRA=T.rowAttrs(hr);
+    let sbL=hdr["특별상여금"]||null,preL=hdr["기지급액"]||null,addI=lastHdrI;
+    const newCols=[];
+    if(needSb&&!sbL){sbL=payIdxCol(++addI);newCols.push([sbL,"특별상여금"]);}
+    if(needPre&&!preL){preL=payIdxCol(++addI);newCols.push([preL,"기지급액"]);}
+    for(const [L,t] of newCols){hdr[t]=L;if(!cols.includes(L))cols.push(L);const lastL=payIdxCol(lastHdrI);sty[L]=sty[lastL];stT[L]=stT[lastL];fml[L]=null;T.setCell(L+hr,t,hdrS);}
+    const totL=hdr["지급총액"],dedL=hdr["공제총액"];
+    if(sbL&&totL&&fml[totL]&&fml[totL].indexOf(sbL+d0)<0)fml[totL]=fml[totL]+"+"+sbL+d0;
+    if(preL&&dedL&&fml[dedL]&&fml[dedL].indexOf(preL+d0)<0)fml[dedL]=fml[dedL]+"+"+preL+d0;
+    const useBon0=!!sbL;
     T.dropFrom(d0);
     const list=emps.length?emps:[null];
     list.forEach((x,i)=>{
@@ -15522,6 +15537,9 @@ async function ptxBuild(file){
         let v=null;
         if(head==="사원명")v=x?x.name:"";
         else if(fml[L])v={f:ptxReRow(fml[L],d0,r)};
+        else if(head==="상여금"&&x&&useBon0){v=x.bon0||null;}
+        else if(head==="특별상여금"&&x){v=x.sbon||null;}
+        else if(head==="기지급액"&&x){v=x.pre||null;}
         else if(F[head]&&x){v=x[F[head]]||0;if(!v&&/^(제수당|상여금)$/.test(head))v=null;}
         if(v===null&&sty[L]==null)continue;
         cells.push(T.mkCell(L+r,v,sty[L]));
@@ -15627,10 +15645,13 @@ async function ptxBuild(file){
     const tA=tRow?T.sOf("A"+tRow)||dA:dA,tB=tRow?T.sOf("B"+tRow)||tA:tA,tC=tRow?T.sOf("C"+tRow)||dC:dC;
     const r1=T.rowAttrs(1),r2=T.rowAttrs(2),r3=T.rowAttrs(3),rT=tRow?T.rowAttrs(tRow):r3;
     const title=txt(sh,"A1")||"일용직 출근기록부";
+    /* 제목 병합 폭: 원본(예: A1:E1)보다 좁아지지 않게 */
+    let tEndI=5;{const mg=doc.getElementsByTagName("mergeCell");for(const m of mg){const rf=m.getAttribute("ref")||"";const mm=rf.match(/^A1:([A-Z]+)1$/);if(mm)tEndI=Math.max(tEndI,payColIdx(mm[1]));}}
     T.dropFrom(1);
     const nm=H.map(x=>x.name);const nc=Math.max(nm.length,1);
     const lastL=payIdxCol(2+nc),totL=payIdxCol(3+nc);
-    const c1=[T.mkCell("A1",title,titleS)];for(let c=2;c<=2+nc;c++)c1.push(T.mkCell(payIdxCol(c)+"1",null,titleS));
+    const tEnd=Math.max(Math.min(tEndI,5),2+nc),tEndL=payIdxCol(tEnd);/* 사람이 적어도 제목은 E열까지 */
+    const c1=[T.mkCell("A1",title,titleS)];for(let c=2;c<=tEnd;c++)c1.push(T.mkCell(payIdxCol(c)+"1",null,titleS));
     T.sd.appendChild(T.mkRow(1,r1,c1));
     const c2=[T.mkCell("A2","날짜",hA),T.mkCell("B2","요일",hB)];nm.forEach((n,i)=>c2.push(T.mkCell(payIdxCol(3+i)+"2",n,hC)));if(!nm.length)c2.push(T.mkCell("C2",null,hC));
     T.sd.appendChild(T.mkRow(2,r2,c2));
@@ -15645,7 +15666,7 @@ async function ptxBuild(file){
     for(let i=0;i<nc;i++){const L=payIdxCol(3+i);ct.push(T.mkCell(L+tR,{f:`SUM(${L}3:${L}${2+nd})`},tC));}
     ct.push(T.mkCell(totL+tR,{f:`SUM(C${tR}:${lastL}${tR})`},tC));
     T.sd.appendChild(T.mkRow(tR,rT,ct));
-    T.setMerges([`A1:${lastL}1`,`A${tR}:B${tR}`]);T.setDim();
+    T.setMerges([`A1:${tEndL}1`,`A${tR}:B${tR}`]);T.setDim();
     if(H.length&&!anyDay)notes.push(attSh.name+": 시급직급여에 날짜별 시간 칸이 없어 이름·날짜만 채웠어요 (시간은 직접)");
   }
   /* ---- 5) 입사및퇴사 ---- */
