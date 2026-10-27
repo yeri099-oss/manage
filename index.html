@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v364</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v365</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -15405,13 +15405,14 @@ function ptxHourly(){
   const hv=payMkVal(hs,ed);
   let hr=0;for(let r=1;r<=6&&!hr;r++)if(sv("B"+r).replace(/\s+/g,"")==="성명"||sv("A"+r).replace(/\s+/g,"")==="성명")hr=r;
   if(!hr)return [];
-  let payC=null,hourC=null;const dayC={};
+  let payC=null,hourC=null,rateC=null;const dayC={};
   for(let c=3;c<=hs.maxC;c++){
     const L=payIdxCol(c);
     for(let r=1;r<=hr;r++){
       const t=sv(L+r).replace(/\s+/g,"");if(!t)continue;
       if(!payC&&t==="지급총액")payC=L;
       else if(!hourC&&/^(총|근무)?시간(계|합계)?$/.test(t))hourC=L;
+      else if(!rateC&&/^(시급|단가)$/.test(t))rateC=L;
       else{const m=t.match(/^(\d{1,2})일?$/);if(m&&+m[1]>=1&&+m[1]<=31&&dayC[+m[1]]==null)dayC[+m[1]]=L;}
     }
   }
@@ -15425,7 +15426,8 @@ function ptxHourly(){
     const amt=Math.round(hv(payC+r)||0);if(!amt)continue;
     const days={};let hsum=0;for(const d in dayC){const v=hv(dayC[d]+r);if(v){days[d]=v;hsum+=v;}}
     const biz=(grp.indexOf("인사")>=0||grp.indexOf("피다")>=0)?"ep":"mi";
-    out.push({name:b,biz,amt,hours:hourC?hv(hourC+r):(hsum||null),days});
+    const rate=rateC?hv(rateC+r):0;
+    out.push({name:b,biz,amt,hours:hourC?hv(hourC+r):(hsum||(rate>0?Math.round(amt/rate*2)/2:null)),days});
   }
   return out;
 }
@@ -15483,9 +15485,19 @@ async function ptxBuild(file){
   const Y=+ym.y,M=+ym.m,yymm=String(Y).slice(2)+String(M).padStart(2,"0");
   const notes=[];
   const C=pecCalc();if(!C)throw new Error("상용직급여를 찾지 못했어요");
-  const un=C.per.filter(x=>!x.biz).map(x=>x.name);
+  const un=C.per.filter(x=>!x.biz).map(x=>x.name);/* (틀에 있으면 아래에서 틀 기준으로 정해짐) */
   if(un.length)notes.push("사업장 미지정(이카운트 입력 탭에서 지정): "+un.join(", "));
-  const emps=C.per.filter(x=>x.biz&&inBiz(x.biz));
+  /* v365: 사업장은 틀(지난달 보낸 파일)에 있던 대로 — 틀에 없는 새 직원만 이카운트 입력 탭 사업장 설정 */
+  const peek=async(b)=>{if(b===biz)return W;const t=(S.data.payTaxTpl||{})[b];const src=t&&((t.last&&t.last.ym===yymm&&t.base)?t.base:(t.last||t.base));/* 이번 달 결과가 아니라 지난달 틀 기준 */if(!src||!src.b64)return null;try{return await pumParse(ptxU8(src.b64));}catch(e){return null;}};
+  const tplBiz={},tplOrder={};let otherHasBizSh=null;
+  for(const b of["mi","ep"]){
+    const W2=await peek(b);if(!W2)continue;
+    const s0=W2.sheets[0];let i0=0;
+    for(let r=1;r<=s0.maxR;r++){const a=s0.cells["A"+r];const t=a&&a.typ==="str"?String(a.v).trim():"";const k=ptxN(t);if(!k||k==="사원명")continue;if(/계$|합계/.test(k))break;if(!tplBiz[k]){tplBiz[k]=b;tplOrder[k]=i0++;}}
+    if(b!==biz)otherHasBizSh=W2.sheets.some(x=>/사업소득/.test(x.name));
+  }
+  const bizOfEmp=x=>tplBiz[ptxN(x.name)]||(x.biz==="ep"?"ep":x.biz?"mi":null);
+  const emps=C.per.filter(x=>bizOfEmp(x)===biz).sort((a,b)=>{const ia=tplOrder[ptxN(a.name)],ib=tplOrder[ptxN(b.name)];return (ia==null?999:ia)-(ib==null?999:ib);});
   const txt=(sh,ref)=>{const c=sh.cells[ref];return c&&c.typ==="str"?String(c.v).trim():"";};
   const docs={};
   const getDoc=async(sh)=>{if(!docs[sh.path])docs[sh.path]=par.parseFromString(await zip.file(sh.path).async("string"),"application/xml");return docs[sh.path];};
@@ -15534,8 +15546,9 @@ async function ptxBuild(file){
       const sty={},fml={},stS={};cols.forEach(L=>{sty[L]=T.sOf(L+d0);fml[L]=T.fOf(L+d0);stS[L]=sr?T.sOf(L+sr):sty[L];});
       const ra=T.rowAttrs(d0),rs=sr?T.rowAttrs(sr):ra;
       const Yd=(typeof pecYong==="function")?pecYong():null;
-      const ppl=Yd?Yd.per.filter(x=>x.biz&&inBiz(x.biz)):[];
-      const ynb=Yd?Yd.per.filter(x=>!x.biz).map(x=>x.name):[];if(ynb.length)notes.push("용역직 사업장 미지정: "+ynb.join(", "));
+      /* 다른 사업장 파일에 사업소득 시트가 없으면 용역직급여 전원을 이 파일에 */
+      const allHere=otherHasBizSh===false||otherHasBizSh===null;
+      const ppl=Yd?Yd.per.filter(x=>allHere||(x.biz&&inBiz(x.biz))||!x.biz):[];
       T.dropFrom(d0);
       const list=ppl.length?ppl:[null];
       list.forEach((x,i)=>{
@@ -15608,8 +15621,10 @@ async function ptxBuild(file){
   if(attSh){
     const sh=attSh,doc=await getDoc(sh),T=ptxSheetTools(doc);
     const titleS=T.sOf("A1"),hA=T.sOf("A2"),hB=T.sOf("B2"),hC=T.sOf("C2")||hB,dA=T.sOf("A3"),dB=T.sOf("B3"),dC=T.sOf("C3")||dB;
+    /* 2일부터는 위 테두리가 있는 원본 4행 서식 */
+    const dA2=T.sOf("A4")||dA,dB2=T.sOf("B4")||dB,dC2=T.sOf("C4")||dC;
     let tRow=0;for(let r=4;r<=sh.maxR;r++){if(sh.cells["C"+r]&&sh.cells["C"+r].f){tRow=r;break;}}
-    const tA=tRow?T.sOf("A"+tRow)||dA:dA,tC=tRow?T.sOf("C"+tRow)||dC:dC;
+    const tA=tRow?T.sOf("A"+tRow)||dA:dA,tB=tRow?T.sOf("B"+tRow)||tA:tA,tC=tRow?T.sOf("C"+tRow)||dC:dC;
     const r1=T.rowAttrs(1),r2=T.rowAttrs(2),r3=T.rowAttrs(3),rT=tRow?T.rowAttrs(tRow):r3;
     const title=txt(sh,"A1")||"일용직 출근기록부";
     T.dropFrom(1);
@@ -15622,11 +15637,11 @@ async function ptxBuild(file){
     const nd=new Date(Y,M,0).getDate(),WD="일월화수목금토";
     let anyDay=false;
     for(let d=1;d<=nd;d++){
-      const r=2+d,cs=[T.mkCell("A"+r,d,dA),T.mkCell("B"+r,WD[new Date(Y,M-1,d).getDay()],dB)];
-      for(let i=0;i<nc;i++){const x=H[i];const v=x&&x.days[d]?x.days[d]:null;if(v)anyDay=true;cs.push(T.mkCell(payIdxCol(3+i)+r,v,dC));}
+      const r=2+d,cs=[T.mkCell("A"+r,d,d===1?dA:dA2),T.mkCell("B"+r,WD[new Date(Y,M-1,d).getDay()],d===1?dB:dB2)];
+      for(let i=0;i<nc;i++){const x=H[i];const v=x&&x.days[d]?x.days[d]:null;if(v)anyDay=true;cs.push(T.mkCell(payIdxCol(3+i)+r,v,d===1?dC:dC2));}
       T.sd.appendChild(T.mkRow(r,r3,cs));
     }
-    const tR=3+nd,ct=[T.mkCell("A"+tR,"합계",tA),T.mkCell("B"+tR,null,tA)];
+    const tR=3+nd,ct=[T.mkCell("A"+tR,"합계",tA),T.mkCell("B"+tR,null,tB)];
     for(let i=0;i<nc;i++){const L=payIdxCol(3+i);ct.push(T.mkCell(L+tR,{f:`SUM(${L}3:${L}${2+nd})`},tC));}
     ct.push(T.mkCell(totL+tR,{f:`SUM(C${tR}:${lastL}${tR})`},tC));
     T.sd.appendChild(T.mkRow(tR,rT,ct));
