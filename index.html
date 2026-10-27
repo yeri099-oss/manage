@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v369</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v370</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -15980,7 +15980,8 @@ function retParse(pages){
   if(/퇴직소득원천징수영수증/.test(all.replace(/\s+/g,""))){
     let ret=0,tax=0,ltax=0,co="";
     for(const t of lines){const z=t.replace(/\s+/g,"");
-      if(!ret&&/^⑮퇴직급여/.test(z)){const n=nums(t).filter(v=>v>=1000);if(n.length)ret=n[n.length-1];}
+      /* 서식마다 줄 앞에 '퇴직'이 붙기도 함 (2026.5 개정 서식) */
+      if(!ret&&/⑮퇴직급여/.test(z)){const n=nums(t.replace(/^.*?⑮/,"")).filter(v=>v>=1000);if(n.length)ret=n[n.length-1];}
       if(/차감원천징수세액/.test(z)){const n=nums(t.replace(/차감원천징수세액\s*\([^)]*\)/,"")).filter(v=>Math.abs(v)>=10);if(n.length>=2&&!tax){tax=n[0];ltax=n[1];}}
       if(!co){const m=t.match(/법인명\(상호\)\s*(\S+)/);if(m)co=m[1];}
     }
