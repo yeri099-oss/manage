@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v360</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v361</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -1135,7 +1135,7 @@ async function loadAllData() {
   jobs.push(fsCol("config").doc("bojagiDrinkItems").get().then((d) => { S.data.drinkItems = d.data()?.items || []; }));
   jobs.push(db.collection("salesStatus_months").get().then((snap) => { S.cfmYms = []; snap.forEach((d) => S.cfmYms.push(d.id)); }).catch(() => {}));
   jobs.push(fsCol("config").doc("epidaDrink").get().then((d) => { S.data.epidaDrink = d.data() || { add: [], remove: [] }; }).catch(() => {}));
-  jobs.push(fsCol("payMonthly").get().then((snap)=>{const out={},files={};snap.forEach((d)=>{if(d.id.indexOf("file_")===0)files[d.id.slice(5)]=d.data();else if(d.id==="acctConfig")S.data.payAcct=d.data().acctOf||{};else if(d.id==="taxConfig")S.data.payTax=d.data()||{byName:{}};else if(d.id==="taxTable")S.data.payTaxTable=d.data()||null;else if(d.id==="bizConfig")S.data.payBiz=d.data()||{bizOf:{}};else if(d.id.indexOf("hg_")===0){S.data.payHg=S.data.payHg||{};S.data.payHg[d.id.slice(3)]=d.data();}else out[d.id]=d.data();});S.data.payMonthly=out;S.data.payFiles=files;}).catch(()=>{S.data.payMonthly=S.data.payMonthly||{};S.data.payFiles=S.data.payFiles||{};S.data.payAcct=S.data.payAcct||{};}));
+  jobs.push(fsCol("payMonthly").get().then((snap)=>{const out={},files={};snap.forEach((d)=>{if(d.id.indexOf("file_")===0)files[d.id.slice(5)]=d.data();else if(d.id==="acctConfig")S.data.payAcct=d.data().acctOf||{};else if(d.id==="taxConfig")S.data.payTax=d.data()||{byName:{}};else if(d.id==="taxTable")S.data.payTaxTable=d.data()||null;else if(d.id==="bizConfig")S.data.payBiz=d.data()||{bizOf:{}};else if(d.id.indexOf("hg_")===0){S.data.payHg=S.data.payHg||{};S.data.payHg[d.id.slice(3)]=d.data();}else if(d.id.indexOf("pach_")===0){S.data.payPach=S.data.payPach||{};S.data.payPach[d.id.slice(5)]=d.data();}else out[d.id]=d.data();});S.data.payMonthly=out;S.data.payFiles=files;}).catch(()=>{S.data.payMonthly=S.data.payMonthly||{};S.data.payFiles=S.data.payFiles||{};S.data.payAcct=S.data.payAcct||{};}));
   jobs.push(fsCol("config").doc("bojagiPosMap").get().then((d) => { S.data.bojagiPosMap = (d.data() || {}).map || {}; }).catch(() => {}));
   if(S.user&&S.user.role==="admin")jobs.push(fsCol("buy").get().then((snap)=>{const B={files:{},close:{},stat:{},vendorMap:{}};snap.forEach((d)=>{const id=d.id;if(id==="file_close")B.files.close=d.data();else if(id==="file_stat")B.files.stat=d.data();else if(id.indexOf("close_")===0)B.close[id.slice(6)]=d.data();else if(id.indexOf("stat_")===0)B.stat[id.slice(5)]=d.data();else if(id==="vendorMap"){B.vendorMap=(d.data()||{}).map||{};B.vendorSkip=(d.data()||{}).skip||{};}else if(id==="expenseCheck"){B.expense=d.data()||{months:{}};}else if(id.indexOf("free_")===0){B.free=B.free||{};B.free[id.slice(5)]=d.data();}else if(id.indexOf("card_")===0){B.card=B.card||{};B.card[id.slice(5)]=d.data();}else if(id==="cardConfig"){B.cardCfg=d.data()||{};}else if(id.indexOf("debit_")===0){B.debit=B.debit||{};B.debit[id.slice(6)]=d.data();}else if(id==="debitConfig"){B.debitCfg=d.data()||{};}});S.data.buy=B;}).catch(()=>{S.data.buy=S.data.buy||{files:{},close:{},stat:{},vendorMap:{}};}));
   await Promise.all(jobs);
@@ -10481,6 +10481,7 @@ function renderPay(){
     const chips=chipList.map(s=>`<button class="paychip${s.name===active?" on":""}" onclick="window.__pay.sheet='${esc(s.name)}';renderPay()">${esc(PAY_LABEL[s.name]||s.name)}</button>`).join("")
       +`<button class="paychip${active==="__ecount"?" on":""}" style="border-style:dashed" onclick="window.__pay.sheet='__ecount';renderPay()">🧾 이카운트 입력</button>`
       +`<button class="paychip${active==="__hg"?" on":""}" style="border-style:dashed" onclick="window.__pay.sheet='__hg';renderPay()">🏛 한가람 대조</button>`
+      +`<button class="paychip${active==="__pach"?" on":""}" style="border-style:dashed" onclick="window.__pay.sheet='__pach';renderPay()">🧾 파출비용</button>`
       +`<button class="paychip${active==="__tax"?" on":""}" style="border-style:dashed" onclick="window.__pay.sheet='__tax';renderPay()">📤 세무사무실 자료</button>`
       +(active==="상용직급여"?`<button class="paychip" style="border-style:dashed;margin-left:6px" onclick="payPasteOpen()">📋 최종 표 붙여넣어 대조</button>`:"");
     let body="";
@@ -10514,6 +10515,8 @@ function renderPay(){
       <div class="table-wrap"><table class="rpt" style="font-size:12.5px"><thead><tr><th class="l">사원</th><th>국민연금</th><th>건강보험</th><th>장기요양</th><th>고용보험</th><th>가족수(자녀 포함 전체)</th><th>8~20세 자녀</th><th>세액표</th><th>임원 일급</th><th>기준 실측(총액→소득세)</th></tr></thead><tbody>${rows3}</tbody></table></div>`;
     }else if(active==="__ecount"){
       body=(typeof payEcBody==="function")?payEcBody():"";
+    }else if(active==="__pach"){
+      body=(typeof payPachBody==="function")?payPachBody():"";
     }else if(active==="__tax"){
       body=(typeof payTaxBody==="function")?payTaxBody():"";
     }else if(active==="__hg"){
@@ -15556,7 +15559,13 @@ async function ptxBuild(file){
     }
   }
   /* ---- 3) 일용직 ---- */
-  const H=ptxHourly().filter(x=>x.biz===biz);
+  /* 일용직 = 시급직급여(파출 제외) + 🧾 파출비용 (북촌 → 꽃밥이야기, 피다 → 꽃밥에피다), 같은 이름은 합침 */
+  const H=ptxHourly().filter(x=>x.biz===biz).map(x=>Object.assign({info:{}},x));
+  for(const q of pachPeople().filter(x=>x.biz===biz)){
+    const o=H.find(x=>ptxN(x.name)===ptxN(q.name));
+    if(o){o.amt+=q.amt;o.hours=(o.hours||0)+q.hours;for(const d in q.days)o.days[d]=(o.days[d]||0)+q.days[d];o.info=Object.assign({},q.info,o.info);}
+    else H.push(q);
+  }
   const daySh=W.sheets.find(s=>/일용직/.test(s.name));
   if(daySh){
     const sh=daySh,doc=await getDoc(sh),T=ptxSheetTools(doc);
@@ -15577,6 +15586,7 @@ async function ptxBuild(file){
           const head=Object.keys(hdr).find(h=>hdr[h]===L)||"";let v=null;
           if(head==="성명")v=x?x.name:"";else if(head==="시급")v=x?x.amt:null;else if(head==="시간")v=x&&x.hours?x.hours:null;
           else if(k[head])v=k[head];
+          else if(x&&x.info&&x.info[head])v=x.info[head];
           const s=L==="A"&&i===0?sA0:sty[L];
           if(v===null&&s==null)continue;cells.push(T.mkCell(L+r,v,s));
         }
@@ -15673,10 +15683,101 @@ function payTaxBody(){
   return `<div class="card"><div class="card-title">📤 세무사무실 급여자료 <span class="unit">사업장별 엑셀 (꽃밥이야기 / 꽃밥에피다)</span></div>
     <div class="footnote" style="margin:6px 0 10px;line-height:1.7">지난달 세무사무실에 보낸 엑셀을 올리면, 같은 모양 그대로 <b>${ym?ym.y+"년 "+ym.m+"월":"이번 달"}</b> 숫자로 채워서 바로 내려받아요. 두 파일을 한 번에 골라도 돼요.<br>
       · 꽃밥이야기/꽃밥에피다 시트 = 상용직급여 (사업장은 🧾 이카운트 입력 탭의 사업장 설정: 마켓·보자기 → 꽃밥이야기, 피다 → 꽃밥에피다)<br>
-      · 사업소득 = 용역직급여 · 일용직·출퇴근일지 = 시급직급여 (파출 제외) · 입사및퇴사 = 지난달 파일과 비교해 이름만 표시<br>
+      · 사업소득 = 용역직급여 · 일용직·출퇴근일지 = 시급직급여 (파출 줄 제외) + 🧾 파출비용 탭 내역 (북촌 → 꽃밥이야기, 피다 → 꽃밥에피다) · 입사및퇴사 = 지난달 파일과 비교해 이름만 표시<br>
       · 주민번호·자격·국적·내용은 올린 파일에서 같은 이름으로 그대로 이어받아요 (앱에는 저장하지 않아요). 새로 온 사람은 직접 적어주세요.</div>
     <label class="btn btn-primary" style="cursor:pointer">📂 지난달 보낸 엑셀 올리기 → 이번 달로 받기<input type="file" accept=".xlsx" multiple style="display:none" onchange="payTaxPick(this)"></label>
     <div id="payTaxOut" style="margin-top:10px"></div></div>`;
+}
+/* ===== v361: 파출비용 — 급여탭에서 날짜별로 적고(엑셀에서 가져오기도), 세무사무실 급여자료 일용직·출퇴근일지에 반영
+   위치: 피다 = 인사동 파출(꽃밥에피다 자료), 북촌 = 북촌 파출(꽃밥이야기 자료). 시간은 비우면 4시간으로 봄
+   저장: salesApp_payMonthly / pach_{YYMM} ===== */
+function pachKey(){const ym=payYm();return ym?String(ym.y).slice(2)+String(ym.m).padStart(2,"0"):"";}
+function pachDoc(k){S.data.payPach=S.data.payPach||{};k=k||pachKey();if(!S.data.payPach[k])S.data.payPach[k]={rows:[]};S.data.payPach[k].rows=S.data.payPach[k].rows||[];return S.data.payPach[k];}
+function pachSave(k){
+  k=k||pachKey();const st=document.getElementById("pachSt");if(st)st.textContent="☁ 저장 중…";
+  clearTimeout(window.__pachT);window.__pachT=setTimeout(async()=>{
+    let ok=true;
+    if(!IS_DEMO){try{await fsCol("payMonthly").doc("pach_"+k).set(JSON.parse(JSON.stringify({rows:pachDoc(k).rows,savedAt:Date.now()})));}catch(e){console.error(e);ok=false;}}
+    const st2=document.getElementById("pachSt");if(st2)st2.textContent=IS_DEMO?"미리보기(저장 안 됨)":ok?"☁ 저장됨 ✓":"⚠ 저장 실패";
+  },700);
+}
+const PACH_F=["d","name","amt","h","nat","visa","note","loc"];
+window.pachEdit=function(i,f,v){
+  const D=pachDoc(),r=D.rows[i];if(!r)return;
+  if(f==="amt"||f==="h"||f==="d"){const n=Number(String(v).replace(/[^\d.]/g,""));r[f]=String(v).trim()===""||isNaN(n)?null:n;}
+  else r[f]=String(v).trim();
+  if(f==="d")D.rows.sort((a,b)=>(a.d||99)-(b.d||99));
+  pachSave();renderPay();
+};
+window.pachAdd=function(){const D=pachDoc();const last=D.rows[D.rows.length-1];D.rows.push({d:last?last.d:1,name:"",amt:null,h:null,nat:"",visa:"",note:"",loc:last?last.loc:"bc"});pachSave();renderPay();
+  setTimeout(()=>{const ins=document.querySelectorAll('#pachTbl input[data-f="name"]');if(ins.length)ins[ins.length-1].focus();},50);};
+window.pachDel=function(i){const D=pachDoc();D.rows.splice(i,1);pachSave();renderPay();};
+/* 엑셀(파출비용 시트)에서 가져오기: 이번 달 YYMM 이름의 시트(없으면 마지막 시트) */
+window.pachImport=async function(inp){
+  const f=inp.files&&inp.files[0];inp.value="";if(!f)return;
+  try{
+    const W=await pumParse(await f.arrayBuffer());const k=pachKey();
+    const sh=W.sheets.find(s=>s.name.trim()===k)||W.sheets[W.sheets.length-1];
+    const tv=(ref)=>{const c=sh.cells[ref];return c?String(c.typ==="num"?c.v:c.v||"").trim():"";};
+    let hr=0;const hd={};
+    for(let r=1;r<=4&&!hr;r++)for(let c=1;c<=sh.maxC;c++){const t=tv(payIdxCol(c)+r).replace(/\s+/g,"");if(t==="파출"||t==="금액"){hr=r;break;}}
+    if(hr)for(let c=1;c<=sh.maxC;c++){const t=tv(payIdxCol(c)+hr).replace(/\s+/g,"");if(t)hd[t]=payIdxCol(c);}
+    const cN=hd["파출"]||"C",cA=hd["금액"]||"D",cNat=hd["국적"],cVisa=hd["비자"],cNote=hd["비고"],cLoc=hd["위치"]||hd["근무지"]||hd["부서"];
+    const rows=[];let d=null;
+    for(let r=(hr||2)+1;r<=sh.maxR;r++){
+      const a=tv("A"+r);if(/합계/.test(a))break;
+      const m=a.match(/^(\d{1,2})/);if(m)d=+m[1];
+      const nm=tv(cN+r),amt=Number(String(tv(cA+r)).replace(/[^\d.-]/g,""))||0;
+      if(!nm&&!amt)continue;if(!d)continue;
+      const loc=cLoc?tv(cLoc+r):"";
+      const note=cNote?tv(cNote+r):"";
+      const hm=(note+" "+(tv("H"+r)||"")).match(/(\d+(?:\.\d+)?)\s*h/i);
+      rows.push({d,name:nm,amt:amt||null,h:hm?+hm[1]:null,nat:cNat?tv(cNat+r):"",visa:cVisa?tv(cVisa+r):"",note,loc:/피다|인사/.test(loc)?"ep":"bc"});
+    }
+    if(!rows.length){toast(sh.name+" 시트에서 파출 내역을 찾지 못했어요",true);return;}
+    const D=pachDoc(k);
+    if(D.rows.length&&!confirm(`${k} 파출비용이 이미 ${D.rows.length}줄 있어요. '${sh.name}' 시트 내용(${rows.length}줄)으로 바꿀까요?`))return;
+    D.rows=rows;pachSave(k);renderPay();toast(`'${sh.name}' 시트에서 파출 ${rows.length}줄을 가져왔어요`);
+  }catch(e){console.error(e);toast("가져오기 실패: "+(e.message||e),true);}
+};
+/* 세무사무실 자료용: 사업장별 사람 묶음 {name,biz(mi|ep),amt,hours,days,info} */
+function pachPeople(){
+  const D=pachDoc(),by={};
+  for(const r of D.rows){
+    const nm=String(r.name||"").trim();if(!nm||!r.amt)continue;
+    const biz=r.loc==="ep"?"ep":"mi",k=biz+"|"+nm.replace(/\s+/g,"");
+    const h=r.h!=null&&r.h!==""?Number(r.h):4;
+    const x=by[k]=by[k]||{name:nm,biz,amt:0,hours:0,days:{},info:{}};
+    x.amt+=Number(r.amt)||0;x.hours+=h;x.days[r.d]=(x.days[r.d]||0)+h;
+    if(r.nat&&!x.info["국적"])x.info["국적"]=r.nat;
+    if(r.visa&&!x.info["자격"])x.info["자격"]=r.visa;
+    const rrn=String(r.note||"").match(/\d{6}[-\s]?\d{7}/);if(rrn&&!x.info["주민번호"])x.info["주민번호"]=rrn[0].replace(/\s/,"-");
+  }
+  return Object.values(by);
+}
+function payPachBody(){
+  const k=pachKey();if(!k)return `<div class="card">급여 달을 먼저 정해주세요.</div>`;
+  const D=pachDoc(k),R=D.rows;
+  const ym=payYm(),nd=new Date(+ym.y,+ym.m,0).getDate(),WD="일월화수목금토";
+  const inS="font:inherit;font-size:12.5px;padding:3px 6px;border:1px solid var(--line,#ddd);border-radius:6px";
+  let bc=0,ep=0;R.forEach(r=>{if(r.loc==="ep")ep+=r.amt||0;else bc+=r.amt||0;});
+  const inp=(i,f,v,w,al)=>`<input data-f="${f}" style="${inS};width:${w}px;text-align:${al||"left"}" value="${v==null?"":esc(f==="amt"&&v?fmt(v):v)}" onchange="pachEdit(${i},'${f}',this.value)">`;
+  const rows=R.map((r,i)=>{const wd=r.d?WD[new Date(+ym.y,+ym.m-1,r.d).getDay()]:"";const same=i>0&&R[i-1].d===r.d;
+    return `<tr${r.loc==="ep"?' style="background:#f3f7ee"':""}><td><select style="${inS}" onchange="pachEdit(${i},'d',this.value)">${Array.from({length:nd},(_,j)=>`<option value="${j+1}" ${r.d===j+1?"selected":""}>${j+1}일</option>`).join("")}</select></td>
+      <td style="color:${wd==="일"?"#b91c1c":wd==="토"?"#1d4ed8":"inherit"}">${same?"":wd}</td>
+      <td>${inp(i,"name",r.name,90)}</td><td>${inp(i,"amt",r.amt,90,"right")}</td><td>${inp(i,"h",r.h,46,"right")}</td>
+      <td><select style="${inS}" onchange="pachEdit(${i},'loc',this.value)"><option value="bc" ${r.loc!=="ep"?"selected":""}>북촌</option><option value="ep" ${r.loc==="ep"?"selected":""}>피다(인사동)</option></select></td>
+      <td>${inp(i,"nat",r.nat,56)}</td><td>${inp(i,"visa",r.visa,46)}</td><td>${inp(i,"note",r.note,150)}</td>
+      <td><button class="btn btn-sm" style="padding:1px 7px" onclick="pachDel(${i})">×</button></td></tr>`;}).join("");
+  return `<div class="card"><div class="card-title" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">🧾 파출비용 <span class="unit">${ym.y}년 ${ym.m}월</span><span id="pachSt" class="footnote" style="margin-left:auto"></span></div>
+    <div class="footnote" style="margin:4px 0 8px">하루에 여러 명이면 같은 날짜로 줄을 더 추가하세요. 위치 '피다' = 인사동 파출(꽃밥에피다), '북촌' = 북촌 파출(꽃밥이야기). 시간은 비우면 4시간 — 📤 세무사무실 자료의 일용직·출퇴근일지에 그대로 들어가요. 비고에 주민번호를 적으면 일용직 주민번호 칸에 쓰여요.</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+      <button class="btn btn-primary btn-sm" onclick="pachAdd()">＋ 줄 추가</button>
+      <label class="btn btn-sm" style="cursor:pointer">📂 파출비용 엑셀에서 가져오기 (${k} 시트)<input type="file" accept=".xlsx" style="display:none" onchange="pachImport(this)"></label>
+      <span style="margin-left:auto">북촌 <b>${fmt(bc)}</b> · 피다 <b>${fmt(ep)}</b> · 합계 <b style="font-size:15px">${fmt(bc+ep)}</b>원</span></div>
+    ${R.length?`<div class="table-wrap"><table class="rpt" id="pachTbl" style="font-size:12.5px"><thead><tr><th>날짜</th><th>요일</th><th>파출(이름)</th><th>금액</th><th>시간</th><th>위치</th><th>국적</th><th>비자</th><th>비고</th><th></th></tr></thead><tbody>${rows}</tbody>
+      <tfoot><tr class="total"><td colspan="3" class="l">합계 (${R.length}건)</td><td style="text-align:right">${fmt(bc+ep)}</td><td colspan="6"></td></tr></tfoot></table></div>`:`<div class="footnote">아직 내역이 없어요 — 줄을 추가하거나 엑셀에서 가져오세요.</div>`}
+  </div>`;
 }
 /* === 용역직급여 (사업소득 3.3%) === */
 function pecYong(){
