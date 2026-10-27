@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v366</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v367</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -15500,6 +15500,19 @@ async function ptxBuild(file){
   const bizOfEmp=x=>tplBiz[ptxN(x.name)]||(x.biz==="ep"?"ep":x.biz?"mi":null);
   const emps=C.per.filter(x=>bizOfEmp(x)===biz).sort((a,b)=>{const ia=tplOrder[ptxN(a.name)],ib=tplOrder[ptxN(b.name)];return (ia==null?999:ia)-(ib==null?999:ib);});
   const txt=(sh,ref)=>{const c=sh.cells[ref];return c&&c.typ==="str"?String(c.v).trim():"";};
+  /* 가운데 정렬 서식 만들기 (원래 서식 복사 + horizontal=center) */
+  let stDoc=null;try{stDoc=par.parseFromString(await zip.file("xl/styles.xml").async("string"),"application/xml");}catch(e){}
+  const centerCache={};
+  const centerOf=(s0)=>{
+    if(!stDoc||s0==null)return s0;if(centerCache[s0]!=null)return centerCache[s0];
+    const xfs=stDoc.getElementsByTagName("cellXfs")[0];if(!xfs)return s0;
+    const list=[...xfs.getElementsByTagName("xf")];const src=list[Number(s0)];if(!src)return s0;
+    const nx=src.cloneNode(true);nx.setAttribute("applyAlignment","1");
+    let al=nx.getElementsByTagName("alignment")[0];if(!al){al=stDoc.createElementNS(PTX_NS,"alignment");nx.appendChild(al);}
+    al.setAttribute("horizontal","center");al.setAttribute("vertical","center");
+    xfs.appendChild(nx);xfs.setAttribute("count",String(list.length+1));
+    return centerCache[s0]=String(list.length);
+  };
   const docs={};
   const getDoc=async(sh)=>{if(!docs[sh.path])docs[sh.path]=par.parseFromString(await zip.file(sh.path).async("string"),"application/xml");return docs[sh.path];};
   /* ---- 1) 상용직 시트 ---- */
@@ -15605,6 +15618,8 @@ async function ptxBuild(file){
     let hr=0;for(let r=1;r<=4&&!hr;r++)if(txt(sh,"B"+r).replace(/\s+/g,"")==="성명")hr=r;
     if(hr){
       const hdr={};for(let c=1;c<=sh.maxC;c++){const t=txt(sh,payIdxCol(c)+hr).replace(/\s+/g,"");if(t)hdr[t]=payIdxCol(c);}
+      /* v367: '시간' 열이 없고 '비고' 열이 있으면 '시간'으로 바꿔서 씀 (꽃밥에피다 양식) */
+      if(!hdr["시간"]&&hdr["비고"]){hdr["시간"]=hdr["비고"];delete hdr["비고"];T.setCell(hdr["시간"]+hr,"시간",T.sOf(hdr["시간"]+hr));}
       const keep={};let gr=0;
       for(let r=hr+1;r<=sh.maxR;r++){const a=txt(sh,"A"+r).replace(/\s+/g,"");if(a==="계"){gr=r;break;}const b=txt(sh,"B"+r);if(b){const o={};for(const k of["자격","국적","주민번호","비고"])if(hdr[k])o[k]=txt(sh,hdr[k]+r);keep[ptxN(b)]=o;}}
       const d0=hr+1,cols=[];for(let c=1;c<=Math.max(sh.maxC,7);c++)cols.push(payIdxCol(c));
@@ -15621,7 +15636,8 @@ async function ptxBuild(file){
           else if(k[head])v=k[head];
           else if(x&&x.info&&x.info[head])v=x.info[head];
           else if(x){const I=INFO[ptxN(x.name)]||{};const iv=head==="주민번호"?I.rrn:head==="국적"?I.nat:head==="자격"?I.visa:null;if(iv)v=iv;}
-          const s=L==="A"&&i===0?sA0:sty[L];
+          let s=L==="A"&&i===0?sA0:sty[L];
+          if(L===hdr["시간"])s=centerOf(s);
           if(v===null&&s==null)continue;cells.push(T.mkCell(L+r,v,s));
         }
         T.sd.appendChild(T.mkRow(r,ra,cells));
@@ -15629,7 +15645,7 @@ async function ptxBuild(file){
       const last=d0+n-1,gR=last+1,gc=[];
       for(const L of cols){const head=Object.keys(hdr).find(h=>hdr[h]===L)||"";let v=null;
         if(L==="A")v="계";else if(head==="시급"||head==="시간")v={f:`SUM(${L}${d0}:${L}${last})`};
-        if(v===null&&stG[L]==null)continue;gc.push(T.mkCell(L+gR,v,stG[L]));}
+        if(v===null&&stG[L]==null)continue;gc.push(T.mkCell(L+gR,v,L===hdr["시간"]?centerOf(stG[L]):stG[L]));}
       T.sd.appendChild(T.mkRow(gR,rg,gc));
       T.setMerges([`A${d0}:A${last}`,`A${gR}:B${gR}`].filter(m=>m!==`A${d0}:A${d0}`));T.setDim();
     }
@@ -15648,12 +15664,12 @@ async function ptxBuild(file){
     /* 제목 병합 폭: 원본(예: A1:E1)보다 좁아지지 않게 */
     let tEndI=5;{const mg=doc.getElementsByTagName("mergeCell");for(const m of mg){const rf=m.getAttribute("ref")||"";const mm=rf.match(/^A1:([A-Z]+)1$/);if(mm)tEndI=Math.max(tEndI,payColIdx(mm[1]));}}
     T.dropFrom(1);
-    const nm=H.map(x=>x.name);const nc=Math.max(nm.length,1);
+    const nm=H.map(x=>x.name);const nc=Math.max(nm.length,3);/* 이름 칸은 최소 3칸 (원본처럼 표와 제목 폭이 맞게) */
     const lastL=payIdxCol(2+nc),totL=payIdxCol(3+nc);
-    const tEnd=Math.max(Math.min(tEndI,5),2+nc),tEndL=payIdxCol(tEnd);/* 사람이 적어도 제목은 E열까지 */
+    const tEnd=2+nc,tEndL=payIdxCol(tEnd);/* 제목 = 표 폭 */
     const c1=[T.mkCell("A1",title,titleS)];for(let c=2;c<=tEnd;c++)c1.push(T.mkCell(payIdxCol(c)+"1",null,titleS));
     T.sd.appendChild(T.mkRow(1,r1,c1));
-    const c2=[T.mkCell("A2","날짜",hA),T.mkCell("B2","요일",hB)];nm.forEach((n,i)=>c2.push(T.mkCell(payIdxCol(3+i)+"2",n,hC)));if(!nm.length)c2.push(T.mkCell("C2",null,hC));
+    const c2=[T.mkCell("A2","날짜",hA),T.mkCell("B2","요일",hB)];for(let i=0;i<nc;i++)c2.push(T.mkCell(payIdxCol(3+i)+"2",nm[i]||null,hC));
     T.sd.appendChild(T.mkRow(2,r2,c2));
     const nd=new Date(Y,M,0).getDate(),WD="일월화수목금토";
     let anyDay=false;
@@ -15687,6 +15703,7 @@ async function ptxBuild(file){
     if(ent.length)notes.push("입사및퇴사: "+ent.map(e=>e.name+" "+e.memo).join(", ")+" — 입사·퇴사일과 개인정보는 직접 적어주세요");
   }
   for(const pth in docs)zip.file(pth,ser.serializeToString(docs[pth]));
+  if(stDoc&&Object.keys(centerCache).length)zip.file("xl/styles.xml",ser.serializeToString(stDoc));
   /* 수식을 새로 썼으니 엑셀이 열 때 다시 계산하게 */
   try{
     if(zip.file("xl/calcChain.xml")){zip.remove("xl/calcChain.xml");
