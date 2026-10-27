@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v370</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v371</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -7150,6 +7150,7 @@ function payAutoFill(){
     }
     try{if(typeof payDailyFill==="function")payDailyFill(af);}catch(e7){console.warn("일용직 급여",e7);}
     try{if(typeof payYongFill==="function")payYongFill(af);}catch(e7){console.warn("용역직 줄",e7);}
+    try{if(typeof payRetFill==="function")payRetFill(af);}catch(e7){console.warn("퇴직금 줄",e7);}
     /* ② 인건비현황: 이번 달 행 */
     const lb=paySheetByName("인건비현황"),ym=payYm();
     if(lb&&pw&&ym){
@@ -15968,9 +15969,27 @@ function payPachBody(){
             4대 2540 미지급급여 / 거래처 이름 / 대변 퇴직급여 − 세금
    퇴직정산: 4대 2547 국세·지방세 / 대변 차감징수세액(환급이면 −)  ·  4대 2540 미지급급여 / 대변 −(세금 합)
    저장: payMonthly / ret_{YYMM} = {list:[{name,ret,tax,ltax,stax,sltax,dept,src}]} ===== */
+/* v371: 💼 퇴직금 탭 내역 → 급여품의 '퇴직금' 열(부서별 상용직 줄) → 합계 → 인건비현황 퇴직금(J) */
+const RET_PW_DEPT={"꽃밥이야기":"꽃밥이야기","꽃밥마켓":"마켓","보자기꽃밥":"보자기","꽃밥에피다":"인사동"};
+function payRetFill(af){
+  const pw=paySheetByName("급여품의");if(!pw)return;
+  const txt=(ref)=>{const c=pw.cells[ref];return c&&c.typ==="str"?String(c.v).replace(/\s+/g,""):"";};
+  let hr=0;for(let r=1;r<=6&&!hr;r++)for(let c=1;c<=pw.maxC;c++)if(txt(payIdxCol(c)+r)==="부서"){hr=r;break;}
+  if(!hr)return;
+  let rc=null;for(let c=1;c<=pw.maxC&&!rc;c++){for(let r=1;r<=hr;r++)if(txt(payIdxCol(c)+r).indexOf("퇴직")>=0){rc=payIdxCol(c);break;}}
+  if(!rc)return;
+  const D=((S.data.payRet||{})[retKey()]||{list:[]});
+  const by={};for(const x of D.list){const d=RET_PW_DEPT[x.dept||"꽃밥이야기"]||"꽃밥이야기";by[d]=(by[d]||0)+(Number(x.ret)||0);}
+  const done={};let curD=null;
+  for(let r=hr+1;r<=pw.maxR;r++){
+    if(txt("A"+r)==="합계")break;
+    const b=txt("B"+r),c=txt("C"+r);if(b)curD=b;
+    if(c==="상용직"&&curD&&!done[curD]){done[curD]=1;af("급여품의",rc+r,Math.round(by[curD]||0));}
+  }
+}
 function retKey(){const ym=payYm();return ym?String(ym.y).slice(2)+String(ym.m).padStart(2,"0"):"";}
 function retDoc(){S.data.payRet=S.data.payRet||{};const k=retKey();S.data.payRet[k]=S.data.payRet[k]||{list:[]};return S.data.payRet[k];}
-async function retSave(){const k=retKey();if(IS_DEMO||!k)return;try{await fsCol("payMonthly").doc("ret_"+k).set(JSON.parse(JSON.stringify(retDoc())));}catch(e){console.error(e);toast("퇴직금 저장 실패",true);}}
+async function retSave(){try{payAutoFill();if(typeof paySchedSave==="function")paySchedSave();}catch(e){}const k=retKey();if(IS_DEMO||!k)return;try{await fsCol("payMonthly").doc("ret_"+k).set(JSON.parse(JSON.stringify(retDoc())));}catch(e){console.error(e);toast("퇴직금 저장 실패",true);}}
 const RET_DEPTS=["꽃밥이야기","꽃밥마켓","꽃밥에피다","보자기꽃밥"];
 function retParse(pages){
   const lines=[].concat(...pages).map(l=>l.text);
