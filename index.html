@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v378</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v379</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -10492,12 +10492,12 @@ function renderPay(){
     const active=P.sheet||wb.sheets[0].name;
     const PAY_TAIL=["손익","4대보험"];
     const chipList=wb.sheets.filter(x=>PAY_TAIL.indexOf(x.name)<0&&x.name!=="퇴직금").concat(PAY_TAIL.map(n=>wb.sheets.find(x=>x.name===n)).filter(Boolean));
-    const chips=chipList.map(s=>`<button class="paychip${s.name===active?" on":""}" onclick="window.__pay.sheet='${esc(s.name)}';renderPay()">${esc(PAY_LABEL[s.name]||s.name)}</button>`).join("")
-      +`<button class="paychip${active==="__ecount"?" on":""}" style="border-style:dashed" onclick="window.__pay.sheet='__ecount';renderPay()">🧾 이카운트 입력</button>`
-      +`<button class="paychip${active==="__hg"?" on":""}" style="border-style:dashed" onclick="window.__pay.sheet='__hg';renderPay()">🏛 한가람 대조</button>`
-      +`<button class="paychip${active==="__pach"?" on":""}" style="border-style:dashed" onclick="window.__pay.sheet='__pach';renderPay()">🧾 파출비용</button>`
-      +`<button class="paychip${active==="__ret"?" on":""}" style="border-style:dashed" onclick="window.__pay.sheet='__ret';renderPay()">💼 퇴직금</button>`
-      +`<button class="paychip${active==="__tax"?" on":""}" style="border-style:dashed" onclick="window.__pay.sheet='__tax';renderPay()">📤 세무사무실 자료</button>`
+    const chips=chipList.map(s=>`<button class="subtab paychip${s.name===active?" on active":""}" onclick="window.__pay.sheet='${esc(s.name)}';renderPay()">${esc(PAY_LABEL[s.name]||s.name)}</button>`).join("")
+      +`<button class="subtab paychip${active==="__ecount"?" on active":""}" style="border-style:dashed" onclick="window.__pay.sheet='__ecount';renderPay()">🧾 이카운트 입력</button>`
+      +`<button class="subtab paychip${active==="__hg"?" on active":""}" style="border-style:dashed" onclick="window.__pay.sheet='__hg';renderPay()">🏛 한가람 대조</button>`
+      +`<button class="subtab paychip${active==="__pach"?" on active":""}" style="border-style:dashed" onclick="window.__pay.sheet='__pach';renderPay()">🧾 파출비용</button>`
+      +`<button class="subtab paychip${active==="__ret"?" on active":""}" style="border-style:dashed" onclick="window.__pay.sheet='__ret';renderPay()">💼 퇴직금</button>`
+      +`<button class="subtab paychip${active==="__tax"?" on active":""}" style="border-style:dashed" onclick="window.__pay.sheet='__tax';renderPay()">📤 세무사무실 자료</button>`
       +(active==="상용직급여"?`<button class="paychip" style="border-style:dashed;margin-left:6px" onclick="payPasteOpen()">📋 최종 표 붙여넣어 대조</button>`:"");
     let body="";
     if(active==="__cfg"){
@@ -10749,7 +10749,7 @@ function renderPay(){
       ${titleText?`<div style="font-weight:700;font-size:15px;margin:2px 2px 8px">${esc(titleText)}</div>`:""}
       <div class="table-wrap"><table class="payws web"><tbody>${trs}</tbody></table></div>`;
     }
-    wbBox=`<div class="card"><div class="paychips">${chips}</div>${body}</div>`;
+    wbBox=`<div class="card"><div class="paychips subtabs">${chips}</div>${body}</div>`;
   }
   const histBox=payHistHtml();
   const ruleBox=P.ruleErr?`<div class="card" style="border:1.5px solid #E4A2A2;background:#FDF3F3"><div class="card-title">⚠ 급여 저장 권한이 아직 없어요 — 규칙 추가가 필요해요</div>
