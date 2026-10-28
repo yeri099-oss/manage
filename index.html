@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v377</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v378</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -12349,8 +12349,8 @@ function vhgLine(pk){
   const p=vatPkParts(pk);if(!p)return "";const hk=p.h+"-"+p.k;
   const L=Object.keys(VAT_CO).map(co=>{const D=vhgRepData(co,p.y),q=D.per.find(x=>x.hk===hk);if(!q)return "";
     const uije=/의제/.test(D.p2),t=Math.abs((q.v.p2&&q.v.p2[1])||0);
-    return `· ${VAT_CO[co]}: 매출 ${fmt(q.A[0])}원 / 매입 ${fmt((q.v.p1&&q.v.p1[0])||0)}원 / ${uije?"의제매입세액(공제O)":"공통매입세액(공제X)"} ${fmt(t)}원 → 납부세액 ${fmt(q.A[1]-q.B[1])}원`;}).filter(Boolean);
-  return L.length?`${p.y}년 ${p.h}기 ${p.k} 부가세 신고\n`+L.join("\n"):"";
+    return `*${VAT_CO[co]}\n\n매출 ${fmt(q.A[0])}원 / 매입 ${fmt((q.v.p1&&q.v.p1[0])||0)}원\n\n${uije?"의제매입세액(공제O)":"공통매입세액(공제X)"} ${fmt(t)}원 → 납부세액 ${fmt(q.A[1]-q.B[1])}원`;}).filter(Boolean);
+  return L.length?`${p.y}년 ${p.h}기 ${p.k} 부가세 신고 요약\n\n\n`+L.join("\n\n\n"):"";
 }
 window.vhgLineCopy=async function(pk){const t=vhgLine(pk);if(!t)return;
   try{await navigator.clipboard.writeText(t);}catch(e){const ta=document.createElement("textarea");ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand("copy");ta.remove();}
