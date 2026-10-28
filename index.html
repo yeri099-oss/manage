@@ -482,7 +482,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v375</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v376</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -12128,10 +12128,10 @@ function vhgBlocks(W){
       const rows={};
       for(let q=r+2;q<=r+12&&q<=sh.maxR;q++){
         const b=tx("B"+q);if(tx("B"+q)==="년도")break;
-        if(b==="세금계산서"&&!rows.s1)rows.s1=q;else if(/^신용카드/.test(b))rows.s3=q;else if(/^(소매|기타)/.test(b))rows.s4=q;
+        if(b==="세금계산서"&&!rows.s1)rows.s1=q;else if(/^신용카드/.test(b))rows.s3=q;else if(/^소매/.test(b)||/^기타$/.test(b)&&!rows.s4)rows.s4=q;else if(/택스프리|영세|^기타/.test(b))rows.s6=q;
         else if(/^세금계산서외/.test(b))rows.p1=q;else if(/공통매입/.test(b)){rows.p2=q;rows.kind="common";}else if(/의제매입/.test(b)){rows.p2=q;rows.kind="uije";}
       }
-      if(rows.s1&&rows.p1&&rows.p2)out.push({sheet:sh,co,y:+ym[1],cols,rows});
+      if(rows.s1&&rows.p1&&rows.p2)out.push({sheet:sh,co,y:+ym[1],cols,rows,r0:r});
     }
   });
   return out;
@@ -12141,7 +12141,7 @@ function vhgVals(rec){return (rec&&(rec.use==="fin"&&rec.fin?rec.fin:rec.v))||{}
 /* 요약파일 칸에 들어갈 값 */
 function vhgSumCells(rec,kind){
   const v=vhgVals(rec),g=(n,c)=>(v[n]&&v[n][c])||0;
-  const o={s1:[g(1,"a")+g(2,"a"),g(1,"t")+g(2,"t")],s3:[g(3,"a"),g(3,"t")],s4:[g(4,"a"),g(4,"t")]};
+  const o={s1:[g(1,"a")+g(2,"a"),g(1,"t")+g(2,"t")],s3:[g(3,"a"),g(3,"t")],s4:[g(4,"a"),g(4,"t")],s6:[g(5,"a")+g(6,"a"),g(5,"t")+g(6,"t")]};
   if(kind==="uije"){o.p1=[g(16,"a")-g(15,"a")-g(17,"a"),g(16,"t")-g(15,"t")-g(17,"t")];o.p2=[g(15,"a"),g(15,"t")];}
   else{o.p1=[g(16,"a"),g(16,"t")];o.p2=[-g(17,"a"),-g(17,"t")];}
   return o;
@@ -12158,7 +12158,7 @@ window.vhgDownload=async function(){
         if(!b||!col){miss.push(VAT_CO[co]+" "+p.y+"년");continue;}
         const path=b.sheet.path;if(!docs[path])docs[path]=par.parseFromString(await zip.file(path).async("string"),"application/xml");
         const T=ptxSheetTools(docs[path]),vals=vhgSumCells(st.recs[pk][co],b.rows.kind);
-        for(const k of["s1","s3","s4","p1","p2"]){if(!b.rows[k])continue;const[a,t]=vals[k];
+        for(const k of["s1","s3","s4","s6","p1","p2"]){if(!b.rows[k])continue;const[a,t]=vals[k];
           T.setCell(col+b.rows[k],a||(T.cellOf(col+b.rows[k])?"":null));T.setCell(vhgNext(col)+b.rows[k],t||(T.cellOf(vhgNext(col)+b.rows[k])?"":null));}
         n++;
       }}
@@ -12250,7 +12250,7 @@ function vhgHtml(){
   const warns=cos.filter(co=>recs[co]).map(co=>{const w=vhgChecks(vhgVals(recs[co]));return w.length?`<div style="color:#b45309;font-size:12.5px">⚠ ${VAT_CO[co]}: ${w.map(esc).join(" · ")}</div>`:`<div style="color:#16a34a;font-size:12.5px">✓ ${VAT_CO[co]}: 합계·납부세액 검산 일치</div>`;}).join("");
   /* 요약파일에 들어갈 값 미리보기 */
   const KL={s1:"매출 세금계산서",s3:"매출 신용카드 외",s4:"매출 소매(기타)",p1:"매입 세금계산서 외",p2:{common:"− 공통매입세액",uije:"의제매입세액 (그 밖의 공제)"}};
-  const prev=["s1","s3","s4","p1","p2"].map(k=>`<tr><td colspan="2" style="text-align:left">${k==="p2"?"− 공통매입 / 의제매입":KL[k]}</td>${cos.map(co=>{const r=recs[co];if(!r)return "<td></td><td></td>";const o=vhgSumCells(r,co==="epida"?"uije":"common")[k];return `<td>${fmt(o[0])||""}</td><td>${fmt(o[1])||""}</td>`;}).join("")}</tr>`).join("");
+  const prev=["s1","s3","s4","s6","p1","p2"].map(k=>`<tr><td colspan="2" style="text-align:left">${k==="p2"?"− 공통매입 / 의제매입":k==="s6"?"매출 기타(택스프리·영세율) — 요약파일에 줄이 있을 때":KL[k]}</td>${cos.map(co=>{const r=recs[co];if(!r)return "<td></td><td></td>";const o=vhgSumCells(r,co==="epida"?"uije":"common")[k];return `<td>${fmt(o[0])||""}</td><td>${fmt(o[1])||""}</td>`;}).join("")}</tr>`).join("");
   const sumLine=st.sum?`📄 <b>${esc(st.sum.name)}</b> <span style="color:#94a3b8;font-size:12px">(${new Date(st.sum.at).toLocaleDateString("ko-KR")} 올림)</span>`:`<span style="color:#b45309">아직 없어요 — 세무사무실에 보낸 「부가세 신고 요약」 엑셀을 한 번 올려주세요</span>`;
   const step1=`<div class="card" style="margin-bottom:12px">
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><b style="font-size:15px">① 신고서 PDF → 부가세 요약파일</b></div>
@@ -12280,8 +12280,81 @@ function vhgHtml(){
       ${L.length?`<button class="btn" onclick="vhgCopy('${pk}')">📋 전표 줄 복사</button>`:""}<span style="font-size:12.5px;color:#475569">${pays}</span></div>${vt}
     <div style="font-size:12px;color:#64748b;margin-top:6px">금액을 누르면 그 숫자만 복사돼요 · 납부할 세금은 10원 미만을 버린 금액(실제 납부액) 기준이고, 끝전은 부가세예수금에서 정리 · 꽃밥에피다 의제매입세액은 「상품」 대변(그 밖의 공제 − 공제받지 못할 세액) · 가산세는 세금과공과금으로 따로</div></div>`;
   return `<style>#tab-vat .vhgT td{text-align:right}#tab-vat .vhgIn{width:118px;border:1px solid transparent;background:transparent;text-align:right;font:inherit;padding:2px 4px;border-radius:4px}#tab-vat .vhgIn:hover,#tab-vat .vhgIn:focus{border-color:#cbd5e1;background:#fff}</style>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:2px 0 10px">${ysel}<div class="subtabs" style="flex-wrap:wrap;margin:0">${chips}</div></div>${step1}${step2}`;
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:2px 0 10px">${ysel}<div class="subtabs" style="flex-wrap:wrap;margin:0">${chips}</div></div>${step1}${step2}${vhgRepHtml(p.y)}`;
 }
+/* ③ 보고용 「부가세 신고 요약」 이미지 — 요약파일(지난 기수) + 올린 신고서(덮어씀) */
+function vhgSumW(){
+  const st=window.__vhg;if(!st.sum)return null;
+  if(st.sumW&&st.sumWat===st.sum.at)return st.sumW;
+  if(st.sumWing!==st.sum.at){st.sumWing=st.sum.at;pumParse(vhgUnB64(st.sum.b64)).then(W=>{st.sumW=W;st.sumWat=st.sum.at;if(window.__vat.ui.top==="hg")renderVat();}).catch(e=>console.warn(e));}
+  return null;
+}
+const VHG_PAYD={"1-예정":"4/25","1-확정":"7/25","2-예정":"10/25","2-확정":"1/25"};
+function vhgRepData(co,y){
+  const st=window.__vhg,W=vhgSumW(),B=W?vhgBlocks(W).find(b=>b.co===co&&b.y===y):null;
+  const kind=B?B.rows.kind:(co==="epida"?"uije":"common");
+  const C=B?B.sheet.cells:{},num=(ref)=>{const c=C[ref];if(!c)return 0;const n=Number(String(c.v).replace(/[,\s]/g,""));return isNaN(n)?0:n;};
+  const lb=(k,d)=>{if(!B||!B.rows[k])return d;const c=C["B"+B.rows[k]];return c&&String(c.v).trim()?String(c.v).trim():d;};
+  const per=[];
+  VHG_PKS.forEach(hk=>{
+    const rec=(st.recs[y+"-"+hk]||{})[co],col=B&&B.cols[hk];let v={};
+    if(rec)v=vhgSumCells(rec,kind);
+    else if(col){["s1","s3","s4","s6","p1","p2"].forEach(k=>{const r=B.rows[k];v[k]=r?[num(col+r),num(vhgNext(col)+r)]:[0,0];});}
+    else return;
+    const sumA=["s1","s3","s4","s6"].reduce((a,k)=>[a[0]+(v[k]?v[k][0]:0),a[1]+(v[k]?v[k][1]:0)],[0,0]),sumB=["p1","p2"].reduce((a,k)=>[a[0]+(v[k]?v[k][0]:0),a[1]+(v[k]?v[k][1]:0)],[0,0]);
+    if(!sumA[0]&&!sumA[1]&&!sumB[0]&&!sumB[1])return;
+    let pd=VHG_PAYD[hk];if(col){const c=C[col+(B.r0+2)];if(c&&c.typ==="str"&&/\d+\/\d+/.test(c.v))pd=String(c.v).trim();}
+    const[h,k]=hk.split("-"),[m1,m2]=VAT_PK_M[hk];
+    per.push({hk,lab:`${h}기${k}(${m1}/1~${m2}/${new Date(y,m2,0).getDate()})`,pd,v,A:sumA,B:sumB,src:rec?"pdf":"xlsx"});
+  });
+  const s6=(B&&B.rows.s6)||per.some(p=>p.v.s6&&(p.v.s6[0]||p.v.s6[1]));
+  const rows=[["s1",lb("s1","세금계산서")],["s3",lb("s3","신용카드 외")],["s4",lb("s4",co==="epida"?"소매":"소매(과세)")]].concat(s6?[["s6",lb("s6","기타(택스프리)")]]:[]);
+  return {per,rows,p1:lb("p1","세금계산서 외"),p2:lb("p2",kind==="uije"?"의제매입세액 *":"- 공통매입세액 *"),hasSum:!!st.sum,ready:!st.sum||!!W};
+}
+function vhgRepTable(co,y){
+  const D=vhgRepData(co,y);if(!D.per.length)return "";
+  const bd="border:1px solid #000;",th=`${bd}padding:5px 10px;text-align:center;font-weight:400;`,td=`${bd}padding:5px 10px;text-align:right;white-space:nowrap;`;
+  const n=(x)=>!x?"":x<0?`<span style="float:left">-</span>${fmt(-x)}`:fmt(x);
+  const P=D.per,ncol=P.length*2;
+  const band=(cells,bg)=>cells.map(c=>`<td style="${td}${bg?"background:"+bg+";":""}">${c}</td>`).join("");
+  const sRows=D.rows.map(([k,lb],i)=>`<tr>${i===0?`<td rowspan="${D.rows.length+1}" style="${th}">매출</td>`:""}<td style="${th}">${esc(lb)}</td>${band(P.flatMap(p=>[n(p.v[k]&&p.v[k][0]),n(p.v[k]&&p.v[k][1])]))}</tr>`).join("");
+  return `<div class="vhgRep" data-co="${co}" style="display:inline-block;background:#fff;padding:14px 14px 16px;font-family:'Malgun Gothic','맑은 고딕',sans-serif;font-size:13px;color:#000">
+    <div style="text-align:center;font-weight:700;font-size:17px;margin:2px 0 12px">부가세 신고 요약 <span style="font-weight:400;font-size:14px">(${VAT_CO[co]})</span></div>
+    <table style="border-collapse:collapse;border:2px solid #000">
+      <tr><td rowspan="4" style="${th}width:70px">과세분</td><td style="${th}width:120px">년도</td><td colspan="${ncol}" style="${th}font-weight:700">${y}년</td></tr>
+      <tr><td style="${th}">기수</td>${P.map(p=>`<td colspan="2" style="${th}">${p.lab}</td>`).join("")}</tr>
+      <tr><td style="${th}">납부일</td>${P.map(p=>`<td colspan="2" style="${th}">${esc(p.pd)}</td>`).join("")}</tr>
+      <tr><td style="${th}">구분</td>${P.map(()=>`<td style="${th}width:105px">금액</td><td style="${th}width:95px">세액</td>`).join("")}</tr>
+      ${sRows}
+      <tr><td style="${th}background:#fce4d6">계(A)</td>${band(P.flatMap(p=>[n(p.A[0]),n(p.A[1])]),"#fce4d6")}</tr>
+      <tr><td rowspan="3" style="${th}">매입</td><td style="${th}">${esc(D.p1)}</td>${band(P.flatMap(p=>[n(p.v.p1&&p.v.p1[0]),n(p.v.p1&&p.v.p1[1])]))}</tr>
+      <tr><td style="${th}">${esc(D.p2)}</td>${band(P.flatMap(p=>[n(p.v.p2&&p.v.p2[0]),n(p.v.p2&&p.v.p2[1])]))}</tr>
+      <tr><td style="${th}background:#ddebf7">계(B)</td>${band(P.flatMap(p=>[n(p.B[0]),n(p.B[1])]),"#ddebf7")}</tr>
+      <tr><td colspan="2" style="${th}background:#c6e0b4;padding:8px 10px">납부세액(A-B)</td>${band(P.flatMap(p=>["",n(p.A[1]-p.B[1])]),"#c6e0b4")}</tr>
+    </table></div>`;
+}
+function vhgRepHtml(y){
+  const D0=vhgRepData("kkotbap",y);
+  if(!D0.ready)return `<div class="card" style="margin-top:12px">③ 보고용 요약 이미지 — 요약파일 읽는 중…</div>`;
+  const parts=Object.keys(VAT_CO).map(co=>{const t=vhgRepTable(co,y);return t?`<div style="margin-bottom:14px"><div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><b>${VAT_CO[co]}</b>
+      <button class="btn btn-primary" onclick="vhgRepCopy('${co}',${y})">🖼 이미지 복사</button><button class="btn" onclick="vhgRepCopy('${co}',${y},'dl')">💾 이미지 저장</button></div>
+      <div style="overflow-x:auto" id="vhgRep_${co}">${t}</div></div>`:"";}).join("");
+  return `<div class="card" style="margin-top:12px"><div style="margin-bottom:8px"><b style="font-size:15px">③ 보고용 「부가세 신고 요약」 이미지 — ${y}년</b>
+    <span style="font-size:12px;color:#64748b">신고한 기수까지 자동으로 · 지난 기수는 요약파일 값, 신고서를 올린 기수는 신고서 값</span></div>
+    ${parts||`<div style="color:#94a3b8">${y}년 자료가 아직 없어요 — 요약파일이나 신고서 PDF를 올려주세요</div>`}</div>`;
+}
+window.vhgRepCopy=async function(co,y,mode){
+  const el=document.querySelector("#vhgRep_"+co+" .vhgRep");if(!el)return;
+  try{
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
+    const cv=await html2canvas(el,{backgroundColor:"#ffffff",scale:2});
+    const blob=await new Promise(r=>cv.toBlob(r,"image/png"));
+    const dl=()=>{const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="부가세신고요약_"+VAT_CO[co]+"_"+y+".png";document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);};
+    if(mode==="dl"||!navigator.clipboard||typeof ClipboardItem==="undefined"){dl();toast("요약 이미지를 저장했어요");return;}
+    try{await navigator.clipboard.write([new ClipboardItem({"image/png":blob})]);toast(VAT_CO[co]+" 요약 이미지를 복사했어요 — 보고 창에 Ctrl+V");}
+    catch(e){dl();toast("복사가 막혀서 이미지 파일로 저장했어요");}
+  }catch(e){console.error(e);toast("이미지 만들기 실패: "+(e.message||e),true);}
+};
 const RENDERERS = {
   home: () => renderHome(),
   compare: renderCompare, sales: renderSales, pnl: renderPnl, jagum: renderJagum, pay: renderPay, buy: () => renderBuy(), expense: () => renderExpense(), free: () => renderFree(), vat: () => renderVat(), settings: () => renderSettings(), withdraw: () => renderWithdraw(),
