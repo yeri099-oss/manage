@@ -428,6 +428,7 @@ li.drag-over { border-top: 2px solid var(--brand); }
 .paychip{border:1px solid rgba(0,0,0,.15);background:#fff;border-radius:999px;padding:4px 12px;font-size:12.5px;cursor:pointer;font-family:inherit}
 .paychip.on{background:var(--brand,#2F6B3F);color:#fff;border-color:var(--brand,#2F6B3F);font-weight:700}
 .paychip.bonus{border-style:dashed}
+#pachTbl tr.pach-dir input:not([type=checkbox]){color:#64748b}
 table.payws{border-collapse:collapse;font-size:13px;min-width:100%}
 table.payws td{border:1px solid #e8e8e4;padding:6px 10px;white-space:nowrap;text-align:right;background:#fff;min-width:56px}
 table.payws td.ls{text-align:left}
@@ -482,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v379</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v380</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -16365,6 +16366,14 @@ window.pachNew=function(d,f,v){
   setTimeout(()=>{const i=D.rows.indexOf(r);const el=document.querySelector(`#pachTbl input[onchange^="pachEdit(${i},'${f==="name"?"amt":"name"}'"]`);if(el)el.focus();},60);
 };
 window.pachAddDay=function(d){const D=pachDoc();const prev=D.rows.filter(x=>x.d===+d).pop();D.rows.push({d:+d,name:"",amt:null,h:null,nat:"",visa:"",note:"",loc:prev?prev.loc:"bc"});D.rows.sort((a,b)=>(a.d||99)-(b.d||99));pachSave();renderPay();};
+/* v380: 직접 지급 체크 — 체크 = 우리가 직접 불러서 이미 지급, 비움 = 레몬파출(월말 한 번에 지급) */
+window.pachDir=function(i,on){const D=pachDoc(),r=D.rows[i];if(!r)return;if(on)r.dir=true;else delete r.dir;pachSave();renderPay();};
+function pachSplit(rows){const o={lm:{bc:0,ep:0,n:0},dir:{bc:0,ep:0,n:0}};(rows||[]).forEach(r=>{if(!String(r.name||"").trim()&&!r.amt)return;const g=r.dir?o.dir:o.lm;g[r.loc==="ep"?"ep":"bc"]+=Number(r.amt)||0;g.n++;});return o;}
+window.pachLemonCopy=async function(){
+  const ym=payYm(),R=pachDoc().rows.filter(r=>!r.dir&&(String(r.name||"").trim()||r.amt));
+  const t=`레몬파출 ${ym.y}년 ${ym.m}월\n`+R.map(r=>`${ym.m}/${r.d}\t${r.name||""}\t${r.amt||0}\t${r.loc==="ep"?"피다(인사동)":"북촌"}`).join("\n")+`\n합계\t${R.length}건\t${R.reduce((a,r)=>a+(Number(r.amt)||0),0)}`;
+  try{await navigator.clipboard.writeText(t);toast("레몬파출 내역을 복사했어요 (엑셀에 붙여넣으면 칸이 나뉘어요)");}catch(e){toast("복사 못 했어요",true);}
+};
 window.pachDel=function(i){const D=pachDoc();D.rows.splice(i,1);pachSave();renderPay();};
 /* 엑셀(파출비용 시트)에서 가져오기: 이번 달 YYMM 이름의 시트(없으면 마지막 시트) */
 window.pachImport=async function(inp){
@@ -16427,19 +16436,27 @@ function payPachBody(){
     list.forEach((i,j)=>{
       const r=i==null?{}:R[i];
       const dayTd=j===0?`<td rowspan="${list.length}" style="white-space:nowrap;vertical-align:middle">${d}일 <button class="btn btn-sm" style="padding:0 6px;margin-left:2px" title="이 날짜에 한 명 더" onclick="pachAddDay(${d})">＋</button></td><td rowspan="${list.length}" style="vertical-align:middle;color:${wd==="일"?"#b91c1c":wd==="토"?"#1d4ed8":"inherit"}">${wd}</td>`:"";
-      rows+=`<tr${r.loc==="ep"?' style="background:#f3f7ee"':""}>${dayTd}
+      rows+=`<tr${r.loc==="ep"?' style="background:#f3f7ee"':""}${r.dir?' class="pach-dir"':""}>${dayTd}
         <td>${cell(i,"name",r.name,90)}</td><td>${cell(i,"amt",r.amt,90,"right")}</td><td>${cell(i,"h",r.h,46,"right")}</td>
         <td>${locSel(i,r.loc,d)}</td><td>${cell(i,"nat",r.nat,56)}</td><td>${cell(i,"visa",r.visa,46)}</td><td>${cell(i,"note",r.note,150)}</td>
+        <td style="text-align:center">${i==null?"":`<input type="checkbox" style="width:16px;height:16px;cursor:pointer" ${r.dir?"checked":""} onchange="pachDir(${i},this.checked)">`}</td>
         <td>${i==null?"":`<button class="btn btn-sm" style="padding:1px 7px" onclick="pachDel(${i})">×</button>`}</td></tr>`.replace(/DAY/g,String(d));
     });
   }
   return `<div class="card"><div class="card-title" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">🧾 파출비용 <span class="unit">${ym.y}년 ${ym.m}월</span><span id="pachSt" class="footnote" style="margin-left:auto"></span></div>
-    <div class="footnote" style="margin:4px 0 8px">1일~말일이 모두 보여요 — 빈 줄에 바로 적으면 그 날짜로 들어가고, 하루에 여러 명이면 날짜 옆 ＋를 누르세요. 위치 '피다' = 인사동 파출(꽃밥에피다), '북촌' = 북촌 파출(꽃밥이야기). 시간은 비우면 4시간 — 📤 세무사무실 자료의 일용직·출퇴근일지에 그대로 들어가요. 비고에 주민번호를 적으면 일용직 주민번호 칸에 쓰여요.</div>
+    <div class="footnote" style="margin:4px 0 8px">1일~말일이 모두 보여요 — 빈 줄에 바로 적으면 그 날짜로 들어가고, 하루에 여러 명이면 날짜 옆 ＋를 누르세요. 위치 '피다' = 인사동 파출(꽃밥에피다), '북촌' = 북촌 파출(꽃밥이야기). 시간은 비우면 4시간. <b>직접 지급</b> 칸에 체크하면 우리가 직접 불러서 이미 지급한 분, 비워두면 레몬파출(월말 지급)로 따로 합계를 내요. 📤 세무사무실 자료의 일용직·출퇴근일지에 그대로 들어가요. 비고에 주민번호를 적으면 일용직 주민번호 칸에 쓰여요.</div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
       <label class="btn btn-sm" style="cursor:pointer">📂 파출비용 엑셀에서 가져오기 (${k} 시트)<input type="file" accept=".xlsx" style="display:none" onchange="pachImport(this)"></label>
       <span style="margin-left:auto">북촌 <b>${fmt(bc)}</b> · 피다 <b>${fmt(ep)}</b> · 합계 <b style="font-size:15px">${fmt(bc+ep)}</b>원</span></div>
-    ${true?`<div class="table-wrap"><table class="rpt" id="pachTbl" style="font-size:12.5px"><thead><tr><th>날짜</th><th>요일</th><th>파출(이름)</th><th>금액</th><th title="비우면 4시간">시간 <span class="unit" style="font-weight:400">(기본 4)</span></th><th>위치</th><th>국적</th><th>비자</th><th>비고</th><th></th></tr></thead><tbody>${rows}</tbody>
-      <tfoot><tr class="total"><td colspan="3" class="l">합계 (${R.length}건)</td><td style="text-align:right">${fmt(bc+ep)}</td><td colspan="6"></td></tr></tfoot></table></div>`:`<div class="footnote">아직 내역이 없어요 — 줄을 추가하거나 엑셀에서 가져오세요.</div>`}
+    ${(()=>{const sp=pachSplit(R),y=String(ym.y).slice(2);
+      const yr=[];for(let m=1;m<=12;m++){const d=(S.data.payPach||{})[y+String(m).padStart(2,"0")];if(!d||!(d.rows||[]).length)continue;const q=pachSplit(d.rows);yr.push([m,q]);}
+      const box=(t,g,col,sub)=>`<div style="flex:1;min-width:230px;border:1px solid ${col};border-radius:10px;padding:8px 12px"><div style="font-weight:700;font-size:13px">${t} <span class="unit" style="font-weight:400">${g.n}건 · ${sub}</span></div><div style="font-size:13px;margin-top:3px">북촌 <b>${fmt(g.bc)}</b> · 피다 <b>${fmt(g.ep)}</b> · 합계 <b style="font-size:16px">${fmt(g.bc+g.ep)}</b>원</div></div>`;
+      return `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">${box("🍋 레몬파출",sp.lm,"#eab308","월말에 한 번에 지급")}${box("✅ 직접 지급",sp.dir,"#86efac","이미 지급 (체크한 줄)")}</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><button class="btn btn-sm" onclick="pachLemonCopy()">📋 레몬파출 내역 복사 (날짜·이름·금액·위치)</button>
+        ${yr.length?`<details><summary style="cursor:pointer;font-size:12.5px;font-weight:700">📅 ${ym.y}년 월별 레몬파출 비용</summary><table class="rpt" style="font-size:12.5px;margin-top:6px"><thead><tr><th>월</th><th>북촌</th><th>피다</th><th>레몬 합계</th><th>직접 지급</th></tr></thead><tbody>${yr.map(([m,q])=>`<tr><td>${m}월</td><td style="text-align:right">${fmt(q.lm.bc)}</td><td style="text-align:right">${fmt(q.lm.ep)}</td><td style="text-align:right;font-weight:700">${fmt(q.lm.bc+q.lm.ep)}</td><td style="text-align:right;color:#64748b">${fmt(q.dir.bc+q.dir.ep)}</td></tr>`).join("")}
+          <tr class="total"><td>합계</td><td style="text-align:right">${fmt(yr.reduce((a,[,q])=>a+q.lm.bc,0))}</td><td style="text-align:right">${fmt(yr.reduce((a,[,q])=>a+q.lm.ep,0))}</td><td style="text-align:right">${fmt(yr.reduce((a,[,q])=>a+q.lm.bc+q.lm.ep,0))}</td><td style="text-align:right">${fmt(yr.reduce((a,[,q])=>a+q.dir.bc+q.dir.ep,0))}</td></tr></tbody></table></details>`:""}</div>`;})()}
+    ${true?`<div class="table-wrap"><table class="rpt" id="pachTbl" style="font-size:12.5px"><thead><tr><th>날짜</th><th>요일</th><th>파출(이름)</th><th>금액</th><th title="비우면 4시간">시간 <span class="unit" style="font-weight:400">(기본 4)</span></th><th>위치</th><th>국적</th><th>비자</th><th>비고</th><th title="체크 = 우리가 직접 불러서 이미 지급 · 비움 = 레몬파출">직접 지급</th><th></th></tr></thead><tbody>${rows}</tbody>
+      <tfoot><tr class="total"><td colspan="3" class="l">합계 (${R.length}건)</td><td style="text-align:right">${fmt(bc+ep)}</td><td colspan="7"></td></tr></tfoot></table></div>`:`<div class="footnote">아직 내역이 없어요 — 줄을 추가하거나 엑셀에서 가져오세요.</div>`}
   </div>`;
 }
 /* ===== v369: 퇴직금 — 퇴직소득원천징수영수증(PDF) + 중도퇴사 근로소득원천징수영수증(PDF)을 올리면 이카운트 전표로 정리
