@@ -428,7 +428,7 @@ li.drag-over { border-top: 2px solid var(--brand); }
 .paychip{border:1px solid rgba(0,0,0,.15);background:#fff;border-radius:999px;padding:4px 12px;font-size:12.5px;cursor:pointer;font-family:inherit}
 .paychip.on{background:var(--brand,#2F6B3F);color:#fff;border-color:var(--brand,#2F6B3F);font-weight:700}
 .paychip.bonus{border-style:dashed}
-#pachTbl tr.pach-dir input:not([type=checkbox]){color:#64748b}
+#pachTbl tr.pach-dir input:not([type=checkbox]),#pachTbl tr.pach-dir select{background:#fffbea}
 table.payws{border-collapse:collapse;font-size:13px;min-width:100%}
 table.payws td{border:1px solid #e8e8e4;padding:6px 10px;white-space:nowrap;text-align:right;background:#fff;min-width:56px}
 table.payws td.ls{text-align:left}
@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v381</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v382</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -16440,11 +16440,11 @@ function payPachBody(){
     const list=idx.length?idx:[null];
     list.forEach((i,j)=>{
       const r=i==null?{}:R[i];
-      const dayTd=j===0?`<td rowspan="${list.length}" style="white-space:nowrap;vertical-align:middle">${d}일 <button class="btn btn-sm" style="padding:0 6px;margin-left:2px" title="이 날짜에 한 명 더" onclick="pachAddDay(${d})">＋</button></td><td rowspan="${list.length}" style="vertical-align:middle;color:${wd==="일"?"#b91c1c":wd==="토"?"#1d4ed8":"inherit"}">${wd}</td>`:"";
-      rows+=`<tr${r.loc==="ep"?' style="background:#f3f7ee"':""}${r.dir?' class="pach-dir"':""}>${dayTd}
+      const dayTd=j===0?`<td rowspan="${list.length}" style="white-space:nowrap;vertical-align:middle${list.length>1?";background:#fff":""}">${d}일 <button class="btn btn-sm" style="padding:0 6px;margin-left:2px" title="이 날짜에 한 명 더" onclick="pachAddDay(${d})">＋</button></td><td rowspan="${list.length}" style="vertical-align:middle;${list.length>1?"background:#fff;":""}color:${wd==="일"?"#b91c1c":wd==="토"?"#1d4ed8":"inherit"}">${wd}</td>`:"";
+      rows+=`<tr${r.dir?' class="pach-dir" style="background:#fdf6d3"':r.loc==="ep"?' style="background:#f3f7ee"':""}>${dayTd}
         <td>${cell(i,"name",r.name,90)}</td><td>${cell(i,"amt",r.amt,90,"right")}</td><td>${cell(i,"h",r.h,46,"right")}</td>
         <td>${locSel(i,r.loc,d)}</td><td>${cell(i,"nat",r.nat,56)}</td><td>${cell(i,"visa",r.visa,46)}</td><td>${cell(i,"note",r.note,150)}</td>
-        <td style="text-align:center">${i==null?"":`<input type="checkbox" style="width:16px;height:16px;cursor:pointer" ${r.dir?"checked":""} onchange="pachDir(${i},this.checked)">`}</td>
+        <td style="text-align:center">${i==null?"":`<input type="checkbox" style="width:16px;height:16px;cursor:pointer" ${r.dir?"checked":""} onchange="pachDir(${i},this.checked)">${r.dir?'<div style="font-size:10.5px;color:#a16207;font-weight:700;line-height:1.1">지급완료</div>':""}`}</td>
         <td>${i==null?"":`<button class="btn btn-sm" style="padding:1px 7px" onclick="pachDel(${i})">×</button>`}</td></tr>`.replace(/DAY/g,String(d));
     });
   }
