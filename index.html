@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v380</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v381</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -10489,11 +10489,12 @@ function renderPay(){
   if(wb){
     const PAY_ORDER=["상용직급여","휴일근무수당","상여금","시급직급여","용역직급여","손익","4대보험","급여품의","인건비현황"];
     const PAY_LABEL={"상용직급여":"급여대장 (상용직)"};
-    if(P.sheet==="__cfg"||P.sheet==="퇴직금"||!P.sheet)P.sheet=wb.sheets.some(x=>x.name==="상용직급여")?"상용직급여":wb.sheets[0].name;
+    if(P.sheet==="__cfg"||P.sheet==="퇴직금")P.sheet=wb.sheets.some(x=>x.name==="상용직급여")?"상용직급여":wb.sheets[0].name;
+    if(!P.sheet)P.sheet="__sum"; /* v381: 처음엔 📊 요약 */
     const active=P.sheet||wb.sheets[0].name;
     const PAY_TAIL=["손익","4대보험"];
     const chipList=wb.sheets.filter(x=>PAY_TAIL.indexOf(x.name)<0&&x.name!=="퇴직금").concat(PAY_TAIL.map(n=>wb.sheets.find(x=>x.name===n)).filter(Boolean));
-    const chips=chipList.map(s=>`<button class="subtab paychip${s.name===active?" on active":""}" onclick="window.__pay.sheet='${esc(s.name)}';renderPay()">${esc(PAY_LABEL[s.name]||s.name)}</button>`).join("")
+    const chips=`<button class="subtab paychip${active==="__sum"?" on active":""}" onclick="window.__pay.sheet='__sum';renderPay()">📊 요약</button>`+chipList.map(s=>`<button class="subtab paychip${s.name===active?" on active":""}" onclick="window.__pay.sheet='${esc(s.name)}';renderPay()">${esc(PAY_LABEL[s.name]||s.name)}</button>`).join("")
       +`<button class="subtab paychip${active==="__ecount"?" on active":""}" style="border-style:dashed" onclick="window.__pay.sheet='__ecount';renderPay()">🧾 이카운트 입력</button>`
       +`<button class="subtab paychip${active==="__hg"?" on active":""}" style="border-style:dashed" onclick="window.__pay.sheet='__hg';renderPay()">🏛 한가람 대조</button>`
       +`<button class="subtab paychip${active==="__pach"?" on active":""}" style="border-style:dashed" onclick="window.__pay.sheet='__pach';renderPay()">🧾 파출비용</button>`
@@ -10501,7 +10502,9 @@ function renderPay(){
       +`<button class="subtab paychip${active==="__tax"?" on active":""}" style="border-style:dashed" onclick="window.__pay.sheet='__tax';renderPay()">📤 세무사무실 자료</button>`
       +(active==="상용직급여"?`<button class="paychip" style="border-style:dashed;margin-left:6px" onclick="payPasteOpen()">📋 최종 표 붙여넣어 대조</button>`:"");
     let body="";
-    if(active==="__cfg"){
+    if(active==="__sum"){
+      body="";
+    }else if(active==="__cfg"){
       const em=payEmpRows();
       const by=((S.data.payTax||{}).byName)||{};
       const T=S.data.payTaxTable;
@@ -10750,7 +10753,7 @@ function renderPay(){
       ${titleText?`<div style="font-weight:700;font-size:15px;margin:2px 2px 8px">${esc(titleText)}</div>`:""}
       <div class="table-wrap"><table class="payws web"><tbody>${trs}</tbody></table></div>`;
     }
-    wbBox=`<div class="card"><div class="paychips subtabs">${chips}</div>${body}</div>`;
+    wbBox=active==="__sum"?`<div class="paychips subtabs">${chips}</div>`:`<div class="card"><div class="paychips subtabs">${chips}</div>${body}</div>`;
   }
   const histBox=payHistHtml();
   const ruleBox=P.ruleErr?`<div class="card" style="border:1.5px solid #E4A2A2;background:#FDF3F3"><div class="card-title">⚠ 급여 저장 권한이 아직 없어요 — 규칙 추가가 필요해요</div>
@@ -10758,7 +10761,9 @@ function renderPay(){
     <pre style="background:#fff;border:1px solid rgba(0,0,0,.1);border-radius:8px;padding:10px;font-size:12px;overflow:auto">match /salesApp_payMonthly/{doc} {
   allow read, write: if salesAdmin();
 }</pre></div>`:"";
-  el.innerHTML=`${ruleBox}${upBox}${res}${wbBox}${sumBox}${acctBox}${histBox}`;
+  /* v381: 급여 관리·지급 요약·급여지급표·월별 집계는 📊 요약 탭에만 — 다른 탭은 달 선택만 위에 */
+  if(wb&&P.sheet!=="__sum")el.innerHTML=`${ruleBox}${String(mchips||"").trim()?`<div class="card" style="padding:10px 14px">${mchips}</div>`:""}${res}${wbBox}`;
+  else el.innerHTML=`${ruleBox}${wbBox}${upBox}${res}${sumBox}${acctBox}${histBox}`;
   payApplyFocus(el);
 }
 async function payRecordMonth(){
