@@ -11987,7 +11987,11 @@ function vhgTok(s){
 }
 function vhgMeta(pages){
   const all=hgNorm(pages.map(p=>p.map(l=>l.text).join(" ")).join(" ")).replace(/[一ㅡ—–]/g,"-");
-  const co=/에피다|116-?85-?47758/.test(all)?"epida":/꽃밥이야기|572-?86-?01866/.test(all)?"kkotbap":null;
+  /* 회사: 접수증·신고서 앞쪽(상호·사업자번호)에 먼저 나오는 쪽 — 뒤쪽 거래처 명세에 다른 회사 이름이 있어도 안 헷갈리게 */
+  const coOf=(t)=>{const a=t.search(/꽃밥이야기|572-?86-?01866/),b=t.search(/에피다|116-?85-?47758/);if(a<0&&b<0)return null;if(a<0)return "epida";if(b<0)return "kkotbap";return a<b?"kkotbap":"epida";};
+  const p1=hgNorm((pages[0]||[]).map(l=>l.text).join(" ")).replace(/[一ㅡ—–]/g,"-");
+  const sh=/상호\(?성?명?\)?(.{0,30})/.exec(p1);
+  const co=(sh&&coOf(sh[1]))||coOf(p1)||coOf(all);
   let pk=null;const m=/신고년기(20\d\d)년(\d)기/.exec(all)||/(20\d\d)년(\d)기/.exec(all);
   const k=/(예정|확정)\(일반/.exec(all)||/부가가치세(예정|확정)/.exec(all);
   if(m){let kind=k?k[1]:null;if(!kind){const mm=/20\d\d-(\d\d)-01~/.exec(all);if(mm)kind=(+mm[1])%6===1?"예정":"확정";}if(kind)pk=m[1]+"-"+m[2]+"-"+kind;}
@@ -12205,6 +12209,9 @@ window.vhgEdit=function(pk,co,n,c,el){
   const x=Number(String(el.value).replace(/[^\d\-]/g,""))||0;v[n]=v[n]||{a:0,t:0};if(v[n][c]===x)return;v[n][c]=x;rec.edited=true;vhgSave();renderVat();
 };
 window.vhgUse=function(pk,co,u){const rec=(window.__vhg.recs[pk]||{})[co];if(!rec)return;rec.use=u;vhgSave();renderVat();};
+window.vhgMove=function(pk,co){const st=window.__vhg,to=co==="epida"?"kkotbap":"epida",R=st.recs[pk];if(!R||!R[co])return;
+  if(!confirm(VAT_CO[co]+" 칸의 자료를 "+VAT_CO[to]+"(으)로 옮길까요?"+(R[to]?" ("+VAT_CO[to]+" 칸에 있던 자료와 서로 바뀌어요)":"")))return;
+  const a=R[co],b=R[to];R[to]=a;a.co=to;if(b){R[co]=b;b.co=co;}else delete R[co];vhgSave();renderVat();};
 window.vhgDel=function(pk,co){const st=window.__vhg;if(!confirm(VAT_CO[co]+" "+vatPkLabel(pk)+" 신고 자료를 지울까요?"))return;delete st.recs[pk][co];if(!Object.keys(st.recs[pk]).length)delete st.recs[pk];vhgSave();renderVat();};
 window.vhgNew=function(pk,co){const st=window.__vhg;st.recs[pk]=st.recs[pk]||{};st.recs[pk][co]={co,pk,v:{},fin:null,use:"fin",src:"hand",file:"직접 입력",at:Date.now(),edited:true};vhgSave();renderVat();};
 function vhgTsv(pk){
@@ -12231,7 +12238,7 @@ function vhgHtml(){
     if(!r)return `<th colspan="2" style="background:#f8fafc">${VAT_CO[co]}<div style="font-weight:400;font-size:11.5px;color:#94a3b8">PDF 없음 · <a href="#" onclick="event.preventDefault();vhgNew('${pk}','${co}')">직접 입력</a></div></th>`;
     const badge=r.src==="ocr"?`<span style="color:#b45309">🔍 스캔본 — 숫자 확인</span>`:r.src==="hand"?`<span style="color:#64748b">직접 입력</span>`:`<span style="color:#16a34a">✓ 전자신고서</span>`;
     const use=r.fin?`<div style="margin-top:3px"><select class="ctl" style="font-size:11.5px;padding:1px 4px" onchange="vhgUse('${pk}','${co}',this.value)"><option value="orig" ${r.use!=="fin"?"selected":""}>경정청구 — 당초 신고값(△)</option><option value="fin" ${r.use==="fin"?"selected":""}>경정청구 — 경정 후 값</option></select></div>`:"";
-    return `<th colspan="2" style="background:#f8fafc">${VAT_CO[co]} <a href="#" title="지우기" style="color:#dc2626;text-decoration:none;font-weight:400" onclick="event.preventDefault();vhgDel('${pk}','${co}')">✕</a>
+    return `<th colspan="2" style="background:#f8fafc">${VAT_CO[co]} <a href="#" title="지우기" style="color:#dc2626;text-decoration:none;font-weight:400" onclick="event.preventDefault();vhgDel('${pk}','${co}')">✕</a> <a href="#" title="다른 회사 칸으로 옮기기" style="text-decoration:none;font-weight:400;font-size:12px" onclick="event.preventDefault();vhgMove('${pk}','${co}')">⇄ 회사 바꾸기</a>
       <div style="font-weight:400;font-size:11.5px">${badge}${r.edited?' · <span style="color:#7c3aed">고친 값 있음</span>':""}</div><div style="font-weight:400;font-size:11px;color:#94a3b8;max-width:260px;overflow:hidden;text-overflow:ellipsis">${esc(r.file||"")}</div>${use}</th>`;}).join("");
   const inp=(co,n,c)=>{const r=recs[co];if(!r)return `<td></td>`;const v=vhgVals(r),x=(v[n]&&v[n][c])||0;
     const taxOnly=["18","21","29","30"].includes(n)&&c==="a",bold=["9","16","18","30"].includes(n);
