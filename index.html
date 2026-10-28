@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v382</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v383</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -16374,10 +16374,36 @@ window.pachAddDay=function(d){const D=pachDoc();const prev=D.rows.filter(x=>x.d=
 /* v380: 직접 지급 체크 — 체크 = 우리가 직접 불러서 이미 지급, 비움 = 레몬파출(월말 한 번에 지급) */
 window.pachDir=function(i,on){const D=pachDoc(),r=D.rows[i];if(!r)return;if(on)r.dir=true;else delete r.dir;pachSave();renderPay();};
 function pachSplit(rows){const o={lm:{bc:0,ep:0,n:0},dir:{bc:0,ep:0,n:0}};(rows||[]).forEach(r=>{if(!String(r.name||"").trim()&&!r.amt)return;const g=r.dir?o.dir:o.lm;g[r.loc==="ep"?"ep":"bc"]+=Number(r.amt)||0;g.n++;});return o;}
-window.pachLemonCopy=async function(){
-  const ym=payYm(),R=pachDoc().rows.filter(r=>!r.dir&&(String(r.name||"").trim()||r.amt));
-  const t=`레몬파출 ${ym.y}년 ${ym.m}월\n`+R.map(r=>`${ym.m}/${r.d}\t${r.name||""}\t${r.amt||0}\t${r.loc==="ep"?"피다(인사동)":"북촌"}`).join("\n")+`\n합계\t${R.length}건\t${R.reduce((a,r)=>a+(Number(r.amt)||0),0)}`;
-  try{await navigator.clipboard.writeText(t);toast("레몬파출 내역을 복사했어요 (엑셀에 붙여넣으면 칸이 나뉘어요)");}catch(e){toast("복사 못 했어요",true);}
+/* v383: 레몬파출 보낼 표 → 이미지 (1일~말일, 직접 지급 줄 제외, 비고의 주민번호는 가림) */
+function pachLemonHtml(){
+  const ym=payYm(),nd=new Date(+ym.y,+ym.m,0).getDate(),WD="일월화수목금토";
+  const R=pachDoc().rows.filter(r=>!r.dir&&(String(r.name||"").trim()||r.amt));
+  const bd="border:1px solid #000;",c=`${bd}padding:3px 8px;text-align:center;white-space:nowrap;`;
+  let tr="",tot=0;
+  for(let d=1;d<=nd;d++){
+    const wd=WD[new Date(+ym.y,+ym.m-1,d).getDay()],list=R.filter(r=>r.d===d);const L=list.length?list:[null];
+    L.forEach((r,j)=>{if(r)tot+=Number(r.amt)||0;const note=r?String(r.note||"").replace(/\d{6}[-\s]?\d{7}/g,"").trim():"";
+      tr+=`<tr>${j===0?`<td rowspan="${L.length}" style="${c}border-right:0;width:34px;text-align:right">${d}일</td><td rowspan="${L.length}" style="${c}border-left:0;width:22px">${wd}</td>`:""}
+        <td style="${c}width:80px">${r?esc(r.name||""):""}</td><td style="${c}width:80px;text-align:right">${r&&r.amt?fmt(r.amt):""}</td>
+        <td style="${c}width:40px">${r?esc(r.nat||""):""}</td><td style="${c}width:40px">${r?esc(r.visa||""):""}</td><td style="${c}width:110px">${esc(note)}</td></tr>`;});
+  }
+  const hd=`${c}background:#e2efda;`;
+  return `<div id="pachLemonImg" style="display:inline-block;background:#fff;padding:12px;font-family:'Malgun Gothic','맑은 고딕',sans-serif;font-size:13px;color:#000">
+    <table style="border-collapse:collapse;border:2px solid #000"><tr><td colspan="7" style="${c}font-weight:700;font-size:16px;padding:8px">파출비용 <span style="font-weight:400;font-size:13px">(${ym.y}년 ${ym.m}월)</span></td></tr>
+    <tr><td colspan="2" style="${hd}">날짜</td><td style="${hd}">파출</td><td style="${hd}">금액</td><td style="${hd}">국적</td><td style="${hd}">비자</td><td style="${hd}">비고</td></tr>
+    ${tr}<tr><td colspan="3" style="${c}background:#fce4d6">합계</td><td style="${c}background:#fce4d6;text-align:right">${fmt(tot)}</td><td colspan="3" style="${c}background:#fce4d6"></td></tr></table></div>`;
+}
+window.pachLemonCopy=async function(mode){
+  const ym=payYm();const box=document.createElement("div");box.style.cssText="position:fixed;left:-10000px;top:0";box.innerHTML=pachLemonHtml();document.body.appendChild(box);
+  try{
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
+    const cv=await html2canvas(box.firstElementChild,{backgroundColor:"#ffffff",scale:2});
+    const blob=await new Promise(r=>cv.toBlob(r,"image/png"));
+    const dl=()=>{const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="레몬파출_"+String(ym.y).slice(2)+String(ym.m).padStart(2,"0")+".png";document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);};
+    if(mode==="dl"||!navigator.clipboard||typeof ClipboardItem==="undefined"){dl();toast("레몬파출 이미지를 저장했어요");return;}
+    try{await navigator.clipboard.write([new ClipboardItem({"image/png":blob})]);toast("레몬파출 이미지를 복사했어요 — 카톡에 Ctrl+V");}catch(e){dl();toast("복사가 막혀서 이미지 파일로 저장했어요");}
+  }catch(e){console.error(e);toast("이미지 만들기 실패: "+(e.message||e),true);}
+  finally{box.remove();}
 };
 window.pachDel=function(i){const D=pachDoc();D.rows.splice(i,1);pachSave();renderPay();};
 /* 엑셀(파출비용 시트)에서 가져오기: 이번 달 YYMM 이름의 시트(없으면 마지막 시트) */
@@ -16457,7 +16483,7 @@ function payPachBody(){
       const yr=[];for(let m=1;m<=12;m++){const d=(S.data.payPach||{})[y+String(m).padStart(2,"0")];if(!d||!(d.rows||[]).length)continue;const q=pachSplit(d.rows);yr.push([m,q]);}
       const box=(t,g,col,sub)=>`<div style="flex:1;min-width:230px;border:1px solid ${col};border-radius:10px;padding:8px 12px"><div style="font-weight:700;font-size:13px">${t} <span class="unit" style="font-weight:400">${g.n}건 · ${sub}</span></div><div style="font-size:13px;margin-top:3px">북촌 <b>${fmt(g.bc)}</b> · 피다 <b>${fmt(g.ep)}</b> · 합계 <b style="font-size:16px">${fmt(g.bc+g.ep)}</b>원</div></div>`;
       return `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">${box("🍋 레몬파출",sp.lm,"#eab308","월말에 한 번에 지급")}${box("✅ 직접 지급",sp.dir,"#86efac","이미 지급 (체크한 줄)")}</div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><button class="btn btn-sm" onclick="pachLemonCopy()">📋 레몬파출 내역 복사 (날짜·이름·금액·위치)</button>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><button class="btn btn-sm btn-primary" onclick="pachLemonCopy()">🖼 레몬파출 이미지 복사</button><button class="btn btn-sm" onclick="pachLemonCopy('dl')">💾 이미지 저장</button>
         ${yr.length?`<details><summary style="cursor:pointer;font-size:12.5px;font-weight:700">📅 ${ym.y}년 월별 레몬파출 비용</summary><table class="rpt" style="font-size:12.5px;margin-top:6px"><thead><tr><th>월</th><th>북촌</th><th>피다</th><th>레몬 합계</th><th>직접 지급</th></tr></thead><tbody>${yr.map(([m,q])=>`<tr><td>${m}월</td><td style="text-align:right">${fmt(q.lm.bc)}</td><td style="text-align:right">${fmt(q.lm.ep)}</td><td style="text-align:right;font-weight:700">${fmt(q.lm.bc+q.lm.ep)}</td><td style="text-align:right;color:#64748b">${fmt(q.dir.bc+q.dir.ep)}</td></tr>`).join("")}
           <tr class="total"><td>합계</td><td style="text-align:right">${fmt(yr.reduce((a,[,q])=>a+q.lm.bc,0))}</td><td style="text-align:right">${fmt(yr.reduce((a,[,q])=>a+q.lm.ep,0))}</td><td style="text-align:right">${fmt(yr.reduce((a,[,q])=>a+q.lm.bc+q.lm.ep,0))}</td><td style="text-align:right">${fmt(yr.reduce((a,[,q])=>a+q.dir.bc+q.dir.ep,0))}</td></tr></tbody></table></details>`:""}</div>`;})()}
     ${true?`<div class="table-wrap"><table class="rpt" id="pachTbl" style="font-size:12.5px"><thead><tr><th>날짜</th><th>요일</th><th>파출(이름)</th><th>금액</th><th title="비우면 4시간">시간 <span class="unit" style="font-weight:400">(기본 4)</span></th><th>위치</th><th>국적</th><th>비자</th><th>비고</th><th title="체크 = 우리가 직접 불러서 이미 지급 · 비움 = 레몬파출">직접 지급</th><th></th></tr></thead><tbody>${rows}</tbody>
