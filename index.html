@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v384</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v385</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -17923,6 +17923,7 @@ function hgParsePay(pages){
     }
     if(tot)total=tot;
   });
+  rows.concat(total?[total]:[]).forEach(hgFixAlw);
   /* v384: 특별상여금은 앱처럼 상여에 합쳐서 비교 */
   rows.concat(total?[total]:[]).forEach(o=>{const sb=o.extra&&o.extra["특별상여금"];if(sb){o.bon=(o.bon||0)+sb;o.sbon=sb;}});
   return {rows,total};
@@ -17976,6 +17977,16 @@ function hgF(F,kind){const fs=[kind,kind+"_branch"].map(k=>F[k]).filter(Boolean)
   const tot=fs.some(f=>f.total)?fs.reduce((a,f)=>{Object.entries(f.total||{}).forEach(([k,v])=>{if(typeof v==="number")a[k]=(a[k]||0)+v;});return a;},{}):null;
   return {rows:fs.flatMap(f=>f.rows),total:tot,name:fs.map(f=>f.name).join(", ")};}
 const HG_SLOT_LB={pay_main:"급여대장 본점",pay_branch:"급여대장 지점",biz:"사업소득 본점",biz_branch:"사업소득 지점",daily:"일용직 본점",daily_branch:"일용직 지점"};
+/* v385: 급여대장의 기타 수당 칸(연차수당·야간수당 등 — 머리글에 없는 지급 항목)은 앱·보낸 파일처럼 제수당에 합쳐서 비교 */
+const HG_NOT_ALW=/특별상여|상여|공제|보험|소득세|지방|연금|가불|상환|기부|조합|비과세|직급|부서|입사|퇴사/;
+function hgFixAlw(o){
+  if(!o||o._alw)return o;o._alw=1;
+  const x=o.extra||{};const add={};
+  Object.keys(x).forEach(k=>{if(!HG_NOT_ALW.test(k)&&x[k])add[k]=x[k];});
+  const sum=Object.values(add).reduce((a,v)=>a+v,0);
+  if(sum){o.alw=(o.alw||0)+sum;o.alwX=add;}
+  return o;
+}
 function hgKey(){const ym=payYm();return ym?ym.y+"-"+String(ym.m).padStart(2,"0"):null;}
 function hgStore(){S.data.payHg=S.data.payHg||{};return S.data.payHg;}
 async function hgSave(key){
@@ -18044,7 +18055,7 @@ function hgSummarize(d){
       if(!a)r.miss++;else if(dn)r.bad++;});
     if(app){r.appOnly=Object.keys(app).filter(n=>!seen.has(n)).length;Object.values(app).forEach(a=>flds.forEach(f=>{const v=keyOf?keyOf(a,f):a[f];if(v!=null)r.totA[f]=(r.totA[f]||0)+v;}));}
     r.ok=!r.bad&&!r.miss&&!r.appOnly;return r;};
-  const payRows=["pay_main","pay_branch"].filter(k=>F[k]).flatMap(k=>F[k].rows);
+  const payRows=["pay_main","pay_branch"].filter(k=>F[k]).flatMap(k=>F[k].rows.map(hgFixAlw));
   if(payRows.length)out.pay=sec(payRows,hgAppPay(),["pay","bon","alw","tot","np","hi","ei","ltc","tax","ltax","ded","net"],(a,f)=>f==="net"&&a.pre?a.net+a.pre:(a[f]||0));
   const FB=hgF(F,"biz"),FD=hgF(F,"daily");
   if(FB)out.biz=sec(FB.rows,hgAppYong(),["amt","tax","ltax","net"]);
@@ -18295,7 +18306,7 @@ window.payHgBody=function(){
     const trs=[];
     payFiles.forEach(k=>{const f=F[k];const isB=k==="pay_branch";
       trs.push(`<tr style="background:#EEF3EC"><td colspan="${FLD.length+2}" class="l"><b>${isB?"지점":"본점"}</b> <span class="unit">${esc(f.branch||"")} · ${f.rows.length}명</span></td></tr>`);
-      f.rows.forEach(r=>{const a=app[r.name];seen.add(r.name);
+      f.rows.forEach(r=>{hgFixAlw(r);const a=app[r.name];seen.add(r.name);
         let diff=0;const cells=FLD.map(([fk])=>{let av=a?a[fk]:null;if(fk==="net"&&a&&a.pre)av=a.net+a.pre;if(a&&(r[fk]||0)!==(av||0))diff++;sumH[fk]=(sumH[fk]||0)+(r[fk]||0);if(a)sumA[fk]=(sumA[fk]||0)+(av||0);return hgCell(r[fk]||0,a?av||0:null,fk==="tot"||fk==="net");}).join("");
         if(!a)miss++;else if(diff)bad++;
         const bz=cfg.bizOf?cfg.bizOf[r.name]:null;const bzWarn=bz&&((isB&&bz!=="ep")||(!isB&&bz==="ep"))?` <span class="buy-warn" title="이카운트 입력 사업장 설정과 소속이 달라요">사업장 ${bz==="ep"?"꽃밥에피다":bz==="mk"?"꽃밥마켓":"보자기꽃밥"}</span>`:"";
@@ -18391,7 +18402,7 @@ function ptxCrossHtml(){
     const trs=rows.map(r=>{const a=sent[r.name];seen.add(r.name);let diff=0;
       const cells=FLD.map(([k])=>{const hv=pdfOf?pdfOf(r,k):(r[k]||0);sumH[k]=(sumH[k]||0)+hv;const av=a?(a[k]||0):null;if(a)sumA[k]=(sumA[k]||0)+av;if(a&&hv!==av)diff++;return hgCell(hv,av,k==="tot"||k==="net"||k==="amt");}).join("");
       if(!a)miss++;else if(diff)bad++;
-      return `<tr${!a?' style="background:#FFF8EC"':""}><td class="l"><b>${esc(r.name)}</b></td>${cells}<td>${!a?'<span class="buy-warn">보낸 파일에 없음</span>':diff?`<span class="buy-warn">⚠ ${diff}칸</span>`:ok}</td></tr>`;}).join("");
+      return `<tr${!a?' style="background:#FFF8EC"':""}><td class="l"><b>${esc(r.name)}</b>${r.alwX?`<div class="unit" style="font-size:10.5px">제수당에 ${Object.entries(r.alwX).map(([k,v])=>esc(k)+" "+fmt(v)).join(", ")} 포함</div>`:""}</td>${cells}<td>${!a?'<span class="buy-warn">보낸 파일에 없음</span>':diff?`<span class="buy-warn">⚠ ${diff}칸</span>`:ok}</td></tr>`;}).join("");
     const only=Object.keys(sent).filter(n=>!seen.has(n));
     only.forEach(n=>{const a=sent[n];FLD.forEach(([k])=>{sumA[k]=(sumA[k]||0)+(a[k]||0);});});
     const onlyTr=only.map(n=>`<tr style="background:#FDECEC"><td class="l"><b>${esc(n)}</b></td>${FLD.map(([k])=>`<td style="text-align:right;color:#b42318">${fmt(sent[n][k]||0)}</td>`).join("")}<td><span class="buy-warn">신고자료에 없음</span></td></tr>`).join("");
@@ -18400,7 +18411,7 @@ function ptxCrossHtml(){
       <div class="table-wrap"><table class="rpt hgT" style="font-size:11.5px;margin:0"><thead><tr><th class="l">성명</th>${FLD.map(([,n])=>`<th>${n}</th>`).join("")}<th>대조</th></tr></thead><tbody>${trs}${onlyTr}
       <tr class="total"><td class="l"><b>합계</b></td>${FLD.map(([k])=>hgCell(sumH[k]||0,sumA[k]||0,true)).join("")}<td></td></tr></tbody></table></div>`;
   };
-  const SANG=[["pay","기본급"],["bon","상여(특별상여 포함)"],["alw","제수당"],["tot","지급합계"],["np","국민연금"],["hi","건강보험"],["ei","고용보험"],["ltc","장기요양"],["tax","소득세"],["ltax","지방소득세"],["ded","공제합계"],["net","차인지급액"]];
+  const SANG=[["pay","기본급"],["bon","상여(특별상여 포함)"],["alw","제수당(연차수당 등 포함)"],["tot","지급합계"],["np","국민연금"],["hi","건강보험"],["ei","고용보험"],["ltc","장기요양"],["tax","소득세"],["ltax","지방소득세"],["ded","공제합계"],["net","차인지급액"]];
   [["mi","꽃밥이야기","pay_main","biz","daily"],["ep","꽃밥에피다","pay_branch","biz_branch","daily_branch"]].forEach(([biz,lb,sp,sb,sd])=>{
     if(!F[sp]&&!F[sb]&&!F[sd])return;
     const sent=ptxSentFor(biz,yymm);
@@ -18409,7 +18420,7 @@ function ptxCrossHtml(){
     if(sent.loading){html+=`<div class="footnote">보낸 파일 읽는 중…</div></div>`;return;}
     if(sent.err){html+=`<div class="check-box warn">보낸 파일을 못 읽었어요: ${esc(sent.err)}</div></div>`;return;}
     html+=` <span class="unit">↔ 보낸 파일: ${esc(sent.name||"")}</span>`;
-    if(F[sp])html+=sec("① 급여대장 ↔ 보낸 상용직",F[sp].rows,sent.sang,SANG);
+    if(F[sp])html+=sec("① 급여대장 ↔ 보낸 상용직",F[sp].rows.map(hgFixAlw),sent.sang,SANG);
     if(F[sb])html+=sec("② 사업소득지급대장 ↔ 보낸 사업소득",F[sb].rows,sent.biz,[["amt","지급액"],["tax","소득세"],["ltax","지방소득세"],["net","차인지급액"]]);
     if(F[sd])html+=sec("③ 일용직급여지급명세서 ↔ 보낸 일용직",F[sd].rows,sent.daily,[["tot","급여총액"],["hours","근무시간"]]);
     html+=`</div>`;
