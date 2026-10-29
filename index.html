@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v391</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v392</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -18235,8 +18235,8 @@ window.nbPick=async function(inp){
       d.nb.biz[r.biz]={nat:r.nat.map(n=>({name:n.name,amt:n.amt})),local:r.local,file:f.name,up:Date.now()};
       const imgs=[];
       try{
-        for(const n of r.nat)if(n.page!=null)imgs.push(await nbCrop(pages[n.page],10,585,n.y0,n.y1,3));
-        if(r.localPage!=null)imgs.push(await nbCrop(pages[r.localPage],52,548,r.localY0,r.localY1,3));
+        for(const n of r.nat)if(n.page!=null){const c=await nbCrop(pages[n.page],10,585,n.y0,n.y1,3);c.nbLab=n.name||"국세";imgs.push(c);}
+        if(r.localPage!=null){const c=await nbCrop(pages[r.localPage],52,548,r.localY0,r.localY1,3);c.nbLab="지방소득세";imgs.push(c);}
       }catch(e){console.error(e);toast(f.name+": 금액은 읽었는데 이미지로 바꾸지 못했어요",true);}
       IM[key]=IM[key]||{};IM[key][r.biz]=imgs;
       done.push((r.biz==="branch"?"꽃밥에피다":"꽃밥이야기")+" "+r.nat.map(n=>n.name+" "+fmt(n.amt)).concat(r.local?["지방소득세 "+fmt(r.local)]:[]).join(", "));
@@ -18279,6 +18279,15 @@ window.nbCopyImg=async function(key,only){
     catch(e){const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=(nbYm(key)||key)+"_소득세납부"+(only?"_"+only:"")+".png";document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},800);toast("복사가 막혀서 이미지 파일로 저장했어요");}
   }catch(e){console.error(e);toast("이미지 만들기 실패: "+(e.message||e),true);}
 };
+/* v392: 영수증 한 장씩 복사 (긴 한 장은 보고 창이 높이에 맞춰 줄여 작게 보임) */
+window.nbCopyOne=async function(key,biz,i,btn){
+  const c=(((nbStoreImgs()[key])||{})[biz]||[])[i];if(!c)return;
+  try{
+    const blob=await new Promise(r=>c.toBlob(r,"image/png"));
+    try{await navigator.clipboard.write([new ClipboardItem({"image/png":blob})]);toast((biz==="branch"?"꽃밥에피다":"꽃밥이야기")+" "+(c.nbLab||"")+" 복사 — 보고 창에 Ctrl+V");if(btn){btn.style.background="#DCEFE0";btn.textContent="✓ "+btn.textContent.replace(/^✓ /,"");}}
+    catch(e){const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=(nbYm(key)||key)+"_"+(biz==="branch"?"꽃밥에피다":"꽃밥이야기")+"_"+(c.nbLab||i)+".png";document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},800);toast("복사가 막혀서 이미지 파일로 저장했어요");}
+  }catch(e){console.error(e);toast("복사 실패: "+(e.message||e),true);}
+};
 window.nbCopyText=function(key){const t=nbText(hgStore()[key].nb,key);navigator.clipboard.writeText(t).then(()=>toast("금액 문구를 복사했어요")).catch(()=>toast("복사 실패",true));};
 window.nbClear=function(key){const d=hgStore()[key];if(!d||!d.nb)return;if(!confirm("이 달 납부서 자료를 지울까요?"))return;delete d.nb;const IM=nbStoreImgs();delete IM[key];hgSave(key);renderPay();};
 /* 한가람 급여대장·사업소득·일용직 PDF 합계와 맞는지 */
@@ -18307,7 +18316,9 @@ function nbHtml(curKey){
   h+=`<div style="font-weight:700;font-size:15px;margin:2px 0 8px">${py?py+" 소득세 납부":key+" 귀속"} ${nb.due?`<span class="unit">납부기한 ${nb.due}</span>`:""} <span class="unit">(${key.replace("-","년 ")}월 귀속${nb.payYm?` · ${Number(nb.payYm.slice(2))}월 지급분`:""})</span></div>
     <div style="display:flex;gap:14px;flex-wrap:wrap">${chk}</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center"><button class="btn btn-sm btn-primary" onclick="nbCopyText('${key}')">📋 금액 문구 복사</button>
-      ${imgsHave?`<button class="btn btn-sm btn-primary" onclick="nbCopyImg('${key}')">📸 납부서 이미지 복사 (전체)</button>${NB_BIZ.filter(([k])=>IM[k]&&IM[k].length).map(([k,n])=>`<button class="btn btn-sm" onclick="nbCopyImg('${key}','${k}')">${n}만</button>`).join("")}`:`<span class="unit">이미지는 PDF를 올린 화면에서만 만들 수 있어요 — 다시 보내려면 PDF를 한 번 더 올려주세요</span>`}</div>
+      ${imgsHave?`<div style="flex-basis:100%;display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:8px 10px;border:1px dashed #9DBBA4;border-radius:10px;background:#F4F9F4"><b style="font-size:12.5px">🖼 한 장씩 복사</b> <span class="unit">보고 창에서 크게 보여요 — 복사 → 붙여넣기를 차례로</span>
+        ${NB_BIZ.filter(([k])=>IM[k]&&IM[k].length).map(([k,n])=>IM[k].map((c,i)=>`<button class="btn btn-sm" id="nbOne_${k}_${i}" onclick="nbCopyOne('${key}','${k}',${i},this)">${n} ${esc(c.nbLab||(i===IM[k].length-1?"지방소득세":"국세"))}</button>`).join("")).join("")}</div>
+      <button class="btn btn-sm" onclick="nbCopyImg('${key}')">📸 한 장으로 합쳐 복사 (전체)</button>${NB_BIZ.filter(([k])=>IM[k]&&IM[k].length).map(([k,n])=>`<button class="btn btn-sm" onclick="nbCopyImg('${key}','${k}')">${n}만</button>`).join("")}`:`<span class="unit">이미지는 PDF를 올린 화면에서만 만들 수 있어요 — 다시 보내려면 PDF를 한 번 더 올려주세요</span>`}</div>
     <pre style="margin-top:10px;padding:10px 12px;background:#FAFAF7;border:1px solid var(--line,#e5e5e0);border-radius:8px;font:inherit;font-size:13px;white-space:pre-wrap;max-width:420px">${esc(nbText(nb,key))}</pre>`;
   if(imgsHave){
     h+=`<div style="margin-top:8px;display:flex;flex-direction:column;gap:10px;max-width:640px" id="nbPreview"></div>`;
