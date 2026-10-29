@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v388</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v389</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -18190,7 +18190,23 @@ async function nbCrop(P,x0,x1,y0,y1,scale){
   await P.pg.render({canvasContext:ctx,viewport:vp}).promise;
   const H=P.vp.height;const sx=Math.max(0,x0*scale),sy=Math.max(0,(H-y0)*scale),sw=Math.min(c.width-sx,(x1-x0)*scale),sh=Math.min(c.height-sy,(y0-y1)*scale);
   const o=document.createElement("canvas");o.width=Math.round(sw);o.height=Math.round(sh);o.getContext("2d").drawImage(c,sx,sy,sw,sh,0,0,sw,sh);
-  return o;
+  return nbTrim(o);
+}
+/* v389: 영수증 둘레의 흰 여백을 잘라 글자가 폭을 꽉 채우게 (보고 창에서 덜 작아 보이게) */
+function nbTrim(c){
+  try{
+    const w=c.width,h=c.height,d=c.getContext("2d").getImageData(0,0,w,h).data;
+    const dark=(x,y)=>{const i=(y*w+x)*4;return d[i]<200||d[i+1]<200||d[i+2]<200;};
+    const rowHas=(y)=>{let n=0;for(let x=0;x<w;x+=2)if(dark(x,y)&&++n>2)return true;return false;};
+    const colHas=(x,y0,y1)=>{let n=0;for(let y=y0;y<y1;y+=2)if(dark(x,y)&&++n>2)return true;return false;};
+    let y0=0,y1=h-1;while(y0<h&&!rowHas(y0))y0++;while(y1>y0&&!rowHas(y1))y1--;
+    if(y1-y0<20)return c;
+    let x0=0,x1=w-1;while(x0<w&&!colHas(x0,y0,y1))x0++;while(x1>x0&&!colHas(x1,y0,y1))x1--;
+    const pad=Math.round(w*0.012);x0=Math.max(0,x0-pad);y0=Math.max(0,y0-pad);x1=Math.min(w-1,x1+pad);y1=Math.min(h-1,y1+pad);
+    if(x1-x0<w*0.4)return c;
+    const o=document.createElement("canvas");o.width=x1-x0+1;o.height=y1-y0+1;o.getContext("2d").drawImage(c,x0,y0,o.width,o.height,0,0,o.width,o.height);
+    return o;
+  }catch(e){return c;}
 }
 function nbStoreImgs(){window.__pay.nbImg=window.__pay.nbImg||{};return window.__pay.nbImg;}
 window.nbPick=async function(inp){
@@ -18208,8 +18224,8 @@ window.nbPick=async function(inp){
       d.nb.biz[r.biz]={nat:r.nat.map(n=>({name:n.name,amt:n.amt})),local:r.local,file:f.name,up:Date.now()};
       const imgs=[];
       try{
-        for(const n of r.nat)if(n.page!=null)imgs.push(await nbCrop(pages[n.page],10,585,n.y0,n.y1,2));
-        if(r.localPage!=null)imgs.push(await nbCrop(pages[r.localPage],52,548,r.localY0,r.localY1,2));
+        for(const n of r.nat)if(n.page!=null)imgs.push(await nbCrop(pages[n.page],10,585,n.y0,n.y1,3));
+        if(r.localPage!=null)imgs.push(await nbCrop(pages[r.localPage],52,548,r.localY0,r.localY1,3));
       }catch(e){console.error(e);toast(f.name+": 금액은 읽었는데 이미지로 바꾸지 못했어요",true);}
       IM[key]=IM[key]||{};IM[key][r.biz]=imgs;
       done.push((r.biz==="branch"?"꽃밥에피다":"꽃밥이야기")+" "+r.nat.map(n=>n.name+" "+fmt(n.amt)).concat(r.local?["지방소득세 "+fmt(r.local)]:[]).join(", "));
@@ -18230,15 +18246,16 @@ function nbText(nb){
 }
 async function nbComposite(key,only){
   const IM=(nbStoreImgs()[key])||{};const nb=hgStore()[key].nb;
-  const W=1150;const parts=[];
+  const W=1400;const parts=[];
   const py=nb.payYm||"";
-  parts.push({t:(py?py+" ":"")+"소득세 납부",size:34,h:70});
-  NB_BIZ.forEach(([k,n])=>{if(only&&only!==k)return;const imgs=IM[k];if(!imgs||!imgs.length)return;parts.push({t:n,size:28,h:56});imgs.forEach(c=>parts.push({img:c}));});
-  let H=20;parts.forEach(p=>{if(p.img)H+=Math.round(p.img.height*W/p.img.width)+18;else H+=p.h;});
-  const cv=document.createElement("canvas");cv.width=W+40;cv.height=H+20;const ctx=cv.getContext("2d");
-  ctx.fillStyle="#fff";ctx.fillRect(0,0,cv.width,cv.height);let y=20;
-  parts.forEach(p=>{if(p.img){const h=Math.round(p.img.height*W/p.img.width);ctx.strokeStyle="#ddd";ctx.strokeRect(19.5,y-0.5,W+1,h+1);ctx.drawImage(p.img,20,y,W,h);y+=h+18;}
-    else{ctx.fillStyle="#222";ctx.font=`700 ${p.size}px 'Pretendard','Malgun Gothic','Apple SD Gothic Neo',sans-serif`;ctx.fillText(p.t,20,y+p.size);y+=p.h;}});
+  parts.push({t:(py?py+" ":"")+"소득세 납부",size:40,h:80});
+  NB_BIZ.forEach(([k,n])=>{if(only&&only!==k)return;const imgs=IM[k];if(!imgs||!imgs.length)return;parts.push({t:n,size:34,h:64});imgs.forEach(c=>parts.push({img:c}));});
+  const M=8;let H=M;parts.forEach(p=>{if(p.img)H+=Math.round(p.img.height*W/p.img.width)+14;else H+=p.h;});
+  const cv=document.createElement("canvas");cv.width=W+M*2;cv.height=H+M;const ctx=cv.getContext("2d");
+  ctx.fillStyle="#fff";ctx.fillRect(0,0,cv.width,cv.height);let y=M;
+  ctx.imageSmoothingQuality="high";
+  parts.forEach(p=>{if(p.img){const h=Math.round(p.img.height*W/p.img.width);ctx.drawImage(p.img,M,y,W,h);y+=h+14;}
+    else{ctx.fillStyle="#222";ctx.font=`700 ${p.size}px 'Pretendard','Malgun Gothic','Apple SD Gothic Neo',sans-serif`;ctx.fillText(p.t,M+4,y+p.size);y+=p.h;}});
   return cv;
 }
 window.nbCopyImg=async function(key,only){
