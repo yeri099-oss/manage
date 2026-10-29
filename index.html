@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v385</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v386</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -18022,6 +18022,8 @@ function hgAppPay(){
   const em=payEmpRows();if(!em)return {};
   const g=(c,r)=>c?Math.round(em.val(c+r)):0;const cm=em.cm;const out={};
   em.rows.forEach(row=>{const r=row.r;const o={pay:g(cm.pay,r),bon:g(cm.bon,r)+(cm.sbon?g(cm.sbon,r):0),alw:g(cm.alw,r),tot:g(cm.tot,r),np:g(cm.np,r),hi:g(cm.hi,r),ei:g(cm.ei,r),ltc:g(cm.ltc,r),tax:g(cm.tax,r),ltax:g(cm.ltax,r),ded:g(cm.ded,r),net:g(cm.net,r),pre:cm.pre?g(cm.pre,r):0};
+    /* v386: 앱 공제총액엔 기지급액(특별상여금 미리 준 것)이 들어 있음 — 세무사무실 급여대장 공제합계는 기지급액 빼기 전이라 빼고 비교 */
+    if(o.pre)o.ded-=o.pre;
     out[hgNorm(row.name)]=o;});
   return out;
 }
@@ -18319,7 +18321,7 @@ window.payHgBody=function(){
     html+=`<div style="font-weight:700;margin:12px 0 4px">① 급여대장 ↔ 상용직급여 ${bad||miss||appOnly.length?`<span class="buy-warn">다른 사람 ${bad}명${miss?` / 앱에 없음 ${miss}명`:""}${appOnly.length?` / 한가람에 없음 ${appOnly.length}명`:""}</span>`:'<span style="color:#2F6B3F">✓ 전원 일치</span>'}</div>
       <style>.hgT td,.hgT th{padding:4px 5px!important;white-space:nowrap}.hgT{width:auto!important}</style><div class="table-wrap"><table class="rpt hgT" style="font-size:11px;margin:0"><thead><tr><th class="l">성명</th>${FLD.map(([,n])=>`<th>${n}</th>`).join("")}<th>대조</th></tr></thead><tbody>${trs.join("")}${totRow}</tbody></table></div>
       ${appOnly.length?`<div class="footnote" style="margin-top:4px"><b style="color:#b45309">앱 상용직급여에만 있는 사람:</b> ${appOnly.map(esc).join(", ")}</div>`:""}
-      <div class="footnote" style="margin-top:4px">빨간 칸 = 한가람 금액(굵게)과 앱 금액이 다른 곳이에요. 앱에 기지급액이 있으면 차인지급액은 기지급액을 더해서 비교해요.</div>`;
+      <div class="footnote" style="margin-top:4px">빨간 칸 = 한가람 금액(굵게)과 앱 금액이 다른 곳이에요. 앱에 기지급액(특별상여금 미리 준 것)이 있으면 공제합계는 기지급액을 빼고, 차인지급액은 더해서 비교해요 — 세무사무실 급여대장 기준.</div>`;
   }
   /* ② 사업소득 ↔ 용역직급여 */
   const FB=hgF(F,"biz"),FD=hgF(F,"daily");
