@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v392</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v393</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -18081,6 +18081,8 @@ function hgSummarize(d){
 }
 function hgSumSame(a,b){return JSON.stringify(a||{})===JSON.stringify(b||{});}
 window.hgRecOk=function(key,on){const d=hgStore()[key];if(!d)return;d.rec=d.rec||{};if(on){d.rec.ok=Date.now();d.rec.okSum=d.rec.sum;}else{delete d.rec.ok;delete d.rec.okSum;}hgSave(key);renderPay();};
+/* v393: 앱에 자료가 완전하지 않은 달은 '임시값'으로 표시하고 대조에서 뺌 */
+window.hgRecTemp=function(key,on){const d=hgStore()[key];if(!d)return;d.rec=d.rec||{};if(on)d.rec.temp=Date.now();else delete d.rec.temp;hgSave(key);renderPay();};
 window.hgRecMemo=function(key,v){const d=hgStore()[key];if(!d)return;d.rec=d.rec||{};d.rec.memo=String(v||"").trim();hgSave(key);};
 window.hgRecOpen=function(key){window.__pay.hgOpen=window.__pay.hgOpen===key?null:key;renderPay();};
 function hgSecBadge(r,label){
@@ -18100,10 +18102,14 @@ function hgHistoryHtml(curKey){
     const allOk=["pay","biz","daily"].every(x=>!S[x]||S[x].ok);
     const diffs=[].concat(...["pay","biz","daily"].map(x=>(S[x]&&S[x].diffs||[]).map(v=>Object.assign({sec:x},v))));
     const det=open===k?`<tr><td colspan="8" class="l" style="background:#FAFAF7;white-space:normal">${diffs.length?diffs.map(v=>`<span style="display:inline-block;margin:2px 10px 2px 0"><b>${esc(v.n)}</b> ${HG_FL[v.f]||v.f} 한가람 ${fmt(v.h)} / 앱 ${fmt(v.a)}</span>`).join(""):'<span class="unit">금액이 다른 칸은 없어요</span>'}${R.ok?`<div class="unit" style="margin-top:4px">${dt(R.ok)} 확인 완료 때의 결과예요</div>`:""}</td></tr>`:"";
+    const tmpLink=`<a href="javascript:void(0)" onclick="hgRecTemp('${k}',${R.temp?0:1})" style="font-size:11.5px;color:#64748b;margin-left:6px">${R.temp?"임시 해제":"임시값으로"}</a>`;
+    if(R.temp)return `<tr style="background:#F5F5F4;color:#94a3b8"><td><b>${k.replace("-","년 ")}월</b></td><td style="font-size:12px">${files}</td>
+      <td colspan="4" class="l">🕓 <b>임시값</b> — 앱에 자료를 다 넣기 전이라 대조에서 뺐어요</td><td style="white-space:nowrap">임시값</td>
+      <td class="l" style="white-space:normal;min-width:170px;max-width:260px;font-size:12px">${esc(R.memo||"")}${tmpLink}</td></tr>`;
     return `<tr${k===curKey?' style="background:#F4F9F4"':""}><td><b>${k.replace("-","년 ")}월</b></td><td style="font-size:12px">${files}</td>
       ${R.sum?`<td class="l">${hgSecBadge(S.pay)}</td><td class="l">${hgSecBadge(S.biz)}</td><td class="l">${hgSecBadge(S.daily)}</td><td style="text-align:right">${tot}</td>`:`<td colspan="4" class="l unit">아직 대조 전 — 급여 탭에서 이 달을 열고 📤 세무사무실 탭을 열면 기록돼요</td>`}
       <td style="white-space:nowrap">${R.ok?`<span style="color:#2F6B3F">✓ ${dt(R.ok)}</span>`:allOk&&R.sum?'<span class="unit">일치 (확인 전)</span>':'<span class="unit">확인 전</span>'}</td>
-      <td class="l" style="white-space:normal;min-width:170px;max-width:260px;font-size:12px">${esc(R.memo||"")} <a href="javascript:void(0)" onclick="hgRecOpen('${k}')" style="font-size:11.5px">${open===k?"접기":"자세히"}</a></td></tr>${det}`;}).join("");
+      <td class="l" style="white-space:normal;min-width:170px;max-width:260px;font-size:12px">${esc(R.memo||"")} <a href="javascript:void(0)" onclick="hgRecOpen('${k}')" style="font-size:11.5px">${open===k?"접기":"자세히"}</a>${tmpLink}</td></tr>${det}`;}).join("");
   return `<div class="card"><div class="card-head"><div class="card-title">📒 한가람 대조 기록 <span class="unit">달마다 올린 PDF와 대조 결과가 남아요 · 급여 탭에서 그 달을 열면 자세한 표를 다시 볼 수 있어요</span></div></div>
     <div class="table-wrap"><table class="rpt hgT" style="font-size:12px;margin:0"><thead><tr><th>귀속월</th><th>받은 PDF</th><th class="l">급여대장</th><th class="l">사업소득</th><th class="l">일용직</th><th>지급합계(한가람)</th><th>확인</th><th class="l">메모</th></tr></thead><tbody>${trs}</tbody></table></div></div>`;
 }
@@ -18334,7 +18340,7 @@ window.payHgBody=function(embed){
   const END=embed?"</details>":"</div>";
   const up=`<button class="btn btn-sm btn-primary" onclick="document.getElementById('hgFile').click()">📄 한가람 PDF 올리기</button><input type="file" id="hgFile" accept=".pdf" multiple style="display:none" onchange="hgPick(this)">`;
   const head=embed?(()=>{const sm=d&&Object.keys(d.files||{}).length?hgSummarize(d):null;const rec=(d&&d.rec)||{};
-    return `<details class="card"><summary style="cursor:pointer;font-weight:700;font-size:14.5px">🧮 앱 급여와도 비교 · 확인 완료 기록 ${key?`— ${key.replace("-","년 ")}월`:""} <span style="font-weight:400;font-size:12.5px">${sm?`급여대장 ${hgSecBadge(sm.pay)} · 사업소득 ${hgSecBadge(sm.biz)} · 일용직 ${hgSecBadge(sm.daily)}${rec.ok?' · <span style="color:#2F6B3F">✓ 확인 완료</span>':""}`:""}</span></summary>
+    return `<details class="card"><summary style="cursor:pointer;font-weight:700;font-size:14.5px">🧮 앱 급여와도 비교 · 확인 완료 기록 ${key?`— ${key.replace("-","년 ")}월`:""} <span style="font-weight:400;font-size:12.5px">${sm?`급여대장 ${hgSecBadge(sm.pay)} · 사업소득 ${hgSecBadge(sm.biz)} · 일용직 ${hgSecBadge(sm.daily)}${rec.ok?' · <span style="color:#2F6B3F">✓ 확인 완료</span>':""}${rec.temp?' · <span style="color:#64748b">🕓 임시값(대조 제외)</span>':""}`:""}</span></summary>
     <div class="footnote" style="margin:6px 0">위 크로스체크는 <b>보낸 파일</b>과, 여기는 지금 앱 급여(급여 탭에서 보는 달)와 비교해요. 다 맞으면 '확인 완료'를 체크해 기록으로 남겨요.</div>`;})():`<div class="card"><div class="card-head"><div class="card-title">🏛 한가람 대조 ${key?`— ${key.replace("-","년 ")}월 귀속`:""} <span class="unit">세무사무소에서 받은 급여대장(본점·지점)·사업소득지급대장·일용직급여지급명세서 PDF를 올리면 이번 달 앱 금액과 맞는지 확인해요</span></div><div class="card-actions">${up}${d?`<button class="btn btn-sm" onclick="hgClear('${key}')">자료 지우기</button>`:""}</div></div>
     <div class="footnote" style="margin:-4px 0 6px">PDF 네 개를 한 번에 골라 올려도 돼요. 이름과 금액만 읽고 주민등록번호·주소·전화번호는 저장하지 않아요.</div>`;
   if(!key)return head+`<div class="footnote">급여품의 파일을 먼저 올려주세요 (귀속 연월을 앱 급여에서 가져와요).</div>${END}`+nbHtml(null)+hgHistoryHtml(null);
