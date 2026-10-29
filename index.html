@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v393</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v394</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -20700,10 +20700,46 @@ const AUTO={};
 function autoCell(id,fn,strong){AUTO[id]=fn;return `<td class="au${strong?' strong':''}" data-ac="${id}"></td>`;}
 function inp(path,cls){return `<td><input data-p="${path}" class="${cls||''}"></td>`;}
 function blank(n){return `<td class="au" colspan="${n||1}"></td>`;}
+/* v394: 📌 매달 잊지 말 것 — 매출확정 입력 화면 맨 위 알림 (클라우드 salesStatus_months/_remind 에 저장)
+   찾을 이름(키워드)을 적어두면 이번 달 ⑩ 기타 거래처에 그 이름 줄이 있는지 자동 확인 */
+let REMIND=null,REMIND_CL=false;
+const REMIND_DEF=[{id:'card2',t:'새 카드단말기 매출(행사·한식페스타 등) → ⑩ 기타 거래처에 소속 「마켓」으로 추가 (카드·QR / 현금·이체 두 줄)',kw:'단말기|페스타|행사'}];
+function remindList(){
+  if(!REMIND){try{const x=JSON.parse(localStorage.getItem('ssv2_remind')||'null');if(x&&Array.isArray(x.list))REMIND=x.list;}catch(e){}}
+  if(!REMIND)REMIND=REMIND_DEF.slice();
+  if(FB&&!REMIND_CL){REMIND_CL=true;db.collection('salesStatus_months').doc('_remind').get().then(sn=>{if(sn.exists&&Array.isArray((sn.data()||{}).list)){REMIND=sn.data().list;try{localStorage.setItem('ssv2_remind',JSON.stringify({list:REMIND}));}catch(e){}if(CUR&&MONTHS[CUR])renderInput();}}).catch(()=>{});}
+  return REMIND;
+}
+function remindSave(){
+  try{localStorage.setItem('ssv2_remind',JSON.stringify({list:REMIND}));}catch(e){}
+  if(FB)db.collection('salesStatus_months').doc('_remind').set({list:REMIND,at:Date.now()}).catch(e=>console.warn(e));
+}
+function remindHtml(m){
+  const L=remindList();const none=m.remindNone||{};
+  const names=(m.extra||[]).filter(x=>x.amt).map(x=>x.name||'');
+  const rows=L.map(r=>{
+    let re=null;try{re=r.kw?new RegExp(r.kw):null;}catch(e){}
+    const hit=re?names.filter(n=>re.test(n)):[];
+    const st=hit.length?`<span style="color:#15803d;font-weight:700">✓ 이번 달 ⑩에 있음</span> <span style="color:var(--sub);font-size:12px">${hit.map(esc).join(', ')}</span>`
+      :none[r.id]?`<span style="color:#64748b">— 이번 달 해당 없음</span>`
+      :re?`<span style="color:#b45309;font-weight:700">⚠ 아직 안 넣었어요</span>`:`<span style="color:#64748b">확인해 주세요</span>`;
+    return `<tr><td style="text-align:left;padding:6px 8px;white-space:normal">📌 ${esc(r.t)}${r.kw?` <span style="color:var(--sub);font-size:11.5px">(찾는 이름: ${esc(r.kw.split('|').join(', '))})</span>`:''}</td>
+      <td style="white-space:nowrap;text-align:left;padding:6px 8px">${st}</td>
+      <td style="white-space:nowrap;padding:6px 8px">${hit.length?'':`<label style="font-size:12px;cursor:pointer"><input type="checkbox" style="width:auto;margin:0 3px 0 0;vertical-align:middle" ${none[r.id]?'checked':''} onchange="cfmRemNone('${r.id}',this.checked)">이번 달 없음</label>`}
+        <span class="addrow" style="margin-left:6px;color:#b91c1c" onclick="cfmRemDel('${r.id}')">삭제</span></td></tr>`;}).join('');
+  const warn=L.some(r=>{let re=null;try{re=r.kw?new RegExp(r.kw):null;}catch(e){}return re&&!names.some(n=>re.test(n))&&!none[r.id];});
+  return `<div class="card" style="border:2px solid ${warn?'#f59e0b':'#86efac'};background:${warn?'#fffbeb':'#f0fdf4'}"><h2>📌 매달 잊지 말 것 <small>매출확정할 때마다 확인 · 찾을 이름이 ⑩ 기타 거래처에 있으면 자동으로 ✓</small></h2>
+    <table class="g" style="width:100%">${rows||'<tr><td style="color:var(--sub)">적어둔 항목이 없어요</td></tr>'}</table>
+    <div class="flex" style="margin-top:8px;gap:6px;flex-wrap:wrap"><input id="remT" class="txt" placeholder="잊지 말 것 (예: 새 카드단말기 매출 ⑩에 추가)" style="flex:1;min-width:240px"><input id="remK" class="txt" placeholder="찾을 이름 (예: 페스타|단말기)" style="width:180px"><span class="addrow" onclick="cfmRemAdd()">+ 추가</span></div></div>`;
+}
+window.cfmRemNone=function(id,on){const m=MONTHS[CUR];if(!m)return;m.remindNone=m.remindNone||{};if(on)m.remindNone[id]=1;else delete m.remindNone[id];touch();renderInput();};
+window.cfmRemDel=function(id){if(!confirm('이 알림을 지울까요? (모든 달에서 사라져요)'))return;REMIND=remindList().filter(x=>x.id!==id);remindSave();renderInput();};
+window.cfmRemAdd=function(){const t=(document.getElementById('remT')||{}).value||'';if(!t.trim())return;const kw=((document.getElementById('remK')||{}).value||'').trim();REMIND=remindList().concat([{id:'r'+Date.now(),t:t.trim(),kw}]);remindSave();renderInput();};
 function renderInput(){
   const m=MONTHS[CUR];
   const pg=$("#pg-input");
   let h='';
+  h+=remindHtml(m);
   h+=`<div class="card" style="padding:10px 16px"><span class="hint">🪄 비어있는 공급가·부가세는 계·면세를 입력하면 <b>자동으로 바로</b> 채워져요 — 직접 입력한 칸은 건드리지 않아요.</span></div>`;
   // 📂 엑셀 업로드 체크리스트
   const UP=m.uploads||{};
