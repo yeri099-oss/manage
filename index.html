@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v387</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v388</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -9168,7 +9168,9 @@ async function payLoadMonth(key){
       }
     }
     P.result=null;P.epc=null;
-    P.sheet=P.wb.sheets.some(x=>x.name==="상용직급여")?"상용직급여":P.wb.sheets[0].name;
+    /* v388: 달을 바꿔도 보던 탭 그대로 (세무사무실 탭에서 9월로 바꾸면 9월 세무사무실 탭) */
+    if(!(P.sheet&&(P.sheet.indexOf("__")===0||P.wb.sheets.some(x=>x.name===P.sheet))))P.sheet="__sum";
+    try{localStorage.setItem("salesApp_payLastMonth",key);}catch(e){}
     P.cloudState="saved";
     /* 불러온 달을 지금 기준으로 다시 계산해 보고, 저장돼 있던 인건비현황 줄과 다르면 다시 저장 (다음 달 파일이 따라가도록) */
     try{
@@ -10389,7 +10391,9 @@ function renderPay(){
   if(!P.wb&&!P.autoLoadTried){
     P.autoLoadTried=true;
     const ks=paySortKeys(S.data.payFiles);
-    if(ks.length){el.innerHTML='<div class="card">저장된 급여 자료를 불러오는 중…</div>';payLoadMonth(ks[0]);return;}
+    /* v388: 마지막으로 보던 달·탭부터 (아직 계산 안 한 새 달이 먼저 열리지 않게) */
+    let last=null;try{last=localStorage.getItem("salesApp_payLastMonth");if(!P.sheet)P.sheet=localStorage.getItem("salesApp_paySheet")||null;}catch(e){}
+    if(ks.length){el.innerHTML='<div class="card">저장된 급여 자료를 불러오는 중…</div>';payLoadMonth(last&&ks.indexOf(last)>=0?last:ks[0]);return;}
   }
   const wb=P.wb,epc=P.epc,ym=payYm();
   /* 달 이동 드롭다운 */
@@ -10490,6 +10494,7 @@ function renderPay(){
     const PAY_ORDER=["상용직급여","휴일근무수당","상여금","시급직급여","용역직급여","손익","4대보험","급여품의","인건비현황"];
     const PAY_LABEL={"상용직급여":"급여대장 (상용직)"};
     if(P.sheet==="__hg")P.sheet="__tax"; /* v387: 한가람 대조는 세무사무실 탭으로 합침 */
+    try{if(P.sheet)localStorage.setItem("salesApp_paySheet",P.sheet);}catch(e){}
     if(P.sheet==="__cfg"||P.sheet==="퇴직금")P.sheet=wb.sheets.some(x=>x.name==="상용직급여")?"상용직급여":wb.sheets[0].name;
     if(!P.sheet)P.sheet="__sum"; /* v381: 처음엔 📊 요약 */
     const active=P.sheet||wb.sheets[0].name;
