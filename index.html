@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v390</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v391</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -15892,6 +15892,17 @@ function ptxN(x){return String(x==null?"":x).replace(/\s+/g,"").replace(/\d+월$
 function ptxCol(ref){return ref.replace(/\d+/g,"");}
 function ptxRow(ref){return Number(ref.replace(/[A-Z]+/g,""));}
 /* 시급직급여 → 일용직 사람 목록 {name,biz(mi|ep),amt,hours,days{일:시간}} */
+/* 일용직 = 시급직급여(파출 제외) + 🧾 파출비용 (북촌 → 꽃밥이야기, 피다 → 꽃밥에피다), 같은 이름은 합침 — 세무사무실 자료·대조 공용 */
+function ptxDailyList(biz){
+  const H=ptxHourly().filter(x=>x.biz===biz).map(x=>Object.assign({info:{}},x));
+  for(const q of pachPeople().filter(x=>x.biz===biz)){
+    const o=H.find(x=>ptxN(x.name)===ptxN(q.name));
+    /* 시급직급여 사람을 파출비용 탭에도 적었으면: 금액은 시급직급여, 날짜·시간은 파출비용 */
+    if(o){if(!o.hourly)o.amt+=q.amt;o.hours=o.hourly?q.hours:(o.hours||0)+q.hours;if(o.hourly)o.days={};for(const d in q.days)o.days[d]=(o.days[d]||0)+q.days[d];o.info=Object.assign({},q.info,o.info);}
+    else H.push(q);
+  }
+  return H;
+}
 function ptxHourly(){
   const P=window.__pay||{},hs=paySheetByName("시급직급여");if(!hs)return [];
   const ed=(P.edits||{})["시급직급여"]||{};
@@ -16101,13 +16112,7 @@ async function ptxBuild(file){
   }
   /* ---- 3) 일용직 ---- */
   /* 일용직 = 시급직급여(파출 제외) + 🧾 파출비용 (북촌 → 꽃밥이야기, 피다 → 꽃밥에피다), 같은 이름은 합침 */
-  const H=ptxHourly().filter(x=>x.biz===biz).map(x=>Object.assign({info:{}},x));
-  for(const q of pachPeople().filter(x=>x.biz===biz)){
-    const o=H.find(x=>ptxN(x.name)===ptxN(q.name));
-    /* 시급직급여 사람을 파출비용 탭에도 적었으면: 금액은 시급직급여, 날짜·시간은 파출비용 */
-    if(o){if(!o.hourly)o.amt+=q.amt;o.hours=o.hourly?q.hours:(o.hours||0)+q.hours;if(o.hourly)o.days={};for(const d in q.days)o.days[d]=(o.days[d]||0)+q.days[d];o.info=Object.assign({},q.info,o.info);}
-    else H.push(q);
-  }
+  const H=ptxDailyList(biz);
   const daySh=W.sheets.find(s=>/일용직/.test(s.name));
   if(daySh){
     const sh=daySh,doc=await getDoc(sh),T=ptxSheetTools(doc);
@@ -18042,6 +18047,12 @@ function hgAppHourly(){
     const o={tot:cT?Math.round(hv(cT+r)):null,net:Math.round(hv(cN+r))};if(out[nm]){out[nm].tot=(out[nm].tot||0)+(o.tot||0);out[nm].net+=o.net;}else out[nm]=o;}
   return out;
 }
+/* v391: 앱 일용직 = 보낸 파일과 같은 기준(시급직급여 + 파출비용) */
+function hgAppDaily(){
+  const base=hgAppHourly()||{};let n=Object.keys(base).length;
+  ["mi","ep"].forEach(b=>{try{ptxDailyList(b).forEach(q=>{const k=hgNorm(q.name);if(!k)return;if(base[k]){if(!q.hourly&&base[k].pach)base[k].tot+=q.amt;return;}base[k]={tot:q.amt,net:null,pach:true};n++;});}catch(e){console.warn(e);}});
+  return n?base:null;
+}
 function hgAppYong(){const Y=(typeof pecYong==="function")?pecYong():null;if(!Y)return null;const o={};Y.per.forEach(p=>{o[hgNorm(p.name)]={amt:p.amt,tax:p.tax,ltax:p.ltax,net:p.net};});return o;}
 function hgCell(h,a,strong){
   if(h==null&&a==null)return `<td></td>`;
@@ -18065,7 +18076,7 @@ function hgSummarize(d){
   if(payRows.length)out.pay=sec(payRows,hgAppPay(),["pay","bon","alw","tot","np","hi","ei","ltc","tax","ltax","ded","net"],(a,f)=>f==="net"&&a.pre?a.net+a.pre:(a[f]||0));
   const FB=hgF(F,"biz"),FD=hgF(F,"daily");
   if(FB)out.biz=sec(FB.rows,hgAppYong(),["amt","tax","ltax","net"]);
-  if(FD){const app=hgAppHourly();out.daily=sec(FD.rows,app,["tot","net"],(a,f)=>f==="tot"?(a.tot!=null?a.tot:null):a.net);}
+  if(FD){const app=hgAppDaily();out.daily=sec(FD.rows,app,["tot","net"],(a,f)=>f==="tot"?(a.tot!=null?a.tot:null):a.net);}
   return out;
 }
 function hgSumSame(a,b){return JSON.stringify(a||{})===JSON.stringify(b||{});}
@@ -18364,18 +18375,18 @@ window.payHgBody=function(embed){
   }
   /* ③ 일용직 ↔ 시급직급여 */
   if(FD){
-    const app=hgAppHourly();const seen=new Set();let bad=0,sh=0,sa=0,nh=0,na=0;
-    const trs=FD.rows.map(r=>{const a=app?app[r.name]:null;seen.add(r.name);sh+=r.tot||0;nh+=r.net||0;if(a){sa+=a.tot!=null?a.tot:a.net;na+=a.net;}
-      const dT=a&&a.tot!=null&&(r.tot||0)!==a.tot,dN=a&&(r.net||0)!==a.net;if(!a||dT||dN)bad++;
+    const app=hgAppDaily();const seen=new Set();let bad=0,sh=0,sa=0,nh=0,na=0;
+    const trs=FD.rows.map(r=>{const a=app?app[r.name]:null;seen.add(r.name);sh+=r.tot||0;nh+=r.net||0;if(a){sa+=a.tot!=null?a.tot:(a.net||0);na+=a.net!=null?a.net:(r.net||0);}
+      const dT=a&&a.tot!=null&&(r.tot||0)!==a.tot,dN=a&&a.net!=null&&(r.net||0)!==a.net;if(!a||dT||dN)bad++;
       return `<tr><td class="l"><b>${esc(r.name)}</b></td><td style="text-align:right">${r.days||""}</td><td style="text-align:right">${r.hours||""}</td>${hgCell(r.tot||0,a?(a.tot!=null?a.tot:null):null)}${hgCell(r.net||0,a?a.net:null)}<td>${!a?'<span class="buy-warn">앱에 없음</span>':dT||dN?'<span class="buy-warn">⚠</span>':'<span style="color:#2F6B3F">✓</span>'}</td></tr>`;}).join("");
     const appOnly=app?Object.keys(app).filter(n=>!seen.has(n)):[];
     const t=FD.total||{};
-    html+=`<div style="font-weight:700;margin:16px 0 4px">③ 일용직급여지급명세서 ↔ 시급직급여 ${bad||appOnly.length?`<span class="buy-warn">확인 필요 ${bad+appOnly.length}건</span>`:'<span style="color:#2F6B3F">✓ 일치</span>'}</div>
+    html+=`<div style="font-weight:700;margin:16px 0 4px">③ 일용직급여지급명세서 ↔ 시급직급여 + 파출비용 ${bad||appOnly.length?`<span class="buy-warn">확인 필요 ${bad+appOnly.length}건</span>`:'<span style="color:#2F6B3F">✓ 일치</span>'}</div>
       ${app?"":`<div class="footnote">앱에 시급직급여 시트가 없어서 한가람 값만 보여요.</div>`}
       <div class="table-wrap"><table class="rpt hgT" style="font-size:12px;margin:0"><thead><tr><th class="l">성명</th><th>근무일수</th><th>시간</th><th>급여총액</th><th>차인지급액</th><th>대조</th></tr></thead><tbody>${trs}
       <tr class="total"><td class="l"><b>합계</b></td><td></td><td></td>${hgCell(sh,app?sa:null,true)}${hgCell(nh,app?na:null,true)}<td></td></tr></tbody></table></div>
       ${t.tot!=null&&t.tot!==sh?`<div class="footnote" style="color:#b45309">PDF 총계 ${fmt(t.tot)}원과 사람별 합 ${fmt(sh)}원이 달라요 — PDF를 한 번 확인해 주세요</div>`:""}
-      ${appOnly.length?`<div class="footnote" style="margin-top:4px"><b style="color:#b45309">앱 시급직급여에만 있는 사람:</b> ${appOnly.map(esc).join(", ")}</div>`:""}`;
+      ${appOnly.length?`<div class="footnote" style="margin-top:4px"><b style="color:#b45309">앱(시급직급여·파출비용)에만 있는 사람:</b> ${appOnly.map(esc).join(", ")}</div>`:""}`;
   }
   return html+hgRecBox(key,d)+END+nbHtml(key)+hgHistoryHtml(key);
 };
