@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v397</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v398</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -16369,7 +16369,7 @@ window.pachEdit=function(i,f,v){
   else r[f]=String(v).trim();
   if(f==="d")D.rows.sort((a,b)=>(a.d||99)-(b.d||99));
   /* v397: 주민번호 칸 — 이름이 있으면 사람별 정보(세무사무실 일용직 신고용)에도 저장 */
-  if(f==="rrn"){const nm=String(r.name||"").replace(/\s+/g,"");if(nm&&!PACH_PLACE.test(nm)&&typeof payTaxInfoEdit==="function")payTaxInfoEdit(nm,"rrn",r.rrn);}
+  if(f==="rrn"||f==="nat"||f==="visa"){const nm=String(r.name||"").replace(/\s+/g,"");if(nm&&!PACH_PLACE.test(nm)&&typeof payTaxInfoEdit==="function")payTaxInfoEdit(nm,f,r[f]);}
   pachSave();renderPay();
 };
 /* 줄의 주민번호: 줄에 적은 값 → 사람별 정보 → 비고 순 */
@@ -16624,7 +16624,10 @@ function payPachBody(){
       const dayTd=j===0?`<td rowspan="${list.length}" style="white-space:nowrap;vertical-align:middle${list.length>1?";background:#fff":""}">${d}일 <button class="btn btn-sm" style="padding:0 6px;margin-left:2px" title="이 날짜에 한 명 더" onclick="pachAddDay(${d})">＋</button></td><td rowspan="${list.length}" style="vertical-align:middle;${list.length>1?"background:#fff;":""}color:${wd==="일"?"#b91c1c":wd==="토"?"#1d4ed8":"inherit"}">${wd}</td>`:"";
       rows+=`<tr${r.dir?' class="pach-dir" style="background:#fdf6d3"':r.loc==="ep"?' style="background:#f3f7ee"':""}>${dayTd}
         <td>${cell(i,"name",r.name,90)}</td><td>${i==null?cell(i,"rrn","",118):inp(i,"rrn",pachRrn(r),118)}</td><td>${cell(i,"amt",r.amt,90,"right")}</td><td>${cell(i,"h",r.h,46,"right")}</td>
-        <td>${locSel(i,r.loc,d)}</td><td>${cell(i,"nat",r.nat,56)}</td><td>${cell(i,"visa",r.visa,46)}</td><td>${cell(i,"note",r.note,150)}</td>
+        <td>${locSel(i,r.loc,d)}</td><td>${i==null?cell(i,"nat","",56):(()=>{const nm=String(r.name||"").replace(/\s+/g,""),inf=nm&&!PACH_PLACE.test(nm)?(ptxInfo()[ptxN(nm)]||{}):{};const nat=r.nat||inf.nat||"";
+          /* v398: 외국인(비자 있음 또는 외국인등록번호 7번째 자리 5~8)인데 국적이 비면 빨간 칸 */
+          const fr=!!(r.visa||inf.visa)||/^\d{6}-?[5-8]/.test(String(pachRrn(r)).replace(/\s/g,""));
+          return fr&&!nat?`<input data-f="nat" title="외국인 — 국적을 적어주세요" placeholder="국적?" style="${inS};width:56px;background:#FDECEC;border-color:#ef4444" value="" onchange="pachEdit(${i},'nat',this.value)">`:inp(i,"nat",nat,56);})()}</td><td>${cell(i,"visa",r.visa,46)}</td><td>${cell(i,"note",r.note,150)}</td>
         <td style="text-align:center">${i==null?"":`<input type="checkbox" style="width:16px;height:16px;cursor:pointer" ${r.dir?"checked":""} onchange="pachDir(${i},this.checked)">${r.dir?'<div style="font-size:10.5px;color:#a16207;font-weight:700;line-height:1.1">지급완료</div>':""}`}</td>
         <td>${i==null?"":`<button class="btn btn-sm" style="padding:1px 7px" onclick="pachDel(${i})">×</button>`}</td></tr>`.replace(/DAY/g,String(d));
     });
