@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v396</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v397</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -16368,8 +16368,12 @@ window.pachEdit=function(i,f,v){
   if(f==="amt"||f==="h"||f==="d"){const n=Number(String(v).replace(/[^\d.]/g,""));r[f]=String(v).trim()===""||isNaN(n)?null:n;}
   else r[f]=String(v).trim();
   if(f==="d")D.rows.sort((a,b)=>(a.d||99)-(b.d||99));
+  /* v397: 주민번호 칸 — 이름이 있으면 사람별 정보(세무사무실 일용직 신고용)에도 저장 */
+  if(f==="rrn"){const nm=String(r.name||"").replace(/\s+/g,"");if(nm&&!PACH_PLACE.test(nm)&&typeof payTaxInfoEdit==="function")payTaxInfoEdit(nm,"rrn",r.rrn);}
   pachSave();renderPay();
 };
+/* 줄의 주민번호: 줄에 적은 값 → 사람별 정보 → 비고 순 */
+function pachRrn(r){if(r.rrn)return r.rrn;const nm=String(r.name||"").replace(/\s+/g,"");if(nm&&!PACH_PLACE.test(nm)){const v=(ptxInfo()[ptxN(nm)]||{}).rrn;if(v)return v;}const m=String(r.note||"").match(/\d{6}[-\s]?\d{7}/);return m?m[0]:"";}
 window.pachAdd=function(){const D=pachDoc();const last=D.rows[D.rows.length-1];D.rows.push({d:last?last.d:1,name:"",amt:null,h:null,nat:"",visa:"",note:"",loc:last?last.loc:"bc"});pachSave();renderPay();
   setTimeout(()=>{const ins=document.querySelectorAll('#pachTbl input[data-f="name"]');if(ins.length)ins[ins.length-1].focus();},50);};
 window.pachNew=function(d,f,v){
@@ -16399,7 +16403,7 @@ function pachExportDays(v){
     const list=R.filter(r=>r.d===d);if(!list.length&&v==="dir")continue;
     out.push({d,wd:WD[new Date(+ym.y,+ym.m-1,d).getDay()],rows:list.map(r=>{
       const nm=String(r.name||"").trim(),real=PACH_PLACE.test(nm.replace(/\s+/g,""))?"":nm;
-      const nr=String(r.note||"").match(/\d{6}[-\s]?\d{7}/);const rrn=(real&&(info[ptxN(real)]||{}).rrn)||(nr?nr[0]:"");
+      const rrn=pachRrn(r);
       return {loc:r.loc==="ep"?"인사동":"북촌",name:real,rrn,amt:Number(r.amt)||0,nat:r.nat||(real&&(info[ptxN(real)]||{}).nat)||"",visa:r.visa||(real&&(info[ptxN(real)]||{}).visa)||"",note:String(r.note||"").replace(/\d{6}[-\s]?\d{7}/g,"").trim()};})});
   }
   return out;
@@ -16516,14 +16520,14 @@ window.pachLemonApply=function(onlyIdx){
   const res=pachCompare(C.L,D.rows,+ym.y,+ym.m);let n=0;
   res.forEach((x,i)=>{if(onlyIdx!=null&&i!==onlyIdx)return;if(!x.l||!x.a||x.locOk===false)return;
     const r=D.rows[x.ai];if(!r)return;const info=pachInfoOf(x.l);
-    r.name=x.l.name;if(x.l.visa)r.visa=x.l.visa;if(x.l.foreign&&!r.nat&&info.nat)r.nat=info.nat;
+    r.name=x.l.name;if(x.l.rrn)r.rrn=x.l.rrn;if(x.l.visa)r.visa=x.l.visa;if(x.l.foreign&&!r.nat&&info.nat)r.nat=info.nat;
     ptxInfoPut(x.l.name,{rrn:x.l.rrn,visa:x.l.visa,nat:info.nat||""});n++;});
   pachSave();renderPay();toast(n+"줄에 이름·주민번호"+(res.some(x=>x.l&&x.l.foreign)?"·국적·비자":"")+"를 채웠어요");
 };
 window.pachLemonAdd=function(i){
   const C=window.__pay.pachCmp;if(!C)return;const ym=payYm(),D=pachDoc();const x=pachCompare(C.L,D.rows,+ym.y,+ym.m)[i];if(!x||!x.l)return;
   const info=pachInfoOf(x.l);
-  D.rows.push({d:x.d,name:x.l.name,amt:x.l.amt,h:x.h&&Math.abs(x.h-4)>0.01&&!(x.h>=4.5&&x.h<=5.5)?x.h:null,nat:x.l.foreign?(info.nat||""):"",visa:x.l.visa||"",note:"",loc:x.l.loc||"bc"});
+  D.rows.push({d:x.d,name:x.l.name,rrn:x.l.rrn||"",amt:x.l.amt,h:x.h&&Math.abs(x.h-4)>0.01&&!(x.h>=4.5&&x.h<=5.5)?x.h:null,nat:x.l.foreign?(info.nat||""):"",visa:x.l.visa||"",note:"",loc:x.l.loc||"bc"});
   D.rows.sort((a,b)=>(a.d||99)-(b.d||99));ptxInfoPut(x.l.name,{rrn:x.l.rrn,visa:x.l.visa});pachSave();renderPay();toast(x.d+"일 "+x.l.name+" 줄을 추가했어요");
 };
 function pachLemonHtml2(){
@@ -16594,7 +16598,7 @@ function pachPeople(){
     x.amt+=Number(r.amt)||0;x.hours+=h;x.days[r.d]=(x.days[r.d]||0)+h;
     if(r.nat&&!x.info["국적"])x.info["국적"]=r.nat;
     if(r.visa&&!x.info["자격"])x.info["자격"]=r.visa;
-    const rrn=String(r.note||"").match(/\d{6}[-\s]?\d{7}/);if(rrn&&!x.info["주민번호"])x.info["주민번호"]=rrn[0].replace(/\s/,"-");
+    const rrn=r.rrn?[r.rrn]:String(r.note||"").match(/\d{6}[-\s]?\d{7}/);if(rrn&&!x.info["주민번호"])x.info["주민번호"]=String(rrn[0]).replace(/\s/,"-");
   }
   return Object.values(by);
 }
@@ -16619,7 +16623,7 @@ function payPachBody(){
       const r=i==null?{}:R[i];
       const dayTd=j===0?`<td rowspan="${list.length}" style="white-space:nowrap;vertical-align:middle${list.length>1?";background:#fff":""}">${d}일 <button class="btn btn-sm" style="padding:0 6px;margin-left:2px" title="이 날짜에 한 명 더" onclick="pachAddDay(${d})">＋</button></td><td rowspan="${list.length}" style="vertical-align:middle;${list.length>1?"background:#fff;":""}color:${wd==="일"?"#b91c1c":wd==="토"?"#1d4ed8":"inherit"}">${wd}</td>`:"";
       rows+=`<tr${r.dir?' class="pach-dir" style="background:#fdf6d3"':r.loc==="ep"?' style="background:#f3f7ee"':""}>${dayTd}
-        <td>${cell(i,"name",r.name,90)}</td><td>${cell(i,"amt",r.amt,90,"right")}</td><td>${cell(i,"h",r.h,46,"right")}</td>
+        <td>${cell(i,"name",r.name,90)}</td><td>${i==null?cell(i,"rrn","",118):inp(i,"rrn",pachRrn(r),118)}</td><td>${cell(i,"amt",r.amt,90,"right")}</td><td>${cell(i,"h",r.h,46,"right")}</td>
         <td>${locSel(i,r.loc,d)}</td><td>${cell(i,"nat",r.nat,56)}</td><td>${cell(i,"visa",r.visa,46)}</td><td>${cell(i,"note",r.note,150)}</td>
         <td style="text-align:center">${i==null?"":`<input type="checkbox" style="width:16px;height:16px;cursor:pointer" ${r.dir?"checked":""} onchange="pachDir(${i},this.checked)">${r.dir?'<div style="font-size:10.5px;color:#a16207;font-weight:700;line-height:1.1">지급완료</div>':""}`}</td>
         <td>${i==null?"":`<button class="btn btn-sm" style="padding:1px 7px" onclick="pachDel(${i})">×</button>`}</td></tr>`.replace(/DAY/g,String(d));
@@ -16643,8 +16647,8 @@ function payPachBody(){
         <span style="display:inline-flex;gap:4px">${PACH_VIEWS.map(([k2,n])=>`<button class="btn btn-sm" style="${V===k2?"background:var(--brand,#2F6B3F);color:#fff;border-color:var(--brand,#2F6B3F);font-weight:700":""}" onclick="pachSetView('${k2}')">${n} <span style="opacity:.75;font-size:11px">${cnt(k2)}</span></button>`).join("")}</span>
         <span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-sm btn-primary" onclick="pachLemonCopy()">🖼 이미지 복사</button><button class="btn btn-sm" onclick="pachLemonCopy('dl')">💾 이미지 저장</button><button class="btn btn-sm" onclick="pachXlsx()">📥 엑셀 받기</button></span>
         <span class="unit" style="flex-basis:100%">이미지·엑셀은 지금 보기(${pachViewTitle(V)}) 기준 · 이름·주민번호·국적·비자 포함 (위치만 적힌 줄은 이름 칸이 비어요)</span></div>`;})()}
-    ${true?`<div class="table-wrap"><table class="rpt" id="pachTbl" style="font-size:12.5px"><thead><tr><th>날짜</th><th>요일</th><th>파출(이름)</th><th>금액</th><th title="비우면 4시간">시간 <span class="unit" style="font-weight:400">(기본 4)</span></th><th>위치</th><th>국적</th><th>비자</th><th>비고</th><th title="체크 = 우리가 직접 불러서 이미 지급 · 비움 = 레몬파출">직접 지급</th><th></th></tr></thead><tbody>${rows}</tbody>
-      <tfoot>${(()=>{const F=R.filter(r=>(String(r.name||"").trim()||r.amt)&&pachInView(r,V));return `<tr class="total"><td colspan="3" class="l">합계 ${V!=="all"?"("+pachViewTitle(V)+") ":""}(${F.length}건)</td><td style="text-align:right">${fmt(F.reduce((a,r)=>a+(Number(r.amt)||0),0))}</td><td colspan="7"></td></tr>`;})()}</tfoot></table></div>`:`<div class="footnote">아직 내역이 없어요 — 줄을 추가하거나 엑셀에서 가져오세요.</div>`}
+    ${true?`<div class="table-wrap"><table class="rpt" id="pachTbl" style="font-size:12.5px"><thead><tr><th>날짜</th><th>요일</th><th>파출(이름)</th><th>주민번호</th><th>금액</th><th title="비우면 4시간">시간 <span class="unit" style="font-weight:400">(기본 4)</span></th><th>위치</th><th>국적</th><th>비자</th><th>비고</th><th title="체크 = 우리가 직접 불러서 이미 지급 · 비움 = 레몬파출">직접 지급</th><th></th></tr></thead><tbody>${rows}</tbody>
+      <tfoot>${(()=>{const F=R.filter(r=>(String(r.name||"").trim()||r.amt)&&pachInView(r,V));return `<tr class="total"><td colspan="4" class="l">합계 ${V!=="all"?"("+pachViewTitle(V)+") ":""}(${F.length}건)</td><td style="text-align:right">${fmt(F.reduce((a,r)=>a+(Number(r.amt)||0),0))}</td><td colspan="7"></td></tr>`;})()}</tfoot></table></div>`:`<div class="footnote">아직 내역이 없어요 — 줄을 추가하거나 엑셀에서 가져오세요.</div>`}
   </div>`;
 }
 /* ===== v369: 퇴직금 — 퇴직소득원천징수영수증(PDF) + 중도퇴사 근로소득원천징수영수증(PDF)을 올리면 이카운트 전표로 정리
