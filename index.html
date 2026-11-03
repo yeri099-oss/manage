@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v406</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v407</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -7428,7 +7428,8 @@ function payBjCols(){
   for(let r=1;r<=6;r++){const b=bj.cells["B"+r];if(b&&b.typ==="str"&&String(b.v).trim()==="이름"){hdrRow=r;break;}}
   const ym=payYm();
   let monthCol=null,freeCol=null;
-  const added=[];
+  const added=[],hist=[];
+  const HI=(P.edits||{})["__bjhist"]||{};
   for(let c=3;c<=bj.maxC;c++){
     const L=payIdxCol(c),ref=L+hdrRow;
     const cell=bj.cells[ref];
@@ -7437,7 +7438,11 @@ function payBjCols(){
     const label=edv!==null?edv:orig;
     if(label){
       if(ym&&label===ym.m+"월"&&!monthCol)monthCol=L;
-      if(edv!==null&&edv&&!orig)added.push({col:L,label:label});
+      /* v407: 지난달 월 열(예: 10월에 본 '9월')과 지난 특별상여(이력 표시된 열)는 이번 달 항목이 아님 — 보기만 */
+      if(edv!==null&&edv&&!orig){
+        if(HI[L]||(/^\d{1,2}월$/.test(label)&&!(ym&&label===ym.m+"월")))hist.push({col:L,label:label});
+        else added.push({col:L,label:label});
+      }
     }else if(!freeCol){
       let has=false;
       for(let r=hdrRow+1;r<=bj.maxR&&!has;r++){
@@ -7447,7 +7452,7 @@ function payBjCols(){
       if(!has)freeCol=L;
     }
   }
-  return {sheet:bj,hdrRow:hdrRow,monthCol:monthCol,added:added,freeCol:freeCol,ym:ym};
+  return {sheet:bj,hdrRow:hdrRow,monthCol:monthCol,added:added,hist:hist,freeCol:freeCol,ym:ym};
 }
 function payBonusColAdd(){
   const inp=document.getElementById("bjNewCol");
@@ -9377,8 +9382,11 @@ async function payStartMonth(y2,m2,rst){
     catch(e){console.warn(e);if(BJ.freeCol)payEdit("상여금",BJ.freeCol+BJ.hdrRow,m2+"월");}
   }
   P.undo=null;
+  /* 지난달 월 열의 선지급 표시는 이번 달엔 의미 없음 */
+  {const B2=payBjCols();if(B2&&P.edits["__bjpre"])B2.hist.forEach(h=>{delete P.edits["__bjpre"][h.col];});}
   if(rst&&Object.keys(rst).length){
-    await payResetApply(payResetPlan(rst));
+    P.__newMonth=true;let plan9;try{plan9=payResetPlan(rst);}finally{P.__newMonth=false;}
+    await payResetApply(plan9);
     toast(y2+"년 "+m2+"월 급여를 시작했어요 — 체크한 항목은 비우고, 나머지는 지난달 내용을 이어받았어요");
     return;
   }
@@ -9438,9 +9446,10 @@ function payResetPlan(o){
       const names=[];
       BJ.added.filter((a)=>a.col!==BJ.monthCol&&!/^\d{1,2}월$/.test(a.label)).forEach((a)=>{
         names.push(a.label);
-        (plan.del["상여금"]=plan.del["상여금"]||{})[a.col+BJ.hdrRow]=1;
         plan.bjpre.push(a.col);
-        for(let r=BJ.hdrRow+1;r<=BJ.sheet.maxR;r++)clr(BJ.sheet,a.col+r,"sbon");
+        if(P.__newMonth){plan.bjhist=plan.bjhist||[];plan.bjhist.push(a.col);} /* v407: 새 달 — 지난 특별상여(추석 등)는 이력 열로 남김 */
+        else{(plan.del["상여금"]=plan.del["상여금"]||{})[a.col+BJ.hdrRow]=1;
+          for(let r=BJ.hdrRow+1;r<=BJ.sheet.maxR;r++)clr(BJ.sheet,a.col+r,"sbon");}
         cnt("sbon",0);
       });
       if(names.length){plan.note.sbon="상여금 시트의 특별상여 항목 "+names.join(", ");plan.n.sbonCols=names.length;}
@@ -9493,6 +9502,7 @@ async function payResetApply(plan){
   P.edits=P.edits||{};P.autoSet=P.autoSet||{};
   for(const nm in plan.del)for(const ref in plan.del[nm]){if(P.edits[nm])delete P.edits[nm][ref];if(P.autoSet[nm])delete P.autoSet[nm][ref];}
   if(plan.ot){delete P.edits["__ot"];delete P.edits["__otbase"];}
+  if(plan.bjhist&&plan.bjhist.length){P.edits["__bjhist"]=P.edits["__bjhist"]||{};plan.bjhist.forEach((c)=>{P.edits["__bjhist"][c]=1;});}
   if(plan.bjpre.length&&P.edits["__bjpre"]){plan.bjpre.forEach((c)=>delete P.edits["__bjpre"][c]);if(!Object.keys(P.edits["__bjpre"]).length)delete P.edits["__bjpre"];}
   if(Object.keys(plan.blank).length){
     const zip=await JSZip.loadAsync(P.wb.zipBuf.slice(0));
@@ -9706,13 +9716,55 @@ async function payInsertColBefore(shName,c){
   P.edits=P.edits||{};P.autoSet=P.autoSet||{};
   if(P.edits[shName])P.edits[shName]=mv(P.edits[shName]);
   if(P.autoSet[shName])P.autoSet[shName]=mv(P.autoSet[shName]);
-  if(shName==="상여금"&&P.edits["__bjpre"]){
+  for(const key of["__bjpre","__bjhist"])if(shName==="상여금"&&P.edits[key]){
     const o2={};
-    for(const L in P.edits["__bjpre"])o2[payColIdx(L)>=c?payIdxCol(payColIdx(L)+1):L]=P.edits["__bjpre"][L];
-    P.edits["__bjpre"]=o2;
+    for(const L in P.edits[key])o2[payColIdx(L)>=c?payIdxCol(payColIdx(L)+1):L]=P.edits[key][L];
+    P.edits[key]=o2;
   }
   await payAdoptBuf(await zip.generateAsync({type:"arraybuffer",compression:"DEFLATE"}));
 }
+/* v407: 지난달 파일에 있던 특별상여 열(추석 등) 중 이번 달에 없는 것 */
+async function payBjPrevSpecial(){
+  const ym=payYm();if(!ym)return [];
+  let py=+ym.y,pm=+ym.m-1;if(pm<1){pm=12;py--;}
+  const fd=(S.data.payFiles||{})[py+"-"+pm];if(!fd||!fd.b64)return [];
+  const W=await pumParse(payB64Buf(fd.b64));const bj=W.sheets.find(x=>x.name==="상여금");if(!bj)return [];
+  const ed=((fd.edits||{})["상여금"])||{};const hiP=((fd.edits||{})["__bjhist"])||{};
+  let hr=3;for(let r=1;r<=6;r++){const b=bj.cells["B"+r];if(b&&b.typ==="str"&&String(b.v).trim()==="이름"){hr=r;break;}}
+  const cur=payBjCols();const have=new Set((cur?cur.added.concat(cur.hist):[]).map(a=>a.label));
+  const out=[];
+  for(let c=3;c<=Math.max(bj.maxC,30);c++){
+    const L=payIdxCol(c),cell=bj.cells[L+hr],orig=cell&&cell.typ==="str"?String(cell.v).trim():"";
+    const lab=ed[L+hr]!==undefined?String(ed[L+hr]||"").trim():"";
+    if(!lab||orig||/^\d{1,2}월$/.test(lab)||have.has(lab))continue;
+    const vals={};
+    for(let r=hr+1;r<=bj.maxR;r++){const nb=bj.cells["B"+r];if(!nb||nb.typ!=="str")continue;const nm=String(nb.v).replace(/\s+/g,"");const v=ed[L+r];const n=Number(v);if(nm&&v!==undefined&&v!==""&&!isNaN(n)&&n)vals[nm]=n;}
+    /* 지난달에서 이 열 바로 왼쪽 라벨 (그 열 뒤에 끼움) */
+    const lc=payIdxCol(c-1),ll=ed[lc+hr]!==undefined?String(ed[lc+hr]||"").trim():(bj.cells[lc+hr]&&bj.cells[lc+hr].typ==="str"?String(bj.cells[lc+hr].v).trim():"");
+    out.push({label:lab,vals,after:ll,pre:!!(((fd.edits||{})["__bjpre"]||{})[L])});
+  }
+  return out;
+}
+window.payBjRestorePrev=async function(){
+  const P=window.__pay;
+  try{
+    const list=await payBjPrevSpecial();if(!list.length){toast("되살릴 지난달 특별상여 열이 없어요");return;}
+    for(const it of list){
+      const BJ=payBjCols();const sh=BJ.sheet,ed=(P.edits["상여금"]=P.edits["상여금"]||{});
+      const labOf=(L)=>{const e=ed[L+BJ.hdrRow];if(e!==undefined)return String(e||"").trim();const c=sh.cells[L+BJ.hdrRow];return c&&c.typ==="str"?String(c.v).trim():"";};
+      let at=null;for(let c=3;c<=sh.maxC;c++)if(labOf(payIdxCol(c))===it.after){at=c+1;break;}
+      if(!at){let m=null;for(let c=3;c<=sh.maxC;c++)if(/^\d{1,2}월$/.test(labOf(payIdxCol(c)))&&labOf(payIdxCol(c))!==(BJ.ym&&BJ.ym.m+"월")){m=c;break;}at=m?m+1:4;}
+      await payInsertColBefore("상여금",at);
+      const L=payIdxCol(at),B2=payBjCols(),sh2=B2.sheet;if(sh2.maxC<at)sh2.maxC=at;
+      payEdit("상여금",L+B2.hdrRow,it.label);
+      for(let r=B2.hdrRow+1;r<=sh2.maxR;r++){const nb=sh2.cells["B"+r];if(!nb||nb.typ!=="str")continue;const nm=String(nb.v).replace(/\s+/g,"");if(it.vals[nm])payEdit("상여금",L+r,it.vals[nm]);}
+      P.edits["__bjhist"]=P.edits["__bjhist"]||{};P.edits["__bjhist"][L]=1;
+    }
+    window.__pay.bjPrevList=[];
+    try{payAutoFill();}catch(e){}
+    paySchedSave();renderPay();toast("지난달 특별상여 열("+list.map(x=>x.label).join(", ")+")을 되살렸어요 — 이력으로만 보이고 이번 달 계산엔 안 들어가요");
+  }catch(e){console.error(e);toast("되살리기 실패: "+(e.message||e),true);}
+};
 /* 상여금: 이름 바로 옆(C열)에 새 열을 만들고 라벨을 붙임 */
 async function payBjNewFront(label,pre){
   const P=window.__pay;
@@ -10915,7 +10967,7 @@ function renderPay(){
         if(BJ){
           bjCtl=`<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
             <span class="footnote" style="font-weight:700">특별상여 항목:</span>
-            ${BJ.added.length?BJ.added.map(a=>{const pre=((P.edits||{})["__bjpre"]||{})[a.col];return `<span class="paychip" style="cursor:default">${esc(a.label)} <b style="cursor:pointer;color:${pre?"#2F6B3F":"#999"}" onclick="payBonusPreToggle('${a.col}')" title="선지급이면 기지급액으로 공제돼 실지급에서 빠져요">${pre?"☑ 선지급":"☐ 선지급"}</b> <b style="cursor:pointer;color:#b45309" onclick="payBonusColDel('${a.col}')" title="이 항목 지우기">✕</b></span>`;}).join(""):'<span class="footnote">아직 없음</span>'}
+            ${BJ.added.length?BJ.added.map(a=>{const pre=((P.edits||{})["__bjpre"]||{})[a.col];return `<span class="paychip" style="cursor:default">${esc(a.label)} <b style="cursor:pointer;color:${pre?"#2F6B3F":"#999"}" onclick="payBonusPreToggle('${a.col}')" title="선지급이면 기지급액으로 공제돼 실지급에서 빠져요">${pre?"☑ 선지급":"☐ 선지급"}</b> <b style="cursor:pointer;color:#b45309" onclick="payBonusColDel('${a.col}')" title="이 항목 지우기">✕</b></span>`;}).join(""):'<span class="footnote">아직 없음</span>'}${BJ.hist&&BJ.hist.length?` <span class="footnote">· 지난 항목(이력, 계산 안 함): ${BJ.hist.map(h=>esc(h.label)).join(", ")}</span>`:""}${(()=>{if(window.__pay.bjPrevChk!==(payYm()||{}).m){window.__pay.bjPrevChk=(payYm()||{}).m;payBjPrevSpecial().then(l=>{window.__pay.bjPrevList=l;if(l.length)renderPay();}).catch(()=>{});}const l=window.__pay.bjPrevList||[];return l.length?` <button class="btn btn-sm" onclick="payBjRestorePrev()" title="새 달을 시작하면서 지워진 지난달 특별상여 열을 이력으로 다시 보여줘요">↩ 지난달 ${l.map(x=>esc(x.label)).join("·")} 열 되살리기</button>`:"";})()}
             <input id="bjNewCol" placeholder="예: 추석" style="width:110px;padding:4px 8px;border:1px solid rgba(0,0,0,.2);border-radius:8px;font-family:inherit">
             <button class="btn btn-sm" onclick="payBonusColAdd()">➕ 항목 추가</button>
             ${(typeof payBjBlankCols==="function"&&payBjBlankCols().length)?`<button class="btn btn-sm" style="border-color:#b45309;color:#8a5a00" onclick="payBjBlankDel()" title="머리글도 금액도 없이 남은 열을 엑셀에서도 지워요">🧹 빈 열 ${payBjBlankCols().length}개 지우기</button>`:""}
