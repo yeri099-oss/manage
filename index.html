@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v398</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v399</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -16451,6 +16451,34 @@ window.pachXlsx=async function(){
     await cardDlBlob(await cardBuildXlsx([{name:"파출비용_"+pachKey(),cols:[8,6,9,12,17,12,9,8,22],rows}]),pachFileName(v,"xlsx"));
   }catch(e){console.error(e);toast("엑셀 만들기 실패: "+(e.message||e),true);}
 };
+/* v399: 레몬파출 이카운트 분개 — 한 번에 지급(미지급급여)한 금액을 사업장(부서)별로 나눔
+   3차 8059 잡급(판) / 4대 2540 미지급급여, 거래처 000108 레몬파출, 적요 'YYMM 파출비용', 북촌 → 보자기꽃밥 · 피다(인사동) → 꽃밥에피다. 직접 지급 줄은 뺌 */
+const PACH_EC={acc:["8059","잡급(판)"],cr:["2540","미지급급여"],cust:["000108","레몬파출"],dept:{bc:"보자기꽃밥",ep:"꽃밥에피다"}};
+function pachEcLines(){
+  const k=pachKey(),sp=pachSplit(pachDoc().rows).lm,memo=k+" 파출비용";
+  const L=[];["bc","ep"].forEach(x=>{if(sp[x])L.push({side:"3차",acc:PACH_EC.acc,dr:sp[x],cr:0,dept:PACH_EC.dept[x]});});
+  ["bc","ep"].forEach(x=>{if(sp[x])L.push({side:"4대",acc:PACH_EC.cr,dr:0,cr:sp[x],dept:PACH_EC.dept[x]});});
+  L.forEach(l=>{l.cust=PACH_EC.cust;l.memo=memo;});return L;
+}
+window.pachEcCopy=async function(){
+  const L=pachEcLines();if(!L.length){toast("레몬파출 금액이 없어요",true);return;}
+  const t=L.map(l=>[l.side,l.acc[0],l.acc[1],l.cust[0],l.cust[1],l.dr||"",l.cr||"",l.memo,l.dept].join("\t")).join("\n");
+  try{await navigator.clipboard.writeText(t);toast("분개 줄을 복사했어요 (탭으로 구분)");}catch(e){toast("복사 못 했어요",true);}
+};
+window.pachEcNum=async function(n){try{await navigator.clipboard.writeText(String(n));toast(fmt(n)+" 복사");}catch(e){}};
+function pachEcHtml(){
+  const L=pachEcLines();const ym=payYm();if(!ym)return "";
+  const last=new Date(+ym.y,+ym.m,0).getDate();
+  const num=(n)=>n?`<a href="#" style="color:inherit;text-decoration:none" title="눌러서 복사" onclick="event.preventDefault();pachEcNum(${n})">${fmt(n)}</a>`:"";
+  const dr=L.reduce((a,l)=>a+l.dr,0),cr=L.reduce((a,l)=>a+l.cr,0);
+  return `<details class="pach-ec" style="margin:0 0 10px;border:1px solid #c7d2fe;border-radius:10px;background:#f8faff;padding:8px 12px" open>
+    <summary style="cursor:pointer;font-weight:700;font-size:13.5px">🧾 이카운트 분개 — 레몬파출 사업장별 정리 <span class="unit" style="font-weight:400">일반전표 · ${ym.y}/${String(ym.m).padStart(2,"0")}/${last} · 직접 지급 줄은 빼요</span></summary>
+    ${L.length?`<div style="display:flex;gap:8px;align-items:center;margin:8px 0 6px"><button class="btn btn-sm btn-primary" onclick="pachEcCopy()">📋 분개 줄 복사</button><span class="unit">금액을 누르면 그 숫자만 복사돼요</span></div>
+    <div class="table-wrap"><table class="rpt" style="font-size:12.5px;margin:0"><thead><tr><th>구분</th><th>계정코드</th><th>계정명</th><th>거래처코드</th><th>거래처명</th><th>차변</th><th>대변</th><th>적요</th><th>부서</th></tr></thead><tbody>
+      ${L.map(l=>`<tr><td>${l.side}</td><td>${l.acc[0]}</td><td class="l">${l.acc[1]}</td><td>${l.cust[0]}</td><td class="l">${l.cust[1]}</td><td style="text-align:right">${num(l.dr)}</td><td style="text-align:right">${num(l.cr)}</td><td class="l">${esc(l.memo)}</td><td class="l">${l.dept}</td></tr>`).join("")}
+      <tr class="total"><td colspan="5" class="l">합계 ${dr===cr?'<span style="color:#2F6B3F">✓ 차대 일치</span>':'<span class="buy-warn">차대 불일치</span>'}</td><td style="text-align:right">${fmt(dr)}</td><td style="text-align:right">${fmt(cr)}</td><td colspan="2"></td></tr></tbody></table></div>`
+    :`<div class="unit" style="margin-top:6px">이번 달 레몬파출 금액이 없어요.</div>`}</details>`;
+}
 window.pachDel=function(i){const D=pachDoc();D.rows.splice(i,1);pachSave();renderPay();};
 /* ===== v395: 파출회사(레몬취업) 공유 엑셀 ↔ 파출비용 대조
    같은 날짜·위치(비고: 북촌/인사)·금액(인건비+수수료)을 맞춰 보고, 맞으면 이름·주민번호·국적·비자를 채움. 직접 지급(체크) 줄은 대조에서 뺌 ===== */
@@ -16639,6 +16667,7 @@ function payPachBody(){
       <label class="btn btn-sm btn-primary" style="cursor:pointer">🔁 파출회사 공유 엑셀로 대조<input type="file" accept=".xlsx,.xls" style="display:none" onchange="pachLemonPick(this)"></label>
       <span style="margin-left:auto">북촌 <b>${fmt(bc)}</b> · 피다 <b>${fmt(ep)}</b> · 합계 <b style="font-size:15px">${fmt(bc+ep)}</b>원</span></div>
     ${pachLemonHtml2()}
+    ${pachEcHtml()}
     ${(()=>{const sp=pachSplit(R),y=String(ym.y).slice(2);
       const yr=[];for(let m=1;m<=12;m++){const d=(S.data.payPach||{})[y+String(m).padStart(2,"0")];if(!d||!(d.rows||[]).length)continue;const q=pachSplit(d.rows);yr.push([m,q]);}
       const box=(t,g,col,sub)=>`<div style="flex:1;min-width:230px;border:1px solid ${col};border-radius:10px;padding:8px 12px"><div style="font-weight:700;font-size:13px">${t} <span class="unit" style="font-weight:400">${g.n}건 · ${sub}</span></div><div style="font-size:13px;margin-top:3px">북촌 <b>${fmt(g.bc)}</b> · 피다 <b>${fmt(g.ep)}</b> · 합계 <b style="font-size:16px">${fmt(g.bc+g.ep)}</b>원</div></div>`;
