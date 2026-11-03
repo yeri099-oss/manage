@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v412</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v414</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -17769,6 +17769,25 @@ function cardHolderXlsxSheet(sh){
   return {name:sh.name,cols:[11,/접수/.test((sh.labels&&sh.labels.d)||"")?22:12,34,12,34,16],rows};
 }
 async function cardDlBlob(blob,fname){const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=fname;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},800);toast(fname+" 를 받았어요");}
+/* v414: 사용자별 이미지 — 소지자별 엑셀 탭과 같은 내용(카드소지자·승인일자·가맹점명·승인금액·세부내역·비고) */
+window.cardHolderImg=async function(key,si,mode){
+  const doc=cardStore()[key];if(!doc)return;const sh=doc.sheets[si];if(!sh)return;
+  const X=cardHolderXlsxSheet(sh);const bd="border:1px solid #000;",c=`${bd}padding:3px 8px;white-space:nowrap;`;
+  const ym=String(key).match(/(\d{4})-?(\d{2})/);
+  let h=`<div style="display:inline-block;background:#fff;padding:12px;font-family:'Malgun Gothic','맑은 고딕',sans-serif;font-size:13px;color:#000"><div style="font-weight:700;font-size:15px;margin-bottom:6px">법인카드 사용내역 — ${esc(sh.name)}${ym?` <span style="font-weight:400;font-size:13px">(${ym[1]}년 ${Number(ym[2])}월)</span>`:""}</div><table style="border-collapse:collapse;border:2px solid #000">`;
+  X.rows.forEach((row,ri)=>{const last=ri===X.rows.length-1;h+=`<tr${ri===0?' style="background:#e2efda;font-weight:700"':last?' style="background:#fce4d6;font-weight:700"':""}>`+row.map((cell,ci)=>{const v=cell.v;const isN=typeof v==="number";return `<td style="${c}${isN?"text-align:right;":ri===0||last?"text-align:center;":""}">${isN?fmt(v):esc(String(v==null?"":v))}</td>`;}).join("")+`</tr>`;});
+  h+=`</table></div>`;
+  const box=document.createElement("div");box.style.cssText="position:fixed;left:-10000px;top:0";box.innerHTML=h;document.body.appendChild(box);
+  try{
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
+    const cv=await html2canvas(box.firstElementChild,{backgroundColor:"#ffffff",scale:2});
+    const blob=await new Promise(r=>cv.toBlob(r,"image/png"));
+    const dl=()=>{const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=key+"_법인카드_"+sh.name+".png";document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);};
+    if(mode==="dl"||!navigator.clipboard||typeof ClipboardItem==="undefined"){dl();toast(sh.name+" 이미지를 저장했어요");return;}
+    try{await navigator.clipboard.write([new ClipboardItem({"image/png":blob})]);toast(sh.name+" 카드내역 이미지를 복사했어요 — Ctrl+V");}catch(e){dl();toast("복사가 막혀서 이미지 파일로 저장했어요");}
+  }catch(e){console.error(e);toast("이미지 만들기 실패: "+(e.message||e),true);}
+  finally{box.remove();}
+};
 window.cardHolderDl=async function(key,si){
   const doc=cardStore()[key];if(!doc)return;
   try{const out=[];
@@ -17864,17 +17883,17 @@ function renderExpCard(){
     if(si!==selSi)return "";
     if(view==="date"){
       const idx=cardDateOrder(p.sh);
-      const trs=idx.map(i=>{const r=p.sh.rows[i];return `<tr><td>${esc(r.d)}</td><td class="l">${esc(r.m)}</td><td class="l"><input value="${esc(r.x||"")}" placeholder="세부내역" onchange="cardSetX('${ym.key}',${si},${i},this.value)" style="font:inherit;font-size:12.5px;width:100%;min-width:160px;box-sizing:border-box;padding:2px 6px;border:1px solid ${r.xE?"#E8C88A":"var(--line,#e3e3e3)"};border-radius:6px;background:${r.xE?"#FFFBEA":"#fff"}">${cardIsFit(r)?' <span class="unit" style="color:#8a5a00">체력단련</span>':""}</td><td style="text-align:right;${r.a<0?"color:#b42318":""}">${fmt(r.a)}</td><td>${selOpt(r,si,i)}</td></tr>`;}).join("");
-      return `<div style="margin-top:10px"><div class="unit" style="margin-bottom:4px">${CARD_BIZ_N[p.biz]} · ${p.sh.rows.length}건 · 합계 <b>${fmt(p.sum)}</b>원 <button class="btn btn-sm" style="margin-left:8px" onclick="cardHolderDl('${ym.key}',${si})">📥 ${esc(p.name)} 탭만 받기</button></div><div class="table-wrap"><table class="rpt" style="font-size:12.5px;margin:0"><thead><tr><th>${esc((p.sh.labels||{}).d||"승인일자")}</th><th class="l">가맹점</th><th class="l">세부 내역</th><th>금액</th><th>비고 (계정)</th></tr></thead><tbody>${trs}<tr style="background:#eef3ee"><td colspan="3" class="l"><b>합계</b></td><td style="text-align:right"><b>${fmt(p.sum)}</b></td><td></td></tr></tbody></table></div></div>`;
+      const trs=idx.map(i=>{const r=p.sh.rows[i];return `<tr><td>${esc(r.d)}</td><td class="l">${esc(r.m)}</td><td class="l"><div style="display:flex;gap:6px;align-items:center"><input value="${esc(r.x||"")}" placeholder="세부내역" onchange="cardSetX('${ym.key}',${si},${i},this.value)" style="font:inherit;font-size:12.5px;flex:1;width:100%;min-width:140px;box-sizing:border-box;padding:2px 6px;border:1px solid ${r.xE?"#E8C88A":"var(--line,#e3e3e3)"};border-radius:6px;background:${r.xE?"#FFFBEA":"#fff"}">${cardIsFit(r)?'<span class="unit" style="color:#8a5a00;white-space:nowrap;flex:none">💪 체력단련</span>':""}</div></td><td style="text-align:right;${r.a<0?"color:#b42318":""}">${fmt(r.a)}</td><td>${selOpt(r,si,i)}</td></tr>`;}).join("");
+      return `<div style="margin-top:10px"><div class="unit" style="margin-bottom:4px">${CARD_BIZ_N[p.biz]} · ${p.sh.rows.length}건 · 합계 <b>${fmt(p.sum)}</b>원 <button class="btn btn-sm" style="margin-left:8px" onclick="cardHolderDl('${ym.key}',${si})">📥 ${esc(p.name)} 탭만 받기</button> <button class="btn btn-sm" onclick="cardHolderImg('${ym.key}',${si})">🖼 ${esc(p.name)} 이미지 복사</button></div><div class="table-wrap"><table class="rpt" style="font-size:12.5px;margin:0"><thead><tr><th>${esc((p.sh.labels||{}).d||"승인일자")}</th><th class="l">가맹점</th><th class="l">세부 내역</th><th>금액</th><th>비고 (계정)</th></tr></thead><tbody>${trs}<tr style="background:#eef3ee"><td colspan="3" class="l"><b>합계</b></td><td style="text-align:right"><b>${fmt(p.sum)}</b></td><td></td></tr></tbody></table></div></div>`;
     }
     const groups=p.order.map(a=>{
       const idx=p.sh.rows.map((r,i)=>i).filter(i=>cardEff(p.sh.rows[i])===a);
-      const trs=idx.map(i=>{const r=p.sh.rows[i];return `<tr><td>${esc(r.d)}</td><td class="l">${esc(r.m)}</td><td class="l"><input value="${esc(r.x||"")}" placeholder="세부내역" onchange="cardSetX('${ym.key}',${si},${i},this.value)" style="font:inherit;font-size:12.5px;width:100%;min-width:160px;box-sizing:border-box;padding:2px 6px;border:1px solid ${r.xE?"#E8C88A":"var(--line,#e3e3e3)"};border-radius:6px;background:${r.xE?"#FFFBEA":"#fff"}">${cardIsFit(r)?' <span class="unit" style="color:#8a5a00">체력단련</span>':""}</td><td style="text-align:right;${r.a<0?"color:#b42318":""}">${fmt(r.a)}</td><td>${selOpt(r,si,i)}</td></tr>`;}).join("");
+      const trs=idx.map(i=>{const r=p.sh.rows[i];return `<tr><td>${esc(r.d)}</td><td class="l">${esc(r.m)}</td><td class="l"><div style="display:flex;gap:6px;align-items:center"><input value="${esc(r.x||"")}" placeholder="세부내역" onchange="cardSetX('${ym.key}',${si},${i},this.value)" style="font:inherit;font-size:12.5px;flex:1;width:100%;min-width:140px;box-sizing:border-box;padding:2px 6px;border:1px solid ${r.xE?"#E8C88A":"var(--line,#e3e3e3)"};border-radius:6px;background:${r.xE?"#FFFBEA":"#fff"}">${cardIsFit(r)?'<span class="unit" style="color:#8a5a00;white-space:nowrap;flex:none">💪 체력단련</span>':""}</div></td><td style="text-align:right;${r.a<0?"color:#b42318":""}">${fmt(r.a)}</td><td>${selOpt(r,si,i)}</td></tr>`;}).join("");
       const sub=p.acc[a];const fitSub=a==="복리후생비"?p.fit:0;
       return trs+`<tr style="background:#eef3ee"><td colspan="3" class="l"><b>${esc(a)} 소계</b>${fitSub?` <span class="unit">(그중 체력단련비 ${fmt(fitSub)} / 체력단련 제외 ${fmt(sub-fitSub)})</span>`:""}</td><td style="text-align:right"><b>${fmt(sub)}</b></td><td></td></tr>`;
     }).join("");
     const ok=p.ap?(p.ap.sum===p.sum):null;
-    return `<div style="margin-top:10px"><div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><b style="font-size:14.5px">${esc(p.name)}</b><span class="unit">${CARD_BIZ_N[p.biz]} · ${p.sh.rows.length}건 · 합계 <b>${fmt(p.sum)}</b>원</span><button class="btn btn-sm" onclick="cardHolderDl('${ym.key}',${si})">📥 ${esc(p.name)} 탭만 받기</button>
+    return `<div style="margin-top:10px"><div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><b style="font-size:14.5px">${esc(p.name)}</b><span class="unit">${CARD_BIZ_N[p.biz]} · ${p.sh.rows.length}건 · 합계 <b>${fmt(p.sum)}</b>원</span><button class="btn btn-sm" onclick="cardHolderDl('${ym.key}',${si})">📥 ${esc(p.name)} 탭만 받기</button><button class="btn btn-sm" onclick="cardHolderImg('${ym.key}',${si})">🖼 ${esc(p.name)} 이미지 복사</button>
       ${p.ap?(ok?`<span class="unit" style="color:#2F6B3F">✓ ${esc(doc.raw?doc.raw.name:"승인내역")} ${fmt(p.ap.sum)}원과 일치</span>`:`<span class="buy-warn">⚠ ${esc(doc.raw?doc.raw.name:"승인내역")} ${fmt(p.ap.sum)}원 — 차이 ${fmt(p.sum-p.ap.sum)}원</span>`):""}</div>
       <div class="table-wrap" style="margin-top:4px"><table class="rpt" style="font-size:12.5px;margin:0"><thead><tr><th>${esc((p.sh.labels||{}).d||"승인일자")}</th><th class="l">가맹점</th><th class="l">세부 내역</th><th>금액</th><th>비고 (계정)</th></tr></thead><tbody>${groups}</tbody></table></div></div>`;
   }).join("");
