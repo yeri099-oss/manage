@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v400</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v401</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -5315,6 +5315,7 @@ window.jgImportSeed=function(){
   toast(`현금흐름 ${missing.length}건 + 재무상태표 ${bsMissing.length}개월을 불러왔어요`);
   renderJagum();
 };
+const JG_IGN='<ignoredErrors><ignoredError sqref="A1:AZ400" formula="1" formulaRange="1" numberStoredAsText="1" unlockedFormula="1" emptyCellReference="1" twoDigitTextYear="1" calculatedColumn="1"/></ignoredErrors>';
 function jgPeriods(){ /* 전체 반월 키 오름차순: 'YYYY-MM-DD'(마감일) */
   const out=[];
   for(const y in (S.data.jagum||{}))for(const k in (S.data.jagum[y].periods||{}))out.push(`${y}-${k}`);
@@ -6282,7 +6283,8 @@ window.jgExportXlsx=async function(){
       if(r===62&&XD.length)emitX("dec",XD,62);
     }
     const merges=String(SK.merges||"").replace(/ref="([A-Z]+)(\d+):([A-Z]+)(\d+)"/g,(m0,c1,r1,c2,r2)=>{let e=M(+r2);if(+r2===32)e=M(32);if(+r2===63)e=M(63);return `ref="${c1}${M(+r1)}:${c2}${e}"`;});
-    x+='</sheetData>'+merges+'<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/></worksheet>';
+    /* v401: 엑셀 오류 검사 표시(초록 삼각형·⚠ '인접 셀 생략' 등) 끄기 — 합계 수식이 의도대로라 표시만 없앰 */
+    x+='</sheetData>'+merges+'<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>'+JG_IGN+'</worksheet>';
     zip.file("xl/worksheets/sheet1.xml",x);
     /* 재무상태표(월말): 입력이 있으면 시트5도 원본 골격으로 재생성 */
     const bsMos=[...jgBsMonths()].reverse();
@@ -6351,7 +6353,7 @@ window.jgExportXlsx=async function(){
         }
         bx+='</row>';
       }
-      bx+='</sheetData><mergeCells count="'+bn+'">'+bsMos.map((ym,ci)=>`<mergeCell ref="${colL(1+ci*2)}2:${colL(2+ci*2)}2"/>`).join("")+'</mergeCells><pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/></worksheet>';
+      bx+='</sheetData><mergeCells count="'+bn+'">'+bsMos.map((ym,ci)=>`<mergeCell ref="${colL(1+ci*2)}2:${colL(2+ci*2)}2"/>`).join("")+'</mergeCells><pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>'+JG_IGN+'</worksheet>';
       zip.file("xl/worksheets/sheet5.xml",bx);
     }
     /* 상표권대금 시트 제거 (지급 완료) */
@@ -6372,6 +6374,9 @@ window.jgExportXlsx=async function(){
       }
     }catch(e){console.warn("상표권 시트 제거",e);}
     if(zip.file("xl/calcChain.xml"))zip.remove("xl/calcChain.xml");
+    /* v401: 한글이 없는 글꼴(Arial·새굴림·Arial Unicode MS 등)은 엑셀에서 한글이 깨져 보여서 모든 글꼴을 맑은 고딕으로 통일 */
+    {const sf=zip.file("xl/styles.xml");if(sf){let st=await sf.async("string");st=st.replace(/<font>([\s\S]*?)<\/font>|<font ([^>]*)>([\s\S]*?)<\/font>/g,(m)=>m.replace(/<name val="[^"]*"\/>/,'<name val="맑은 고딕"/>').replace(/<family val="\d+"\/>/,'<family val="3"/>').replace(/<charset val="\d+"\/>/,'').replace(/<scheme val="[^"]*"\/>/,'').replace(/<\/font>$/,'<charset val="129"/></font>'));zip.file("xl/styles.xml",st);}}
+    for(const wf of zip.file(/^xl\/worksheets\/sheet\d+\.xml$/)){let wx=await wf.async("string");if(wx.indexOf("<ignoredErrors")<0&&/<\/worksheet>\s*$/.test(wx)&&!/<(drawing|legacyDrawing|tableParts|extLst)[ >]/.test(wx)){zip.file(wf.name,wx.replace(/<\/worksheet>\s*$/,JG_IGN+"</worksheet>"));}}
     const blob=await zip.generateAsync({type:"blob",compression:"DEFLATE",mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
     const d=new Date();
     const aEl=document.createElement("a");
