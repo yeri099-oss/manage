@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v410</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v411</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -6863,6 +6863,7 @@ function payEmpRows(){
     if(!nm||nm==="사원명"||nm.indexOf("소계")>=0||nm.indexOf("합계")>=0||nm.indexOf("**")>=0)continue;
     const e=sh.cells[cm.tot+r];
     if(!(e&&typeof e.f==="string"))continue;/* 지급총액 수식 있는 줄 = 직원 줄 */
+    if(((((window.__pay||{}).edits||{})["__hide"]||{})["상용직급여"]||{})[r])continue; /* v411: 뺀(퇴사) 직원 */
     rows.push({r:r,name:nm});
   }
   return {sheet:sh,rows:rows,cm:cm,val:payMkVal(sh,(window.__pay.edits||{})["상용직급여"])};
@@ -10377,6 +10378,72 @@ window.payRowUnhide=function(shName,r){
   try{payAutoFill();}catch(e){}
   paySchedSave();renderPay();toast("줄을 되살렸어요");
 };
+/* ===== v411: 👥 직원 등록 (급여대장 상용직) — 추가·빼기·월급 수정을 파일에 바로 적어서 노란(고친) 칸이 안 생김 ===== */
+async function payBakeCells(shName,map){
+  const P=window.__pay,sh=paySheetByName(shName);if(!sh)throw new Error(shName+" 시트가 없어요");
+  const zip=await JSZip.loadAsync(P.wb.zipBuf.slice(0));const par=new DOMParser(),ser=new XMLSerializer();
+  const doc=par.parseFromString(await zip.file(sh.path).async("string"),"application/xml");
+  const T=ptxSheetTools(doc);
+  for(const ref in map){const v=map[ref];T.setCell(ref,v===""||v==null?null:v);
+    if(P.edits&&P.edits[shName])delete P.edits[shName][ref];if(P.autoSet&&P.autoSet[shName])delete P.autoSet[shName][ref];}
+  zip.file(sh.path,ser.serializeToString(doc));
+  await payAdoptBuf(await zip.generateAsync({type:"arraybuffer",compression:"DEFLATE"}));
+}
+function payEmpRegHtml(){
+  const P=window.__pay,em=payEmpRows();if(!em||!em.cm.pay)return "";
+  const open=!!P.empRegOpen;
+  const HR=(((P.edits||{})["__hide"]||{})["상용직급여"])||{};
+  const hidden=Object.keys(HR).filter(r=>HR[r]).map(r=>{const a=em.sheet.cells["A"+r];return {r:+r,name:a&&a.typ==="str"?String(a.v).trim():"("+r+"행)"};});
+  const yel=em.rows.filter(x=>{const ref=em.cm.pay+x.r;return ((P.edits||{})["상용직급여"]||{})[ref]!==undefined&&!(((P.autoSet||{})["상용직급여"]||{})[ref]);}).length;
+  const inS="font:inherit;font-size:13px;padding:4px 8px;border:1px solid rgba(0,0,0,.2);border-radius:8px";
+  return `<details ${open?"open":""} ontoggle="window.__pay.empRegOpen=this.open" style="margin:0 0 10px;border:1px solid #c7d2fe;border-radius:10px;background:#f8faff;padding:8px 12px">
+    <summary style="cursor:pointer;font-weight:700;font-size:13.5px">👥 직원 등록 <span class="unit" style="font-weight:400">추가 · 빼기(퇴사) · 월급 수정 — 파일에 바로 적어서 노란 칸이 안 생겨요 · ${em.rows.length}명</span></summary>
+    <div class="table-wrap" style="margin-top:8px"><table class="rpt" style="font-size:12.5px;margin:0;width:auto"><thead><tr><th class="l">이름</th><th>월급(급여)</th><th></th></tr></thead><tbody>
+      ${em.rows.map(x=>`<tr><td class="l"><b>${esc(x.name)}</b></td><td><input style="${inS};width:120px;text-align:right" value="${fmt(Math.round(em.val(em.cm.pay+x.r))||0)}" onchange="payEmpSalary(${x.r},this.value)"></td><td><button class="btn btn-sm" onclick="payEmpHide(${x.r})">🙈 빼기(퇴사)</button></td></tr>`).join("")}
+    </tbody></table></div>
+    ${yel?`<div style="margin-top:6px"><button class="btn btn-sm" onclick="payEmpBakeYellow()">✍ 표에서 고친 월급 ${yel}칸 확정하기 (노란 칸 없애기)</button></div>`:""}
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px"><b style="font-size:12.5px">➕ 직원 추가:</b>
+      <input id="empNewName" placeholder="이름" style="${inS};width:100px"><input id="empNewPay" placeholder="월급" style="${inS};width:110px;text-align:right">
+      <select id="empNewAfter" style="${inS}">${em.rows.map((x,i)=>`<option value="${x.r}" ${i===em.rows.length-1?"selected":""}>${esc(x.name)} 아래에</option>`).join("")}</select>
+      <button class="btn btn-sm btn-primary" onclick="payEmpAdd()">추가</button></div>
+    ${hidden.length?`<div class="footnote" style="margin-top:6px">뺀 직원: ${hidden.map(h=>`${esc(h.name)} <a href="#" onclick="event.preventDefault();payEmpUnhide(${h.r})">되살리기</a>`).join(" · ")}</div>`:""}
+    <div class="footnote" style="margin-top:4px">빼면 이 달 급여대장에서 그 줄이 숨겨지고 금액이 비워져요(손익·4대보험·급여품의도 따라가요). 이카운트 급여대장을 올릴 때 그 사람이 있으면 다시 되살릴지 물어봐요.</div></details>`;
+}
+const payNum=(v)=>{const n=Number(String(v==null?"":v).replace(/[^\d.-]/g,""));return isNaN(n)?0:Math.round(n);};
+window.payEmpSalary=async function(r,v){
+  const em=payEmpRows();if(!em)return;
+  try{await payBakeCells("상용직급여",{[em.cm.pay+r]:payNum(v)||""});try{payAutoFill();}catch(e){}paySchedSave();renderPay();toast("월급을 바꿨어요");}
+  catch(e){console.error(e);toast("월급 저장 실패: "+(e.message||e),true);}
+};
+window.payEmpBakeYellow=async function(){
+  const P=window.__pay,em=payEmpRows();if(!em)return;const ed=(P.edits||{})["상용직급여"]||{},as=(P.autoSet||{})["상용직급여"]||{};
+  const map={};em.rows.forEach(x=>{const ref=em.cm.pay+x.r;if(ed[ref]!==undefined&&!as[ref])map[ref]=payNum(ed[ref])||"";});
+  try{await payBakeCells("상용직급여",map);try{payAutoFill();}catch(e){}paySchedSave();renderPay();toast(Object.keys(map).length+"칸을 확정했어요");}
+  catch(e){console.error(e);toast("확정 실패: "+(e.message||e),true);}
+};
+window.payEmpAdd=async function(){
+  const P=window.__pay;const nm=String((document.getElementById("empNewName")||{}).value||"").trim();if(!nm){toast("이름을 먼저 적어주세요",true);return;}
+  const pay=payNum((document.getElementById("empNewPay")||{}).value);const k=Number((document.getElementById("empNewAfter")||{}).value);
+  const em=payEmpRows();if(!em)return;if(em.rows.some(x=>x.name.replace(/\s+/g,"")===nm.replace(/\s+/g,""))){toast(nm+" 님은 이미 있어요",true);return;}
+  const ym=payYm();const undo={key:ym?ym.y+"-"+ym.m:"",what:"직원 추가",zipBuf:P.wb.zipBuf.slice(0),fileName:P.wb.fileName,edits:JSON.stringify(P.edits||{}),autoSet:JSON.stringify(P.autoSet||{})};
+  try{
+    await payInsertRowAfter("상용직급여",k,{A:nm},{sumSingle:true});
+    const em2=payEmpRows();const row=em2&&em2.rows.find(x=>x.name.replace(/\s+/g,"")===nm.replace(/\s+/g,""));
+    if(row){const blank={};for(const key of["pay","alw","bon","sbon","pre","tax","ltax","np","hi","ltc","ei"]){const L=em2.cm[key];if(!L)continue;const c=em2.sheet.cells[L+row.r];if(c&&typeof c.f==="string")continue;blank[L+row.r]="";}
+      if(pay)blank[em2.cm.pay+row.r]=pay;await payBakeCells("상용직급여",blank);}
+    P.undo=undo;try{payAutoFill();}catch(e){}paySchedSave();renderPay();toast(nm+" 님을 추가했어요"+(pay?" (월급 "+fmt(pay)+"원)":""));
+  }catch(e){console.error(e);try{P.wb=await pumParse(undo.zipBuf.slice(0));P.wb.fileName=undo.fileName;P.edits=JSON.parse(undo.edits);P.autoSet=JSON.parse(undo.autoSet);}catch(e2){}renderPay();toast("추가 실패: "+(e.message||e),true);}
+};
+window.payEmpHide=async function(r){
+  const P=window.__pay,em=payEmpRows();if(!em)return;const x=em.rows.find(y=>y.r===r);if(!x)return;
+  if(!confirm(x.name+" 님을 이 달 급여대장에서 뺄까요? (금액은 비우고 줄은 숨겨요 · 되살리기 가능)"))return;
+  const map={};for(const key of["pay","alw","bon","sbon","pre","tax","ltax","np","hi","ltc","ei"]){const L=em.cm[key];if(!L)continue;const c=em.sheet.cells[L+r];if(c&&typeof c.f==="string")continue;map[L+r]="";}
+  try{await payBakeCells("상용직급여",map);
+    P.edits["__hide"]=P.edits["__hide"]||{};P.edits["__hide"]["상용직급여"]=P.edits["__hide"]["상용직급여"]||{};P.edits["__hide"]["상용직급여"][r]=1;
+    try{payAutoFill();}catch(e){}paySchedSave();renderPay();toast(x.name+" 님을 뺐어요");}
+  catch(e){console.error(e);toast("빼기 실패: "+(e.message||e),true);}
+};
+window.payEmpUnhide=function(r){const P=window.__pay;const H=((P.edits||{})["__hide"]||{})["상용직급여"];if(H)delete H[r];try{payAutoFill();}catch(e){}paySchedSave();renderPay();toast("되살렸어요 — 월급을 다시 적어주세요");};
 async function payRowAdd(shName){
   const P=window.__pay;
   const nmEl=document.getElementById("payRowName"),afEl=document.getElementById("payRowAfter");
@@ -11000,7 +11067,7 @@ function renderPay(){
       }
       body=`<div class="footnote" style="margin-bottom:6px">칸을 누르면 바로 고칠 수 있어요(Enter로 확정). 계산되는 칸은 고칠 수 없어요. <span style="color:#4E8B60">초록 테두리</span>는 자동으로 채운 칸, <span style="color:#B08A00">노란 테두리</span>는 직접 고친 칸이에요. 여기서 고친 내용은 '엑셀 받기'를 누르면 급여품의 양식 그대로 들어가요.${bjNote}</div>
       ${sh.name==="시급직급여"&&P.pachHourlyNote?`<div class="footnote" style="margin-bottom:8px;padding:6px 10px;background:#F4F9F4;border:1px solid #c7e3cc;border-radius:8px">🧾 <b>파출</b> 줄은 파출비용 탭에서 자동으로 가져와요 (레몬·직접 지급 합산) — 북촌 <b>${fmt(P.pachHourlyNote.bc)}</b>원 · 인사동(피다) <b>${fmt(P.pachHourlyNote.ep)}</b>원. 지급총액과 ${P.pachHourlyNote.pre?"기지급액에 같은 금액을 넣어 실지급액은 0이에요":'<b style="color:#b45309">기지급액 열이 없어서</b> 지급총액만 채웠어요'}.</div>`:""}
-      ${holCtl}${bjCtl}${sh.name==="상용직급여"?`<div class="footnote" style="margin-bottom:8px">위에서 이카운트 급여대장을 올리면 이 표가 이름으로 맞춰 채워져요. 급여대장에만 있는 직원은 줄을 새로 만들지 물어봐요.</div>`:pnlCtl}${payRowAddBar(sh.name)}${sh.name==="상여금"?payBjArrangeBar():""}
+      ${holCtl}${bjCtl}${sh.name==="상용직급여"?`${payEmpRegHtml()}<div class="footnote" style="margin-bottom:8px">위에서 이카운트 급여대장을 올리면 이 표가 이름으로 맞춰 채워져요. 급여대장에만 있는 직원은 줄을 새로 만들지 물어봐요.</div>`:pnlCtl}${payRowAddBar(sh.name)}${sh.name==="상여금"?payBjArrangeBar():""}
       ${titleText?`<div style="font-weight:700;font-size:15px;margin:2px 2px 8px">${esc(titleText)}</div>`:""}
       <div class="table-wrap"><table class="payws web"><tbody>${trs}</tbody></table></div>`;
     }
