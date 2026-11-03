@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v405</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v406</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -7133,6 +7133,7 @@ function payAutoFill(){
             if(!nb0||nb0.typ!=="str")continue;
             const n0=String(nb0.v).replace(/\s+/g,"");
             if(!n0||n0==="성명")continue;
+            if((((P.edits||{})["__hide"]||{})["휴일근무수당"]||{})[r])continue; /* v406: 뺀(퇴사) 줄은 자동계산 안 함 */
             const cfg0=byT[n0];
             /* 일급 정하기: ① 일급 열 값 ② 임원(⚙ 설정)은 월급여÷241.6×14 */
             let daily=0;
@@ -10279,8 +10280,32 @@ function payRowAddBar(shName){
     <select id="payRowAfter" style="padding:4px 8px;border:1px solid rgba(0,0,0,.2);border-radius:8px;font-family:inherit;font-size:13px">${PR.rows.map((x,i)=>`<option value="${x.r}" ${i===PR.rows.length-1?"selected":""}>${esc(x.name)} 아래에</option>`).join("")}</select>
     <button class="btn btn-sm" onclick="payRowAdd('${esc(shName)}')">➕ 줄 추가</button>
     <span class="footnote">고른 사람 바로 아래에 같은 모양의 빈 줄이 생기고, 계와 합계에도 포함돼요</span>
-  </div>`;
+  </div>${(()=>{const HR=(((window.__pay.edits||{})["__hide"]||{})[shName])||{};const vis=PR.rows.filter(x=>!HR[x.r]);const hid=PR.rows.filter(x=>HR[x.r]);
+    /* v406: 퇴사한 사람 빼기 — 화면·엑셀에서 그 줄을 숨기고 금액은 비움 (되살리기 가능) */
+    return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:-2px 0 8px">
+    <span class="footnote" style="font-weight:700">사람 빼기(퇴사):</span>
+    <select id="payRowHideSel" style="padding:4px 8px;border:1px solid rgba(0,0,0,.2);border-radius:8px;font-family:inherit;font-size:13px">${vis.map(x=>`<option value="${x.r}">${esc(x.name)}</option>`).join("")}</select>
+    <button class="btn btn-sm" onclick="payRowHide('${esc(shName)}')">🙈 이 줄 빼기</button>
+    ${hid.length?`<span class="footnote">뺀 사람: ${hid.map(x=>`${esc(x.name)} <a href="#" onclick="event.preventDefault();payRowUnhide('${esc(shName)}',${x.r})">되살리기</a>`).join(" · ")}</span>`:`<span class="footnote">화면과 받는 엑셀에서 그 줄이 숨겨지고, 그 사람 금액은 비워져요</span>`}</div>`;})()}`;
 }
+window.payRowHide=function(shName){
+  const P=window.__pay;const sel=document.getElementById("payRowHideSel");if(!sel||!sel.value)return;const r=Number(sel.value);
+  const sh=paySheetByName(shName);if(!sh)return;const nm=sel.options[sel.selectedIndex].text;
+  if(!confirm(nm+" 줄을 "+shName+"에서 뺄까요? (금액은 비우고 줄은 숨겨요 · 되살리기 가능)"))return;
+  P.edits=P.edits||{};const H=(P.edits["__hide"]=P.edits["__hide"]||{});H[shName]=H[shName]||{};H[shName][r]=1;
+  const ed=(P.edits[shName]=P.edits[shName]||{});
+  for(let c=3;c<=sh.maxC;c++){const ref=payIdxCol(c)+r,cell=sh.cells[ref];if(cell&&typeof cell.f==="string")continue;
+    if(cell&&cell.typ==="str"&&ed[ref]===undefined)continue;
+    if((cell&&cell.typ==="num"&&cell.v!=="")||ed[ref]!==undefined){ed[ref]="";if(P.autoSet&&P.autoSet[shName])delete P.autoSet[shName][ref];}}
+  try{payAutoFill();}catch(e){}
+  paySchedSave();renderPay();toast(nm+" 줄을 뺐어요");
+};
+window.payRowUnhide=function(shName,r){
+  const P=window.__pay;const H=((P.edits||{})["__hide"]||{})[shName];if(H)delete H[r];
+  const ed=(P.edits||{})[shName]||{};for(const ref in ed)if(Number(ref.replace(/[A-Z]+/,""))===Number(r)&&ed[ref]==="")delete ed[ref];
+  try{payAutoFill();}catch(e){}
+  paySchedSave();renderPay();toast("줄을 되살렸어요");
+};
 async function payRowAdd(shName){
   const P=window.__pay;
   const nmEl=document.getElementById("payRowName"),afEl=document.getElementById("payRowAfter");
