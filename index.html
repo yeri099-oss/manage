@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v407</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v408</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -10880,6 +10880,11 @@ function renderPay(){
       let curKind="";
       let trs="";
       const hideR=((P.edits||{})["__hide"]||{})[sh.name]||{};
+      /* v408: 숨긴 줄(퇴사 등)이 세로 병합(부서명 등) 안에 있으면 병합 높이를 그만큼 줄이고, 병합 첫 줄이 숨겨졌으면 다음 보이는 줄로 옮김 */
+      const mvMg={};
+      for(const k in mg){const m=mg[k];m.rsV=m.rs;if(!(m.rs>1))continue;const r0=Number(k.replace(/[A-Z]+/,"")),col=k.replace(/\d+/g,"");
+        let vis=0,first=null;for(let r2=r0;r2<r0+m.rs;r2++)if(!hideR[r2]&&r2!==titleRow){vis++;if(first==null)first=r2;}
+        m.rsV=Math.max(vis,1);if((hideR[r0]||r0===titleRow)&&first!=null&&first!==r0)mvMg[col+first]=k;}
       for(let r=1;r<=sh.maxR;r++){
         let tds="";
         let hasAny=false;
@@ -10888,12 +10893,12 @@ function renderPay(){
         curKind=rowKind(r);
         for(let c=1;c<=useC;c++){
           if(holHide.has(c)){if(hasTxt(sh.cells[payIdxCol(c)+r]))hasAny=true;continue;}
-          const ref=payIdxCol(c)+r;
-          if(cov[ref]){if(hasTxt(sh.cells[ref])||edits[ref]!==undefined)hasAny=true;continue;}
+          const ref0=payIdxCol(c)+r,ref=mvMg[ref0]||ref0;
+          if(!mvMg[ref0]&&cov[ref]){if(hasTxt(sh.cells[ref])||edits[ref]!==undefined)hasAny=true;continue;}
           const m=mg[ref];
           let spanC=1;
           if(m){spanC=0;for(let cc=c;cc<=Math.min(c+m.cs-1,useC);cc++)if(!holHide.has(cc))spanC++;spanC=Math.max(spanC,1);}
-          const span=m?` colspan="${spanC}" rowspan="${m.rs}"`:"";
+          const span=m?` colspan="${spanC}" rowspan="${m.rsV||m.rs}"`:"";
           const cell=sh.cells[ref];
           if(hasTxt(cell)||edits[ref]!==undefined)hasAny=true;
           const scss=KCSS[curKind]||"";
