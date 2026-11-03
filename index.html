@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v399</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v400</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -5696,6 +5696,63 @@ function jgKpiCards(A,B){
     ${netCard}
   </div>`;
 }
+/* ===== v400: 증감 계정 세부내역 — 이카운트 계정별원장 붙여넣기 → p.det["inc|i"] = {rows,acct,range,at} ===== */
+function jgDetNum(t){const x=String(t==null?"":t).replace(/[,\s원]/g,"");if(!x||x==="-")return null;const n=Number(x);return isNaN(n)?null:n;}
+function jgDetParse(txt){
+  const out={rows:[],acct:"",range:""};
+  String(txt||"").split(/\r?\n/).forEach(line=>{
+    if(!line.trim())return;const c=line.split("\t").map(x=>x.trim());const t0=c[0]||"";
+    const m1=/\/\s*(\d{3,5}\s*\(([^)]+)\))/.exec(line);if(/회사명/.test(line)&&m1){out.acct=m1[1].replace(/\s+/g,"");}
+    const m2=/(\d{4}\/\d{2}\/\d{2})\s*~\s*(\d{4}\/\d{2}\/\d{2})/.exec(line);if(m2&&!/^\d{4}\/\d{2}\/\d{2}\s*-/.test(t0))out.range=m2[1]+" ~ "+m2[2];
+    if(/전표번호/.test(t0)||/회사명/.test(line))return;
+    if(/^\d{4}\/\d{2}\/\d{2}/.test(t0)){out.rows.push({k:"r",no:t0,memo:c[1]||"",cust:c[2]||"",dr:jgDetNum(c[3]),cr:jgDetNum(c[4]),bal:jgDetNum(c[5]),dept:c[6]||""});return;}
+    if(/이월잔액/.test(t0)){out.rows.push({k:"carry",label:"이월잔액",dr:jgDetNum(c[1]),cr:jgDetNum(c[2]),bal:jgDetNum(c[3])});return;}
+    if(/계$/.test(t0.replace(/\s+/g,""))||/^합\s*계$/.test(t0)){out.rows.push({k:/^합\s*계$/.test(t0)?"total":"sub",label:t0,dr:jgDetNum(c[1]),cr:jgDetNum(c[2])});return;}
+  });
+  return out;
+}
+window.jgDetOpen=function(full,box,key,label){window.__jgDet={full,box,key,label};jgDetRender();};
+window.jgDetClose=function(){window.__jgDet=null;const o=document.getElementById("jgDetOv");if(o)o.remove();};
+function jgDetStore(){const D=window.__jgDet;if(!D)return null;const p=jgGet(D.full);if(!p)return null;p.det=p.det||{};return p;}
+window.jgDetPaste=function(txt){
+  const D=window.__jgDet,p=jgDetStore();if(!D||!p)return;const P=jgDetParse(txt);
+  if(!P.rows.filter(r=>r.k==="r").length&&!P.rows.length){toast("붙여넣은 내용에서 원장 줄을 못 찾았어요 (전표번호·적요·거래처·차변·대변·잔액·부서명 순서)",true);return;}
+  p.det[D.box+"|"+D.key]={rows:P.rows,acct:P.acct,range:P.range,at:Date.now()};
+  queueSave("jagum",D.full.slice(0,4));jgDetRender();renderJagum();toast(P.rows.filter(r=>r.k==="r").length+"줄 넣었어요");
+};
+window.jgDetClear=function(){const D=window.__jgDet,p=jgDetStore();if(!D||!p)return;if(!confirm("이 계정의 세부내역을 지울까요?"))return;delete p.det[D.box+"|"+D.key];queueSave("jagum",D.full.slice(0,4));jgDetRender();renderJagum();};
+function jgDetRender(){
+  const D=window.__jgDet;if(!D)return;const p=jgGet(D.full);if(!p)return;
+  const det=(p.det||{})[D.box+"|"+D.key];const amt=Number(((p[D.box]||{})[D.key])||0);
+  let ov=document.getElementById("jgDetOv");
+  if(!ov){ov=document.createElement("div");ov.id="jgDetOv";ov.style.cssText="position:fixed;inset:0;z-index:130;background:rgba(20,24,20,.45);overflow-y:auto";ov.addEventListener("click",e=>{if(e.target===ov)jgDetClose();});document.body.appendChild(ov);}
+  const n=(v)=>v==null||v===0?"":fmt(v);
+  const bd="border:1px solid #d8dde8;padding:7px 10px;";
+  let rows="",sumDr=0,sumCr=0,lastBal=null,carry=null;
+  if(det)det.rows.forEach(r=>{
+    if(r.k==="carry"){carry=r;lastBal=r.bal;rows+=`<tr style="font-weight:700"><td colspan="3" style="${bd}text-align:center">이월잔액</td><td style="${bd}text-align:right">${n(r.dr)}</td><td style="${bd}text-align:right">${n(r.cr)}</td><td style="${bd}text-align:right">${n(r.bal)}</td><td style="${bd}"></td></tr>`;return;}
+    if(r.k==="r"){sumDr+=r.dr||0;sumCr+=r.cr||0;if(r.bal!=null)lastBal=r.bal;rows+=`<tr><td style="${bd}color:#2F5FD0;white-space:nowrap">${esc(r.no)}</td><td style="${bd}">${esc(r.memo)}</td><td style="${bd}">${esc(r.cust)}</td><td style="${bd}text-align:right">${n(r.dr)}</td><td style="${bd}text-align:right">${n(r.cr)}</td><td style="${bd}text-align:right">${n(r.bal)}</td><td style="${bd}">${esc(r.dept)}</td></tr>`;return;}
+    rows+=`<tr style="background:#F1F4FA;font-weight:700"><td colspan="3" style="${bd}text-align:center">${esc(r.label)}</td><td style="${bd}text-align:right">${n(r.dr)}</td><td style="${bd}text-align:right">${n(r.cr)}</td><td style="${bd}"></td><td style="${bd}"></td></tr>`;
+  });
+  const hasTot=det&&det.rows.some(r=>r.k==="total");
+  if(det&&!hasTot&&carry){const td2=(carry.dr||0)+sumDr,tc=(carry.cr||0)+sumCr;rows+=`<tr style="background:#F1F4FA;font-weight:700"><td colspan="3" style="${bd}text-align:center">합계</td><td style="${bd}text-align:right">${n(td2)}</td><td style="${bd}text-align:right">${n(tc)}</td><td style="${bd}"></td><td style="${bd}"></td></tr>`;}
+  const mv=Math.max(sumDr,sumCr);const ok=det&&(sumDr===amt||sumCr===amt||Math.abs(sumCr-sumDr)===amt);
+  const chk=!det?"":ok?`<span style="color:#2F6B3F;font-weight:700">✓ 원장 합계 ${fmt(mv)}원 = 자금일보 ${fmt(amt)}원</span>`:`<span style="color:#b45309;font-weight:700">⚠ 원장 차변 ${fmt(sumDr)} / 대변 ${fmt(sumCr)} — 자금일보 ${fmt(amt)}원과 달라요</span>`;
+  ov.innerHTML=`<div style="background:#fff;max-width:1100px;margin:28px auto 40px;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.25)">
+    <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid #e5e7eb"><b style="font-size:16px">📒 ${esc(D.label)}</b>
+      <span class="unit">${D.box==="inc"?"증가":"감소"} · ${jgRange(D.full)} · 자금일보 ${fmt(amt)}원</span>
+      <button onclick="jgDetClose()" style="margin-left:auto;background:none;border:0;font-size:24px;cursor:pointer;line-height:1">×</button></div>
+    <div style="padding:14px 18px 18px">
+      ${det?`<div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:8px"><span>회사명 : 주식회사 꽃밥이야기${det.acct?" / "+esc(det.acct):" / "+esc(D.label)}</span><span>${esc(det.range||"")}</span></div>
+      <div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;font-size:13.5px"><thead><tr>${["전표번호","적요","거래처","차변","대변","잔액","부서명"].map(h=>`<th style="${bd}background:#F1F4FA">${h}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div>
+      <div style="margin-top:8px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">${chk}<button class="btn btn-sm" style="margin-left:auto" onclick="jgDetClear()">세부내역 지우기</button></div>`
+      :`<div class="unit" style="margin-bottom:8px">아직 세부내역이 없어요. 이카운트 [계정별원장]에서 이 계정·기간을 조회한 표를 복사해 아래에 붙여넣으세요.</div>`}
+      <div style="margin-top:12px"><div style="font-size:12.5px;font-weight:700;margin-bottom:4px">📋 ${det?"다시 ":""}붙여넣기 <span class="unit" style="font-weight:400">이카운트 계정별원장 표(전표번호·적요·거래처·차변·대변·잔액·부서명)를 그대로 복사 → 여기 Ctrl+V</span></div>
+        <textarea id="jgDetTa" rows="3" style="width:100%;box-sizing:border-box;font:inherit;font-size:12.5px;padding:8px;border:1px dashed #94a3b8;border-radius:8px" placeholder="여기에 붙여넣으면 바로 들어가요"></textarea></div>
+    </div></div>`;
+  const ta=document.getElementById("jgDetTa");
+  if(ta)ta.addEventListener("paste",e=>{const t=(e.clipboardData||window.clipboardData).getData("text");if(!t)return;e.preventDefault();jgDetPaste(t);});
+}
 function jgHalvesTables(halves,groupEnds){
   const sep=i=>groupEnds&&groupEnds.includes(i)?"border-left:2px solid #8a887f;":"";
   const td=(v,i,color,bold)=>`<td style="text-align:right;${sep(i)}${color?`color:${color};`:""}${bold?"font-weight:700;":""}">${v==null?"":fmt(Math.round(v))}</td>`;
@@ -5720,14 +5777,18 @@ function jgHalvesTables(halves,groupEnds){
     const o=opt||{};
     const vals=halves.map(f=>{const p=jgGet(f);return p?fn(p,f):null;});
     if(!o.always&&vals.every(v=>v==null||v===0))return;
-    r2+=`<tr${o.total?` class="total"`:""}${o.bg?` style="background:${o.bg}"`:""}><td class="l sticky" style="padding-left:${8+(o.lv||0)*14}px${o.bg?";background:"+o.bg:""}${o.sub?";font-weight:700":""}">${esc(label)}</td>${vals.map((v,i)=>td(v,i,null,o.sub||o.total)).join("")}</tr>`;
+    /* v400: 계정 금액을 누르면 이카운트 계정별원장처럼 세부내역 (붙여넣기로 입력) */
+    const cellOf=(v,i)=>{if(!o.det)return td(v,i,null,o.sub||o.total);const f=halves[i],p=jgGet(f);if(!p)return td(v,i,null,false);
+      const has=!!(p.det&&p.det[o.det.box+"|"+o.det.key]);
+      return `<td style="text-align:right;${sep(i)}cursor:pointer" title="눌러서 세부내역 보기·붙여넣기" onclick="jgDetOpen('${f}','${o.det.box}','${String(o.det.key).replace(/'/g,"\\'")}','${esc(label).replace(/'/g,"\\'")}')">${v==null||v===0?(has?"":'<span style="color:#cbd5e1">＋</span>'):`<span style="border-bottom:1px dashed ${has?"#2F6B3F":"#cbd5e1"}">${fmt(Math.round(v))}</span>`}${has?' <span title="세부내역 있음" style="font-size:10px">📎</span>':""}</td>`;};
+    r2+=`<tr${o.total?` class="total"`:""}${o.bg?` style="background:${o.bg}"`:""}><td class="l sticky" style="padding-left:${8+(o.lv||0)*14}px${o.bg?";background:"+o.bg:""}${o.sub?";font-weight:700":""}">${esc(label)}</td>${vals.map((v,i)=>cellOf(v,i)).join("")}</tr>`;
   };
   const rank=(list,box)=>list.map((n,i)=>({n,i})).concat(jgExtras(box).map(n=>({n,i:"x:"+n}))).map(x=>({...x,m:Math.max(...halves.map(f=>{const p=jgGet(f);return p&&p[box]&&p[box][x.i]?Number(p[box][x.i]):0;}))}))
     .filter(x=>x.m>0).sort((x,y2)=>y2.m-x.m);
   line2("기초잔액",(p,f)=>jgBase(f),{sub:1,always:1});
-  rank(JG_INC,"inc").forEach(x=>line2(x.n,p=>p.inc?.[x.i],{lv:1}));
+  rank(JG_INC,"inc").forEach(x=>line2(x.n,p=>p.inc?.[x.i],{lv:1,det:{box:"inc",key:x.i}}));
   line2("증가 소계",p=>jgIncSum(p),{sub:1,bg:"#F3F7EE",always:1});
-  rank(JG_DEC,"dec").forEach(x=>line2(x.n,p=>p.dec?.[x.i],{lv:1}));
+  rank(JG_DEC,"dec").forEach(x=>line2(x.n,p=>p.dec?.[x.i],{lv:1,det:{box:"dec",key:x.i}}));
   line2("감소 소계",p=>jgDecSum(p),{sub:1,bg:"#F3F7EE",always:1});
   line2("잔액",(p,f)=>jgEnding(f),{total:1,always:1});
   const th1=halves.map((f,i)=>`<th style="${sep(i)}">${jgLabel(f)}</th>`).join("");
