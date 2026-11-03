@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v411</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v412</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -10501,7 +10501,8 @@ function payPayees(){
       const b=hs.cells["B"+r];
       if(!b||b.typ!=="str")continue;
       const nm=String(b.v).trim();
-      if(!nm||nm==="성명"||nm==="파출"||nm.indexOf("계")>=0||nm.indexOf("합")>=0)continue;
+      if(!nm||nm==="성명"||nm.indexOf("파출")>=0||nm.indexOf("계")>=0||nm.indexOf("합")>=0)continue;
+      if(((((P.edits||{})["__hide"]||{})["시급직급여"])||{})[r])continue;
       const amt=Math.round(hv("L"+r));
       out.push({name:nm,amt:amt,src:"시급"});
     }
@@ -10514,10 +10515,12 @@ function payPayees(){
       if(!a||a.typ!=="str")continue;
       const nm=String(a.v).trim();
       if(!nm||nm==="성명"||nm==="계"||nm.indexOf("합")>=0)continue;
+      if(((((P.edits||{})["__hide"]||{})["용역직급여"])||{})[r])continue;
       out.push({name:nm,amt:Math.round(yv("J"+r)),src:"용역"});
     }
   }
-  return out;
+  /* v412: 실제로 통장에 보낼 사람만 — 실지급이 0인 사람(퇴사·빼기, 기지급으로 다 준 파출 등)은 빼요. 검산은 시트 합계 그대로라 영향 없음 */
+  return out.filter(x=>x.amt>0);
 }
 function paySheetNetTotals(){
   const P=window.__pay;
