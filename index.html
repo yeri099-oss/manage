@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v409</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v410</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -16918,7 +16918,8 @@ function payPachBody(){
     ${(()=>{const sp=pachSplit(R),y=String(ym.y).slice(2);
       const yr=[];for(let m=1;m<=12;m++){const d=(S.data.payPach||{})[y+String(m).padStart(2,"0")];if(!d||!(d.rows||[]).length)continue;const q=pachSplit(d.rows);yr.push([m,q]);}
       const box=(t,g,col,sub)=>`<div style="flex:1;min-width:230px;border:1px solid ${col};border-radius:10px;padding:8px 12px"><div style="font-weight:700;font-size:13px">${t} <span class="unit" style="font-weight:400">${g.n}건 · ${sub}</span></div><div style="font-size:13px;margin-top:3px">북촌 <b>${fmt(g.bc)}</b> · 피다 <b>${fmt(g.ep)}</b> · 합계 <b style="font-size:16px">${fmt(g.bc+g.ep)}</b>원</div></div>`;
-      return `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">${box("🍋 레몬파출",sp.lm,"#eab308","월말에 한 번에 지급")}${box("✅ 직접 지급",sp.dir,"#86efac","이미 지급 (체크한 줄)")}</div>
+      const all={bc:sp.lm.bc+sp.dir.bc,ep:sp.lm.ep+sp.dir.ep,n:sp.lm.n+sp.dir.n};
+      return `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">${box("📊 전체",all,"#94a3b8","레몬 + 직접 지급")}${box("🍋 레몬파출",sp.lm,"#eab308","월말에 한 번에 지급")}${box("✅ 직접 지급",sp.dir,"#86efac","이미 지급 (체크한 줄)")}</div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">${yr.length?`<details><summary style="cursor:pointer;font-size:12.5px;font-weight:700">📅 ${ym.y}년 월별 레몬파출 비용</summary><table class="rpt" style="font-size:12.5px;margin-top:6px"><thead><tr><th>월</th><th>북촌</th><th>피다</th><th>레몬 합계</th><th>직접 지급</th></tr></thead><tbody>${yr.map(([m,q])=>`<tr><td>${m}월</td><td style="text-align:right">${fmt(q.lm.bc)}</td><td style="text-align:right">${fmt(q.lm.ep)}</td><td style="text-align:right;font-weight:700">${fmt(q.lm.bc+q.lm.ep)}</td><td style="text-align:right;color:#64748b">${fmt(q.dir.bc+q.dir.ep)}</td></tr>`).join("")}
           <tr class="total"><td>합계</td><td style="text-align:right">${fmt(yr.reduce((a,[,q])=>a+q.lm.bc,0))}</td><td style="text-align:right">${fmt(yr.reduce((a,[,q])=>a+q.lm.ep,0))}</td><td style="text-align:right">${fmt(yr.reduce((a,[,q])=>a+q.lm.bc+q.lm.ep,0))}</td><td style="text-align:right">${fmt(yr.reduce((a,[,q])=>a+q.dir.bc+q.dir.ep,0))}</td></tr></tbody></table></details>`:""}</div>`;})()}
     ${(()=>{const cnt=(v)=>R.filter(r=>(String(r.name||"").trim()||r.amt)&&pachInView(r,v)).length;
