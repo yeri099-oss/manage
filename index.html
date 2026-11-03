@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v412</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v413</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -17864,12 +17864,12 @@ function renderExpCard(){
     if(si!==selSi)return "";
     if(view==="date"){
       const idx=cardDateOrder(p.sh);
-      const trs=idx.map(i=>{const r=p.sh.rows[i];return `<tr><td>${esc(r.d)}</td><td class="l">${esc(r.m)}</td><td class="l"><input value="${esc(r.x||"")}" placeholder="세부내역" onchange="cardSetX('${ym.key}',${si},${i},this.value)" style="font:inherit;font-size:12.5px;width:100%;min-width:160px;box-sizing:border-box;padding:2px 6px;border:1px solid ${r.xE?"#E8C88A":"var(--line,#e3e3e3)"};border-radius:6px;background:${r.xE?"#FFFBEA":"#fff"}">${cardIsFit(r)?' <span class="unit" style="color:#8a5a00">체력단련</span>':""}</td><td style="text-align:right;${r.a<0?"color:#b42318":""}">${fmt(r.a)}</td><td>${selOpt(r,si,i)}</td></tr>`;}).join("");
+      const trs=idx.map(i=>{const r=p.sh.rows[i];return `<tr><td>${esc(r.d)}</td><td class="l">${esc(r.m)}</td><td class="l"><div style="display:flex;gap:6px;align-items:center"><input value="${esc(r.x||"")}" placeholder="세부내역" onchange="cardSetX('${ym.key}',${si},${i},this.value)" style="font:inherit;font-size:12.5px;flex:1;width:100%;min-width:140px;box-sizing:border-box;padding:2px 6px;border:1px solid ${r.xE?"#E8C88A":"var(--line,#e3e3e3)"};border-radius:6px;background:${r.xE?"#FFFBEA":"#fff"}">${cardIsFit(r)?'<span class="unit" style="color:#8a5a00;white-space:nowrap;flex:none">💪 체력단련</span>':""}</div></td><td style="text-align:right;${r.a<0?"color:#b42318":""}">${fmt(r.a)}</td><td>${selOpt(r,si,i)}</td></tr>`;}).join("");
       return `<div style="margin-top:10px"><div class="unit" style="margin-bottom:4px">${CARD_BIZ_N[p.biz]} · ${p.sh.rows.length}건 · 합계 <b>${fmt(p.sum)}</b>원 <button class="btn btn-sm" style="margin-left:8px" onclick="cardHolderDl('${ym.key}',${si})">📥 ${esc(p.name)} 탭만 받기</button></div><div class="table-wrap"><table class="rpt" style="font-size:12.5px;margin:0"><thead><tr><th>${esc((p.sh.labels||{}).d||"승인일자")}</th><th class="l">가맹점</th><th class="l">세부 내역</th><th>금액</th><th>비고 (계정)</th></tr></thead><tbody>${trs}<tr style="background:#eef3ee"><td colspan="3" class="l"><b>합계</b></td><td style="text-align:right"><b>${fmt(p.sum)}</b></td><td></td></tr></tbody></table></div></div>`;
     }
     const groups=p.order.map(a=>{
       const idx=p.sh.rows.map((r,i)=>i).filter(i=>cardEff(p.sh.rows[i])===a);
-      const trs=idx.map(i=>{const r=p.sh.rows[i];return `<tr><td>${esc(r.d)}</td><td class="l">${esc(r.m)}</td><td class="l"><input value="${esc(r.x||"")}" placeholder="세부내역" onchange="cardSetX('${ym.key}',${si},${i},this.value)" style="font:inherit;font-size:12.5px;width:100%;min-width:160px;box-sizing:border-box;padding:2px 6px;border:1px solid ${r.xE?"#E8C88A":"var(--line,#e3e3e3)"};border-radius:6px;background:${r.xE?"#FFFBEA":"#fff"}">${cardIsFit(r)?' <span class="unit" style="color:#8a5a00">체력단련</span>':""}</td><td style="text-align:right;${r.a<0?"color:#b42318":""}">${fmt(r.a)}</td><td>${selOpt(r,si,i)}</td></tr>`;}).join("");
+      const trs=idx.map(i=>{const r=p.sh.rows[i];return `<tr><td>${esc(r.d)}</td><td class="l">${esc(r.m)}</td><td class="l"><div style="display:flex;gap:6px;align-items:center"><input value="${esc(r.x||"")}" placeholder="세부내역" onchange="cardSetX('${ym.key}',${si},${i},this.value)" style="font:inherit;font-size:12.5px;flex:1;width:100%;min-width:140px;box-sizing:border-box;padding:2px 6px;border:1px solid ${r.xE?"#E8C88A":"var(--line,#e3e3e3)"};border-radius:6px;background:${r.xE?"#FFFBEA":"#fff"}">${cardIsFit(r)?'<span class="unit" style="color:#8a5a00;white-space:nowrap;flex:none">💪 체력단련</span>':""}</div></td><td style="text-align:right;${r.a<0?"color:#b42318":""}">${fmt(r.a)}</td><td>${selOpt(r,si,i)}</td></tr>`;}).join("");
       const sub=p.acc[a];const fitSub=a==="복리후생비"?p.fit:0;
       return trs+`<tr style="background:#eef3ee"><td colspan="3" class="l"><b>${esc(a)} 소계</b>${fitSub?` <span class="unit">(그중 체력단련비 ${fmt(fitSub)} / 체력단련 제외 ${fmt(sub-fitSub)})</span>`:""}</td><td style="text-align:right"><b>${fmt(sub)}</b></td><td></td></tr>`;
     }).join("");
