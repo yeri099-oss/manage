@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v403</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v404</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -10713,6 +10713,12 @@ function renderPay(){
         }
         const hedits=(P.edits||{})["휴일근무수당"]||{};
         const pairs=[];
+        /* v404: 날짜 줄 = 다른 휴일들의 날짜가 적힌 줄 (빈 휴일 칸도 같은 줄에 적어야 함 — 전엔 한 줄 위에 적혀 날짜가 두 번 보였음) */
+        let lblRow=null;
+        if(subRow&&totIdx){const cnt={};for(let c=4;c<totIdx;c++){const sub=sh.cells[payIdxCol(c)+subRow];if(!(sub&&sub.typ==="str"&&String(sub.v).trim()==="시간"))continue;
+          for(let r=subRow-1;r>=1;r--){const hc=sh.cells[payIdxCol(c)+r];if(hc&&hc.typ==="str"&&String(hc.v).trim()){cnt[r]=(cnt[r]||0)+1;break;}}}
+          lblRow=Number(Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a])[0])||Math.max(1,subRow-1);}
+        let holFix=false;
         if(subRow&&totIdx){
           for(let c=4;c<totIdx;c++){
             const sub=sh.cells[payIdxCol(c)+subRow];
@@ -10723,7 +10729,10 @@ function renderPay(){
                 const hc=sh.cells[payIdxCol(c)+r];
                 if(hc&&hc.typ==="str"){hdrRef=payIdxCol(c)+r;label=String(hc.v).trim();break;}
               }
-              if(!hdrRef)hdrRef=payIdxCol(c)+Math.max(1,subRow-2);
+              if(!hdrRef)hdrRef=payIdxCol(c)+(lblRow||Math.max(1,subRow-1));
+              /* 예전 버전이 다른 줄에 적어둔 날짜는 날짜 줄로 옮김 */
+              for(let r=1;r<subRow;r++){const rf=payIdxCol(c)+r;if(rf!==hdrRef&&hedits[rf]!==undefined&&!(sh.cells[rf]&&sh.cells[rf].typ==="str")){
+                if(String(hedits[rf]||"").trim()&&hedits[hdrRef]===undefined)hedits[hdrRef]=hedits[rf];delete hedits[rf];holFix=true;}}
               if(hedits[hdrRef]!==undefined)label=String(hedits[hdrRef]||"").trim();
               let hasData=false;
               for(let r=subRow+1;r<=sh.maxR&&!hasData;r++){
@@ -10741,6 +10750,7 @@ function renderPay(){
             }
           }
         }
+        if(holFix){try{paySchedSave();}catch(e){}}
         pairs.forEach(p=>{if(!p.active){holHide.add(p.c1);holHide.add(p.c2);}});
         window.__pay.holPairs=pairs;
         const freeN=pairs.filter(p=>!p.active).length;
