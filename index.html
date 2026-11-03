@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v402</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v403</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -22755,6 +22755,9 @@ async function cfmDoPush(){
       for(const ch of(ag.deliveryChannels||[]))if(ch.indexOf("쿠팡")>=0&&c.ag.coupang>0){m2.delivery=m2.delivery||{};m2.delivery[ch]=R(c.ag.coupang);touched=true;}
       for(const ch of(ag.onlineChannels||[]))if((ch.indexOf("스마트")>=0||ch.indexOf("네이버")>=0)&&c.ag.smartstore>0){m2.online=m2.online||{};m2.online[ch]=R(c.ag.smartstore);touched=true;}
       if(touched){ag.months[mo]=m2;await saveYearDoc("agency",y,ag);}
+      /* v403: 월별 온라인은 판매대행 온라인 채널 전체 합으로 (스마트스토어만 넣으면 다음 접속 때 자동 맞춤이 되돌려서 경고가 다시 떴음) */
+      if((ag.onlineChannels||[]).length&&m2.online){let sum=0;for(const ch in m2.online)sum+=Number(m2.online[ch])||0;
+        if(sum>0&&md.months[mo]&&md.months[mo].online!==Math.round(sum)){md.months[mo].online=Math.round(sum);await saveYearDoc("monthly",y,md);}}
     }
     window.__cfmPushPending=null;
     closeModal();
@@ -22840,7 +22843,11 @@ async function cfmCheckMismatch(){
     const evA=(mrow.ev&&mrow.ev.add)||{};const lessA=(v,k)=>v==null?v:v-(Number(evA[k])||0);
     cmp("월별 인사동",lessA(mrow.insadong,"insadong"),c.pos.insadong);
     cmp("월별 마켓",lessA(mrow.market,"market"),c.pos.market);
-    cmp("월별 온라인",mrow.online,c.pos.online);
+    /* v403: 월별 온라인 = 판매대행 온라인 채널 합(접속할 때 자동으로 맞춤)이라 다른 온라인 채널도 들어 있음 → 확정(스마트스토어)과는 스마트스토어 채널끼리 비교 */
+    {const ag=S.data.agency&&S.data.agency[ys],on=ag&&(ag.months||{})[mo]&&ag.months[mo].online,chs=(ag&&ag.onlineChannels)||[];
+      const ssCh=chs.filter(ch=>ch.indexOf("스마트")>=0||ch.indexOf("네이버")>=0);
+      if(on&&ssCh.length){const v=ssCh.reduce((a,ch)=>a+(Number(on[ch])||0),0);cmp("판매대행 스마트스토어",v,c.pos.online);}
+      else cmp("월별 온라인",mrow.online,c.pos.online);}
     cmp("월별 보자기",lessA(mrow.bojagi,"bojagi"),c.pos.bojagi);
     cmp("매출비교 전체",scGet(ys,mo,"total"),c.nts.total);
     cmp("매출비교 피다",scGet(ys,mo,"epida"),c.nts.epida);
