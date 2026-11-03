@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v408</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v409</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -6928,6 +6928,25 @@ function payAutoFill(){
       if(val===0&&!hasOrig){if(hasEd)payEdit(shName,ref,"",true);return;} /* 0이면 빈 칸으로 */
       payEdit(shName,ref,val,true);
     };
+    /* v409: 시급직급여 '파출' 줄 ← 🧾 파출비용 (레몬·직접 지급 모두, 북촌/인사동(피다) 따로) — 지급총액 = 기지급액이라 실지급액은 0 */
+    try{
+      const hs=paySheetByName("시급직급여"),PD=(S.data.payPach||{})[pachKey()];
+      if(hs&&PD&&(PD.rows||[]).some(r=>Number(r.amt))){
+        const sum={bc:0,ep:0};PD.rows.forEach(r=>{const v=Number(r.amt)||0;if(v)sum[r.loc==="ep"?"ep":"bc"]+=v;});
+        const tx=(ref)=>{const e=((P.edits||{})["시급직급여"]||{})[ref];if(e!==undefined&&typeof e==="string")return e.replace(/\s+/g,"");const c=hs.cells[ref];return c&&c.typ==="str"?String(c.v).replace(/\s+/g,""):"";};
+        let hr=0,cTot=null,cPre=null,cNet=null;
+        for(let r=1;r<=6&&!cTot;r++)for(let c=2;c<=hs.maxC;c++){const t=tx(payIdxCol(c)+r);if(t==="지급총액"){cTot=payIdxCol(c);hr=r;break;}}
+        if(cTot){for(let r=1;r<=hr;r++)for(let c=2;c<=hs.maxC;c++){const t=tx(payIdxCol(c)+r),L=payIdxCol(c);if(!cPre&&/기지급/.test(t))cPre=L;if(!cNet&&/실지급|차인지급/.test(t))cNet=L;}
+          const rows={bc:[],ep:[]};let grp="";
+          for(let r=hr+1;r<=hs.maxR;r++){const a=tx("A"+r),b=tx("B"+r);if(/^(합계|총계)$/.test(a)||/^(합계|총계)$/.test(b))break;if(a&&!/계$/.test(a))grp=a;
+            if(b.indexOf("파출")<0)continue;rows[/인사|피다/.test(b+grp)?"ep":"bc"].push({r,pref:/보자기|북촌/.test(b+grp)?0:1});}
+          for(const k of["bc","ep"]){const L=rows[k].sort((x,y)=>x.pref-y.pref);L.forEach((x,i)=>{const v=i===0?sum[k]:0;
+            af("시급직급여",cTot+x.r,v);if(cPre)af("시급직급여",cPre+x.r,v);
+            if(cNet){const nc=hs.cells[cNet+x.r];if(!(nc&&typeof nc.f==="string"))af("시급직급여",cNet+x.r,0);}});}
+          P.pachHourlyNote=(rows.bc.length||rows.ep.length)?{bc:sum.bc,ep:sum.ep,pre:!!cPre,rows:rows.bc.length+rows.ep.length}:null;
+        }
+      }
+    }catch(e0){console.warn("시급직 파출",e0);}
     /* 상여금 시트(이번 달 열 + 앱에서 추가한 특별상여 열) → 상용직급여 상여금(D열) 자동 반영 */
     P.bjSpecialSum=0;P.bjPreOf=P.bjPreOf||{};
     const BJ=payBjCols();
@@ -10980,6 +10999,7 @@ function renderPay(){
         }
       }
       body=`<div class="footnote" style="margin-bottom:6px">칸을 누르면 바로 고칠 수 있어요(Enter로 확정). 계산되는 칸은 고칠 수 없어요. <span style="color:#4E8B60">초록 테두리</span>는 자동으로 채운 칸, <span style="color:#B08A00">노란 테두리</span>는 직접 고친 칸이에요. 여기서 고친 내용은 '엑셀 받기'를 누르면 급여품의 양식 그대로 들어가요.${bjNote}</div>
+      ${sh.name==="시급직급여"&&P.pachHourlyNote?`<div class="footnote" style="margin-bottom:8px;padding:6px 10px;background:#F4F9F4;border:1px solid #c7e3cc;border-radius:8px">🧾 <b>파출</b> 줄은 파출비용 탭에서 자동으로 가져와요 (레몬·직접 지급 합산) — 북촌 <b>${fmt(P.pachHourlyNote.bc)}</b>원 · 인사동(피다) <b>${fmt(P.pachHourlyNote.ep)}</b>원. 지급총액과 ${P.pachHourlyNote.pre?"기지급액에 같은 금액을 넣어 실지급액은 0이에요":'<b style="color:#b45309">기지급액 열이 없어서</b> 지급총액만 채웠어요'}.</div>`:""}
       ${holCtl}${bjCtl}${sh.name==="상용직급여"?`<div class="footnote" style="margin-bottom:8px">위에서 이카운트 급여대장을 올리면 이 표가 이름으로 맞춰 채워져요. 급여대장에만 있는 직원은 줄을 새로 만들지 물어봐요.</div>`:pnlCtl}${payRowAddBar(sh.name)}${sh.name==="상여금"?payBjArrangeBar():""}
       ${titleText?`<div style="font-weight:700;font-size:15px;margin:2px 2px 8px">${esc(titleText)}</div>`:""}
       <div class="table-wrap"><table class="payws web"><tbody>${trs}</tbody></table></div>`;
