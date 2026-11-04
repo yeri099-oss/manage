@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v418</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v419</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -20663,8 +20663,11 @@ async function mbFile(f){
     const r=(aoa[i]||[]).map(x=>String(x).trim());
     const dm=r.join(' ').match(/조회일자\s*:\s*(\d{4})-(\d{2})/);
     if(dm)ym=dm[1].slice(2)+dm[2];
-    if(r.includes('회원명')&&r.includes('매출액')){hi=i;r.forEach((v,j)=>{if(v&&ci[v]==null)ci[v]=j;});}
+    if(r.includes('회원명')&&(r.includes('매출액')||r.includes('순매출'))){hi=i;r.forEach((v,j)=>{if(v&&ci[v]==null)ci[v]=j;});}
   }
+  /* v419: '회원-상품 구매내역' 양식(총매출·할인액·순매출, 부가세 칸 없음)도 읽음 — 매출액=순매출 */
+  const prodFmt=ci['매출액']==null&&ci['순매출']!=null;
+  if(prodFmt)ci['매출액']=ci['순매출'];
   if(hi<0)throw new Error("회원구매현황 형식을 찾지 못했어요 — 오케이포스 회원분석(일자별회원구매내역) 엑셀인지 확인해 주세요.");
   const numv4=x=>Number(String(x||'').replace(/,/g,''))||0;
   const MAP={'꽃밥에피다':'insadong','보자기꽃밥':'bojagi','꽃밥마켓':'pangong','꽃밥이야기':'sanae'};
@@ -20674,9 +20677,10 @@ async function mbFile(f){
   for(let i=hi+1;i<aoa.length;i++){
     const r=aoa[i]||[];
     if(!/^\d+$/.test(String(r[0]||'').trim()))continue;
+    if(prodFmt&&!String(r[ci['회원명']]||'').trim())continue;
     const nm=String(r[ci['회원명']]||'').trim();
     const key=MAP[nm];
-    const amt0=numv4(r[ci['매출액']]),vat=numv4(r[ci['부가세']]),disc=ci['할인액']!=null?numv4(r[ci['할인액']]):0;
+    const amt0=numv4(r[ci['매출액']]),vat=ci['부가세']!=null?numv4(r[ci['부가세']]):0,disc=ci['할인액']!=null?numv4(r[ci['할인액']]):0;
     const svc=(key==='pangong'||key==='sanae');
     const amt=svc?amt0+disc:amt0;
     if(!key&&/택배/.test(nm)){taekbae+=amt0+disc;continue;}
@@ -20687,19 +20691,22 @@ async function mbFile(f){
   if(!n)throw new Error("거래 줄을 찾지 못했어요.");
   if(ym&&ym!==CUR&&!confirm("파일은 "+ymLabel(ym)+" 자료인데 지금 화면은 "+ymLabel(CUR)+"이에요. 그래도 현재 달에 넣을까요?"))return;
   const m=MONTHS[CUR];
+  const noVat=prodFmt&&ci['부가세']==null;
   for(const k in agg){
     m.members[k+'Gye']=Math.round(agg[k].g);
+    if(noVat){if(!agg[k].g){m.members[k+'Buga']=0;m.members[k+'Gong']=0;}continue;} /* 부가세 칸이 없는 양식 — 부가세·공급가는 그대로 둠(직접 입력) */
     m.members[k+'Buga']=Math.round(agg[k].v);
     m.members[k+'Gong']=Math.round(agg[k].v)*10;
   }
   m.members.taekbaeRef=Math.round(taekbae);
   m.uploads=m.uploads||{};m.uploads.members=1;
   touch();renderInput();
-  const line=(nm,k)=>"· "+nm+": "+fmt(m.members[k+'Gye'])+"원 (부가세 "+fmt(m.members[k+'Buga'])+")";
+  const line=(nm,k)=>"· "+nm+": "+fmt(m.members[k+'Gye'])+"원 ("+(noVat?"부가세는 직접 입력":"부가세 "+fmt(m.members[k+'Buga']))+")";
   alert("회원구매현황 반영 완료\n\n"+line("인사동(꽃밥에피다)","insadong")+"\n"+line("보자기(보자기꽃밥)","bojagi")+"\n"+line("판공(꽃밥마켓)","pangong")+"\n"+line("사내(꽃밥이야기)","sanae")
     +((svcDisc.pangong||svcDisc.sanae)?"\n\nℹ 판공·사내는 포스에서 서비스(매출액 0)로 찍혀서 할인액을 더해 가져왔어요 (판공 할인액 "+fmt(svcDisc.pangong||0)+"원, 사내 할인액 "+fmt(svcDisc.sanae||0)+"원).":"")
     +(taekbae?"\n\n· 참고 — 꽃밥택배(택배 출고): "+fmt(Math.round(taekbae))+"원 — 재고 차감용이라 매출에는 넣지 않았어요.":"")
     +(Object.keys(unknown).length?"\n\n⚠ 짝을 모르는 회원: "+Object.entries(unknown).map(([k2,v2])=>k2+" 매출액 "+fmt(v2)+"원"+(unkDisc[k2]?" (할인액 "+fmt(unkDisc[k2])+"원)":"")).join(', ')+" — 어디에도 안 들어갔어요. 필요하면 직접 배정해 주세요.":"")
+    +(noVat?"\n\n⚠ 이 파일(회원-상품 구매내역)엔 부가세 칸이 없어서 계만 넣었어요 — ② 회원분석의 부가세 칸은 직접 적거나, 오케이포스 '일자별 회원구매내역' 파일을 넣으면 부가세까지 채워져요.":"")
     +"\n\n면세는 계−부가세×11로 자동 계산돼요. 사내는 보고 반영 시 마켓매출 '사내'에 합산돼요.");
 }
 async function uplRouterPick(inp){
@@ -20715,7 +20722,7 @@ async function uplRouterPick(inp){
         let isCorner=false,isMb0=false;
         for(let i=0;i<Math.min(aoa.length,12);i++){
           const r=(aoa[i]||[]).map(x=>String(x).replace(/\s/g,''));
-          if(r.includes('회원명')&&r.includes('매출액')){isMb0=true;break;}
+          if(r.includes('회원명')&&(r.includes('매출액')||r.includes('순매출'))){isMb0=true;break;}
           if(r[0]==='No.'&&r.some(t=>t.includes('매입사'))){isCorner=true;break;}
         }
         if(isMb0){try{await mbFile(f);}catch(e){alert(f.name+' 읽기 실패: '+(e.message||e));}continue;}
@@ -20729,7 +20736,7 @@ async function uplRouterPick(inp){
         let isMb=false;
         for(let i=0;i<Math.min(aoa.length,8);i++){
           const r=(aoa[i]||[]).map(x=>String(x).trim());
-          if(r.includes('회원명')&&r.includes('매출액')){isMb=true;break;}
+          if(r.includes('회원명')&&(r.includes('매출액')||r.includes('순매출'))){isMb=true;break;}
         }
         if(isMb){try{await mbFile(f);}catch(e){alert(f.name+' 읽기 실패: '+(e.message||e));}continue;}
         rest.files.push(f);continue; // 쿠팡이츠/포스 상품 등 → ③ 판별기로
