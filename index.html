@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v422</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v423</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -20570,6 +20570,9 @@ async function apCornerPick(inp){
     alert("마켓포스 카드승인현황 반영 완료\n\n· 카드 전체: "+fmt(m.corner.cardTotal)+"원 ("+n+"건, 취소 차감)\n· 이 중 카드번호 없는 단말기 간편결제: "+fmt(noCard)+"원 ("+noN+"건) — 제로페이 건은 홈택스에선 '제로페이 자료'로 따로 잡혀요\n\n카드 '보자기 몫'은 직접 입력해 주세요.");
   }catch(e){alert("읽기 실패: "+(e.message||e));}
 }
+function zpHoldApply(m){const H=m.nts.zpHold;if(!H)return;m.nts.zeropay=H.tot;m.nts.zeropayVat=H.vat;H.applied=1;}
+window.cfmZpHoldNow=function(){const m=MONTHS[CUR];if(!m||!m.nts.zpHold)return;zpHoldApply(m);touch();renderInput();};
+window.cfmZpHoldDrop=function(){const m=MONTHS[CUR];if(!m||!m.nts.zpHold)return;if(!confirm('보관한 제로페이 자료를 지울까요?'))return;delete m.nts.zpHold;touch();renderInput();};
 async function ntsZpPick(inp){
   const f=inp.files&&inp.files[0];
   if(!f)return;
@@ -20613,9 +20616,13 @@ async function ntsZpPick(inp){
     if(!n)throw new Error("가맹점 데이터 줄을 찾지 못했어요.");
     if(ym&&ym!==CUR&&!confirm("파일은 "+ymLabel(ym)+" 자료인데 지금 화면은 "+ymLabel(CUR)+"이에요. 그래도 현재 달에 넣을까요?"))return;
     const m=MONTHS[CUR];
-    m.nts.zeropay=Math.round(tot);
-    m.nts.zeropayVat=Math.round(vat);
+    /* v423: 홈택스 카드가 아직 비어 있으면 제로페이 자료는 '보관'만 (계산 제외, [넣기]로만 반영) */
+    m.nts.zpHold={tot:Math.round(tot),vat:Math.round(vat),n:n,ym:ym||CUR,name:f.name,at:Date.now()};
     m.uploads=m.uploads||{};m.uploads.ntszp=1;
+    if(!(m.nts.card>0)){touch();renderInput();
+      alert("제로페이 자료를 보관해 뒀어요 (아직 계산에는 안 들어가요)\n\n· 결제금액: "+fmt(m.nts.zpHold.tot)+"원 ("+n+"줄)\n· 부가세: "+fmt(m.nts.zpHold.vat)+"원\n\n마켓포스에 임의결제로 이미 찍혀 있으면 그대로 두면 돼요. 계산에 넣어야 할 때만 ④의 [넣기]를 누르세요.");
+      return;}
+    zpHoldApply(m);
     touch();renderInput();
     alert("제로페이 부가세내역 반영 완료\n\n· 제로페이·기타수단 총액: "+fmt(m.nts.zeropay)+"원 ("+n+"개 가맹점)\n· 부가세 합(정확값): "+fmt(m.nts.zeropayVat)+"원\n\n④ 카드 칸에는 홈택스 신용카드 자료 중 꽃밥마켓 가맹점분을 입력해 주세요 (전체 합계에는 피다 카드가 섞여 있어요).");
   }catch(e){alert("읽기 실패: "+(e.message||e));}
@@ -21407,6 +21414,8 @@ window.cfmRemNone=function(id,on){const m=MONTHS[CUR];if(!m)return;m.remindNone=
 window.cfmRemDel=function(id){if(!confirm('이 알림을 지울까요? (모든 달에서 사라져요)'))return;REMIND=remindList().filter(x=>x.id!==id);remindSave();renderInput();};
 window.cfmRemAdd=function(){const t=(document.getElementById('remT')||{}).value||'';if(!t.trim())return;const kw=((document.getElementById('remK')||{}).value||'').trim();REMIND=remindList().concat([{id:'r'+Date.now(),t:t.trim(),kw}]);remindSave();renderInput();};
 function renderInput(){
+  {const m0=MONTHS[CUR];if(m0&&m0.nts&&m0.uploads&&m0.uploads.ntszp&&!(m0.nts.card>0)&&m0.nts.zeropay>0&&!m0.nts.zpHold){ /* v423: 카드 없이 들어간 제로페이 → 보관으로 */
+    m0.nts.zpHold={tot:m0.nts.zeropay,vat:m0.nts.zeropayVat==null?0:m0.nts.zeropayVat,n:0,ym:CUR,name:'제로페이 자료',at:Date.now()};m0.nts.zeropay=0;m0.nts.zeropayVat=null;try{touch();}catch(e){}}}
   const m=MONTHS[CUR];
   const pg=$("#pg-input");
   let h='';
@@ -21519,10 +21528,11 @@ function renderInput(){
   <table class="g"><tr><th style="width:160px">카드매출</th><th>계</th><th colspan="4"></th></tr>
     <tr><td class="lb">카드</td>${inp('nts.card')}${blank(4)}</tr>
     <tr><td class="lb">제로페이·기타수단</td>${inp('nts.zeropay')}<td class="au" colspan="4" style="text-align:left;color:var(--sub);font-size:12px">홈택스 <b>'제로(온누리)페이 자료'</b> 금액을 그대로 입력 — 수기 등록분+단말기 승인 제로페이가 모두 포함돼요(포스는 단말기 건을 카드로 집계하지만 홈택스는 제로페이로 분리). 삼성페이 등 카드 기반 간편결제는 신용카드 자료에 이미 포함되니 넣지 마세요</td></tr>
+    ${(()=>{const H=m.nts.zpHold;if(!H||H.applied)return '';return `<tr><td colspan="6" style="background:#FFF8E6;border:1px dashed #f0b429;padding:8px 10px;font-size:13px">📌 <b>제로페이 자료 보관 중</b> — 결제금액 <b>${fmt(H.tot)}원</b> · 부가세 ${fmt(H.vat)}원 (${esc(H.name||'')}) <span style="color:var(--sub)">· 계산에는 안 들어가요 (마켓포스 임의결제로 이미 잡힘) · 필요할 때만 넣기</span> <button class="btn sm" onclick="cfmZpHoldNow()">넣기</button> <button class="btn sm" onclick="cfmZpHoldDrop()">지우기</button></td></tr>`;})()}
     <tr><td class="lb">└ 부가세 합 <span class="tag" id="zpVatTag">추정</span></td><td><input data-p="nts.zeropayVat" class="est" data-nullable="1"></td><td class="au" colspan="4" style="text-align:left;color:var(--sub);font-size:12px">기타수단결제의 실제 부가세 합을 알면 적어주세요 (과세 = 부가세×11) · 비우면 마켓 비율로 추정</td></tr>
     <tr><td class="lb">카드매출 합계 (자동)</td>`+autoCell('nts_tot',mm=>derived(mm).ntsTotal,true)+`<td class="au" colspan="4" style="text-align:left;color:var(--sub)">아래 배분표의 빨간 칸으로 들어갑니다</td></tr>
   </table>
-  <div class="hint" style="background:#f0f7ff;border:1px dashed #93c5fd;border-radius:8px;padding:8px 10px">📂 <b>제로페이 부가세내역으로 자동 입력</b> — <input type="file" accept=".xls,.xlsx,.html" onchange="ntsZpPick(this)" style="font-size:12px"> 홈택스 <b>부가세내역</b> 엑셀(.xls)을 넣으면 위의 <b>제로페이·기타수단 총액과 부가세 합</b>이 자동으로 채워져요.</div>
+  <div class="hint" style="background:#f0f7ff;border:1px dashed #93c5fd;border-radius:8px;padding:8px 10px">📂 <b>제로페이 부가세내역으로 자동 입력</b> — <input type="file" accept=".xls,.xlsx,.html" onchange="ntsZpPick(this)" style="font-size:12px"> 홈택스 <b>부가세내역</b> 또는 <b>제로페이 홈페이지</b> 엑셀(.xls)을 넣으면 위의 <b>제로페이·기타수단 총액과 부가세 합</b>이 채워져요. 홈택스 <b>카드</b>가 아직 비어 있으면 계산에 넣지 않고 <b>보관</b>만 해요 ([넣기]로 직접 반영).</div>
   <div class="flex" style="margin-top:8px"><span class="addrow apBtn">📋 승인내역 확인 — 단말기 간편결제(카드번호 없는 승인)가 얼마나 되는지 보기</span></div>
   <div id="ap-wrap" style="display:none;margin-top:8px">
     <div class="hint">오케이포스 <b>승인현황</b>을 붙여넣거나 <b>엑셀 파일(.xlsx)을 그대로 선택</b>하면, 카드번호가 별표뿐인 <b>단말기 간편결제</b>를 월별로 집계해 보여줘요 (확인용 — 포스는 이 결제들을 신용카드로 집계하지만, 이 중 <b>제로페이 건은 홈택스에선 '제로페이 자료'로 따로</b> 잡혀요. 그래서 포스 카드가 홈택스 카드보다 그만큼 큰 게 정상이에요).</div>
