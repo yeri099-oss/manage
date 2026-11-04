@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v425</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v426</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -19822,6 +19822,14 @@ document.addEventListener("DOMContentLoaded", () => {
 #cfm-root table.g input{width:110px;padding:4px 6px;border:1px solid #d1d5db;border-radius:6px;text-align:right;font-size:13px}
 #cfm-root table.g input:focus{outline:2px solid var(--accent);border-color:var(--accent)}
 #cfm-root table.g input.est{background:var(--estbg);border-color:#a78bfa}
+/* v426: 직접 입력해야 하는 칸 — 비어 있으면 주황색으로 반짝 */
+#cfm-root table.g input.needin{background:#FFF4D6;border:2px solid #f59e0b;animation:needPulse 1.6s ease-in-out infinite}
+#cfm-root table.g input.needin:focus{animation:none}
+@keyframes needPulse{0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,.0)}50%{box-shadow:0 0 0 4px rgba(245,158,11,.35)}}
+#cfm-root .needtag{display:inline-block;font-size:10.5px;font-weight:700;color:#b45309;background:#FFEDD5;border:1px solid #fdba74;border-radius:6px;padding:0 5px;margin-left:4px;vertical-align:1px}
+#cfm-root .needtag.done{color:#15803d;background:#ECFDF3;border-color:#86efac}
+#cfm-root .srcedit{cursor:pointer}
+#cfm-root .srcedit:hover{text-decoration:underline}
 #cfm-root table.g input.auinp{background:#f8fafc;border-color:transparent;color:#374151}
 #cfm-root table.g input.txt{text-align:left}
 #cfm-root .hint{font-size:12px;color:var(--sub);margin-top:6px}
@@ -20678,8 +20686,8 @@ async function msalesFile(f){
   /* v425: 고객수 칸이 있으면(결제수단별 파일) 마켓 고객수도 — 직접 적은 값은 안 덮어씀 */
   let guestMsg='';
   if(ci['고객수']!=null){const gs=g2('고객수');
-    if(gs>0&&!(m.market.guest>0)){m.market.guest=gs;if(typeof window.cfmSyncGuest==='function')try{window.cfmSyncGuest(CUR,m);}catch(e){}guestMsg="\n· 고객수: "+fmt(gs)+"명";}
-    else if(gs>0)guestMsg="\n· 고객수: 파일 "+fmt(gs)+"명 (이미 적어둔 "+fmt(m.market.guest)+"명은 그대로 뒀어요)";
+    /* v426: 고객수는 직접 입력 — 파일 값은 참고로만 알려줌 */
+    if(gs>0)guestMsg="\n· (참고) 포스 고객수 "+fmt(gs)+"명 — 고객수 칸은 직접 입력해 주세요";
     if(gs>0&&gs===g2('영수건수'))guestMsg+=" ※ 포스 고객수가 영수건수와 같아요 (인원 입력 없이 영수증 1장=1명으로 집계)";}
   let rangeMsg='';
   if(range){const [a,b]=range.split(' ~ ');const ld=new Date(+b.slice(0,4),+b.slice(5,7),0).getDate();
@@ -21384,7 +21392,7 @@ function autoCell(id,fn,strong){AUTO[id]=fn;return `<td class="au${strong?' stro
 function inp(path,cls){return `<td><input data-p="${path}" class="${cls||''}"></td>`;}
 function blank(n){return `<td class="au" colspan="${n||1}"></td>`;}
 /* v420: 엑셀 업로드 체크리스트 — 파일마다 '어디서 받는지(메뉴 경로)' (고칠 수 있게, 클라우드 salesStatus_months/_upsrc) */
-const UPSRC_DEF={msales:"오케이포스 › 매출관리 › 월별 매출현황 [월별 종합] → 엑셀",corner:"오케이포스 › 매출관리 › 승인현황 › 카드 승인현황 → 엑셀",kiosk:"키오스크 관리자 › 매출분석 › 상품별 → 엑셀",coupang:"쿠팡이츠 사장님 › 주문내역 → 엑셀 (매월 5일 이후)",members:"오케이포스 › 회원분석 › 일자별 회원구매내역 → 엑셀",pops:"POPS CLOUD › 일일매출상세내역 → 엑셀",ntszp:"홈택스 › 제로페이 부가세내역 → 엑셀"};
+const UPSRC_DEF={in_jy:"매출관리-매출현황-매장상품별-실매출액",msales:"오케이포스 › 매출관리 › 월별 매출현황 [월별 종합] → 엑셀",corner:"오케이포스 › 매출관리 › 승인현황 › 카드 승인현황 → 엑셀",kiosk:"키오스크 관리자 › 매출분석 › 상품별 → 엑셀",coupang:"쿠팡이츠 사장님 › 주문내역 → 엑셀 (매월 5일 이후)",members:"오케이포스 › 회원분석 › 일자별 회원구매내역 → 엑셀",pops:"POPS CLOUD › 일일매출상세내역 → 엑셀",ntszp:"홈택스 › 제로페이 부가세내역 → 엑셀"};
 let UPSRC=null,UPSRC_CL=false;
 function upSrc(k){
   if(!UPSRC){try{UPSRC=JSON.parse(localStorage.getItem('ssv2_upsrc')||'null');}catch(e){}UPSRC=UPSRC||{};}
@@ -21392,7 +21400,7 @@ function upSrc(k){
   return UPSRC[k]||UPSRC_DEF[k]||"";
 }
 window.cfmUpSrcEdit=function(k){
-  const v=prompt("이 파일을 어디서 받는지 적어두세요 (메뉴 경로)",upSrc(k));if(v==null)return;
+  const v=prompt(String(k).indexOf('in_')===0?"이 값을 어디서 찾는지 적어두세요 (메뉴 경로)":"이 파일을 어디서 받는지 적어두세요 (메뉴 경로)",upSrc(k));if(v==null)return;
   UPSRC=UPSRC||{};if(v.trim())UPSRC[k]=v.trim();else delete UPSRC[k];
   try{localStorage.setItem('ssv2_upsrc',JSON.stringify(UPSRC));}catch(e){}
   if(FB)db.collection('salesStatus_months').doc('_upsrc').set({map:UPSRC,at:Date.now()}).catch(e=>console.warn(e));
@@ -21476,9 +21484,9 @@ function renderInput(){
     <tr><td class="lb">제로페이·기타수단 (계)</td>${inp('market.zeropay')}${blank(4)}</tr>
     <tr><td class="lb">포인트 사용 (계)</td>${inp('market.point')}${blank(4)}</tr>
     <tr><td class="lb">외상 (계)</td>${inp('market.credit')}${blank(4)}</tr>
-    <tr><td class="lb">정육<div class="hint">매출관리-매출현황-매장상품별-실매출액</div></td>`+autoCell('mk_jy',mm=>derived(mm).jeongyukGye)+`<td><div style="font-size:11px;color:var(--sub);text-align:right;margin-bottom:2px">🐂 우육 — 대관령한우</div><input data-p="market.jeongyukMyeon"></td><td><div style="font-size:11px;color:var(--sub);text-align:right;margin-bottom:2px">🐖 돈육 — 씨알돈육</div><input data-p="market.jeongyukGwase"></td><td class="au" colspan="2" style="text-align:left;color:var(--sub);font-size:12px">축종별 매출액을 그대로 적어요(면세·과세 구분 아님 — 확정 계산에 안 쓰이는 보고용 값) · 입력하면 매출현황 정육매출 '대관령한우'·'씨알돈육'에 <b>바로</b> 반영돼요</td></tr>
-    <tr><td class="lb">포인트 적립</td>${inp('market.pointAccum')}${blank(4)}</tr>
-    <tr><td class="lb">고객수</td>${inp('market.guest')}<td class="au" colspan="4" style="text-align:left;color:var(--sub);font-size:12px">명 · 입력하면 매출현황 마켓매출 '고객수' 열에 <b>바로</b> 반영돼요</td></tr>
+    <tr><td class="lb">정육${(()=>{const ok=[getPath(m,'market.jeongyukMyeon'),getPath(m,'market.jeongyukGwase')].some(v=>v>0);return `<span class="needtag${ok?' done':''}">${ok?'✔ 입력됨':'✍ 직접 입력'}</span>`;})()}<div class="hint srcedit" title="눌러서 어디서 찾는지 고치기" onclick="cfmUpSrcEdit('in_jy')">${esc(upSrc('in_jy'))||'<span style="color:#b45309">📍 어디서 찾는지 적어두세요</span>'} <span style="color:#94a3b8">✏</span></div></td>`+autoCell('mk_jy',mm=>derived(mm).jeongyukGye)+`<td><div style="font-size:11px;color:var(--sub);text-align:right;margin-bottom:2px">🐂 우육 — 대관령한우</div><input data-p="market.jeongyukMyeon"></td><td><div style="font-size:11px;color:var(--sub);text-align:right;margin-bottom:2px">🐖 돈육 — 씨알돈육</div><input data-p="market.jeongyukGwase"></td><td class="au" colspan="2" style="text-align:left;color:var(--sub);font-size:12px">축종별 매출액을 그대로 적어요(면세·과세 구분 아님 — 확정 계산에 안 쓰이는 보고용 값) · 입력하면 매출현황 정육매출 '대관령한우'·'씨알돈육'에 <b>바로</b> 반영돼요</td></tr>
+    <tr><td class="lb">포인트 적립${(()=>{const ok=[getPath(m,'market.pointAccum')].some(v=>v>0);return `<span class="needtag${ok?' done':''}">${ok?'✔ 입력됨':'✍ 직접 입력'}</span>`;})()}<div class="hint srcedit" title="눌러서 어디서 찾는지 고치기" onclick="cfmUpSrcEdit('in_pt')">${esc(upSrc('in_pt'))||'<span style="color:#b45309">📍 어디서 찾는지 적어두세요</span>'} <span style="color:#94a3b8">✏</span></div></td>${inp('market.pointAccum')}${blank(4)}</tr>
+    <tr><td class="lb">고객수${(()=>{const ok=[getPath(m,'market.guest')].some(v=>v>0);return `<span class="needtag${ok?' done':''}">${ok?'✔ 입력됨':'✍ 직접 입력'}</span>`;})()}<div class="hint srcedit" title="눌러서 어디서 찾는지 고치기" onclick="cfmUpSrcEdit('in_guest')">${esc(upSrc('in_guest'))||'<span style="color:#b45309">📍 어디서 찾는지 적어두세요</span>'} <span style="color:#94a3b8">✏</span></div></td>${inp('market.guest')}<td class="au" colspan="4" style="text-align:left;color:var(--sub);font-size:12px">명 · 입력하면 매출현황 마켓매출 '고객수' 열에 <b>바로</b> 반영돼요</td></tr>
   </table><div id="vMarket"></div></div>`;
   // ② 꽃밥(세금계산서)
   h+=`<div class="card"><h2>② 꽃밥 (세금계산서) <small>OKPOS-회원관리-회원분석-일자별회원구매내역</small></h2>
@@ -21680,9 +21688,11 @@ function renderInput(){
   h+=`<div class="card"><h2>⑪ 메모</h2><textarea data-memo="1" style="min-height:70px;font-family:inherit;font-size:13px">${esc(m.memo||'')}</textarea></div>`;
   pg.innerHTML=h;
   // 값 채우기 + 이벤트
+  const NEEDIN=['market.jeongyukMyeon','market.jeongyukGwase','market.pointAccum','market.guest']; /* v426 */
   pg.querySelectorAll("input[data-p]").forEach(el=>{
     const v=getPath(m,el.dataset.p);
     el.value=(v===null||v===undefined||v===0)?'':fmt(v);
+    if(NEEDIN.includes(el.dataset.p)){const nd=()=>{const grp=el.dataset.p.indexOf('market.jeongyuk')===0?[...pg.querySelectorAll('input[data-p^="market.jeongyuk"]')]:[el];const empty=grp.every(x=>!String(x.value).trim());grp.forEach(x=>x.classList.toggle('needin',empty));};nd();el.addEventListener('input',nd);el.addEventListener('change',()=>setTimeout(()=>{const tr=el.closest('tr');const tg=tr&&tr.querySelector('.needtag');if(tg){const all=[...tr.querySelectorAll('input[data-p]')].some(x=>String(x.value).trim());tg.classList.toggle('done',all);tg.textContent=all?'✔ 입력됨':'✍ 직접 입력';}},0));}
     if(el.dataset.p==='nts.cardGong'||el.dataset.p==='nts.cardBuga'){if(v===null){const I=deriveInputs(m);const ev=el.dataset.p==='nts.cardGong'?I.estG:I.estV;el.value=ev?fmt(ev):'';}}
     if(AUTOIN[el.dataset.p]){el.classList.toggle('auinp',!v);if(!v){const a=AUTOIN[el.dataset.p](m);el.value=a?fmt(a):'';}}
     if(m.uploads&&m.uploads.msales&&MSLOCK.includes(el.dataset.p)){el.readOnly=true;el.classList.add('auinp');el.title='마켓포스 월별 매출현황 엑셀에서 자동 입력됨';}
