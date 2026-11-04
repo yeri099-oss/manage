@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v420</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v421</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -3798,8 +3798,14 @@ window.epidaFilesPick=async function(inp){
     for(const f of files){
       const buf=await f.arrayBuffer();
       let text;
+      const h4=new Uint8Array(buf.slice(0,4));
+      if((h4[0]===0x50&&h4[1]===0x4B)||(h4[0]===0xD0&&h4[1]===0xCF)){ /* v421: POPS .xlsx */
+        if(typeof window.popsXlsxDetailHtml!=="function")throw new Error(f.name+": 엑셀(.xlsx) 읽기를 준비하지 못했어요.");
+        text=await window.popsXlsxDetailHtml(f);
+      }else{
       try{text=new TextDecoder("euc-kr").decode(buf);}catch(e){text=new TextDecoder("utf-8").decode(buf);}
       if(text.indexOf("거래일시")<0)text=new TextDecoder("utf-8").decode(buf);
+      }
       const r=epidaParse(text,f.name);
       const ydoc=(S.data.epidaDetail[r.y]=S.data.epidaDetail[r.y]||{months:{}});
       ydoc.months=ydoc.months||{};
@@ -18362,6 +18368,7 @@ window.renderExpDebit=renderExpDebit;
     let hasRouter=false;
     list.forEach(i=>{const router=/uplRouterPick/.test(i.getAttribute("onchange")||"");if(router&&hasRouter)return;if(router)hasRouter=true;const l=labelOf(i);if(seen.has(i))return;seen.add(i);out.push({inp:i,label:l,router});});
     out.sort((a,b)=>(b.router?1:0)-(a.router?1:0));
+    if(hasRouter)return out.filter(t=>t.router); /* v421: 자동 분류 칸만 보여줌 (헷갈리지 않게) */
     return out;
   };
   const render=(names)=>{
@@ -20719,6 +20726,13 @@ async function uplRouterPick(inp){
       const head=new Uint8Array(buf.slice(0,4));
       if((head[0]===0x50&&head[1]===0x4B)||(head[0]===0xD0&&head[1]===0xCF)){ // xlsx · 옛 xls(이진)
         const aoa=await apReadXlsx(f);
+        {const pk=popsKindAoa(aoa); /* v421: POPS 일일매출상세내역 / 전체판매별 */
+          if(pk){const wrap=document.getElementById('pp-wrap');
+            if(!wrap){alert('매출확정 › 입력 화면에서 넣어주세요 (⑦ 피다 칸).');continue;}
+            wrap.style.display='block';await ppFilePickW(wrap,{files:[f],value:''});
+            const ok=!(wrap.querySelector('.ppErr')||{}).textContent||wrap.querySelector('.ppErr').style.display==='none';
+            if(ok){alert(pk==='detail'?'꽃밥에피다 일일매출상세내역을 읽었어요 — 피다탭(매출·메뉴별)에도 반영됐어요.\n⑦ 피다 칸 아래 미리보기에서 [적용하기]를 눌러주세요.':'꽃밥에피다 전체판매별(영업집계)을 읽었어요 — 현금·카드·객수(고객수).\n⑦ 피다 칸 아래 미리보기에서 [적용하기]를 눌러주세요.');try{wrap.scrollIntoView({behavior:'smooth',block:'center'});}catch(e3){}}
+            continue;}}
         let isCorner=false,isMb0=false;
         for(let i=0;i<Math.min(aoa.length,12);i++){
           const r=(aoa[i]||[]).map(x=>String(x).replace(/\s/g,''));
@@ -20759,6 +20773,7 @@ window.mbPick=mbPick;
 async function msalesPick(inp){const f=inp.files&&inp.files[0];inp.value='';if(!f)return;try{await msalesFile(f);}catch(e){alert('읽기 실패: '+(e.message||e));}}
 window.msalesPick=msalesPick;
 window.uplRouterPick=uplRouterPick;
+window.popsXlsxDetailHtml=async function(f){const aoa=await apReadXlsx(f);if(popsKindAoa(aoa)!=='detail')throw new Error(f.name+": 일일매출상세내역 파일이 아니에요.");return popsDetailHtml(aoa);};
 window.ntsZpPick=ntsZpPick;
 window.txSlipCopy=async function(btn){
   const m=MONTHS[CUR],d=derived(m);
@@ -20862,7 +20877,63 @@ function parsePops(txt){
   if(!Object.keys(M).length)throw new Error('영수증 줄을 찾지 못했어요. 표 전체(머리글 포함)를 복사해서 붙여넣어 주세요.');
   return M;
 }
+/* v421: POPS CLOUD 엑셀(.xlsx·.xls 이진) — ① 일일매출상세내역 → 옛 .xls(HTML) 모양 표로 바꿔 기존 해석기 그대로 사용
+   ② 영업집계 > 전체판매별 → ∑ 줄에서 현금·카드·건수·객수 */
+async function popsIsXlsx(f){const h=new Uint8Array((await f.arrayBuffer()).slice(0,4));return (h[0]===0x50&&h[1]===0x4B)||(h[0]===0xD0&&h[1]===0xCF&&h[2]===0x11&&h[3]===0xE0);}
+function popsKindAoa(aoa){
+  for(let i=0;i<Math.min(aoa.length,10);i++){const r=(aoa[i]||[]).map(x=>String(x).replace(/\s/g,''));
+    if(r.includes('거래일시')&&r.some(x=>x.indexOf('정산총금액')>=0))return 'detail';
+    if(r.some(x=>x.indexOf('전체판매별')>=0))return 'sum';
+    if(r.includes('정산계')&&r.includes('일자'))return 'sum';}
+  return '';
+}
+function popsDetailHtml(aoa){
+  let hi=-1;for(let i=0;i<Math.min(aoa.length,15);i++){if((aoa[i]||[]).some(x=>String(x).trim()==='거래일시')){hi=i;break;}}
+  if(hi<0)throw new Error("일일매출상세내역 머리글(거래일시)을 찾지 못했어요.");
+  const H=aoa[hi].map(x=>String(x).trim());let last=H.length;while(last>0&&!H[last-1])last--;
+  const dc=H.indexOf('거래일시'),nc=H.indexOf('품명');
+  const e=(v)=>String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const tr=(cells)=>'<tr>'+cells.map(c=>'<td>'+e(c)+'</td>').join('')+'</tr>';
+  const out=['<table>',tr(H.slice(dc,last))];
+  for(let i=hi+1;i<aoa.length;i++){
+    const r=aoa[i]||[];const d=String(r[dc]||'').trim();
+    if(/^\d{4}-\d{2}-\d{2}/.test(d)){const row=[];for(let j=dc;j<last;j++)row.push(r[j]==null?'':r[j]);out.push(tr(row));}
+    else if(!d&&nc>=0&&String(r[nc]||'').trim()){out.push(tr(r.slice(nc,nc+7)));} /* 품목 줄: 품명·품목코드·수량·단가·금액·서비스·PV */
+  }
+  out.push('</table>');return out.join('');
+}
+function popsSumParse(aoa,fname){
+  let hi=-1;for(let i=0;i<Math.min(aoa.length,10);i++){if((aoa[i]||[]).some(x=>String(x).replace(/\s/g,'')==='정산계')){hi=i;break;}}
+  if(hi<0)throw new Error((fname||'파일')+": 전체판매별 머리글(정산계)을 찾지 못했어요.");
+  /* 머리글이 두 줄(정산/기타/매출 아래 세부) — 두 줄을 합쳐서 열 찾기 */
+  const A=(aoa[hi]||[]).map(x=>String(x).replace(/\s/g,'')),B=(aoa[hi+1]||[]).map(x=>String(x).replace(/\s/g,''));
+  const n=Math.max(A.length,B.length);const col=(nm)=>{for(let j=0;j<n;j++){if(B[j]===nm||A[j]===nm)return j;}return -1;};
+  const C={cash:col('현금'),card:col('카드'),tot:col('정산계'),sales:col('매출액'),cnt:col('건수'),guest:col('객수'),disc:col('할인'),svc:col('서비스'),day:col('일자')};
+  if(C.cash<0||C.tot<0)throw new Error((fname||'파일')+": 현금·정산계 열을 찾지 못했어요.");
+  const num=(v)=>{const t=String(v==null?'':v).replace(/[,\s원]/g,'');const x=Number(t);return t&&!isNaN(x)?x:0;};
+  let sumR=null,day1=null,run=null;
+  for(let i=hi+1;i<aoa.length;i++){const r=aoa[i]||[];const t=r.map(x=>String(x).trim());
+    if(!sumR&&i>hi+1&&t.slice(0,3).some(x=>x==='∑'||x==='Σ'||x==='합계'||x==='계'))sumR=r;
+    if(!day1&&C.day>=0&&/^1\s*\(/.test(t[C.day]||''))day1=(t[C.day].match(/\((.)\)/)||[])[1];
+    const rm=t.join(' ').match(/RUNDATE\s*:\s*(\d{4})-(\d{2})/);if(rm)run=rm;}
+  if(!sumR)throw new Error((fname||'파일')+": ∑(합계) 줄을 찾지 못했어요.");
+  /* 몇 월인지: 지금 고른 달 · 내려받은 날의 전달 중 1일 요일이 맞는 달 */
+  const WD='일월화수목금토';const cand=[];
+  if(typeof CUR==='string'&&CUR)cand.push(CUR);
+  if(run){let y=+run[1],m=+run[2]-1;if(m<1){m=12;y--;}cand.push(String(y).slice(2)+String(m).padStart(2,'0'));cand.push(run[1].slice(2)+run[2]);}
+  let ym=cand.find(c=>day1&&WD[new Date(2000+ +c.slice(0,2),+c.slice(2)-1,1).getDay()]===day1)||cand[0];
+  if(!ym)throw new Error((fname||'파일')+": 몇 월 자료인지 알 수 없어요 — 매출확정에서 달을 먼저 골라주세요.");
+  const cash=num(sumR[C.cash]),tot=num(sumR[C.tot]);
+  const o={cnt:C.cnt>=0?num(sumR[C.cnt]):0,sales:C.sales>=0?num(sumR[C.sales]):tot,cash:cash,card:tot-cash,
+    disc:C.disc>=0?num(sumR[C.disc]):0,svc:C.svc>=0?num(sumR[C.svc]):0,guest:C.guest>=0?num(sumR[C.guest]):0,src:'sum'};
+  return {[ym]:o};
+}
 async function ppFileToText(f){
+  if(await popsIsXlsx(f)){
+    const aoa=await apReadXlsx(f);
+    if(popsKindAoa(aoa)!=='detail')throw new Error("일일매출상세내역 파일이 아닌 것 같아요.");
+    return ppFileToText(new File([popsDetailHtml(aoa)],f.name+'.html',{type:'text/html'}));
+  }
   const buf=await f.arrayBuffer();
   let text;
   try{text=new TextDecoder('euc-kr').decode(buf);}catch(e){text=new TextDecoder('utf-8').decode(buf);}
@@ -20895,8 +20966,13 @@ async function ppFilePickW(wrap,inp){
   if(!f)return;
   const ee=wrap.querySelector('.ppErr');if(ee)ee.style.display='none';
   try{
+    if(await popsIsXlsx(f)){const aoa=await apReadXlsx(f);
+      if(popsKindAoa(aoa)==='sum'){wrap.__ppM=popsSumParse(aoa,f.name);ppRenderPreviewW(wrap);return;}}
     const text=await ppFileToText(f);
+    const prevM=wrap.__ppM||{};
     wrap.__ppM=parsePops(text);
+    /* v421: 같은 달 전체판매별(실제 객수)을 먼저 읽었으면 그 값을 유지 */
+    for(const k in wrap.__ppM)if(prevM[k]&&prevM[k].src==='sum')wrap.__ppM[k]=prevM[k];
     ppRenderPreviewW(wrap);
     if(typeof window.epidaFilesPick==='function'){try{await window.epidaFilesPick({files:[f],value:''});}catch(e2){console.error(e2);}}
   }catch(e){if(ee){ee.style.display='block';ee.textContent=e.message||String(e);}console.error(e);}
@@ -20924,7 +21000,8 @@ function ppRenderPreviewW(wrap){
     if(gap)html+=`<tr><td colspan="8" class="au" style="text-align:left;color:var(--warn)">⚠ ${ymLabel(ym)}: 매출 합과 정산 합이 ${fmt(gap)}원 달라요 (미수금 등) — 카드·현금은 정산 기준으로 채워요.</td></tr>`;
   }
   html+='</table>';
-  html+='<div class="hint">현금 = 정산(현금), 카드 = 정산총금액 − 현금 (카드·페이류 포함). 고객수는 세트·코스 주문 수량 합으로 추정한 값이라 필요하면 고쳐서 적용하세요 (포스 인원수 칸은 거의 1로 찍혀 있어 쓰지 않아요). 적용하면 ⑦ 피다 카드(계)·현금(계)·고객수에 저장돼요.</div>';
+  if(yms.some(k=>M[k].src==='sum'))html+='<div class="hint">📊 <b>영업집계 › 전체판매별</b> 파일의 ∑(합계) 줄로 채웠어요 — 현금 = 정산 현금, 카드 = 정산계 − 현금, <b>고객수 = 객수(실제)</b>. 영수증 칸은 건수예요. 메뉴별 매출(피다탭)은 <b>일일매출상세내역</b> 파일을 넣어야 채워져요.</div>';
+  else html+='<div class="hint">현금 = 정산(현금), 카드 = 정산총금액 − 현금 (카드·페이류 포함). 고객수는 세트·코스 주문 수량 합으로 추정한 값이라 필요하면 고쳐서 적용하세요 (포스 인원수 칸은 거의 1로 찍혀 있어 쓰지 않아요). 적용하면 ⑦ 피다 카드(계)·현금(계)·고객수에 저장돼요.</div>';
   html+='<div class="flex" style="margin-top:6px"><button class="btn sm ppApply">적용하기</button></div>';
   wrap.querySelector('.ppPrev').innerHTML=html;
   wrap.querySelectorAll('[data-ppg]').forEach(inp=>{
@@ -21493,7 +21570,7 @@ function renderInput(){
   <div class="pp-wrap" id="pp-wrap" style="display:none;margin-top:8px">
     <div class="hint">POPS CLOUD의 <b>영업속보 → 일일매출상세내역</b>에서 내려받은 <b>엑셀(.xls) 파일을 그대로 선택</b>하거나, 표를 복사해 붙여넣으세요. 파일로 넣으면 <b>매출현황 피다탭(피다매출·메뉴별·주류별)에도 동시에 반영</b>돼요. 영수증 줄만 골라 읽고 품목 줄·[계]·RUNDATE는 자동으로 걸러내요. 현금은 정산(현금), 카드는 정산총금액에서 현금을 뺀 값(카드·페이류 포함)으로 계산해요.</div>
     <textarea class="ppTa" style="min-height:110px" placeholder="여기에 표를 붙여넣으세요 — 또는 아래에서 엑셀 파일을 선택하세요"></textarea>
-    <div class="flex" style="margin-top:6px"><button class="btn sm ppGo">정리하기</button><label class="btn sm" style="cursor:pointer;display:inline-flex;align-items:center">📂 엑셀 파일 선택 (.xls)<input type="file" class="ppFile" accept=".xls,.xlsx,.html" style="display:none"></label></div>
+    <div class="flex" style="margin-top:6px"><button class="btn sm ppGo">정리하기</button><label class="btn sm" style="cursor:pointer;display:inline-flex;align-items:center">📂 엑셀 파일 선택 (.xls·.xlsx)<input type="file" class="ppFile" accept=".xls,.xlsx,.html" style="display:none"></label></div>
     <div class="ppPrev" style="margin-top:8px"></div>
     <div class="err ppErr" style="display:none"></div>
   </div>
