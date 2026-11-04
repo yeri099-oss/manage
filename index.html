@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v427</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v428</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -20302,7 +20302,7 @@ function validations(m){
   for(const[nm,gw,go,bu]of pairChk){
     if((go||bu)&&!near(gw,go+bu))w.push(`${nm}: 공급가+부가세(${fmt(go+bu)})가 과세 계(${fmt(gw)})와 다릅니다.`);
   }
-  for(const[x,nm]of[["insadong","인사동"],["bojagi","보자기"],["siksa","식사"],["pangong","판공"]]){
+  for(const[x,nm]of[["insadong","인사동"],["bojagi","보자기"],["siksa","식사"]]){
     if(d[x+'Myeon']<0)w.push(`회원분석 ${nm}: 공급가+부가세가 계보다 커서 면세가 음수입니다.`);
   }
   {const X=zpCross(m);if(X&&!X.wait&&!X.ok)w.push(`제로페이: 홈택스(${fmt(m.nts.zeropay)}원)와 제로페이 사이트 내역(${fmt(X.H.tot)}원)이 ${fmt(Math.abs(X.dT))}원 달라요${X.dV?` (부가세 차이 ${fmt(Math.abs(X.dV))}원)`:''} — ④ 국세청에서 확인하세요.`);}
@@ -21526,17 +21526,11 @@ function renderInput(){
     </div>
   </div>
   <h2 style="margin-top:14px;font-size:14px">참고 — 세금계산서 미발행 <small>합계에 안 들어가요</small></h2>
-  <table class="g"><tr><th style="width:160px">구분</th><th>계</th><th>면세 (자동)</th><th>과세 계 (자동)</th><th>공급가</th><th>부가세</th></tr>
-    <tr><td class="lb">판공 (꽃밥마켓)</td>${inp('members.pangongGye')}`
-      +autoCell('mb_pangong_m',mm=>derived(mm).pangongMyeon)
-      +autoCell('mb_pangong_g',mm=>derived(mm).pangongGwase)
-      +`${inp('members.pangongGong')}${inp('members.pangongBuga')}</tr>
-    <tr><td class="lb">사내 (꽃밥이야기)</td>${inp('members.sanaeGye')}`
-      +autoCell('mb_sa_m',mm=>mm.members.sanaeGye-(mm.members.sanaeGong+mm.members.sanaeBuga))
-      +autoCell('mb_sa_g',mm=>mm.members.sanaeGong+mm.members.sanaeBuga)
-      +`${inp('members.sanaeGong')}${inp('members.sanaeBuga')}</tr>
-    <tr><td class="lb">택배 (꽃밥택배)</td>${inp('members.taekbaeRef')}<td class="au" colspan="4" style="text-align:left;color:var(--sub);font-size:12px">택배 출고 재고 차감용 (온라인몰, 마켓 택배 등) — 매출에 더하지 않아요</td></tr>
-    <tr><td class="lb"></td><td class="au" colspan="5" style="text-align:left;color:var(--sub);font-size:12px">판공+사내 합계는 보고 반영 시 매출현황 마켓매출 비고칸에 자동으로 적혀요.</td></tr>
+  <table class="g"><tr><th style="width:160px">구분</th><th>계</th><th></th></tr>
+    <tr><td class="lb">판공 (꽃밥마켓)</td>${inp('members.pangongGye')}<td class="au" rowspan="2" style="text-align:left;color:var(--sub);font-size:12px;vertical-align:middle">금액만 참고로 적어둬요 — 할인으로 뺀 금액이라 포스에 부가세가 안 잡혀서 면세·과세를 나누지 않아요</td></tr>
+    <tr><td class="lb">사내 (꽃밥이야기)</td>${inp('members.sanaeGye')}</tr>
+    <tr><td class="lb">택배 (꽃밥택배)</td>${inp('members.taekbaeRef')}<td class="au" style="text-align:left;color:var(--sub);font-size:12px">택배 출고 재고 차감용 (온라인몰, 마켓 택배 등) — 매출에 더하지 않아요</td></tr>
+    <tr><td class="lb"></td><td class="au" colspan="2" style="text-align:left;color:var(--sub);font-size:12px">판공+사내 합계는 보고 반영 시 매출현황 마켓매출 비고칸에 자동으로 적혀요.</td></tr>
   </table>
   <div class="hint" style="background:#f0f7ff;border:1px dashed #93c5fd;border-radius:8px;padding:8px 10px">📂 <b>회원구매현황 엑셀로 자동 입력</b> — <input type="file" accept=".xls,.xlsx" onchange="mbPick(this)" style="font-size:12px"> 회원분석(일자별회원구매내역) 엑셀을 넣으면 인사동·보자기·판공·사내가 자동으로 채워져요 (반품 차감, 면세 자동). 판공·사내는 포스에서 서비스로 찍혀서 매출액+할인액으로 가져와요.</div>
   <div class="hint">인사동+보자기 합계가 매출확정의 '꽃밥(세금계산서)'로 자동 반영됩니다.</div></div>`;
