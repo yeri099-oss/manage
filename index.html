@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v416</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v417</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -6203,7 +6203,7 @@ function jgBsFormHtml(ym){
     <div style="display:flex;flex-wrap:wrap;gap:8px 24px">${JG_BS_FIELDS.map(([k,l])=>row(k,l)).join("")}</div>
   </div>`;
 }
-window.bjApplyQty=function(rows,ch,y,mo){
+window.bjApplyQty=function(rows,ch,y,mo,opt){
   try{
     const map=S.data.bojagiPosMap||{};
     const unmapped=[];
@@ -6211,7 +6211,9 @@ window.bjApplyQty=function(rows,ch,y,mo){
       const m2=map[r.code]||(bjPosGuess(r.name)?{auto:1,...bjPosGuess(r.name)}:null);
       if(!m2)unmapped.push(r.name);
     }
-    if(unmapped.length)return {ok:false,unmapped};
+    /* v417: 매출확정에서 올릴 땐 짝을 아는 품목은 먼저 반영 (partial) — 새 품목은 매출현황>보자기에서 짝만 고르면 돼요 */
+    if(unmapped.length&&!(opt&&opt.partial))return {ok:false,unmapped};
+    if(unmapped.length)rows=rows.filter(r=>map[r.code]||bjPosGuess(r.name));
     const mDoc=(S.data.bojagiMenu[y]=S.data.bojagiMenu[y]||{months:{}});mDoc.months=mDoc.months||{};
     const dDoc=(S.data.bojagiDrinks[y]=S.data.bojagiDrinks[y]||{months:{}});dDoc.months=dDoc.months||{};
     const mm=(mDoc.months[mo]=mDoc.months[mo]||{});
@@ -6230,7 +6232,7 @@ window.bjApplyQty=function(rows,ch,y,mo){
     for(const box of[mm,dm])for(const id in box){const q=box[id];if(!q.k&&!q.p&&!q.d)delete box[id];}
     queueSave("bojagiMenu",y);queueSave("bojagiDrinks",y);
     if(newMap&&!IS_DEMO&&typeof db!=="undefined"&&db)fsCol("config").doc("bojagiPosMap").set({map}).catch(e=>console.warn(e));
-    return {ok:true,applied};
+    return {ok:true,applied,unmapped};
   }catch(e){console.error(e);return {ok:false,error:e.message};}
 };
 async function jgLoanPatchXlsx(zip){
@@ -20489,9 +20491,13 @@ function pushQty(rows,ch,ym,msgs){
     if(!rows.length||typeof window.bjApplyQty!=="function")return;
     const use=ym||CUR;
     const y='20'+use.slice(0,2),mo=String(Number(use.slice(2)));
-    const res=window.bjApplyQty(rows,ch,y,mo);
+    {const agg={},ord=[];rows.forEach(r=>{if(!agg[r.code]){agg[r.code]={code:r.code,name:r.name,qty:0};ord.push(r.code);}agg[r.code].qty+=r.qty;});rows=ord.map(c=>agg[c]);} /* 날짜별 줄 → 품목별 합 */
+    const res=window.bjApplyQty(rows,ch,y,mo,{partial:true});
     const chN={k:'키오스크',p:'포스',d:'배달'}[ch];
-    if(res&&res.ok)msgs.push('→ 매출현황 보자기 메뉴별 '+chN+' 수량 '+res.applied+'개 품목도 채웠어요');
+    if(res&&res.ok){msgs.push('→ 매출현황 보자기 메뉴별 '+chN+' 수량 '+res.applied+'개 품목도 채웠어요');
+      /* 새 품목이 있으면 매출현황>보자기의 '엑셀 상품매출내역 넣기' 짝 맞추기 화면에 이 파일 내용을 그대로 띄워 둠 */
+      if(res.unmapped&&res.unmapped.length){window.__bjPos={rows:rows.slice(),ch:ch,ym:{y:y,mo:mo},src:ch==='k'?'kiosk':ch==='d'?'coupang':'pos',money:0,moneyGross:0,files:1,ranges:[],multiYm:null,fromCfm:true};
+        msgs.push('⚠ 새 품목 '+res.unmapped.length+'개('+res.unmapped.slice(0,3).join(', ')+(res.unmapped.length>3?'…':'')+')는 짝이 없어요 — 매출현황 > 보자기 탭을 열면 짝 고르는 화면이 떠 있어요. 짝만 고르고 [반영]을 누르면 끝 (다시 올릴 필요 없음)');}}
     else if(res&&res.unmapped)msgs.push('→ 메뉴별 수량은 새 품목 '+res.unmapped.length+'개('+res.unmapped.slice(0,3).join(', ')+'…)의 짝이 없어 못 채웠어요 — 매출현황>보자기 메뉴별에서 이 파일을 한 번 올려 짝지어주세요');
   }catch(e){console.error(e);}
 }
