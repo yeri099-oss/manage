@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v424</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v425</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -20655,6 +20655,12 @@ async function msalesFile(f){
     if(fy===CUR){row=aoa[i];rowYm=fy;break;}
     if(!row){row=aoa[i];rowYm=fy;}
   }
+  /* v425: 결제수단별(일별종합) 엑셀 — 날짜별 줄 + '합계' 줄 → 합계 줄 사용 (조회일자에서 달) */
+  let range='';
+  if(!row){
+    for(let i=0;i<Math.min(aoa.length,8);i++){const rm=(aoa[i]||[]).join(' ').match(/조회일자\s*:\s*(\d{4}-\d{2}-\d{2})\s*~\s*(\d{4}-\d{2}-\d{2})/);if(rm){range=rm[1]+' ~ '+rm[2];break;}}
+    for(let i=hi+1;i<aoa.length;i++){if(String((aoa[i]||[])[0]||'').replace(/\s/g,'')==='합계'){row=aoa[i];rowYm=ym;break;}}
+  }
   if(!row)throw new Error("월 데이터 줄을 찾지 못했어요.");
   const useYm=rowYm||ym;
   if(useYm&&useYm!==CUR&&!confirm("파일은 "+ymLabel(useYm)+" 자료인데 지금 화면은 "+ymLabel(CUR)+"이에요. 그래도 현재 달에 넣을까요?"))return;
@@ -20669,9 +20675,18 @@ async function msalesFile(f){
   /* v415: 새 양식은 '기타수단결제' 칸이 없음 → 결제합계에서 나머지 결제수단을 뺀 금액(제로페이 등)으로 */
   m.market.zeropay=ci['기타수단결제']!=null?g2('기타수단결제'):Math.max(0,Math.round(g2('결제합계')-(g2('단순현금')+g2('현금영수')+g2('신용카드')+g2('외상')+g2('회원포인트'))));
   m.uploads=m.uploads||{};m.uploads.msales=1;
+  /* v425: 고객수 칸이 있으면(결제수단별 파일) 마켓 고객수도 — 직접 적은 값은 안 덮어씀 */
+  let guestMsg='';
+  if(ci['고객수']!=null){const gs=g2('고객수');
+    if(gs>0&&!(m.market.guest>0)){m.market.guest=gs;if(typeof window.cfmSyncGuest==='function')try{window.cfmSyncGuest(CUR,m);}catch(e){}guestMsg="\n· 고객수: "+fmt(gs)+"명";}
+    else if(gs>0)guestMsg="\n· 고객수: 파일 "+fmt(gs)+"명 (이미 적어둔 "+fmt(m.market.guest)+"명은 그대로 뒀어요)";
+    if(gs>0&&gs===g2('영수건수'))guestMsg+=" ※ 포스 고객수가 영수건수와 같아요 (인원 입력 없이 영수증 1장=1명으로 집계)";}
+  let rangeMsg='';
+  if(range){const [a,b]=range.split(' ~ ');const ld=new Date(+b.slice(0,4),+b.slice(5,7),0).getDate();
+    if(a.slice(8)!=='01'||+b.slice(8)!==ld||a.slice(0,7)!==b.slice(0,7))rangeMsg="\n⚠ 조회일자가 한 달 전체가 아니에요 ("+range+") — 1일~말일로 다시 받아주세요.";}
   touch();renderInput();
   const silGap=g2('실매출')-m.market.total;
-  alert("마켓포스 월별 매출현황 반영 완료\n\n· 포스 전체 계(결제합계): "+fmt(m.market.total)+"원\n· 카드 전체: "+fmt(m.corner.cardTotal)+"원\n· 현금 전체(단순현금+현금영수): "+fmt(m.corner.cashTotal)+"원\n· 외상: "+fmt(m.market.credit)+"원 · 포인트: "+fmt(m.market.point)+"원 · 기타수단: "+fmt(m.market.zeropay)+"원"
+  alert((range?"마켓포스 결제수단별 반영 완료 ("+range+")":"마켓포스 월별 매출현황 반영 완료")+rangeMsg+"\n\n· 포스 전체 계(결제합계): "+fmt(m.market.total)+"원\n· 카드 전체: "+fmt(m.corner.cardTotal)+"원\n· 현금 전체(단순현금+현금영수): "+fmt(m.corner.cashTotal)+"원\n· 외상: "+fmt(m.market.credit)+"원 · 포인트: "+fmt(m.market.point)+"원 · 기타수단: "+fmt(m.market.zeropay)+"원"+guestMsg
     +(Math.abs(silGap)>2?"\nℹ 실매출("+fmt(g2('실매출'))+")과는 "+fmt(Math.abs(silGap))+"원 차이 — 에누리 등이라 결제합계 기준이 정확해요.":"")
     +"\n\n채워진 칸은 회색으로 잠겨요. 카드 보자기 몫은 직접 입력해 주세요.");
 }
@@ -21432,7 +21447,7 @@ function renderInput(){
   h+=`<div class="card"><h2>📂 엑셀 업로드 체크리스트 <small>매달 아래 파일들을 내려받아 여기에 한꺼번에 넣으면, 종류를 자동으로 알아보고 알맞은 칸을 채워요</small></h2>
   <div class="hint" style="background:#f0f7ff;border:1px dashed #93c5fd;border-radius:8px;padding:8px 10px"><b>파일 선택 (여러 개 한꺼번에 가능)</b> — <input type="file" multiple accept=".xls,.xlsx,.html" onchange="uplRouterPick(this)" style="font-size:12px"></div>
   <table class="g" style="margin-top:8px"><tr><th style="width:230px">파일</th><th style="width:110px">어디서</th><th>받는 곳 (메뉴 경로) <span style="font-weight:400;font-size:11px;color:var(--sub)">✏ 눌러서 고칠 수 있어요 · 칸에 마우스를 올리면 채우는 곳</span></th><th style="width:90px">상태</th></tr>
-    <tr><td class="lb">마켓포스 월별 매출현황 (.xls·.xlsx)</td><td class="au">오케이포스</td><td class="au" style="text-align:left;cursor:pointer" title="채우는 곳: ① 포스 전체 계 + 승인현황 카드·현금 전체 + 외상·포인트·기타수단" onclick="cfmUpSrcEdit('msales')">${esc(upSrc('msales'))} <span style="color:#94a3b8;font-size:11px">✏</span></td><td class="au">${okC(UP.msales,m.market.total>0)}</td></tr>
+    <tr><td class="lb">마켓포스 월별 매출현황 (.xls·.xlsx)<br><span style="font-weight:400;font-size:11px;color:var(--sub)">또는 결제수단별(일별종합) — 고객수까지</span></td><td class="au">오케이포스</td><td class="au" style="text-align:left;cursor:pointer" title="채우는 곳: ① 포스 전체 계 + 승인현황 카드·현금 전체 + 외상·포인트·기타수단" onclick="cfmUpSrcEdit('msales')">${esc(upSrc('msales'))} <span style="color:#94a3b8;font-size:11px">✏</span></td><td class="au">${okC(UP.msales,m.market.total>0)}</td></tr>
     <tr><td class="lb">마켓포스 카드승인현황 (.xls·.xlsx)</td><td class="au">오케이포스</td><td class="au" style="text-align:left;cursor:pointer" title="채우는 곳: 승인현황 카드 '마켓포스 전체'" onclick="cfmUpSrcEdit('corner')">${esc(upSrc('corner'))} <span style="color:#94a3b8;font-size:11px">✏</span></td><td class="au">${okC(UP.corner,m.corner.cardTotal>0)}</td></tr>
     <tr><td class="lb">키오스크 매출분석 (.xls)</td><td class="au">키오스크</td><td class="au" style="text-align:left;cursor:pointer" title="채우는 곳: ③ 키오스크 계·공급가·부가세 + 매출현황 메뉴별 수량" onclick="cfmUpSrcEdit('kiosk')">${esc(upSrc('kiosk'))} <span style="color:#94a3b8;font-size:11px">✏</span></td><td class="au">${okC(UP.kiosk,m.bpos.kioskGye>0)}</td></tr>
     <tr><td class="lb">쿠팡이츠 주문내역 (.xlsx)</td><td class="au">쿠팡이츠</td><td class="au" style="text-align:left;cursor:pointer" title="채우는 곳: ③ 쿠팡이츠 계·공급가·부가세 + 메뉴별 수량 (매월 5일 이후 다운 가능)" onclick="cfmUpSrcEdit('coupang')">${esc(upSrc('coupang'))} <span style="color:#94a3b8;font-size:11px">✏</span></td><td class="au">${okC(UP.coupang,m.bpos.coupangGye>0)}${m.bpos.coupangGye>0&&m.bpos.coupangTemp?' <span style="color:#b45309;font-size:11px">임시값</span>':''}</td></tr>
