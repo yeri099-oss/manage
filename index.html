@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v436</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v437</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -788,7 +788,7 @@ window.FIREBASE_CONFIG = {
           for (let i = 0; i < this._n; i++) {
             const v = d.data[i];
             if (v == null || isNaN(v)) { if (!d.spanGaps) started = false; continue; }
-            const x = xOf(i), y = yOf(Number(v));
+            const x = xOf(i), y = capMax ? Math.max(yOf(Number(v)), top) : yOf(Number(v));
             if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
           }
           ctx.stroke();
@@ -799,9 +799,21 @@ window.FIREBASE_CONFIG = {
             for (let i = 0; i < this._n; i++) {
               const v = d.data[i];
               if (v == null || isNaN(v)) continue;
-              ctx.beginPath(); ctx.arc(xOf(i), yOf(Number(v)), pr, 0, Math.PI * 2); ctx.fill();
+              ctx.beginPath(); ctx.arc(xOf(i), capMax ? Math.max(yOf(Number(v)), top) : yOf(Number(v)), pr, 0, Math.PI * 2); ctx.fill();
               ctx.strokeStyle = "#fcfcfb"; ctx.lineWidth = 1.5; ctx.stroke();
             }
+          }
+          /* v437: 눈금보다 큰 값 — 맨 위에 점 + 실제 금액 (빨간 글씨) */
+          if (capMax) for (let i = 0; i < this._n; i++) {
+            const v = d.data[i];
+            if (v == null || isNaN(v) || Number(v) <= tN) continue;
+            const x = xOf(i);
+            ctx.font = "700 11px 'Noto Sans KR', sans-serif";
+            ctx.textAlign = "left"; ctx.textBaseline = "top";
+            const lbl = "▲ " + this.yFmt(Number(v));
+            ctx.strokeStyle = "#fcfcfb"; ctx.lineWidth = 3; ctx.strokeText(lbl, x + 8, top + 2);
+            ctx.fillStyle = "#C00000"; ctx.fillText(lbl, x + 8, top + 2);
+            ctx.font = FONT; ctx.fillStyle = d.borderColor || "#2a78d6";
           }
         }
       }
@@ -2964,7 +2976,7 @@ function renderMonthly() {
   <div class="card">
     <div class="card-title">${year}년 사업장별 매출 추이</div>
     <div class="chart-box tall"><canvas id="ch-monthly-stack"></canvas></div>
-    <div style="font-size:13px;font-weight:700;margin:16px 2px 0">${year}년 온라인 매출 추이 <span class="unit">금액이 작아서 따로 봐요</span></div>
+    <div style="font-size:13px;font-weight:700;margin:16px 2px 0">${year}년 온라인 매출 추이 <span class="unit">금액이 작아서 따로 봐요 · 유난히 큰 달은 맨 위에 빨간 금액으로 표시</span></div>
     <div class="chart-box"><canvas id="ch-monthly-online"></canvas></div>
   </div>`;
   const sets = [
@@ -2998,13 +3010,20 @@ function renderMonthly() {
   drawMonthlyOnline(year);
 }
 function drawMonthlyOnline(year) {
+  /* v437: 한 달만 유난히 크면(2월 등) 나머지 달 기준으로 눈금을 잡고 그 달은 위에 금액만 표시 */
+  const ov = MONTHS.map((m) => { const c = monthlyCalc(year, m); return c.has ? (c.online || 0) : null; }).filter((v) => v != null).sort((a, b) => b - a);
+  let capMax = null;
+  if (ov.length >= 3 && ov[0] > 0) {
+    const sec = ov[1] || 0;
+    if (ov[0] > Math.max(sec * 2.5, 1)) capMax = Math.max(1000000, Math.ceil((sec * 1.05) / 500000) * 500000);
+  }
   makeChart("ch-monthly-online", {
     type: "line",
     data: { labels: MONTH_LABELS, datasets: [{ label: "온라인", data: MONTHS.map((m) => { const c = monthlyCalc(year, m); return c.has ? (c.online || 0) : null; }),
       backgroundColor: STORE_COLOR.online, borderColor: STORE_COLOR.online, borderWidth: 2.5, pointRadius: 3.5, pointHoverRadius: 5 }] },
     options: { maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
       plugins: { tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${fmt(c.parsed.y)}원` } } },
-      scales: { y: { ...moneyScaleY }, x: { ...catScaleX } } },
+      scales: { y: { ...moneyScaleY, ...(capMax ? { capMax } : {}) }, x: { ...catScaleX } } },
   });
 }
 /* ============ 3. 일평균 ============ */
