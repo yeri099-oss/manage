@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v433</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v434</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -2958,23 +2958,24 @@ function renderMonthly() {
     <div class="footnote">* 온라인 판매는 매 분기 국세청 자료로 정산해요. 1~3월분은 4월 17일경, 4~6월분은 7월 17일경, 7~9월분은 10월 17일경, 10~12월분은 이듬해 1월 17일경 반영돼요.<br>보자기 매출에는 쿠팡이츠가 포함돼요.${anyDet ? "<br>점선이 그어진 금액은 누르면 내역을 볼 수 있어요." : ""}</div>
   </div>
   <div class="card">
-    <div class="card-title">${year}년 사업장별 매출 구성</div>
+    <div class="card-title">${year}년 사업장별 매출 추이</div>
     <div class="chart-box tall"><canvas id="ch-monthly-stack"></canvas></div>
   </div>`;
   const sets = [
     { key: "insadong", label: "인사동" }, { key: "market", label: "마켓" },
     { key: "bojagi", label: "보자기" }, { key: "online", label: "온라인" },
   ];
+  /* v434: 쌓은 막대 → 꺾은선 (사업장별 흐름이 잘 보이게, 자료 없는 달은 비움) */
   makeChart("ch-monthly-stack", {
-    type: "bar",
+    type: "line",
     data: {
       labels: MONTH_LABELS,
       datasets: sets.map((s) => ({
         label: s.label,
-        data: MONTHS.map((m) => monthlyCalc(year, m)[s.key] || 0),
-        backgroundColor: STORE_FILL[s.key],
-        borderColor: STORE_COLOR[s.key], borderWidth: 1,
-        borderRadius: 3, maxBarThickness: 40, stack: "s",
+        data: MONTHS.map((m) => { const c = monthlyCalc(year, m); return c.has ? (c[s.key] || 0) : null; }),
+        backgroundColor: STORE_COLOR[s.key],
+        borderColor: STORE_COLOR[s.key], borderWidth: 2.5,
+        pointRadius: 3.5, pointHoverRadius: 5, tension: 0.25, spanGaps: false,
       })),
     },
     options: {
@@ -2985,7 +2986,7 @@ function renderMonthly() {
           footer: (items) => "합계: " + fmt(items.reduce((a, i) => a + i.parsed.y, 0)) + "원",
         } },
       },
-      scales: { y: { ...moneyScaleY, stacked: true }, x: { ...catScaleX, stacked: true } },
+      scales: { y: { ...moneyScaleY }, x: { ...catScaleX } },
     },
   });
 }
