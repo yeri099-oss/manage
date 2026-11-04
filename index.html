@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v431</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v432</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -21703,6 +21703,7 @@ function renderInput(){
       if(el.dataset.nullable&&el.value.trim()===''){val=null;el.value='';}
       else{const n=parseNum(el.value);val=n==null?0:Math.round(n);el.value=val?fmt(val):'';}
       setPath(m,el.dataset.p,val);
+      if(m.autoVat&&/(\.gong|Gong|\.buga|Buga)$/.test(el.dataset.p)){delete m.autoVat[el.dataset.p.replace(/\.buga$/,'.gong').replace(/Buga$/,'Gong')];} /* v432: 직접 고친 공급가·부가세는 자동 계산 안 함 */
       if((el.dataset.p==='nts.zeropay'||el.dataset.p==='nts.zeropayVat')&&m.nts.zpHold)setTimeout(renderInput,0); /* v424: 제로페이 대조 다시 보기 */
       /* 피다: 계 입력 → 공급가·부가세 자동 (전부 과세 ÷1.1, 이후 수정 가능) */
       const ASPL={'kkotbap.catchGye':['kkotbap.catchGong','kkotbap.catchBuga'],'kkotbap.ntsCard':['kkotbap.ntsCardGong','kkotbap.ntsCardBuga'],'kkotbap.ntsHyeon':['kkotbap.ntsHyeonGong','kkotbap.ntsHyeonBuga']};
@@ -21838,18 +21839,28 @@ function parseSmartstore(text){
 function autofillEmpty(m){
   const d=derived(m);
   {const ef=vatStaleSplit(m,d);if(ef.changed){m.market.cardGong=ef.cardGong;m.market.cardBuga=ef.cardBuga;m.market.cashGong=ef.cashGong;m.market.cashBuga=ef.cashBuga;}}
-  const fill=(goK,buK,gwase,obj)=>{
-    obj=obj||m.market;
-    if(!obj[goK]&&!obj[buK]&&gwase>0){obj[goK]=exVat(gwase);obj[buK]=gwase-obj[goK];}
+  /* v432: 자동으로 채운 공급가·부가세는 표시해 두고, 계·면세가 바뀌면 다시 계산 (직접 고친 칸은 그대로) */
+  const AV=(m.autoVat=m.autoVat||{});const changed=[];
+  const fill=(goK,buK,gwase,tag,gye)=>{
+    const obj=m[tag],key=tag+'.'+goK;
+    const g=obj[goK]||0,b=obj[buK]||0;
+    const set=()=>{const ng=gwase>0?exVat(gwase):0,nb=gwase>0?gwase-ng:0;if(ng!==g||nb!==b){obj[goK]=ng;obj[buK]=nb;changed.push(tag+'.'+goK,tag+'.'+buK);}};
+    if(!g&&!b){if(gwase>0){set();AV[key]=1;}return;}
+    if(g+b===gwase)return;
+    const autoLike=g===exVat(g+b);
+    /* 표시가 없는 예전 값: 면세 없이 '계' 전체로 나눠 둔 값이면 자동값으로 봄 */
+    if(!AV[key]&&autoLike&&gye!=null&&g+b===gye&&gwase<gye)AV[key]=1;
+    if(AV[key]&&autoLike)set();
   };
-  fill('gong','buga',d.gwase);
-  fill('cashGong','cashBuga',d.cashGwase);
-  fill('cardGong','cardBuga',d.cardGwase);
-  fill('kioskGong','kioskBuga',m.bpos.kioskGye,m.bpos);
-  fill('coupangGong','coupangBuga',m.bpos.coupangGye,m.bpos);
-  fill('catchGong','catchBuga',m.kkotbap.catchGye,m.kkotbap);
-  fill('ntsCardGong','ntsCardBuga',m.kkotbap.ntsCard,m.kkotbap);
-  fill('ntsHyeonGong','ntsHyeonBuga',m.kkotbap.ntsHyeon,m.kkotbap);
+  fill('gong','buga',d.gwase,'market',d.marketGye);
+  fill('cashGong','cashBuga',d.cashGwase,'market',d.cashGye);
+  fill('cardGong','cardBuga',d.cardGwase,'market',d.cardGye);
+  fill('kioskGong','kioskBuga',m.bpos.kioskGye,'bpos');
+  fill('coupangGong','coupangBuga',m.bpos.coupangGye,'bpos');
+  fill('catchGong','catchBuga',m.kkotbap.catchGye,'kkotbap');
+  fill('ntsCardGong','ntsCardBuga',m.kkotbap.ntsCard,'kkotbap');
+  fill('ntsHyeonGong','ntsHyeonBuga',m.kkotbap.ntsHyeon,'kkotbap');
+  return changed;
 }
 AUTO.tx_slip_g=mm=>derived(mm).taxinvGong;
 AUTO.tx_slip_v=mm=>derived(mm).taxinvBuga;
@@ -21861,10 +21872,11 @@ AUTO.al_k19=mm=>compute(mm).K20;
 AUTO.al_l19=mm=>compute(mm).L20;
 function recalcAutos(){
   const m=MONTHS[CUR];
-  try{autofillEmpty(m);}catch(e){}
+  let chg=[];try{chg=autofillEmpty(m)||[];}catch(e){}
   $$("input[data-p]").forEach(el=>{
     if(document.activeElement===el||AUTOIN[el.dataset.p])return;
     const v=getPath(m,el.dataset.p);
+    if(chg.includes(el.dataset.p)){el.value=v?fmt(v):'';return;}
     if(typeof v==='number'&&v&&el.value.trim()==='')el.value=fmt(v);
   });
   $$("#cfm-root [data-ac]").forEach(td=>{const fn=AUTO[td.dataset.ac];if(fn)td.textContent=fmt(fn(m));});
