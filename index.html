@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v419</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v420</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -20661,7 +20661,7 @@ async function mbFile(f){
   let ym=null,hi=-1,ci={};
   for(let i=0;i<Math.min(aoa.length,8);i++){
     const r=(aoa[i]||[]).map(x=>String(x).trim());
-    const dm=r.join(' ').match(/조회일자\s*:\s*(\d{4})-(\d{2})/);
+    const dm=r.join(' ').match(/(?:조회일자\s*:|기간 적용)\s*(\d{4})-(\d{2})/);
     if(dm)ym=dm[1].slice(2)+dm[2];
     if(r.includes('회원명')&&(r.includes('매출액')||r.includes('순매출'))){hi=i;r.forEach((v,j)=>{if(v&&ci[v]==null)ci[v]=j;});}
   }
@@ -21262,6 +21262,21 @@ const AUTO={};
 function autoCell(id,fn,strong){AUTO[id]=fn;return `<td class="au${strong?' strong':''}" data-ac="${id}"></td>`;}
 function inp(path,cls){return `<td><input data-p="${path}" class="${cls||''}"></td>`;}
 function blank(n){return `<td class="au" colspan="${n||1}"></td>`;}
+/* v420: 엑셀 업로드 체크리스트 — 파일마다 '어디서 받는지(메뉴 경로)' (고칠 수 있게, 클라우드 salesStatus_months/_upsrc) */
+const UPSRC_DEF={msales:"오케이포스 › 매출관리 › 월별 매출현황 [월별 종합] → 엑셀",corner:"오케이포스 › 매출관리 › 승인현황 › 카드 승인현황 → 엑셀",kiosk:"키오스크 관리자 › 매출분석 › 상품별 → 엑셀",coupang:"쿠팡이츠 사장님 › 주문내역 → 엑셀 (매월 5일 이후)",members:"오케이포스 › 회원분석 › 일자별 회원구매내역 → 엑셀",pops:"POPS CLOUD › 일일매출상세내역 → 엑셀",ntszp:"홈택스 › 제로페이 부가세내역 → 엑셀"};
+let UPSRC=null,UPSRC_CL=false;
+function upSrc(k){
+  if(!UPSRC){try{UPSRC=JSON.parse(localStorage.getItem('ssv2_upsrc')||'null');}catch(e){}UPSRC=UPSRC||{};}
+  if(FB&&!UPSRC_CL){UPSRC_CL=true;db.collection('salesStatus_months').doc('_upsrc').get().then(sn=>{if(sn.exists&&(sn.data()||{}).map){UPSRC=Object.assign({},sn.data().map,UPSRC);try{localStorage.setItem('ssv2_upsrc',JSON.stringify(UPSRC));}catch(e){}if(CUR&&MONTHS[CUR])renderInput();}}).catch(()=>{});}
+  return UPSRC[k]||UPSRC_DEF[k]||"";
+}
+window.cfmUpSrcEdit=function(k){
+  const v=prompt("이 파일을 어디서 받는지 적어두세요 (메뉴 경로)",upSrc(k));if(v==null)return;
+  UPSRC=UPSRC||{};if(v.trim())UPSRC[k]=v.trim();else delete UPSRC[k];
+  try{localStorage.setItem('ssv2_upsrc',JSON.stringify(UPSRC));}catch(e){}
+  if(FB)db.collection('salesStatus_months').doc('_upsrc').set({map:UPSRC,at:Date.now()}).catch(e=>console.warn(e));
+  renderInput();
+};
 /* v394: 📌 매달 잊지 말 것 — 매출확정 입력 화면 맨 위 알림 (클라우드 salesStatus_months/_remind 에 저장)
    찾을 이름(키워드)을 적어두면 이번 달 ⑩ 기타 거래처에 그 이름 줄이 있는지 자동 확인 */
 let REMIND=null,REMIND_CL=false;
@@ -21308,14 +21323,14 @@ function renderInput(){
   const okC=(up,man)=>up?'<span style="color:#15803d;font-weight:700">✓ 엑셀 업로드됨</span>':(man?'<span style="color:#2563eb">✎ 직접 입력됨</span>':'<span style="color:#9ca3af">— 아직</span>');
   h+=`<div class="card"><h2>📂 엑셀 업로드 체크리스트 <small>매달 아래 파일들을 내려받아 여기에 한꺼번에 넣으면, 종류를 자동으로 알아보고 알맞은 칸을 채워요</small></h2>
   <div class="hint" style="background:#f0f7ff;border:1px dashed #93c5fd;border-radius:8px;padding:8px 10px"><b>파일 선택 (여러 개 한꺼번에 가능)</b> — <input type="file" multiple accept=".xls,.xlsx,.html" onchange="uplRouterPick(this)" style="font-size:12px"></div>
-  <table class="g" style="margin-top:8px"><tr><th style="width:230px">파일</th><th style="width:110px">어디서</th><th>자동으로 채우는 곳</th><th style="width:90px">상태</th></tr>
-    <tr><td class="lb">마켓포스 월별 매출현황 (.xlsx)</td><td class="au">오케이포스</td><td class="au" style="text-align:left">① 포스 전체 계 + 승인현황 카드·현금 전체 + 외상·포인트·기타수단</td><td class="au">${okC(UP.msales,m.market.total>0)}</td></tr>
-    <tr><td class="lb">마켓포스 카드승인현황 (.xlsx)</td><td class="au">오케이포스</td><td class="au" style="text-align:left">승인현황 카드 '마켓포스 전체'</td><td class="au">${okC(UP.corner,m.corner.cardTotal>0)}</td></tr>
-    <tr><td class="lb">키오스크 매출분석 (.xls)</td><td class="au">키오스크</td><td class="au" style="text-align:left">③ 키오스크 계·공급가·부가세 + 매출현황 메뉴별 수량</td><td class="au">${okC(UP.kiosk,m.bpos.kioskGye>0)}</td></tr>
-    <tr><td class="lb">쿠팡이츠 주문내역 (.xlsx)</td><td class="au">쿠팡이츠</td><td class="au" style="text-align:left">③ 쿠팡이츠 계·공급가·부가세 + 메뉴별 수량 <span style="color:#b45309">(매월 5일 이후 다운 가능)</span></td><td class="au">${okC(UP.coupang,m.bpos.coupangGye>0)}${m.bpos.coupangGye>0&&m.bpos.coupangTemp?' <span style="color:#b45309;font-size:11px">임시값</span>':''}</td></tr>
-    <tr><td class="lb">회원구매현황 (.xlsx)</td><td class="au">오케이포스</td><td class="au" style="text-align:left">② 인사동·보자기·판공 계/부가세 + 사내(→마켓매출 '사내')</td><td class="au">${okC(UP.members,m.members.insadongGye>0)}</td></tr>
-    <tr><td class="lb">피다 일일매출상세내역 (.xls)</td><td class="au">POPS CLOUD</td><td class="au" style="text-align:left">⑦ 피다 카드·현금·고객수 + 매출현황 피다탭(피다매출·메뉴별·주류별) 자동 반영</td><td class="au">${okC(UP.pops,m.kkotbap.card>0||m.kkotbap.cash>0)}</td></tr>
-    <tr><td class="lb">제로페이 부가세내역 (.xls)</td><td class="au">홈택스</td><td class="au" style="text-align:left">④ 제로페이·기타수단 총액 + 부가세 합</td><td class="au">${okC(UP.ntszp,m.nts.zeropay>0&&m.nts.zeropayVat!=null)}</td></tr>
+  <table class="g" style="margin-top:8px"><tr><th style="width:230px">파일</th><th style="width:110px">어디서</th><th>받는 곳 (메뉴 경로) <span style="font-weight:400;font-size:11px;color:var(--sub)">✏ 눌러서 고칠 수 있어요 · 칸에 마우스를 올리면 채우는 곳</span></th><th style="width:90px">상태</th></tr>
+    <tr><td class="lb">마켓포스 월별 매출현황 (.xls·.xlsx)</td><td class="au">오케이포스</td><td class="au" style="text-align:left;cursor:pointer" title="채우는 곳: ① 포스 전체 계 + 승인현황 카드·현금 전체 + 외상·포인트·기타수단" onclick="cfmUpSrcEdit('msales')">${esc(upSrc('msales'))} <span style="color:#94a3b8;font-size:11px">✏</span></td><td class="au">${okC(UP.msales,m.market.total>0)}</td></tr>
+    <tr><td class="lb">마켓포스 카드승인현황 (.xls·.xlsx)</td><td class="au">오케이포스</td><td class="au" style="text-align:left;cursor:pointer" title="채우는 곳: 승인현황 카드 '마켓포스 전체'" onclick="cfmUpSrcEdit('corner')">${esc(upSrc('corner'))} <span style="color:#94a3b8;font-size:11px">✏</span></td><td class="au">${okC(UP.corner,m.corner.cardTotal>0)}</td></tr>
+    <tr><td class="lb">키오스크 매출분석 (.xls)</td><td class="au">키오스크</td><td class="au" style="text-align:left;cursor:pointer" title="채우는 곳: ③ 키오스크 계·공급가·부가세 + 매출현황 메뉴별 수량" onclick="cfmUpSrcEdit('kiosk')">${esc(upSrc('kiosk'))} <span style="color:#94a3b8;font-size:11px">✏</span></td><td class="au">${okC(UP.kiosk,m.bpos.kioskGye>0)}</td></tr>
+    <tr><td class="lb">쿠팡이츠 주문내역 (.xlsx)</td><td class="au">쿠팡이츠</td><td class="au" style="text-align:left;cursor:pointer" title="채우는 곳: ③ 쿠팡이츠 계·공급가·부가세 + 메뉴별 수량 (매월 5일 이후 다운 가능)" onclick="cfmUpSrcEdit('coupang')">${esc(upSrc('coupang'))} <span style="color:#94a3b8;font-size:11px">✏</span></td><td class="au">${okC(UP.coupang,m.bpos.coupangGye>0)}${m.bpos.coupangGye>0&&m.bpos.coupangTemp?' <span style="color:#b45309;font-size:11px">임시값</span>':''}</td></tr>
+    <tr><td class="lb">회원구매현황 (.xls·.xlsx)</td><td class="au">오케이포스</td><td class="au" style="text-align:left;cursor:pointer" title="채우는 곳: ② 인사동·보자기·판공 계/부가세 + 사내(→마켓매출 '사내')" onclick="cfmUpSrcEdit('members')">${esc(upSrc('members'))} <span style="color:#94a3b8;font-size:11px">✏</span></td><td class="au">${okC(UP.members,m.members.insadongGye>0)}</td></tr>
+    <tr><td class="lb">피다 일일매출상세내역 (.xls)</td><td class="au">POPS CLOUD</td><td class="au" style="text-align:left;cursor:pointer" title="채우는 곳: ⑦ 피다 카드·현금·고객수 + 매출현황 피다탭(피다매출·메뉴별·주류별) 자동 반영" onclick="cfmUpSrcEdit('pops')">${esc(upSrc('pops'))} <span style="color:#94a3b8;font-size:11px">✏</span></td><td class="au">${okC(UP.pops,m.kkotbap.card>0||m.kkotbap.cash>0)}</td></tr>
+    <tr><td class="lb">제로페이 부가세내역 (.xls)</td><td class="au">홈택스</td><td class="au" style="text-align:left;cursor:pointer" title="채우는 곳: ④ 제로페이·기타수단 총액 + 부가세 합" onclick="cfmUpSrcEdit('ntszp')">${esc(upSrc('ntszp'))} <span style="color:#94a3b8;font-size:11px">✏</span></td><td class="au">${okC(UP.ntszp,m.nts.zeropay>0&&m.nts.zeropayVat!=null)}</td></tr>
   </table>
   <div class="hint">사진(스크린샷)은 읽지 못해요 — 각 화면의 '엑셀 내려받기'로 받은 파일을 넣어주세요. 각 카드에 있는 개별 업로드 칸을 써도 결과는 같아요. 나머지 항목(카드 보자기 몫, 매출분석 숫자, 홈택스 카드·현금영수증 등)은 지금처럼 직접 입력해요.</div></div>`;
   // ⓪ 승인현황 (가장 먼저 입력)
@@ -21392,7 +21407,7 @@ function renderInput(){
     <tr><td class="lb">택배 (꽃밥택배)</td>${inp('members.taekbaeRef')}<td class="au" colspan="4" style="text-align:left;color:var(--sub);font-size:12px">택배 출고 재고 차감용 (온라인몰, 마켓 택배 등) — 매출에 더하지 않아요</td></tr>
     <tr><td class="lb"></td><td class="au" colspan="5" style="text-align:left;color:var(--sub);font-size:12px">판공+사내 합계는 보고 반영 시 매출현황 마켓매출 비고칸에 자동으로 적혀요.</td></tr>
   </table>
-  <div class="hint" style="background:#f0f7ff;border:1px dashed #93c5fd;border-radius:8px;padding:8px 10px">📂 <b>회원구매현황 엑셀로 자동 입력</b> — <input type="file" accept=".xlsx" onchange="mbPick(this)" style="font-size:12px"> 회원분석(일자별회원구매내역) 엑셀을 넣으면 인사동·보자기·판공·사내가 자동으로 채워져요 (반품 차감, 면세 자동). 판공·사내는 포스에서 서비스로 찍혀서 매출액+할인액으로 가져와요.</div>
+  <div class="hint" style="background:#f0f7ff;border:1px dashed #93c5fd;border-radius:8px;padding:8px 10px">📂 <b>회원구매현황 엑셀로 자동 입력</b> — <input type="file" accept=".xls,.xlsx" onchange="mbPick(this)" style="font-size:12px"> 회원분석(일자별회원구매내역) 엑셀을 넣으면 인사동·보자기·판공·사내가 자동으로 채워져요 (반품 차감, 면세 자동). 판공·사내는 포스에서 서비스로 찍혀서 매출액+할인액으로 가져와요.</div>
   <div class="hint">인사동+보자기 합계가 매출확정의 '꽃밥(세금계산서)'로 자동 반영됩니다.</div></div>`;
   // ③ 보자기포스
   h+=`<div class="card"><h2>③ 보자기꽃밥 — 보자기포스</h2>
