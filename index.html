@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v432</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v433</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -22902,7 +22902,9 @@ function preview(raw,ym){
       ? { total: epida+market+bojagi, epida, market, bojagi }
       : { total:0, epida:0, market:0, bojagi:0, notReady:true }),
     mk:{ total: (d.marketGye>0?d.marketGye:V.F8), internal: m.members.insadongGye+m.members.bojagiGye, pgsn: (m.members.pangongGye||0)+(m.members.sanaeGye||0), hanwoo: m.market.jeongyukMyeon, pork: m.market.jeongyukGwase },
-    ag:{ coupang: m.bpos.coupangGye, smartstore: m.ss.gwase+m.ss.myeon }
+    ag:{ coupang: m.bpos.coupangGye, smartstore: m.ss.gwase+m.ss.myeon },
+    /* v433: ⑩ 기타 거래처 (포스 밖 매출) — 매출현황 '따로 보여줄 매출'로 */
+    extra:(m.extra||[]).filter(x=>(x.amt||0)>0).map(x=>({k:x.unit||'market',n:String(x.name||'기타 거래처').trim(),a:Math.round(x.amt)}))
   };
 }
 async function fetchConfirm(year, month){
@@ -23096,6 +23098,22 @@ window.cfmSyncGuest=async function(ym,mm){
     if(typeof toast==="function")toast(y+"년 "+mo+"월 고객수 "+(cur.guest?cur.guest.toLocaleString("ko-KR")+"명":"삭제")+" 매출현황에 바로 반영했어요");
   }catch(e){console.error(e);if(typeof toast==="function")toast("고객수 즉시 반영 실패: "+(e.message||""),true);}
 };
+/* v433: ⑩ 기타 거래처 → 매출현황 월별 '따로 보여줄 매출'(포스 밖 금액) — 한식페스타 카드/현금처럼 이름이 같은 줄은 하나로 */
+const CFM_EX_ONLINE=/네이버|카페24|비바리퍼블리카|토스|쿠팡|스마트스토어|판매대행/;
+const cfmExBase=(n)=>String(n||'').replace(/\s*[\(（]?(카드|현금|계좌이체|이체|QR|큐알|카드·QR|현금·이체)[\)）]?\s*$/,'').trim()||n;
+function cfmExtraGroups(c){
+  const G={};
+  (c.extra||[]).forEach((x,i)=>{const n=cfmExBase(x.n),key=x.k+'|'+n;(G[key]=G[key]||{k:x.k,n:n,a:0,idx:[],on:!CFM_EX_ONLINE.test(x.n)}).a+=x.a;G[key].idx.push(i);if(CFM_EX_ONLINE.test(x.n))G[key].on=false;});
+  return Object.values(G);
+}
+function cfmExtraPushHtml(c){
+  const G=cfmExtraGroups(c);if(!G.length)return '';
+  const F=v=>Math.round(v||0).toLocaleString("ko-KR");const NM={insadong:'인사동',market:'마켓',bojagi:'보자기'};
+  return `<div style="margin-top:12px;border:1px solid #c7d2fe;background:#f8faff;border-radius:10px;padding:10px 12px">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:6px">⑩ 기타 거래처 → 매출현황에 더하기 <span class="form-hint" style="margin:0;font-weight:400">(포스에 안 찍힌 매출 · '따로 보여줄 매출'로 들어가요)</span></div>
+    ${G.map((g,i)=>`<label style="display:flex;gap:8px;align-items:center;font-size:13px;margin:3px 0;cursor:pointer"><input type="checkbox" class="cfm-exq" data-i="${i}" ${g.on?'checked':''}> <span style="min-width:56px;color:var(--sub)">${NM[g.k]||g.k}</span> <b>${esc(g.n)}</b> <span style="margin-left:auto">${F(g.a)}원</span></label>`).join('')}
+    <div class="form-hint" style="margin-top:6px">체크한 것만 월별 ${'인사동·마켓·보자기'} 금액에 더해지고, 금액을 누르면 이름별로 보여요. 판매대행(네이버·카페24 등)은 온라인과 겹칠 수 있어 기본으로 빼 뒀어요. 다시 반영하면 이전에 넣은 ⑩ 항목은 새로 바꿔요.</div></div>`;
+}
 function cfmOpenPushModal(){
   try{
     const app=window.__cfmApp;
@@ -23117,6 +23135,7 @@ function cfmOpenPushModal(){
     ];
     const body=`<table class="rpt" style="width:100%">`+rows.map(r=>
       `<tr><td class="l">${r[0]}</td><td>${r[1]>0?F(r[1])+"원":'<span class="dim">값 없음 — 건너뜀</span>'}</td></tr>`).join("")+`</table>
+      ${cfmExtraPushHtml(c)}
       ${c.coupangTemp?'<div class="check-box warn" style="margin-top:10px">⏳ 쿠팡이츠 임시값이 포함돼 있어요. 국세청 금액 확정 후 이 버튼을 다시 눌러주세요.</div>':""}
       <div class="form-hint" style="margin-top:10px">값이 있는 항목만 저장돼요. 마켓 "기타(명절음식)"·비고 등 나머지는 그대로 유지돼요. 판매대행은 채널 이름에 쿠팡/스마트가 들어간 채널만 채워요.</div>`;
     openModal(`${y}년 ${mo}월 매출확정 → 보고 반영`,body,
@@ -23138,6 +23157,18 @@ async function cfmDoPush(){
     const cur=Object.assign({},md.months[mo]||{});
     setIf(cur,"insadong",c.pos.insadong);setIf(cur,"market",c.pos.market);
     setIf(cur,"online",c.pos.online);setIf(cur,"bojagi",c.pos.bojagi);
+    { /* v433: ⑩ 기타 거래처 체크한 것 → 따로 보여줄 매출(포스 밖 금액 x) */
+      const G=cfmExtraGroups(c);
+      const chk=[...document.querySelectorAll('#modal-body .cfm-exq')];
+      if(G.length||(cur.ev&&Array.isArray(cur.ev.cats)&&cur.ev.cats.some(x=>x&&x.src==='etc'))){
+        const pick=G.filter((g,i)=>{const cb=chk.find(e=>+e.dataset.i===i);return cb?cb.checked:g.on;});
+        const old=(cur.ev&&Array.isArray(cur.ev.cats))?cur.ev.cats:(typeof monthlyCats==='function'?monthlyCats(cur):[]);
+        const names=new Set(pick.map(g=>g.k+'|'+g.n));
+        const cats=old.filter(x=>x&&x.src!=='etc'&&!names.has(x.k+'|'+x.n)).concat(pick.map(g=>({k:g.k,n:g.n,p:0,x:R(g.a),src:'etc'})));
+        const add={};cats.forEach(x=>{if(Number(x.x))add[x.k]=(add[x.k]||0)+Number(x.x);});
+        if(cats.length){cur.ev={cats};if(Object.keys(add).length)cur.ev.add=add;}else delete cur.ev;
+      }
+    }
     if(cur.ev&&cur.ev.add){for(const k of["insadong","market","bojagi"]){const a=Number(cur.ev.add[k])||0;if(a&&c.pos[k]>0)cur[k]=R(c.pos[k])+a;}}
     let note=(cur.note||"").replace(/\s*\/\s*쿠팡이츠 임시값|쿠팡이츠 임시값\s*\/\s*|쿠팡이츠 임시값/g,"").trim();
     if(c.coupangTemp)note=note?note+" / 쿠팡이츠 임시값":"쿠팡이츠 임시값";
