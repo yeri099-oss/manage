@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v434</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v435</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -1037,7 +1037,11 @@ function marketCalc(year, m) {
   const days = S.data.dailyAvg[year]?.days?.[m]?.market;
   const daily = net != null && days ? net / days : null;
   const meat = d.hanwoo != null || d.pork != null ? (d.hanwoo || 0) + (d.pork || 0) : null;
-  return { ...d, net, daily, meat, days, has };
+  /* v435: 판공+사내 — 따로 저장한 값(pgsn), 없으면 예전 비고 글('판공+사내 1,234원')에서 읽음 */
+  const pm = String(d.note || "").match(/판공(?:\+사내)?\s*([\d,]+)\s*원?/);
+  const pgsn = d.pgsn != null ? d.pgsn : (pm ? Number(pm[1].replace(/,/g, "")) : null);
+  const noteRest = String(d.note || "").replace(/판공(\+사내)?\s*[\d,]+\s*원?/g, "").replace(/\s*·\s*·\s*/g, " · ").replace(/^\s*·\s*|\s*·\s*$/g, "").trim();
+  return { ...d, net, daily, meat, days, has, pgsn, noteRest };
 }
 // 보자기 메뉴: 소계
 const itemSum = (q) => (q ? (q.k || 0) + (q.p || 0) + (q.d || 0) : 0);
@@ -2391,14 +2395,14 @@ async function expMarket() {
   const year = S.ui.marketYear || latestYearOf("marketDetail");
   const rows = [
     [xc(`${year}년 마켓 매출 분류 (부가세포함, 단위: 원)`, { bold: true, sz: 12, align: "left" })],
-    [xh("월별", XF.GRAY), xh("총매출", XF.GRAY), xh("피다+보자기 *", XF.GRAY), xh("순매출", XF.Y), xh("일평균", XF.G), xh("비고", XF.GRAY)],
+    [xh("월별", XF.GRAY), xh("총매출", XF.GRAY), xh("피다+보자기 *", XF.GRAY), xh("순매출", XF.Y), xh("일평균", XF.G), xh("판공+사내", XF.GRAY)],
   ];
   const t = { total: 0, internal: 0, other: 0, net: 0, days: 0 };
   for (const m of MONTHS) {
     const c = marketCalc(year, m);
     if (c.has) { t.total += c.total || 0; t.internal += c.internal || 0; t.other += c.other || 0; t.net += c.net || 0; if (c.net != null && c.days) t.days += c.days; }
     rows.push([xh(m + "월"), xc(c.total, { fmt: "n" }), xc(c.internal, { fmt: "n" }),
-      xc(c.net, { fmt: "n", fill: XF.Y }), xc(c.daily != null ? Math.round(c.daily) : "", { fmt: "n", fill: XF.G }), xc(c.note || "", { align: "left" })]);
+      xc(c.net, { fmt: "n", fill: XF.Y }), xc(c.daily != null ? Math.round(c.daily) : "", { fmt: "n", fill: XF.G }), xc(c.pgsn != null ? c.pgsn : "", { fmt: "n" })]);
   }
   rows.push([xh("합계", XF.GRAY), xc(t.total, { fmt: "n", bold: true }), xc(t.internal, { fmt: "n", bold: true }),
     xc(t.net, { fmt: "n", bold: true, fill: XF.Y }), xc(t.days ? Math.round(t.net / t.days) : "", { fmt: "n", bold: true, fill: XF.G }), xc("")]);
@@ -2960,11 +2964,13 @@ function renderMonthly() {
   <div class="card">
     <div class="card-title">${year}년 사업장별 매출 추이</div>
     <div class="chart-box tall"><canvas id="ch-monthly-stack"></canvas></div>
+    <div style="font-size:13px;font-weight:700;margin:16px 2px 0">${year}년 온라인 매출 추이 <span class="unit">금액이 작아서 따로 봐요</span></div>
+    <div class="chart-box"><canvas id="ch-monthly-online"></canvas></div>
   </div>`;
   const sets = [
     { key: "insadong", label: "인사동" }, { key: "market", label: "마켓" },
-    { key: "bojagi", label: "보자기" }, { key: "online", label: "온라인" },
-  ];
+    { key: "bojagi", label: "보자기" },
+  ]; /* v435: 온라인은 금액이 작아 아래 그래프로 따로 */
   /* v434: 쌓은 막대 → 꺾은선 (사업장별 흐름이 잘 보이게, 자료 없는 달은 비움) */
   makeChart("ch-monthly-stack", {
     type: "line",
@@ -2988,6 +2994,17 @@ function renderMonthly() {
       },
       scales: { y: { ...moneyScaleY }, x: { ...catScaleX } },
     },
+  });
+  drawMonthlyOnline(year);
+}
+function drawMonthlyOnline(year) {
+  makeChart("ch-monthly-online", {
+    type: "line",
+    data: { labels: MONTH_LABELS, datasets: [{ label: "온라인", data: MONTHS.map((m) => { const c = monthlyCalc(year, m); return c.has ? (c.online || 0) : null; }),
+      backgroundColor: STORE_COLOR.online, borderColor: STORE_COLOR.online, borderWidth: 2.5, pointRadius: 3.5, pointHoverRadius: 5 }] },
+    options: { maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
+      plugins: { tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${fmt(c.parsed.y)}원` } } },
+      scales: { y: { ...moneyScaleY }, x: { ...catScaleX } } },
   });
 }
 /* ============ 3. 일평균 ============ */
@@ -3094,7 +3111,7 @@ function renderMarket() {
   const year = S.ui.marketYear || latestYearOf("marketDetail");
   S.ui.marketYear = year;
   const sub = S.ui.marketSub || "sales";
-  let rows = "", t = { total: 0, internal: 0, other: 0, net: 0, days: 0, guest: 0 };
+  let rows = "", t = { total: 0, internal: 0, other: 0, net: 0, days: 0, guest: 0, pgsn: 0 };
   let meatRows = "", mt = { hanwoo: 0, pork: 0 };
   for (const m of MONTHS) {
     const c = marketCalc(year, m);
@@ -3103,12 +3120,13 @@ function renderMarket() {
       t.net += c.net || 0; if (c.net != null && c.days) t.days += c.days;
     }
     if (c.guest) t.guest += c.guest;
+    if (c.pgsn) t.pgsn += c.pgsn;
     const ds = (k) => `data-t="mk" data-y="${year}" data-m="${m}" data-k="${k}"`;
     rows += `<tr><td class="lab sticky">${m}월</td>
       <td>${edNum(c.total, ds("total"))}</td><td>${edNum(c.internal, ds("internal"))}</td>
       <td class="cy"><b>${c.net != null ? fmt(c.net) : ""}</b></td><td class="cg">${fmtD(c.daily)}</td>
       <td>${edNum(c.guest, ds("guest"))}</td>
-      <td class="note">${edText(c.note, ds("note"))}</td></tr>`;
+      <td>${edNum(c.pgsn, ds("pgsn"))}${c.noteRest ? `<div class="note" style="font-size:11px;text-align:left">${esc(c.noteRest)}</div>` : ""}</td></tr>`;
     if (c.hanwoo != null || c.pork != null) { mt.hanwoo += c.hanwoo || 0; mt.pork += c.pork || 0; }
     meatRows += `<tr><td class="lab sticky">${m}월</td>
       <td>${edNum(c.hanwoo, ds("hanwoo"))}</td><td>${edNum(c.pork, ds("pork"))}</td><td class="cy"><b>${c.meat != null ? fmt(c.meat) : ""}</b></td></tr>`;
@@ -3123,13 +3141,13 @@ function renderMarket() {
   <div class="card">
     <div class="card-head">
       <div class="card-title">${year}년 마켓 매출 분류 <span class="unit">부가세포함 · 단위: 원</span></div>
-      <div class="card-actions">${segButtons(yrs, year, "setMarketYear")} ${S.user?.role === "admin" ? `<button class="btn btn-sm" onclick="cfmFillPgsnNotes(${year})" title="매출확정에 입력된 판공+사내 금액을 그 해 모든 달의 비고에 적어요">📥 비고에 판공+사내</button>` : ""} ${editBtn()} ${adminBtn(`openMarketForm(${year})`)}</div>
+      <div class="card-actions">${segButtons(yrs, year, "setMarketYear")} ${S.user?.role === "admin" ? `<button class="btn btn-sm" onclick="cfmFillPgsnNotes(${year})" title="매출확정에 입력된 판공+사내 금액을 그 해 모든 달의 비고에 적어요">📥 판공+사내 불러오기</button>` : ""} ${editBtn()} ${adminBtn(`openMarketForm(${year})`)}</div>
     </div>
     <div class="table-wrap">
       <table class="rpt">
-        <thead><tr><th class="c sticky">월별</th><th>총매출</th><th>피다+보자기*</th><th class="cy">순매출</th><th class="cg">일평균</th><th>고객수</th><th class="l">비고</th></tr></thead>
+        <thead><tr><th class="c sticky">월별</th><th>총매출</th><th>피다+보자기*</th><th class="cy">순매출</th><th class="cg">일평균</th><th>고객수</th><th>판공+사내</th></tr></thead>
         <tbody>${rows}
-        <tr class="total"><td class="lab sticky">합계</td><td>${fmt(t.total)}</td><td>${fmt(t.internal)}</td><td class="cy">${fmt(t.net)}</td><td class="cg">${t.days ? fmtD(t.net / t.days) : ""}</td><td>${t.guest ? fmt(t.guest) : ""}</td><td></td></tr>
+        <tr class="total"><td class="lab sticky">합계</td><td>${fmt(t.total)}</td><td>${fmt(t.internal)}</td><td class="cy">${fmt(t.net)}</td><td class="cg">${t.days ? fmtD(t.net / t.days) : ""}</td><td>${t.guest ? fmt(t.guest) : ""}</td><td>${t.pgsn ? fmt(t.pgsn) : ""}</td></tr>
         </tbody>
       </table>
     </div>
@@ -3142,7 +3160,7 @@ function renderMarket() {
   <div class="card">
     <div class="card-head">
       <div class="card-title">${year}년 정육 매출현황 <span class="unit">단위: 원</span></div>
-      <div class="card-actions">${segButtons(yrs, year, "setMarketYear")} ${S.user?.role === "admin" ? `<button class="btn btn-sm" onclick="cfmFillPgsnNotes(${year})" title="매출확정에 입력된 판공+사내 금액을 그 해 모든 달의 비고에 적어요">📥 비고에 판공+사내</button>` : ""} ${editBtn()} ${adminBtn(`openMarketForm(${year})`)}</div>
+      <div class="card-actions">${segButtons(yrs, year, "setMarketYear")} ${S.user?.role === "admin" ? `<button class="btn btn-sm" onclick="cfmFillPgsnNotes(${year})" title="매출확정에 입력된 판공+사내 금액을 그 해 모든 달의 비고에 적어요">📥 판공+사내 불러오기</button>` : ""} ${editBtn()} ${adminBtn(`openMarketForm(${year})`)}</div>
     </div>
     <div class="table-wrap">
       <table class="rpt">
@@ -23190,7 +23208,7 @@ async function cfmDoPush(){
     setIf(mcur,"hanwoo",c.mk.hanwoo);setIf(mcur,"pork",c.mk.pork);
     {
       let nt=String(mcur.note||"").replace(/판공(\+사내)?\s*[\d,]+원/g,"").replace(/\s*·\s*·\s*/g," · ").replace(/^\s*·\s*|\s*·\s*$/g,"").trim();
-      if(c.mk.pgsn>0)nt=(nt?nt+" · ":"")+"판공+사내 "+Math.round(c.mk.pgsn).toLocaleString("ko-KR")+"원";
+      if(c.mk.pgsn>0)mcur.pgsn=Math.round(c.mk.pgsn); /* v435: 판공+사내 칸 */
       if(nt)mcur.note=nt;else delete mcur.note;
     }
     mk.months[mo]=mcur;
@@ -23231,8 +23249,8 @@ window.cfmFillPgsnNotes=async function(year){
       const pg=c&&c.mk?Math.round(c.mk.pgsn||0):0;
       if(!(pg>0)){none.push(mo+"월");continue;}
       let nt=String(cur.note||"").replace(/판공(\+사내)?\s*[\d,]+원/g,"").replace(/\s*·\s*·\s*/g," · ").replace(/^\s*·\s*|\s*·\s*$/g,"").trim();
-      nt=(nt?nt+" · ":"")+"판공+사내 "+pg.toLocaleString("ko-KR")+"원";
-      if(nt!==cur.note){cur.note=nt;changed=true;}
+      if(cur.pgsn!==pg){cur.pgsn=pg;changed=true;} /* v435: 판공+사내 칸 */
+      if(nt!==(cur.note||"")){if(nt)cur.note=nt;else delete cur.note;changed=true;}
       done.push(mo+"월 "+pg.toLocaleString("ko-KR")+"원");
     }
     if(changed)await saveYearDoc("marketDetail",y,mk);
