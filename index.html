@@ -20357,6 +20357,12 @@ function parseAnyPayRows(lines){
   return M;
 }
 async function apReadXlsx(file){
+  /* v415: 옛 엑셀(.xls, 97-2003 이진 형식)은 SheetJS로 읽음 — 오케이포스가 .xls로 내려줄 때 */
+  {const b0=new Uint8Array((await file.arrayBuffer()).slice(0,4));
+   if(b0[0]===0xD0&&b0[1]===0xCF&&b0[2]===0x11&&b0[3]===0xE0){
+     await loadScript("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");
+     const wb=XLSX.read(new Uint8Array(await file.arrayBuffer()),{type:"array"});
+     return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:"",raw:true}).map(r=>r.map(v=>typeof v==="number"?String(Math.round(v*1e6)/1e6):String(v==null?"":v)));}}
   const zip=await JSZip.loadAsync(await file.arrayBuffer());
   const shName=Object.keys(zip.files).filter(n=>/^xl\/worksheets\/sheet\d+\.xml$/.test(n)).sort()[0];
   if(!shName)throw new Error('엑셀 파일에서 시트를 찾지 못했어요 (.xlsx 형식으로 저장해 주세요).');
@@ -20585,7 +20591,7 @@ async function msalesFile(f){
   let ym=null,hi=-1,ci={};
   for(let i=0;i<Math.min(aoa.length,8);i++){
     const r=(aoa[i]||[]).map(x=>String(x).trim());
-    const dm=r.join(' ').match(/조회일자\s*:\s*(\d{4})-(\d{2})/);
+    const dm=r.join(' ').match(/조회(?:일자|월)\s*:\s*(\d{4})-(\d{2})/);
     if(dm)ym=dm[1].slice(2)+dm[2];
     if(r.includes('단순현금')&&r.includes('신용카드')){
       hi=i;r.forEach((v,j)=>{if(v&&ci[v]==null)ci[v]=j;});
@@ -20614,7 +20620,8 @@ async function msalesFile(f){
   m.corner.cashTotal=g2('단순현금')+g2('현금영수');
   m.market.credit=g2('외상');
   m.market.point=g2('회원포인트');
-  m.market.zeropay=g2('기타수단결제');
+  /* v415: 새 양식은 '기타수단결제' 칸이 없음 → 결제합계에서 나머지 결제수단을 뺀 금액(제로페이 등)으로 */
+  m.market.zeropay=ci['기타수단결제']!=null?g2('기타수단결제'):Math.max(0,Math.round(g2('결제합계')-(g2('단순현금')+g2('현금영수')+g2('신용카드')+g2('외상')+g2('회원포인트'))));
   m.uploads=m.uploads||{};m.uploads.msales=1;
   touch();renderInput();
   const silGap=g2('실매출')-m.market.total;
@@ -20676,7 +20683,7 @@ async function uplRouterPick(inp){
     try{
       const buf=await f.arrayBuffer();
       const head=new Uint8Array(buf.slice(0,4));
-      if(head[0]===0x50&&head[1]===0x4B){ // xlsx
+      if((head[0]===0x50&&head[1]===0x4B)||(head[0]===0xD0&&head[1]===0xCF)){ // xlsx · 옛 xls(이진)
         const aoa=await apReadXlsx(f);
         let isCorner=false,isMb0=false;
         for(let i=0;i<Math.min(aoa.length,12);i++){
