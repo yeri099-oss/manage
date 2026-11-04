@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v421</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v422</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -20720,54 +20720,71 @@ async function uplRouterPick(inp){
   const files=[...(inp.files||[])];inp.value='';
   if(!files.length)return;
   const rest={files:[],value:''};
+  const popsQ=[];
+  const go=new Set(); /* v422: 채운 곳 — 끝나면 그 칸으로 이동해서 반짝 표시 */
   for(const f of files){
     try{
       const buf=await f.arrayBuffer();
       const head=new Uint8Array(buf.slice(0,4));
       if((head[0]===0x50&&head[1]===0x4B)||(head[0]===0xD0&&head[1]===0xCF)){ // xlsx · 옛 xls(이진)
         const aoa=await apReadXlsx(f);
-        {const pk=popsKindAoa(aoa); /* v421: POPS 일일매출상세내역 / 전체판매별 */
-          if(pk){const wrap=document.getElementById('pp-wrap');
-            if(!wrap){alert('매출확정 › 입력 화면에서 넣어주세요 (⑦ 피다 칸).');continue;}
-            wrap.style.display='block';await ppFilePickW(wrap,{files:[f],value:''});
-            const ok=!(wrap.querySelector('.ppErr')||{}).textContent||wrap.querySelector('.ppErr').style.display==='none';
-            if(ok){alert(pk==='detail'?'꽃밥에피다 일일매출상세내역을 읽었어요 — 피다탭(매출·메뉴별)에도 반영됐어요.\n⑦ 피다 칸 아래 미리보기에서 [적용하기]를 눌러주세요.':'꽃밥에피다 전체판매별(영업집계)을 읽었어요 — 현금·카드·객수(고객수).\n⑦ 피다 칸 아래 미리보기에서 [적용하기]를 눌러주세요.');try{wrap.scrollIntoView({behavior:'smooth',block:'center'});}catch(e3){}}
-            continue;}}
+        {const pk=popsKindAoa(aoa); /* v421: POPS 일일매출상세내역 / 전체판매별 — v422: 다른 파일이 화면을 다시 그려도 미리보기가 안 지워지게 맨 마지막에 처리 */
+          if(pk){popsQ.push({f,pk});continue;}}
         let isCorner=false,isMb0=false;
         for(let i=0;i<Math.min(aoa.length,12);i++){
           const r=(aoa[i]||[]).map(x=>String(x).replace(/\s/g,''));
           if(r.includes('회원명')&&(r.includes('매출액')||r.includes('순매출'))){isMb0=true;break;}
           if(r[0]==='No.'&&r.some(t=>t.includes('매입사'))){isCorner=true;break;}
         }
-        if(isMb0){try{await mbFile(f);}catch(e){alert(f.name+' 읽기 실패: '+(e.message||e));}continue;}
-        if(isCorner){await apCornerPick({files:[f],value:''});continue;}
+        if(isMb0){try{await mbFile(f);go.add('mb');}catch(e){alert(f.name+' 읽기 실패: '+(e.message||e));}continue;}
+        if(isCorner){await apCornerPick({files:[f],value:''});go.add('corner');continue;}
         let isMs=false;
         for(let i=0;i<Math.min(aoa.length,8);i++){
           const r=(aoa[i]||[]).map(x=>String(x).trim());
           if(r.includes('단순현금')&&r.includes('신용카드')){isMs=true;break;}
         }
-        if(isMs){try{await msalesFile(f);}catch(e){alert(f.name+' 읽기 실패: '+(e.message||e));}continue;}
+        if(isMs){try{await msalesFile(f);go.add('ms');}catch(e){alert(f.name+' 읽기 실패: '+(e.message||e));}continue;}
         let isMb=false;
         for(let i=0;i<Math.min(aoa.length,8);i++){
           const r=(aoa[i]||[]).map(x=>String(x).trim());
           if(r.includes('회원명')&&(r.includes('매출액')||r.includes('순매출'))){isMb=true;break;}
         }
-        if(isMb){try{await mbFile(f);}catch(e){alert(f.name+' 읽기 실패: '+(e.message||e));}continue;}
+        if(isMb){try{await mbFile(f);go.add('mb');}catch(e){alert(f.name+' 읽기 실패: '+(e.message||e));}continue;}
         rest.files.push(f);continue; // 쿠팡이츠/포스 상품 등 → ③ 판별기로
       }
       const text=new TextDecoder('utf-8').decode(buf.slice(0,4000));
-      if(/<tr/i.test(text)&&text.includes('부가세')&&text.includes('결제금액')){await ntsZpPick({files:[f],value:''});continue;}
+      if(/<tr/i.test(text)&&text.includes('부가세')&&text.includes('결제금액')){await ntsZpPick({files:[f],value:''});go.add('nts');continue;}
       let krText='';try{krText=new TextDecoder('euc-kr').decode(buf.slice(0,6000));}catch(e2){}
-      if(krText.indexOf('일일매출상세내역')>=0||krText.indexOf('거래일시')>=0){
-        const wrap=document.getElementById('pp-wrap');
-        if(wrap){wrap.style.display='block';await ppFilePickW(wrap,{files:[f],value:''});alert('일일매출상세내역을 읽었어요 — ⑦ 피다 카드 아래 미리보기에서 고객수를 확인하고 [적용하기]를 눌러주세요.');}
-        continue;
-      }
+      if(krText.indexOf('일일매출상세내역')>=0||krText.indexOf('거래일시')>=0){popsQ.push({f,pk:'html'});continue;}
       rest.files.push(f); // 키오스크 SpreadsheetML 등
     }catch(e){alert(f.name+' 읽기 실패: '+(e.message||e));}
   }
-  if(rest.files.length)await bpFilesPick(rest);
+  if(rest.files.length){await bpFilesPick(rest);go.add('bp');}
+  if(popsQ.length){
+    const wrap=document.getElementById('pp-wrap');
+    if(!wrap)alert('꽃밥에피다(POPS) 파일은 매출확정 › 입력 화면에서 넣어주세요 (⑦ 피다 칸).');
+    else{wrap.style.display='block';const got=[];
+      for(const q of popsQ){try{await ppFilePickW(wrap,{files:[q.f],value:''});const ee=wrap.querySelector('.ppErr');
+        if(ee&&ee.style.display!=='none'&&ee.textContent)alert(q.f.name+' 읽기 실패: '+ee.textContent);
+        else got.push(q.pk==='sum'?'전체판매별(현금·카드·객수)':'일일매출상세내역(피다탭 매출·메뉴별에도 반영)');}
+        catch(e){alert(q.f.name+' 읽기 실패: '+(e.message||e));}}
+      if(got.length){go.add('pops');alert('꽃밥에피다 '+got.join(' + ')+'를 읽었어요.\n⑦ 피다 칸 아래 미리보기에서 [적용하기]를 눌러주세요.');}}
+  }
+  if(go.size)setTimeout(()=>cfmGoFilled(go),250);
 }
+/* v422: 자동 분류로 채운 카드로 스크롤하고 잠깐 파란 테두리로 표시 (여러 곳이면 위쪽 카드로 이동, 모두 표시) */
+function cfmGoFilled(go){
+  const PFX={corner:'승인현황 — 코너',ms:'① 꽃밥마켓',mb:'② 꽃밥',bp:'③ 보자기꽃밥',nts:'④ 국세청',pops:'⑦ 꽃밥에피다'};
+  const hs=[...document.querySelectorAll('.card > h2')];const cards=[];
+  go.forEach(k=>{const h=hs.find(x=>x.offsetParent&&x.textContent.trim().indexOf(PFX[k])===0);if(h)cards.push({k,el:h.parentElement});});
+  if(!cards.length)return;
+  cards.sort((a,b)=>a.el.getBoundingClientRect().top-b.el.getBoundingClientRect().top);
+  cards.forEach(c=>{const el=c.el;el.style.transition='box-shadow .3s';el.style.boxShadow='0 0 0 3px #3b82f6, 0 0 18px rgba(59,130,246,.45)';setTimeout(()=>{el.style.boxShadow='';},3500);});
+  const top=cards.find(c=>c.k==='pops')||cards[0];const pw=document.getElementById('pp-wrap');
+  const tgt=(top.k==='pops'&&pw&&pw.offsetParent)?pw:top.el;
+  try{tgt.scrollIntoView({behavior:'smooth',block:top.k==='pops'?'center':'start'});}catch(e){tgt.scrollIntoView();}
+}
+window.cfmGoFilled=cfmGoFilled;
 async function mbPick(inp){const f=inp.files&&inp.files[0];inp.value='';if(!f)return;try{await mbFile(f);}catch(e){alert('읽기 실패: '+(e.message||e));}}
 window.mbPick=mbPick;
 async function msalesPick(inp){const f=inp.files&&inp.files[0];inp.value='';if(!f)return;try{await msalesFile(f);}catch(e){alert('읽기 실패: '+(e.message||e));}}
