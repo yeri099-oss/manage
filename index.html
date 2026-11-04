@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v417</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v418</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -3406,6 +3406,26 @@ window.bjPosApply=async function(){
     const map=S.data.bojagiPosMap=S.data.bojagiPosMap||{};
     /* 선택 상자에서 매핑 확정 */
     let unassigned=0;
+    /* v418: '＋ 새 주류·음료로 추가' / '＋ 새 메뉴로 추가' — 이 화면에서 바로 품목을 만들고 짝으로 정함 */
+    for(let i=0;i<st.rows.length;i++){
+      const sel=document.getElementById("bjPm"+i);if(!sel||(sel.value!=="newdrink"&&sel.value!=="newmenu"))continue;
+      const r=st.rows[i],isD=sel.value==="newdrink";
+      const def=String(r.name||"").replace(/_/g," ").replace(/\s+/g," ").trim();
+      const nm=prompt((isD?"새 주류·음료":"새 메뉴")+" 이름 (파일 품목: "+r.name+")",def);if(!nm||!nm.trim()){sel.value="";continue;}
+      if(isD){
+        const pr=prompt(nm.trim()+" 단가(원) — 판매금액 계산에 써요",String(r.qty?"":""));const price=Number(String(pr||"").replace(/[^\d]/g,""));
+        if(!price){toast("단가를 적어야 주류를 추가할 수 있어요",true);sel.value="";continue;}
+        const items=[...(S.data.drinkItems||[])];const maxN=items.reduce((a,it)=>Math.max(a,Number(String(it.id).replace(/\D/g,""))||0),0);
+        const id="d"+String(maxN+1).padStart(2,"0");items.push({id,name:nm.trim(),price});await saveConfig("bojagiDrinkItems",items);S.data.drinkItems=items;
+        const o=document.createElement("option");o.value="drink|"+id;o.textContent=nm.trim();sel.appendChild(o);sel.value="drink|"+id;
+      }else{
+        const cat=prompt(nm.trim()+" 분류 (한상메뉴 / 사이드)","한상메뉴")||"한상메뉴";
+        const items=[...(S.data.menuItems||[])];const maxN=items.reduce((a,it)=>Math.max(a,Number(String(it.id).replace(/\D/g,""))||0),0);
+        const id="m"+String(maxN+1).padStart(2,"0");items.push({id,cat:/사이드/.test(cat)?"사이드":"한상메뉴",name:nm.trim()});await saveConfig("bojagiMenuItems",items);S.data.menuItems=items;
+        const o=document.createElement("option");o.value="menu|"+id;o.textContent=nm.trim();sel.appendChild(o);sel.value="menu|"+id;
+      }
+      toast(nm.trim()+" 을(를) 추가했어요");
+    }
     st.rows.forEach((r,i)=>{
       const sel=document.getElementById("bjPm"+i);
       if(!sel)return;
@@ -3483,7 +3503,8 @@ function bjPosCard(year,month){
   const mLabel=it=>dupN[it.name]>1?`${it.name} (${it.cat})`:it.name;
   const opts=[`<optgroup label="메뉴">${(S.data.menuItems||[]).map(it=>`<option value="menu|${it.id}">${esc(mLabel(it))}</option>`).join("")}</optgroup>`,
               `<optgroup label="주류·음료">${(S.data.drinkItems||[]).map(it=>`<option value="drink|${it.id}">${esc(it.name)}</option>`).join("")}</optgroup>`,
-              `<option value="skip">(반영 안 함)</option>`].join("");
+              `<option value="skip">(반영 안 함)</option>`,
+              `<option value="newdrink">＋ 새 주류·음료로 추가</option><option value="newmenu">＋ 새 메뉴로 추가</option>`].join("");
   const nameOf=m2=>{if(!m2)return null;if(m2.kind==="skip")return "(반영 안 함)";const list=m2.kind==="menu"?S.data.menuItems:S.data.drinkItems;const it=(list||[]).find(x=>x.id===m2.id);return it?(m2.kind==="menu"?mLabel(it):it.name):null;};
   let rowsHtml="";
   st.rows.forEach((r,i)=>{
