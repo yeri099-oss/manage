@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v426</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v427</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -21477,7 +21477,7 @@ function renderInput(){
   <table class="g"><tr><th style="width:160px">항목</th><th>계</th><th>면세</th><th>과세 계</th><th>공급가</th><th>부가세</th></tr>
     <tr><td class="lb">포스 전체 계<div class="hint">보자기 결제분 포함</div></td>${inp('market.total')}<td class="au" colspan="4" style="text-align:left;color:var(--sub)">월별 매출현황의 <b>결제합계</b> (여기서 보자기 몫을 빼서 마켓 계가 계산됩니다)</td></tr>
     <tr><td class="lb" style="font-weight:400;color:var(--sub)">에누리 (참고)</td>${inp('market.eunuri')}<td class="au" colspan="4" style="text-align:left;color:var(--sub);font-size:12px">실매출 = 전체 계(결제합계) + 에누리${m.market.eunuri>0?' = <b>'+fmt(m.market.total+m.market.eunuri)+'원</b>':''} · 계산에는 쓰이지 않는 참고값이에요</td></tr>
-    <tr><td class="lb">마켓 계</td>`+autoCell('mk_gye',mm=>derived(mm).marketGye,true)+`${inp('market.myeon')}`+autoCell('mk_gw',mm=>derived(mm).gwase)+`${inp('market.gong')}${inp('market.buga')}</tr>
+    <tr><td class="lb">마켓 계${(()=>{const ok=getPath(m,'market.myeon')>0;return `<span class="needtag${ok?' done':''}">${ok?'✔ 면세 입력됨':'✍ 면세 직접 입력'}</span>`;})()}<div class="hint srcedit" title="눌러서 어디서 찾는지 고치기" onclick="cfmUpSrcEdit('in_myeon')">${esc(upSrc('in_myeon'))||'<span style="color:#b45309">📍 면세는 어디서 찾는지 적어두세요</span>'} <span style="color:#94a3b8">✏</span></div></td>`+autoCell('mk_gye',mm=>derived(mm).marketGye,true)+`${inp('market.myeon')}`+autoCell('mk_gw',mm=>derived(mm).gwase)+`${inp('market.gong')}${inp('market.buga')}</tr>
     <tr><td class="lb">현금</td>`+autoCell('mk_cash',mm=>derived(mm).cashGye)+`<td><input data-p="market.cashMyeon" class="auinp"></td>`+autoCell('mk_cashgw',mm=>derived(mm).cashGwase)+`${inp('market.cashGong')}${inp('market.cashBuga')}</tr>
     <tr><td class="lb">카드</td>`+autoCell('mk_card',mm=>derived(mm).cardGye)+`<td><input data-p="market.cardMyeon" class="auinp"></td>`+autoCell('mk_cardgw',mm=>derived(mm).cardGwase)+`${inp('market.cardGong')}${inp('market.cardBuga')}</tr>
     <tr><td class="lb" style="font-weight:400;color:var(--sub);font-size:12px" colspan="6">${derived(m).myeonRetail?`현금·카드 면세는 자동 안분: 각 금액 × 일반 손님 매출의 면세 비율 <b>${(derived(m).retailMyeonRate*100).toFixed(1)}%</b> (마켓 계·면세에서 회원분석 세금계산서·계산서와 기타 세금계산서를 뺀 비율 · 2607부터)`:"현금·카드 면세는 자동 안분: 각 금액 ÷ 마켓 계 × 마켓 면세"} · 다르면 클릭해서 직접 입력, 비우면 다시 자동</td></tr>
@@ -21688,11 +21688,11 @@ function renderInput(){
   h+=`<div class="card"><h2>⑪ 메모</h2><textarea data-memo="1" style="min-height:70px;font-family:inherit;font-size:13px">${esc(m.memo||'')}</textarea></div>`;
   pg.innerHTML=h;
   // 값 채우기 + 이벤트
-  const NEEDIN=['market.jeongyukMyeon','market.jeongyukGwase','market.pointAccum','market.guest']; /* v426 */
+  const NEEDIN=['market.myeon','market.jeongyukMyeon','market.jeongyukGwase','market.pointAccum','market.guest']; /* v426 */
   pg.querySelectorAll("input[data-p]").forEach(el=>{
     const v=getPath(m,el.dataset.p);
     el.value=(v===null||v===undefined||v===0)?'':fmt(v);
-    if(NEEDIN.includes(el.dataset.p)){const nd=()=>{const grp=el.dataset.p.indexOf('market.jeongyuk')===0?[...pg.querySelectorAll('input[data-p^="market.jeongyuk"]')]:[el];const empty=grp.every(x=>!String(x.value).trim());grp.forEach(x=>x.classList.toggle('needin',empty));};nd();el.addEventListener('input',nd);el.addEventListener('change',()=>setTimeout(()=>{const tr=el.closest('tr');const tg=tr&&tr.querySelector('.needtag');if(tg){const all=[...tr.querySelectorAll('input[data-p]')].some(x=>String(x.value).trim());tg.classList.toggle('done',all);tg.textContent=all?'✔ 입력됨':'✍ 직접 입력';}},0));}
+    if(NEEDIN.includes(el.dataset.p)){const nd=()=>{const grp=el.dataset.p.indexOf('market.jeongyuk')===0?[...pg.querySelectorAll('input[data-p^="market.jeongyuk"]')]:[el];const empty=grp.every(x=>!String(x.value).trim());grp.forEach(x=>x.classList.toggle('needin',empty));};nd();el.addEventListener('input',nd);el.addEventListener('change',()=>setTimeout(()=>{const tr=el.closest('tr');const tg=tr&&tr.querySelector('.needtag');if(tg){const all=el.dataset.p==='market.myeon'?!!String(el.value).trim():[...tr.querySelectorAll('input[data-p]')].some(x=>String(x.value).trim());tg.classList.toggle('done',all);tg.textContent=el.dataset.p==='market.myeon'?(all?'✔ 면세 입력됨':'✍ 면세 직접 입력'):(all?'✔ 입력됨':'✍ 직접 입력');}},0));}
     if(el.dataset.p==='nts.cardGong'||el.dataset.p==='nts.cardBuga'){if(v===null){const I=deriveInputs(m);const ev=el.dataset.p==='nts.cardGong'?I.estG:I.estV;el.value=ev?fmt(ev):'';}}
     if(AUTOIN[el.dataset.p]){el.classList.toggle('auinp',!v);if(!v){const a=AUTOIN[el.dataset.p](m);el.value=a?fmt(a):'';}}
     if(m.uploads&&m.uploads.msales&&MSLOCK.includes(el.dataset.p)){el.readOnly=true;el.classList.add('auinp');el.title='마켓포스 월별 매출현황 엑셀에서 자동 입력됨';}
