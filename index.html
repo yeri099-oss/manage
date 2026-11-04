@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v435</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v436</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -3610,16 +3610,20 @@ function renderBojagiMenu(year, month, yearSel, monthSel) {
     pivotRows += `<tr class="${zi % 2 === 0 ? "zr" : ""}"><td class="l sticky">${esc(it.name)}</td>${tds}<td><b>${sum ? fmt(sum) : ""}</b></td><td>${sum && grand ? (sum / grand * 100).toFixed(1) + "%" : ""}</td></tr>`;
   });
   const pivotTotal = `<td class="l sticky">합계</td>` + MONTHS.map((m) => `<td>${mTot[m] ? fmt(mTot[m]) : ""}</td>`).join("") + `<td>${grand ? fmt(grand) : ""}</td><td>${grand ? "100%" : ""}</td>`;
+  /* v436: 순서 — 월별 꺾은선 → 월별 판매수량 → 메뉴별 판매현황 → 메뉴별 판매량 */
   return bjPosCard(year,month)+`
   <div class="card">
     <div class="card-head">
-      <div class="card-title">${year}년 월별 판매수량 (소계) <span class="unit">단위: 개</span></div>
+      <div class="card-title">${year}년 월별 판매수량 추이 <span class="unit">단위: 개</span></div>
       <div class="card-actions">${yearSel} ${monthSel} ${editBtn()} ${adminBtn(`openBojagiMenuForm(${year},'${month}')`)}</div>
     </div>
+    <div class="chart-box"><canvas id="ch-bmenu-trend"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="card-title">${year}년 월별 판매수량 (소계) <span class="unit">단위: 개</span></div>
     <div class="table-wrap">
       <table class="rpt"><thead>${pivotHead}</thead><tbody>${pivotRows}<tr class="total">${pivotTotal}</tr></tbody></table>
     </div>
-    <div class="chart-box"><canvas id="ch-bmenu-trend"></canvas></div>
   </div>
   <div class="card">
     <div class="card-title">보자기 메뉴별 판매현황 — ${year}년 ${month}월 <span class="unit">단위: 개</span></div>
