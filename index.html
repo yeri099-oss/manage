@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v428</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v429</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -19814,6 +19814,7 @@ document.addEventListener("DOMContentLoaded", () => {
 #cfm-root .card h2{font-size:15px;margin-bottom:10px;border-left:3px solid var(--accent);padding-left:9px}
 #cfm-root .card h2 small{color:var(--sub);font-weight:400;font-size:12px;margin-left:6px}
 #cfm-root table.g{border-collapse:collapse;width:100%}
+#cfm-root table.g.tl{margin-left:0 !important;margin-right:0 !important} /* v429: 왼쪽 붙임 */
 #cfm-root table.g th, #cfm-root table.g td{border:1px solid var(--line);padding:5px 8px;font-size:13px;text-align:right;white-space:nowrap}
 #cfm-root table.g th{background:#f9fafb;text-align:center;color:#374151}
 #cfm-root table.g td.lb{text-align:left;font-weight:600;background:#fafafa}
@@ -21526,12 +21527,18 @@ function renderInput(){
     </div>
   </div>
   <h2 style="margin-top:14px;font-size:14px">참고 — 세금계산서 미발행 <small>합계에 안 들어가요</small></h2>
-  <table class="g"><tr><th style="width:160px">구분</th><th>계</th><th></th></tr>
-    <tr><td class="lb">판공 (꽃밥마켓)</td>${inp('members.pangongGye')}<td class="au" rowspan="2" style="text-align:left;color:var(--sub);font-size:12px;vertical-align:middle">금액만 참고로 적어둬요 — 할인으로 뺀 금액이라 포스에 부가세가 안 잡혀서 면세·과세를 나누지 않아요</td></tr>
+  <div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">
+  <table class="g tl" style="width:auto;min-width:300px"><tr><th style="width:150px">구분</th><th style="width:130px">계</th></tr>
+    <tr><td class="lb">판공 (꽃밥마켓)</td>${inp('members.pangongGye')}</tr>
     <tr><td class="lb">사내 (꽃밥이야기)</td>${inp('members.sanaeGye')}</tr>
-    <tr><td class="lb">택배 (꽃밥택배)</td>${inp('members.taekbaeRef')}<td class="au" style="text-align:left;color:var(--sub);font-size:12px">택배 출고 재고 차감용 (온라인몰, 마켓 택배 등) — 매출에 더하지 않아요</td></tr>
-    <tr><td class="lb"></td><td class="au" colspan="2" style="text-align:left;color:var(--sub);font-size:12px">판공+사내 합계는 보고 반영 시 매출현황 마켓매출 비고칸에 자동으로 적혀요.</td></tr>
+    <tr><td class="lb">택배 (꽃밥택배)</td>${inp('members.taekbaeRef')}</tr>
   </table>
+  <ul style="margin:2px 0 0;padding-left:18px;font-size:12px;color:var(--sub);line-height:1.7;max-width:540px">
+    <li><b>판공·사내</b>: 금액만 참고로 적어둬요. 할인으로 뺀 금액이라 부가세가 안 잡혀서 면세·과세를 나누지 않아요.</li>
+    <li>판공+사내 합계는 보고 반영 때 매출현황 마켓매출 <b>비고칸</b>에 자동으로 적혀요.</li>
+    <li><b>택배</b>: 택배 출고 재고 차감용(온라인몰, 마켓 택배 등) — 매출에 더하지 않아요.</li>
+  </ul>
+  </div>
   <div class="hint" style="background:#f0f7ff;border:1px dashed #93c5fd;border-radius:8px;padding:8px 10px">📂 <b>회원구매현황 엑셀로 자동 입력</b> — <input type="file" accept=".xls,.xlsx" onchange="mbPick(this)" style="font-size:12px"> 회원분석(일자별회원구매내역) 엑셀을 넣으면 인사동·보자기·판공·사내가 자동으로 채워져요 (반품 차감, 면세 자동). 판공·사내는 포스에서 서비스로 찍혀서 매출액+할인액으로 가져와요.</div>
   <div class="hint">인사동+보자기 합계가 매출확정의 '꽃밥(세금계산서)'로 자동 반영됩니다.</div></div>`;
   // ③ 보자기포스
