@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v438</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v439</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -19856,7 +19856,8 @@ document.addEventListener("DOMContentLoaded", () => {
 #cfm-root .card h2{font-size:15px;margin-bottom:10px;border-left:3px solid var(--accent);padding-left:9px}
 #cfm-root .card h2 small{color:var(--sub);font-weight:400;font-size:12px;margin-left:6px}
 #cfm-root table.g{border-collapse:collapse;width:100%}
-#cfm-root table.g{margin-left:0 !important;margin-right:0 !important} /* v430: 매출확정 표는 모두 제목처럼 왼쪽 정렬 (가운데 몰림 X) */
+#cfm-root table.g{margin-left:0 !important;margin-right:0 !important}
+#cfm-root .txslipbox:hover{border-color:#2563eb !important;box-shadow:0 0 0 2px rgba(37,99,235,.15)} /* v430: 매출확정 표는 모두 제목처럼 왼쪽 정렬 (가운데 몰림 X) */
 #cfm-root table.g th, #cfm-root table.g td{border:1px solid var(--line);padding:5px 8px;font-size:13px;text-align:right;white-space:nowrap}
 #cfm-root table.g th{background:#f9fafb;text-align:center;color:#374151}
 #cfm-root table.g td.lb{text-align:left;font-weight:600;background:#fafafa}
@@ -21547,17 +21548,17 @@ function renderInput(){
       +autoCell('mb_tx_v',mm=>derived(mm).taxinvBuga,true)+`</tr>
   </table>
   <div style="margin-top:10px;background:#FDF6E9;border:1.5px solid #E4C87A;border-radius:10px;padding:12px 14px;width:fit-content;max-width:100%">
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span style="font-weight:700">📋 매출전표 입력용 — 인사동+보자기 세금계산서</span><button class="btn sm line" onclick="txSlipCopy(this)" style="font-size:12px">📄 업무일지용 복사</button></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span style="font-weight:700">📋 매출전표 입력용 — 인사동+보자기 세금계산서</span><button class="btn sm" onclick="cfmTxSlipOpen(0)" style="font-size:12px">🧾 이카운트 전표 입력 (10일 전)</button><button class="btn sm line" onclick="txSlipCopy(this)" style="font-size:12px">📄 업무일지용 복사</button></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
-      <div style="flex:0 0 auto;min-width:200px;background:#fff;border:1px solid #E4C87A;border-radius:8px;padding:8px 12px">
-        <div style="font-size:12px;color:var(--sub)">과세 — 세금계산서</div>
+      <div class="txslipbox" onclick="cfmTxSlipOpen(0)" title="눌러서 이카운트 전표 입력 도우미 열기" style="flex:0 0 auto;min-width:200px;background:#fff;border:1px solid #E4C87A;border-radius:8px;padding:8px 12px;cursor:pointer">
+        <div style="font-size:12px;color:var(--sub)">과세 — 세금계산서 <span style="color:#2563eb;font-weight:700">🧾 전표 ▶</span></div>
         <div style="font-size:13px;margin-top:4px">공급가액 <b style="font-size:16px" data-ac="tx_slip_g"></b>원</div>
         <div style="font-size:13px;margin-top:2px">부가세 <b style="font-size:16px" data-ac="tx_slip_v"></b>원</div>
         <div style="font-size:13px;margin-top:2px;padding-top:4px;border-top:1px dashed #E4C87A">과세 총계 <b style="font-size:16px" data-ac="tx_slip_gt"></b>원</div>
         <div style="font-size:12px;margin-top:4px;color:#8a6d1a">적요: <b>네니아 유채유 외</b></div>
       </div>
-      <div style="flex:0 0 auto;min-width:200px;background:#fff;border:1px solid #E4C87A;border-radius:8px;padding:8px 12px">
-        <div style="font-size:12px;color:var(--sub)">면세 — 계산서</div>
+      <div class="txslipbox" onclick="cfmTxSlipOpen(1)" title="눌러서 이카운트 전표 입력 도우미 열기" style="flex:0 0 auto;min-width:200px;background:#fff;border:1px solid #E4C87A;border-radius:8px;padding:8px 12px;cursor:pointer">
+        <div style="font-size:12px;color:var(--sub)">면세 — 계산서 <span style="color:#2563eb;font-weight:700">🧾 전표 ▶</span></div>
         <div style="font-size:13px;margin-top:4px">금액 <b style="font-size:16px" data-ac="tx_slip_m"></b>원</div>
         <div style="font-size:12px;margin-top:4px;color:#8a6d1a">적요: <b>새하나 유기농백미 외</b></div>
       </div>
@@ -22209,6 +22210,17 @@ function ecSlipOpen(idx){
   });
 }
 
+/* v439: ② 꽃밥 세금계산서(인사동+보자기) 전표 도우미 — 입력 탭에서 바로 (10일 전 발행) */
+window.cfmTxSlipOpen=function(which){
+  if(!CUR||!MONTHS[CUR])return;
+  const d=derived(MONTHS[CUR]);
+  EC_SLIPS=[];EC_SLIP_YM=CUR;
+  const L='꽃밥 세금계산서 (인사동+보자기)';
+  if(d.taxinvGong||d.taxinvBuga)EC_SLIPS.push({key:'tx',name:'',label:L+' · 과세 세금계산서',g:d.taxinvGong,v:d.taxinvBuga});
+  if(d.taxinvMyeon)EC_SLIPS.push({key:'tx.m',name:'',label:L+' · 면세 계산서',g:d.taxinvMyeon,v:0});
+  if(!EC_SLIPS.length){alert('아직 세금계산서 금액이 없어요 — 위 표(인사동·보자기)를 먼저 채워주세요.');return;}
+  ecSlipLoadCloud().then(()=>ecSlipOpen(Math.min(which||0,EC_SLIPS.length-1)));
+};
 /* ============ 월별 요약 탭 ============ */
 function renderMonths(){
   const pg=$("#pg-months");
@@ -22262,17 +22274,6 @@ function renderMonths(){
       a+=row5('합계',V.B35,V.C35,V.D35,V.E35,V.F35,'sub');
       a+=row5('합계 (기타 포함)',V.B35+exT.G,V.C35+exT.V,V.D35+exT.G+exT.V,V.E35+exT.M,V.F35+exT.T,'tot');
     }else a+=row5('합계',V.B35,V.C35,V.D35,V.E35,V.F35,'tot');
-    { /* v438: ② 꽃밥 세금계산서 — 매출전표 입력용 (인사동+보자기) */
-      const dd=derived(m);
-      if(dd.taxinvGye){
-        a+=grp('꽃밥 세금계산서 (인사동+보자기)',6);
-        const ti=EC_SLIPS.length;
-        if(dd.taxinvGong||dd.taxinvBuga)EC_SLIPS.push({key:'tx',name:'',label:gName+' · 과세 세금계산서',g:dd.taxinvGong,v:dd.taxinvBuga});
-        if(dd.taxinvMyeon)EC_SLIPS.push({key:'tx.m',name:'',label:gName+' · 면세 계산서',g:dd.taxinvMyeon,v:0});
-        const at=EC_SLIPS.length>ti?` data-slip="${ti}"`:'';
-        a+=`<tr>${lbc('세금계산서 발행',at)}<td>${nf(dd.taxinvGong)}</td><td>${nf(dd.taxinvBuga)}</td><td>${nf(dd.taxinvGong+dd.taxinvBuga)}</td><td>${nf(dd.taxinvMyeon)}</td><td>${nf(dd.taxinvGye)}</td></tr>`;
-      }
-    }
     let b='';
     const smBuga=kb.somae-kb.somaeGong;
     b+=grp('꽃밥에피다 (인사동)',4);
