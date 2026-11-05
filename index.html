@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v439</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v440</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -16773,6 +16773,16 @@ window.pachNew=function(d,f,v){
 };
 window.pachAddDay=function(d){const D=pachDoc();const prev=D.rows.filter(x=>x.d===+d).pop();D.rows.push({d:+d,name:"",amt:null,h:null,nat:"",visa:"",note:"",loc:prev?prev.loc:"bc"});D.rows.sort((a,b)=>(a.d||99)-(b.d||99));pachSave();renderPay();};
 /* v380: 직접 지급 체크 — 체크 = 우리가 직접 불러서 이미 지급, 비움 = 레몬파출(월말 한 번에 지급) */
+/* v440: 파출 옴 체크 — 미리 적어둔 예정 줄이 실제로 오면 체크 (초록), 직접 지급(노랑)은 당연히 온 것 */
+window.pachCame=function(i,on){const D=pachDoc(),r=D.rows[i];if(!r)return;if(on)r.came=true;else delete r.came;pachSave();renderPay();};
+window.pachCameUpto=function(){
+  const D=pachDoc(),ym=payYm();if(!D||!ym)return;
+  const now=new Date(),cy=now.getFullYear(),cm=now.getMonth()+1;
+  const lim=(+ym.y<cy||(+ym.y===cy&&+ym.m<cm))?99:(+ym.y===cy&&+ym.m===cm?now.getDate():0);
+  let n=0;D.rows.forEach(r=>{if((String(r.name||"").trim()||r.amt)&&!r.came&&!r.dir&&(r.d||0)<=lim){r.came=true;n++;}});
+  if(!n){toast(lim?"체크할 줄이 없어요":"아직 오지 않은 달이에요");return;}
+  pachSave();renderPay();toast((lim===99?"이 달":"오늘까지")+" "+n+"줄을 '파출 옴'으로 체크했어요");
+};
 window.pachDir=function(i,on){const D=pachDoc(),r=D.rows[i];if(!r)return;if(on)r.dir=true;else delete r.dir;pachSave();renderPay();};
 function pachSplit(rows){const o={lm:{bc:0,ep:0,n:0},dir:{bc:0,ep:0,n:0}};(rows||[]).forEach(r=>{if(!String(r.name||"").trim()&&!r.amt)return;const g=r.dir?o.dir:o.lm;g[r.loc==="ep"?"ep":"bc"]+=Number(r.amt)||0;g.n++;});return o;}
 /* v383: 레몬파출 보낼 표 → 이미지 (1일~말일, 직접 지급 줄 제외, 비고의 주민번호는 가림) */
@@ -17038,12 +17048,13 @@ function payPachBody(){
     list.forEach((i,j)=>{
       const r=i==null?{}:R[i];
       const dayTd=j===0?`<td rowspan="${list.length}" style="white-space:nowrap;vertical-align:middle${list.length>1?";background:#fff":""}">${d}일 <button class="btn btn-sm" style="padding:0 6px;margin-left:2px" title="이 날짜에 한 명 더" onclick="pachAddDay(${d})">＋</button></td><td rowspan="${list.length}" style="vertical-align:middle;${list.length>1?"background:#fff;":""}color:${wd==="일"?"#b91c1c":wd==="토"?"#1d4ed8":"inherit"}">${wd}</td>`:"";
-      rows+=`<tr${r.dir?' class="pach-dir" style="background:#fdf6d3"':r.loc==="ep"?' style="background:#f3f7ee"':""}>${dayTd}
+      rows+=`<tr${r.dir?' class="pach-dir" style="background:#fdf6d3"':r.came?' style="background:#E3F2E1"':""}>${dayTd}
         <td>${cell(i,"name",r.name,90)}</td><td>${i==null?cell(i,"rrn","",118):inp(i,"rrn",pachRrn(r),118)}</td><td>${cell(i,"amt",r.amt,90,"right")}</td><td>${cell(i,"h",r.h,46,"right")}</td>
         <td>${locSel(i,r.loc,d)}</td><td>${i==null?cell(i,"nat","",56):(()=>{const nm=String(r.name||"").replace(/\s+/g,""),inf=nm&&!PACH_PLACE.test(nm)?(ptxInfo()[ptxN(nm)]||{}):{};const nat=r.nat||inf.nat||"";
           /* v398: 외국인(비자 있음 또는 외국인등록번호 7번째 자리 5~8)인데 국적이 비면 빨간 칸 */
           const fr=!!(r.visa||inf.visa)||/^\d{6}-?[5-8]/.test(String(pachRrn(r)).replace(/\s/g,""));
           return fr&&!nat?`<input data-f="nat" title="외국인 — 국적을 적어주세요" placeholder="국적?" style="${inS};width:56px;background:#FDECEC;border-color:#ef4444" value="" onchange="pachEdit(${i},'nat',this.value)">`:inp(i,"nat",nat,56);})()}</td><td>${cell(i,"visa",r.visa,46)}</td><td>${cell(i,"note",r.note,150)}</td>
+        <td style="text-align:center">${i==null?"":`<input type="checkbox" title="실제로 파출이 왔으면 체크 (초록)" style="width:16px;height:16px;cursor:pointer;accent-color:#2F6B3F" ${r.came||r.dir?"checked":""} ${r.dir?"disabled":""} onchange="pachCame(${i},this.checked)">${r.came||r.dir?'<div style="font-size:10.5px;color:#2F6B3F;font-weight:700;line-height:1.1">옴</div>':'<div style="font-size:10.5px;color:#94a3b8;line-height:1.1">예정</div>'}`}</td>
         <td style="text-align:center">${i==null?"":`<input type="checkbox" style="width:16px;height:16px;cursor:pointer" ${r.dir?"checked":""} onchange="pachDir(${i},this.checked)">${r.dir?'<div style="font-size:10.5px;color:#a16207;font-weight:700;line-height:1.1">지급완료</div>':""}`}</td>
         <td>${i==null?"":`<button class="btn btn-sm" style="padding:1px 7px" onclick="pachDel(${i})">×</button>`}</td></tr>`.replace(/DAY/g,String(d));
     });
@@ -17066,10 +17077,11 @@ function payPachBody(){
     ${(()=>{const cnt=(v)=>R.filter(r=>(String(r.name||"").trim()||r.amt)&&pachInView(r,v)).length;
       return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0 8px;padding:8px 10px;border:1px solid var(--line,#e5e5e0);border-radius:10px;background:#FAFAF7">
         <span style="display:inline-flex;gap:4px">${PACH_VIEWS.map(([k2,n])=>`<button class="btn btn-sm" style="${V===k2?"background:var(--brand,#2F6B3F);color:#fff;border-color:var(--brand,#2F6B3F);font-weight:700":""}" onclick="pachSetView('${k2}')">${n} <span style="opacity:.75;font-size:11px">${cnt(k2)}</span></button>`).join("")}</span>
+        <span class="unit" style="display:inline-flex;gap:8px;align-items:center"><span style="display:inline-block;width:12px;height:12px;background:#E3F2E1;border:1px solid #9ccc9a;border-radius:3px"></span>파출 옴 <span style="display:inline-block;width:12px;height:12px;background:#fdf6d3;border:1px solid #e5c76b;border-radius:3px"></span>직접 지급 <span style="display:inline-block;width:12px;height:12px;background:#fff;border:1px solid #ccc;border-radius:3px"></span>예정 <button class="btn btn-sm" onclick="pachCameUpto()" title="오늘(지난 달이면 말일)까지 적힌 줄을 모두 '파출 옴'으로">✔ 오늘까지 모두 옴</button></span>
         <span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-sm btn-primary" onclick="pachLemonCopy()">🖼 이미지 복사</button><button class="btn btn-sm" onclick="pachLemonCopy('dl')">💾 이미지 저장</button><button class="btn btn-sm" onclick="pachXlsx()">📥 엑셀 받기</button></span>
         <span class="unit" style="flex-basis:100%">이미지·엑셀은 지금 보기(${pachViewTitle(V)}) 기준 · 이름·주민번호·국적·비자 포함 (위치만 적힌 줄은 이름 칸이 비어요)</span></div>`;})()}
-    ${true?`<div class="table-wrap"><table class="rpt" id="pachTbl" style="font-size:12.5px"><thead><tr><th>날짜</th><th>요일</th><th>파출(이름)</th><th>주민번호</th><th>금액</th><th title="비우면 4시간">시간 <span class="unit" style="font-weight:400">(기본 4)</span></th><th>위치</th><th>국적</th><th>비자</th><th>비고</th><th title="체크 = 우리가 직접 불러서 이미 지급 · 비움 = 레몬파출">직접 지급</th><th></th></tr></thead><tbody>${rows}</tbody>
-      <tfoot>${(()=>{const F=R.filter(r=>(String(r.name||"").trim()||r.amt)&&pachInView(r,V));return `<tr class="total"><td colspan="4" class="l">합계 ${V!=="all"?"("+pachViewTitle(V)+") ":""}(${F.length}건)</td><td style="text-align:right">${fmt(F.reduce((a,r)=>a+(Number(r.amt)||0),0))}</td><td colspan="7"></td></tr>`;})()}</tfoot></table></div>`:`<div class="footnote">아직 내역이 없어요 — 줄을 추가하거나 엑셀에서 가져오세요.</div>`}
+    ${true?`<div class="table-wrap"><table class="rpt" id="pachTbl" style="font-size:12.5px"><thead><tr><th>날짜</th><th>요일</th><th>파출(이름)</th><th>주민번호</th><th>금액</th><th title="비우면 4시간">시간 <span class="unit" style="font-weight:400">(기본 4)</span></th><th>위치</th><th>국적</th><th>비자</th><th>비고</th><th title="미리 적어둔 파출이 실제로 왔으면 체크 → 초록색">파출 옴</th><th title="체크 = 우리가 직접 불러서 이미 지급 · 비움 = 레몬파출">직접 지급</th><th></th></tr></thead><tbody>${rows}</tbody>
+      <tfoot>${(()=>{const F=R.filter(r=>(String(r.name||"").trim()||r.amt)&&pachInView(r,V));return `<tr class="total"><td colspan="4" class="l">합계 ${V!=="all"?"("+pachViewTitle(V)+") ":""}(${F.length}건)</td><td style="text-align:right">${fmt(F.reduce((a,r)=>a+(Number(r.amt)||0),0))}</td><td colspan="8"></td></tr>`;})()}</tfoot></table></div>`:`<div class="footnote">아직 내역이 없어요 — 줄을 추가하거나 엑셀에서 가져오세요.</div>`}
   </div>`;
 }
 /* ===== v369: 퇴직금 — 퇴직소득원천징수영수증(PDF) + 중도퇴사 근로소득원천징수영수증(PDF)을 올리면 이카운트 전표로 정리
