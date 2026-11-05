@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v443</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v444</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -17827,19 +17827,10 @@ window.cardPick=async function(inp){
     let key=cardMonthKey(P.sheets);
     if(!key){const m=/(\d{4})/.exec(f.name);key=m?m[1]:expYm().key;}
     const B=cardStore();
-    /* v443: 소지자가 세부내역을 채워 보낸 엑셀(원본 승인내역 탭 없음) — 달 전체를 바꾸지 않고 그 사람 탭만 채우거나 새로 넣음 (오신일·송정은 따로 올려도 합쳐짐) */
+    /* v443: 소지자가 세부내역을 채워 보낸 엑셀(원본 승인내역 탭 없음) — 그 사람 탭만 채우거나 새로 넣음 */
     if(B[key]&&!P.fromRaw&&!P.raw){
-      const doc=B[key];
-      const findSh=(us)=>doc.sheets.find(o=>o.name===us.name)||doc.sheets.find(o=>o.name===cardHolderName(us.holder))||null;
-      const fillUs=[],added=[];
-      P.sheets.forEach(us=>{const o=findSh(us);if(o){us.name=o.name;fillUs.push(us);}else{const nm=cardHolderName(us.holder)||us.name;us.name=/^sheet\d*$/i.test(us.name)&&nm?nm:us.name;doc.sheets.push(us);added.push(us.name+" "+us.rows.length+"건");}});
-      const R=fillUs.length?cardFillBack(key,fillUs):{names:[],total:0,matched:0,changed:0,miss:[]};
       window.__exp.ui.y=2000+Number(key.slice(0,2));window.__exp.ui.m=Number(key.slice(2));
-      cardSaveNow(key);renderExpense();
-      const msg=[];
-      if(R.names.length)msg.push(R.names.join(", ")+" "+R.total+"건 중 "+R.matched+"건을 찾아 세부내역·비고를 채웠어요"+(R.miss.length?" (못 찾은 "+R.miss.length+"건: "+R.miss.slice(0,3).join(", ")+(R.miss.length>3?" …":"")+")":""));
-      if(added.length)msg.push(added.join(", ")+" 을(를) 새 탭으로 넣었어요");
-      toast(msg.join(" · ")||"채울 내역이 없어요",!!R.miss.length);
+      const R=cardMergeHolder(key,P.sheets);cardSaveNow(key);renderExpense();toast(R.msg,R.warn);
       return;
     }
     /* 이미 올린 달에 소지자별 엑셀(내역을 채운 것)을 다시 올리면: 바꾸지 않고 같은 건을 찾아 세부내역·비고만 채움 */
@@ -17865,6 +17856,42 @@ window.cardPick=async function(inp){
     toast(P.sheets.map(s=>s.name).join("·")+" "+n+"건"+(P.raw?" + 원본 "+P.raw.name+" 탭":"")+"을 불러왔어요"+(kept?" (바꿔둔 계정 "+kept+"건 유지)":""));
   }catch(e){console.error(e);toast("엑셀 읽기 실패: "+(e.message||e),true);}
   finally{inp.value="";}
+};
+/* v444: 소지자가 채운 엑셀 시트들을 이 달 자료에 합치기 — 같은 사람 탭은 같은 건을 찾아 채우고, 없는 사람은 새 탭 (target: 이 탭에 강제로) */
+function cardMergeHolder(key,sheets,target){
+  const B=cardStore();
+  if(!B[key])B[key]={fileName:"",up:Date.now(),sheets:[],appr:null,raw:null,fromRaw:false,mig259:1};
+  const doc=B[key];
+  const findSh=(us)=>doc.sheets.find(o=>o.name===us.name)||doc.sheets.find(o=>o.name===cardHolderName(us.holder))||null;
+  const fillUs=[],added=[];
+  (target?sheets.slice(0,1):sheets).forEach(us=>{
+    if(target)us.name=target;
+    const o=findSh(us);
+    if(o){us.name=o.name;fillUs.push(us);}
+    else{const nm=cardHolderName(us.holder)||us.name;if(/^sheet\d*$/i.test(us.name)&&nm)us.name=nm;doc.sheets.push(us);added.push(us.name+" "+us.rows.length+"건");}
+  });
+  const R=fillUs.length?cardFillBack(key,fillUs):{names:[],total:0,matched:0,changed:0,miss:[]};
+  const msg=[];
+  if(R.names.length)msg.push(R.names.join(", ")+" "+R.total+"건 중 "+R.matched+"건을 찾아 세부내역·비고를 채웠어요"+(R.miss.length?" (못 찾은 "+R.miss.length+"건: "+R.miss.slice(0,3).join(", ")+(R.miss.length>3?" …":"")+")":""));
+  if(added.length)msg.push(added.join(", ")+" 을(를) 새 탭으로 넣었어요");
+  return {msg:msg.join(" · ")||"채울 내역이 없어요",warn:!!R.miss.length,miss:R.miss};
+}
+/* v444: [📥 채운 엑셀 올리기] — 엑셀 내역 칸에서 (여러 파일 가능, target이 있으면 그 사람 탭에) */
+window.cardFillPick=async function(inp,target){
+  const fl=[...(inp.files||[])];inp.value="";if(!fl.length)return;
+  const key=expYm().key;const out=[];let warn=false;const miss=[];
+  try{
+    for(const f of fl){
+      const P=await cardParse(await f.arrayBuffer());
+      if(P.fromRaw||!P.sheets.length){out.push(f.name+": 소지자별 탭(카드소지자·승인일자·가맹점명·승인금액)이 없어요"+(P.fromRaw?" — 카드사 원본은 맨 위 [법인카드 엑셀 올리기]로":""));warn=true;continue;}
+      const fk=cardMonthKey(P.sheets);
+      if(fk&&fk!==key&&!confirm(f.name+" 은(는) 20"+fk.slice(0,2)+"년 "+Number(fk.slice(2))+"월 내역이에요. 지금 보고 있는 "+Number(key.slice(2))+"월에 채울까요?"))continue;
+      const R=cardMergeHolder(key,P.sheets,target);out.push(R.msg);if(R.warn){warn=true;miss.push(...R.miss);}
+    }
+    cardSaveNow(key);renderExpense();
+    toast(out.join(" / "),warn);
+    if(miss.length>3)setTimeout(()=>alert("못 찾은 건 (승인일 · 가맹점 · 금액이 원본과 다른지 확인해 주세요)\n\n"+miss.join("\n")),300);
+  }catch(e){console.error(e);toast("엑셀 읽기 실패: "+(e.message||e),true);}
 };
 /* 소지자별 엑셀에 적은 세부내역·비고(계정)·체력단련 표시를 같은 건(소지자 탭, 승인일, 가맹점, 금액, 같은 건이 여럿이면 순서)에 채움 */
 function cardFillBack(key,upSheets){
@@ -18080,7 +18107,7 @@ function renderExpCard(){
       return trs+`<tr style="background:#eef3ee"><td colspan="3" class="l"><b>${esc(a)} 소계</b>${fitSub?` <span class="unit">(그중 체력단련비 ${fmt(fitSub)} / 체력단련 제외 ${fmt(sub-fitSub)})</span>`:""}</td><td style="text-align:right"><b>${fmt(sub)}</b></td><td></td></tr>`;
     }).join("");
     const ok=p.ap?(p.ap.sum===p.sum):null;
-    return `<div style="margin-top:10px"><div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><b style="font-size:14.5px">${esc(p.name)}</b><span class="unit">${CARD_BIZ_N[p.biz]} · ${p.sh.rows.length}건 · 합계 <b>${fmt(p.sum)}</b>원</span><button class="btn btn-sm" onclick="cardHolderDl('${ym.key}',${si})">📥 ${esc(p.name)} 탭만 받기</button><button class="btn btn-sm" onclick="cardHolderImg('${ym.key}',${si})">🖼 ${esc(p.name)} 이미지 복사</button>
+    return `<div style="margin-top:10px"><div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><b style="font-size:14.5px">${esc(p.name)}</b><span class="unit">${CARD_BIZ_N[p.biz]} · ${p.sh.rows.length}건 · 합계 <b>${fmt(p.sum)}</b>원</span><button class="btn btn-sm" onclick="cardHolderDl('${ym.key}',${si})">📥 ${esc(p.name)} 탭만 받기</button><label class="btn btn-sm" style="cursor:pointer" title="${esc(p.name)}이(가) 채워 보낸 엑셀을 올리면 이 탭 내역(세부내역·비고)을 채워요">📤 ${esc(p.name)} 채운 엑셀 올리기<input type="file" accept=".xlsx" style="display:none" onchange="cardFillPick(this,'${esc(p.name)}')"></label><button class="btn btn-sm" onclick="cardHolderImg('${ym.key}',${si})">🖼 ${esc(p.name)} 이미지 복사</button>
       ${p.ap?(ok?`<span class="unit" style="color:#2F6B3F">✓ ${esc(doc.raw?doc.raw.name:"승인내역")} ${fmt(p.ap.sum)}원과 일치</span>`:`<span class="buy-warn">⚠ ${esc(doc.raw?doc.raw.name:"승인내역")} ${fmt(p.ap.sum)}원 — 차이 ${fmt(p.sum-p.ap.sum)}원</span>`):""}</div>
       <div class="table-wrap" style="margin-top:4px"><table class="rpt" style="font-size:12.5px;margin:0"><thead><tr><th>${esc((p.sh.labels||{}).d||"승인일자")}</th><th class="l">가맹점</th><th class="l">세부 내역</th><th>금액</th><th>비고 (계정)</th></tr></thead><tbody>${groups}</tbody></table></div></div>`;
   }).join("");
@@ -18108,7 +18135,7 @@ function renderExpCard(){
     <details style="margin-top:12px" ${noCode.length?"open":""}><summary style="cursor:pointer;font-weight:700">계정 코드표와 계정과목 추가 <span class="unit">엑셀 계정 → 이카운트 코드와 계정명 (한 번 고치면 기억)</span></summary><div style="margin-top:6px">${codeTbl}</div></details>
   </div>
   <div class="card"><div class="card-head"><div class="card-title">엑셀 내역 <span class="unit">탭을 눌러 사용자별로 보기 · 계정 칸을 바꾸면 집계·전표에 바로 반영돼요(노란색=바꾼 칸)</span></div>
-    <div class="card-actions"><button class="btn btn-sm" onclick="cardHolderDl('${ym.key}')">📥 소지자별 엑셀 (세부내역·비고 칸)</button><button class="btn btn-sm btn-primary" onclick="cardTaxDl('${ym.key}')">📥 세무사무소용 엑셀 받기</button>${window.showDirectoryPicker?`<button class="btn btn-sm" onclick="cardChangeDir()" title="엑셀을 저장할 폴더">📁 ${window.__exp.ui.cardDirName?esc(window.__exp.ui.cardDirName)+" 폴더":"저장 폴더 정하기"}</button>`:""}</div></div>
+    <div class="card-actions"><label class="btn btn-sm btn-primary" style="cursor:pointer" title="송정은·오신일 등이 세부내역·비고를 채워 보낸 엑셀 — 여러 개 한꺼번에 가능, 그 사람 탭만 채워요">📤 채운 엑셀 올리기<input type="file" accept=".xlsx" multiple style="display:none" onchange="cardFillPick(this)"></label><button class="btn btn-sm" onclick="cardHolderDl('${ym.key}')">📥 소지자별 엑셀 (세부내역·비고 칸)</button><button class="btn btn-sm btn-primary" onclick="cardTaxDl('${ym.key}')">📥 세무사무소용 엑셀 받기</button>${window.showDirectoryPicker?`<button class="btn btn-sm" onclick="cardChangeDir()" title="엑셀을 저장할 폴더">📁 ${window.__exp.ui.cardDirName?esc(window.__exp.ui.cardDirName)+" 폴더":"저장 폴더 정하기"}</button>`:""}</div></div>
     <div class="footnote" style="margin:-4px 0 4px">소지자별 엑셀: 송정은·임해경·오신일·공용 탭(카드소지자, 접수일자(승인일자), 가맹점명, 승인금액, 세부내역, 비고=계정) + 원본 탭 · 각 탭 위 '탭만 받기'로 한 사람 것만 받을 수 있어요<br>세무사무소용 엑셀: 사용자별 탭(날짜순, 세부 내역 빼고 계정은 비고 칸) + 합 계 + 원본 ${esc(doc.raw?doc.raw.name:"승인내역")} 탭</div>
     ${hasRaw?"":`<div style="margin:6px 0 8px;padding:8px 12px;background:#FDF6EC;border:1px solid #E8C88A;border-radius:10px"><b>⚠ 이 달 자료엔 원본(승인내역) 탭이 저장돼 있지 않아요</b> — 원본 저장 기능이 생기기 전에 올린 자료라서 그래요. 위 "📂 법인카드 엑셀 다시 올리기"로 같은 파일을 한 번만 다시 올려주세요 (바꿔둔 계정은 그대로 유지돼요)</div>`}
     ${sheetTabs}${rawSel?rawHtml:detail}</div>`;
