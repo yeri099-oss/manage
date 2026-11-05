@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v446</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v447</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -9530,8 +9530,71 @@ async function payLoadMonth(key){
     toast(fd.y+"년 "+fd.m+"월 급여품의를 불러왔어요");
   }catch(e){console.error(e);toast("저장된 파일을 여는 데 실패했어요",true);}
   renderPay();
+  setTimeout(()=>{payBjSyncPrev().catch(e=>console.warn("지난 상여 맞추기",e));},300); /* v447 */
 }
 window.payLoadMonth=payLoadMonth;
+/* v447: 상여금 — 지난달 열(10월·9월…, 추석 같은 지난 특별상여)은 그 달 파일 값을 따라감
+   (11월 파일을 만든 뒤 10월 상여를 고쳐도, 11월을 열면 10월 열이 자동으로 맞춰짐) */
+const PAY_BJSRC_CACHE={};
+async function payBjSrcCols(key){
+  const fd=S.data.payFiles[key];if(!fd||!fd.b64)return null;
+  const ck=key+"|"+(fd.savedAt||"")+"|"+String(fd.b64).length;
+  if(PAY_BJSRC_CACHE[key]&&PAY_BJSRC_CACHE[key].ck===ck)return PAY_BJSRC_CACHE[key].v;
+  const W=await pumParse(payB64Buf(fd.b64));const bj=W.sheets.find(x=>x.name==="상여금");
+  let v=null;
+  if(bj){
+    const ed=((fd.edits||{})["상여금"])||{};const val=payMkVal(bj,ed);
+    const txt=(ref)=>{if(ed[ref]!==undefined)return String(ed[ref]==null?"":ed[ref]).trim();const c=bj.cells[ref];return c&&c.typ==="str"?String(c.v).trim():"";};
+    let hr=0;for(let r=1;r<=6;r++)if(txt("B"+r)==="이름"){hr=r;break;}
+    if(hr){
+      const HID=(((fd.edits||{})["__hide"]||{})["상여금"])||{};
+      const cols={};
+      for(let c=3;c<=Math.max(bj.maxC,30);c++){const L=payIdxCol(c),lab=txt(L+hr);if(!lab||cols[lab])continue;
+        const m={};for(let r=hr+1;r<=bj.maxR;r++){const nm=txt("B"+r).replace(/\s+/g,"");if(!nm||HID[r])continue;const x=val(L+r);m[nm]=x==null||x===""?0:Math.round(Number(x)||0);}
+        cols[lab]=m;}
+      v={cols};
+    }
+  }
+  PAY_BJSRC_CACHE[key]={ck,v};return v;
+}
+async function payBjSyncPrev(){
+  const P=window.__pay;if(!P.wb)return 0;
+  const ym=payYm();const bj=paySheetByName("상여금");if(!ym||!bj)return 0;
+  const ed=((P.edits||{})["상여금"])||{};
+  const txt=(ref)=>{if(ed[ref]!==undefined)return String(ed[ref]==null?"":ed[ref]).trim();const c=bj.cells[ref];return c&&c.typ==="str"?String(c.v).trim():"";};
+  let hr=0;for(let r=1;r<=6;r++)if(txt("B"+r)==="이름"){hr=r;break;}
+  if(!hr)return 0;
+  const cy=+ym.y,cm=+ym.m;
+  /* 이전 달 키들 (최근 → 과거) */
+  const prevKeys=[];for(let i=1;i<=12;i++){let y=cy,m=cm-i;while(m<1){m+=12;y--;}const k=y+"-"+m;if(S.data.payFiles[k])prevKeys.push({k,y,m});}
+  if(!prevKeys.length)return 0;
+  const cur=payMkVal(bj,ed);let n=0;const done=[];
+  for(let c=3;c<=bj.maxC;c++){
+    const L=payIdxCol(c),lab=txt(L+hr);if(!lab||lab===cm+"월")continue;
+    let src=null;
+    const mm=/^(\d{1,2})월$/.exec(lab);
+    if(mm){const X=+mm[1];const pk=prevKeys.find(o=>o.m===X);if(!pk)continue;const S2=await payBjSrcCols(pk.k);src=S2&&S2.cols[lab];}
+    else{ /* 지난 특별상여(추석 등, 이력 표시된 열만): 그 이름 열이 있는 가장 가까운 지난달 파일 */
+      if(!(((P.edits||{})["__bjhist"]||{})[L]))continue;
+      for(const o of prevKeys){const S2=await payBjSrcCols(o.k);if(S2&&S2.cols[lab]){src=S2.cols[lab];break;}}
+      /* 이번 달에 새로 만든 특별상여(지난달 파일엔 없음)는 그대로 */
+    }
+    if(!src)continue;
+    let cn=0;
+    for(let r=hr+1;r<=bj.maxR;r++){
+      const nm=txt("B"+r).replace(/\s+/g,"");if(!nm||!(nm in src))continue;
+      const cell=bj.cells[L+r];if(cell&&typeof cell.f==="string")continue;
+      const want=src[nm]||0,have=Math.round(Number(cur(L+r))||0);
+      if(want===have)continue;
+      const E0=(P.edits["상여금"]=P.edits["상여금"]||{}),A0=(P.autoSet=P.autoSet||{})["상여금"]=(P.autoSet["상여금"]||{});
+      delete E0[L+r];delete A0[L+r];payEdit("상여금",L+r,want||"",true);cn++;
+    }
+    if(cn){n+=cn;done.push(lab);}
+  }
+  if(n){try{payAutoFill();}catch(e){}paySchedSave();renderPay();toast("지난 상여("+done.join("·")+")를 그 달 파일 값으로 맞췄어요 — "+n+"칸");}
+  return n;
+}
+window.payBjSyncPrev=payBjSyncPrev;
 function payMonBoxHtml(){
   const ym=payYm();
   const ks=paySortKeys(S.data.payFiles);
