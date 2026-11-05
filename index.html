@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v437</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v438</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -22133,16 +22133,19 @@ const EC_SLIP_DEF={
   'pida.hyeon':{dc:'00002',dn:'꽃밥에피다',ty:'현금영수증',cc:'3001',cn:'포스매출',memo:'피다 현영매출'},
   'pida.somae':{dc:'00002',dn:'꽃밥에피다',ty:'소매매출',cc:'3001',cn:'포스매출',memo:'피다 소매매출'},
   'pida.catch':{dc:'00002',dn:'꽃밥에피다',ty:'소매매출',cc:'6148800597',cn:'(주)와드(꽃밥)',memo:'피다 와드매출'},
-  'cp':{dc:'00003',dn:'보자기꽃밥',ty:'소매매출',cc:'',cn:'쿠팡이츠',memo:'쿠팡이츠매출'}
+  'cp':{dc:'00003',dn:'보자기꽃밥',ty:'소매매출',cc:'',cn:'쿠팡이츠',memo:'쿠팡이츠매출'},
+  /* v438: ② 꽃밥 세금계산서 (인사동+보자기) — 과세 세금계산서 / 면세 계산서 따로, 적요는 품목 (달 번호 안 붙임) */
+  'tx':{dc:'00004',dn:'꽃밥마켓',ty:'과세매출',cc:'',cn:'',memo:'네니아 유채유 외',noYm:1},
+  'tx.m':{dc:'00004',dn:'꽃밥마켓',ty:'면세매출',cc:'',cn:'',memo:'새하나 유기농백미 외',noYm:1}
 };
 let EC_SLIP={};try{EC_SLIP=JSON.parse(localStorage.getItem('ssv2_ecSlip')||'{}');}catch(e){}
 let EC_SLIP_CLOUD=false,EC_SLIPS=[],EC_SLIP_YM=null;
 function ecSlipCfg(key,name){
   const EXD={'pida.ex.':['00002','꽃밥에피다','피다'],'mkt.ex.':['00004','꽃밥마켓','마켓'],'boj.ex.':['00003','보자기꽃밥','보자기']};
   const xp=Object.keys(EXD).find(p=>key.indexOf(p)===0);
-  const base=xp?{dc:EXD[xp][0],dn:EXD[xp][1],ty:'소매매출',cc:'',cn:name,memo:EXD[xp][2]+' '+name+'매출'}:EC_SLIP_DEF[key.replace(/\.m$/,'')];
+  const base=xp?{dc:EXD[xp][0],dn:EXD[xp][1],ty:'소매매출',cc:'',cn:name,memo:EXD[xp][2]+' '+name+'매출'}:(EC_SLIP_DEF[key]||EC_SLIP_DEF[key.replace(/\.m$/,'')]);
   let d=Object.assign({},base);
-  if(/\.m$/.test(key)){d.ty=d.ty+'(면세)';d.memo=d.memo+'(면세)';}
+  if(/\.m$/.test(key)&&!EC_SLIP_DEF[key]){d.ty=d.ty+'(면세)';d.memo=d.memo+'(면세)';}
   return Object.assign(d,EC_SLIP[key]||{});
 }
 async function ecSlipLoadCloud(){
@@ -22170,7 +22173,7 @@ function ecSlipOpen(idx){
       if(e.target&&/INPUT|SELECT|TEXTAREA/.test(e.target.tagName))return;
       if(e.key==='ArrowRight')ecSlipOpen(+ov.dataset.idx+1);if(e.key==='ArrowLeft')ecSlipOpen(+ov.dataset.idx-1);});}
   ov.dataset.idx=idx;
-  const memo=ym+' '+cfg.memo;
+  const memo=cfg.noYm?cfg.memo:ym+' '+cfg.memo;
   const cp=(v,show)=>`<span class="ecv" data-cp="${esc(String(v))}" title="눌러서 복사">${show!=null?show:esc(String(v))}</span>`;
   const ed=(f,v,w)=>`<input class="ecin" data-f="${f}" value="${esc(v||'')}" style="width:${w||120}px">`;
   ov.innerHTML=`<div class="ecbox">
@@ -22182,7 +22185,7 @@ function ecSlipOpen(idx){
       <tr><th>거래처</th><td>${ed('cc',cfg.cc,110)} ${ed('cn',cfg.cn,130)} ${cfg.cc?cp(cfg.cc,'코드 복사'):'<span class="ecwarn">코드 입력 필요</span>'}</td></tr>
       <tr class="amt"><th>공급가액</th><td>${cp(it.g,fmt(it.g))}</td></tr>
       <tr class="amt"><th>부가세</th><td>${cp(it.v,fmt(it.v))}</td></tr>
-      <tr><th>적요</th><td>${cp(memo)} <span class="ecsub">(${ed('memo',cfg.memo,170)} 앞에 ${ym} 자동)</span></td></tr>
+      <tr><th>적요</th><td>${cp(memo)} <span class="ecsub">(${ed('memo',cfg.memo,170)}${cfg.noYm?'':` 앞에 ${ym} 자동`})</span></td></tr>
       <tr><th>매출계정</th><td>4019 상품매출</td></tr>
       <tr><th>입금계좌</th><td>1089 외상매출금</td></tr>
       <tr><th>수수료</th><td>0</td></tr>
@@ -22201,6 +22204,7 @@ function ecSlipOpen(idx){
   ov.querySelector('[data-act="next"]').addEventListener('click',()=>ecSlipOpen(idx+1));
   ov.querySelector('[data-act="save"]').addEventListener('click',async e=>{
     const c={};ov.querySelectorAll('.ecin').forEach(x=>{c[x.dataset.f]=x.value.trim();});
+    if(cfg.noYm)c.noYm=1;
     await ecSlipSave(it.key,c);e.target.textContent='✓ 기억됨';setTimeout(()=>ecSlipOpen(idx),600);
   });
 }
@@ -22258,6 +22262,17 @@ function renderMonths(){
       a+=row5('합계',V.B35,V.C35,V.D35,V.E35,V.F35,'sub');
       a+=row5('합계 (기타 포함)',V.B35+exT.G,V.C35+exT.V,V.D35+exT.G+exT.V,V.E35+exT.M,V.F35+exT.T,'tot');
     }else a+=row5('합계',V.B35,V.C35,V.D35,V.E35,V.F35,'tot');
+    { /* v438: ② 꽃밥 세금계산서 — 매출전표 입력용 (인사동+보자기) */
+      const dd=derived(m);
+      if(dd.taxinvGye){
+        a+=grp('꽃밥 세금계산서 (인사동+보자기)',6);
+        const ti=EC_SLIPS.length;
+        if(dd.taxinvGong||dd.taxinvBuga)EC_SLIPS.push({key:'tx',name:'',label:gName+' · 과세 세금계산서',g:dd.taxinvGong,v:dd.taxinvBuga});
+        if(dd.taxinvMyeon)EC_SLIPS.push({key:'tx.m',name:'',label:gName+' · 면세 계산서',g:dd.taxinvMyeon,v:0});
+        const at=EC_SLIPS.length>ti?` data-slip="${ti}"`:'';
+        a+=`<tr>${lbc('세금계산서 발행',at)}<td>${nf(dd.taxinvGong)}</td><td>${nf(dd.taxinvBuga)}</td><td>${nf(dd.taxinvGong+dd.taxinvBuga)}</td><td>${nf(dd.taxinvMyeon)}</td><td>${nf(dd.taxinvGye)}</td></tr>`;
+      }
+    }
     let b='';
     const smBuga=kb.somae-kb.somaeGong;
     b+=grp('꽃밥에피다 (인사동)',4);
