@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v440</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v441</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -17047,7 +17047,10 @@ function payPachBody(){
     const list=idx.length?idx:[null];
     list.forEach((i,j)=>{
       const r=i==null?{}:R[i];
-      const dayTd=j===0?`<td rowspan="${list.length}" style="white-space:nowrap;vertical-align:middle${list.length>1?";background:#fff":""}">${d}일 <button class="btn btn-sm" style="padding:0 6px;margin-left:2px" title="이 날짜에 한 명 더" onclick="pachAddDay(${d})">＋</button></td><td rowspan="${list.length}" style="vertical-align:middle;${list.length>1?"background:#fff;":""}color:${wd==="일"?"#b91c1c":wd==="토"?"#1d4ed8":"inherit"}">${wd}</td>`:"";
+      /* v441: 여러 명인 날 — 날짜·요일 칸 색은 그날 줄 전체로 (모두 직접 지급 노랑 · 모두 옴 초록 · 예정 섞이면 색 없음) */
+      const gR=list.map(x=>x==null?{}:R[x]);
+      const dayBg=list.length>1?(gR.every(x=>x.dir)?"#fdf6d3":gR.every(x=>x.dir||x.came)?"#E3F2E1":"#fff"):"";
+      const dayTd=j===0?`<td rowspan="${list.length}" style="white-space:nowrap;vertical-align:middle${dayBg?";background:"+dayBg:""}">${d}일 <button class="btn btn-sm" style="padding:0 6px;margin-left:2px" title="이 날짜에 한 명 더" onclick="pachAddDay(${d})">＋</button></td><td rowspan="${list.length}" style="vertical-align:middle;${dayBg?"background:"+dayBg+";":""}color:${wd==="일"?"#b91c1c":wd==="토"?"#1d4ed8":"inherit"}">${wd}</td>`:"";
       rows+=`<tr${r.dir?' class="pach-dir" style="background:#fdf6d3"':r.came?' style="background:#E3F2E1"':""}>${dayTd}
         <td>${cell(i,"name",r.name,90)}</td><td>${i==null?cell(i,"rrn","",118):inp(i,"rrn",pachRrn(r),118)}</td><td>${cell(i,"amt",r.amt,90,"right")}</td><td>${cell(i,"h",r.h,46,"right")}</td>
         <td>${locSel(i,r.loc,d)}</td><td>${i==null?cell(i,"nat","",56):(()=>{const nm=String(r.name||"").replace(/\s+/g,""),inf=nm&&!PACH_PLACE.test(nm)?(ptxInfo()[ptxN(nm)]||{}):{};const nat=r.nat||inf.nat||"";
