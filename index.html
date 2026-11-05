@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v442</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v443</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -17827,6 +17827,21 @@ window.cardPick=async function(inp){
     let key=cardMonthKey(P.sheets);
     if(!key){const m=/(\d{4})/.exec(f.name);key=m?m[1]:expYm().key;}
     const B=cardStore();
+    /* v443: 소지자가 세부내역을 채워 보낸 엑셀(원본 승인내역 탭 없음) — 달 전체를 바꾸지 않고 그 사람 탭만 채우거나 새로 넣음 (오신일·송정은 따로 올려도 합쳐짐) */
+    if(B[key]&&!P.fromRaw&&!P.raw){
+      const doc=B[key];
+      const findSh=(us)=>doc.sheets.find(o=>o.name===us.name)||doc.sheets.find(o=>o.name===cardHolderName(us.holder))||null;
+      const fillUs=[],added=[];
+      P.sheets.forEach(us=>{const o=findSh(us);if(o){us.name=o.name;fillUs.push(us);}else{const nm=cardHolderName(us.holder)||us.name;us.name=/^sheet\d*$/i.test(us.name)&&nm?nm:us.name;doc.sheets.push(us);added.push(us.name+" "+us.rows.length+"건");}});
+      const R=fillUs.length?cardFillBack(key,fillUs):{names:[],total:0,matched:0,changed:0,miss:[]};
+      window.__exp.ui.y=2000+Number(key.slice(0,2));window.__exp.ui.m=Number(key.slice(2));
+      cardSaveNow(key);renderExpense();
+      const msg=[];
+      if(R.names.length)msg.push(R.names.join(", ")+" "+R.total+"건 중 "+R.matched+"건을 찾아 세부내역·비고를 채웠어요"+(R.miss.length?" (못 찾은 "+R.miss.length+"건: "+R.miss.slice(0,3).join(", ")+(R.miss.length>3?" …":"")+")":""));
+      if(added.length)msg.push(added.join(", ")+" 을(를) 새 탭으로 넣었어요");
+      toast(msg.join(" · ")||"채울 내역이 없어요",!!R.miss.length);
+      return;
+    }
     /* 이미 올린 달에 소지자별 엑셀(내역을 채운 것)을 다시 올리면: 바꾸지 않고 같은 건을 찾아 세부내역·비고만 채움 */
     if(B[key]&&!P.fromRaw&&P.sheets.every(sh=>B[key].sheets.some(o=>o.name===sh.name))){
       const R=cardFillBack(key,P.sheets);
@@ -18031,7 +18046,7 @@ function renderExpCard(){
   const ym=expYm();const doc=cardStore()[ym.key];
   const now=new Date();const years=[];for(let y=2025;y<=now.getFullYear()+1;y++)years.push(y);
   const up=`<button class="btn btn-sm ${doc?"":"btn-primary"}" onclick="document.getElementById('cardFile').click()">📂 법인카드 엑셀 ${doc?"다시 올리기":"올리기"}</button><input type="file" id="cardFile" accept=".xlsx" style="display:none" onchange="cardPick(this)">`;
-  const head=`<div class="card"><div class="card-head"><div class="card-title">💳 법인카드 <span class="unit">카드사 원본(이용내역·승인내역)만 올려도 카드소지자별 탭으로 나눠줘요 · 계정이 적힌 사용자별 탭 엑셀도 그대로 읽어요</span></div>
+  const head=`<div class="card"><div class="card-head"><div class="card-title">💳 법인카드 <span class="unit">카드사 원본(이용내역·승인내역)만 올려도 카드소지자별 탭으로 나눠줘요 · 소지자가 세부내역을 채워 보낸 엑셀(오신일·송정은 등)을 올리면 그 사람 내역만 채워요 — 다른 사람 내역은 그대로</span></div>
     <div class="card-actions"><select class="ctl" onchange="expSel(this.value,${ym.m})">${years.map(y=>`<option ${y===ym.y?"selected":""}>${y}</option>`).join("")}</select>
     <select class="ctl" onchange="expSel(${ym.y},this.value)">${Array.from({length:12},(_,i)=>`<option value="${i+1}" ${i+1===ym.m?"selected":""}>${i+1}월</option>`).join("")}</select>${up}</div></div>`;
   if(!doc){el.innerHTML=head+`<div style="font-weight:700;font-size:15px;margin:2px 0 8px">${ym.y}년 ${ym.m}월분</div><div class="footnote">이 달 법인카드 자료가 아직 없어요. 매달 정리하시는 법인카드 엑셀(송정은·임해경·오신일·공용 탭 + 승인내역)을 올려주세요. 파일 안 날짜로 달을 알아서 찾아가요.</div></div>`;return;}
