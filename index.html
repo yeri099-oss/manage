@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v444</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v445</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -8130,6 +8130,7 @@ function payCellEdit(el){
   let v=t===""?"":(/^-?\d+(\.\d+)?$/.test(num)?Number(num):(pctIn?t+"%":t));
   if(pctIn&&typeof v==="number")v=v/100;
   payEdit(shName,ref,v);
+  if(shName==="용역직급여"){try{payAutoFill();}catch(e){console.warn(e);}} /* v445: 용역대금 → 소득세·지방소득세 바로 */
   paySchedSave();
   renderPay();
 }
@@ -9170,6 +9171,35 @@ function payDailyFill(af){
 /* 급여품의: 용역직 줄(예전엔 사람 이름 '오현미') → 이름표 '용역직급여', 급여 = 용역직급여 시트 지급액 합계 */
 function payYongFill(af){
   const P=window.__pay,pw=paySheetByName("급여품의"),ys=paySheetByName("용역직급여");
+  /* v445: 용역대금(지급액)을 넣으면 사업소득 원천징수 자동 — 소득세 3%, 지방소득세 = 소득세의 10% (각각 10원 미만 버림) */
+  if(ys){try{
+    const t0=(ref)=>{const e=((P.edits||{})["용역직급여"]||{})[ref];if(e!==undefined)return String(e||"").replace(/\s+/g,"");const c=ys.cells[ref];return (c&&c.typ==="str")?String(c.v).replace(/\s+/g,""):"";};
+    let hR=0,nC="A";
+    for(let r=1;r<=6&&!hR;r++)for(let c=1;c<=ys.maxC;c++){const t=t0(payIdxCol(c)+r);if(t==="성명"||t==="이름"||t==="사원명"){hR=r;nC=payIdxCol(c);break;}}
+    if(hR){
+      let aC=null,tC=null,lC=null;
+      for(let c=1;c<=ys.maxC;c++){const L=payIdxCol(c),h=t0(L+hR);
+        if(!aC&&/^(지급액|용역대금|용역비|용역료|지급총액|대금)$/.test(h))aC=L;
+        else if(!lC&&h.indexOf("지방")>=0)lC=L;
+        else if(!tC&&h.indexOf("소득세")>=0)tC=L;}
+      if(aC&&tC){
+        const yv0=payMkVal(ys,(P.edits||{})["용역직급여"]);
+        const HID=(((P.edits||{})["__hide"]||{})["용역직급여"])||{};
+        for(let r=hR+1;r<=ys.maxR;r++){
+          const n=t0(nC+r);if(!n||n==="계"||n.indexOf("합계")>=0||n.indexOf("소계")>=0)break;
+          if(HID[r])continue;
+          const amt=Math.round(Number(yv0(aC+r))||0);
+          const isF=(L)=>{const c=ys.cells[L+r];return c&&typeof c.f==="string";};
+          const tax=amt>0?Math.floor(amt*0.03/10)*10:0;
+          const ED=((P.edits||{})["용역직급여"]||{}),AS=((P.autoSet||{})["용역직급여"]||{});
+          const mT=(ED[tC+r]!==undefined&&!AS[tC+r]&&ED[tC+r]!=="")?Math.round(Number(ED[tC+r])||0):null; /* 소득세를 손으로 고쳤으면 지방소득세는 그 값의 10% */
+          const ltax=Math.floor((mT!=null?mT:tax)*0.1/10)*10;
+          if(!isF(tC))af("용역직급여",tC+r,amt>0?tax:"");
+          if(lC&&!isF(lC))af("용역직급여",lC+r,amt>0?ltax:"");
+        }
+      }
+    }
+  }catch(e){console.warn("용역직 세금",e);}}
   if(!pw||!ys)return;
   const txt=(sh,ref)=>{const c=sh.cells[ref];return (c&&c.typ==="str")?String(c.v).replace(/\s+/g,""):"";};
   const pEd=(P.edits||{})["급여품의"]||{};
