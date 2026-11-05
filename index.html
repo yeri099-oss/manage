@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v445</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v446</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -2989,6 +2989,7 @@ function moAddRow(x) {
   div.style.cssText = "display:flex;gap:6px;align-items:center;margin:0 0 6px";
   const ist = "padding:8px 8px;border:1px solid #cfcdc4;border-radius:7px;font-size:13px;font-family:inherit;background:#fff;box-sizing:border-box";
   div.innerHTML = `<select class="mo-k" style="${ist};flex:0 0 84px"><option value="insadong">인사동</option><option value="market">마켓</option><option value="bojagi">보자기</option></select><input type="text" class="mo-n" placeholder="예: 추석, 도시락 배달" style="${ist};flex:1 1 auto;min-width:0;width:auto"><input type="text" inputmode="numeric" class="num mo-p" placeholder="0" style="${ist};flex:0 0 104px;width:104px;text-align:right"><input type="text" inputmode="numeric" class="num mo-x" placeholder="0" style="${ist};flex:0 0 104px;width:104px;text-align:right"><button type="button" class="btn btn-ghost btn-sm" title="이 줄 지우기" style="flex:0 0 28px;padding:4px 0">×</button>`;
+  if (x.src) div.dataset.src = x.src; /* v446: ⑩에서 온 항목 표시 유지 */
   div.querySelector(".mo-k").value = x.k || "bojagi";
   div.querySelector(".mo-n").value = x.n || "";
   [["mo-p", x.p], ["mo-x", x.x]].forEach(([cls, v]) => {
@@ -3002,7 +3003,7 @@ function moAddRow(x) {
   box.appendChild(div);
 }
 function moAddRead() {
-  return [...document.querySelectorAll("#f-addlist .mo-addrow")].map((d) => ({ k: d.querySelector(".mo-k").value, n: d.querySelector(".mo-n").value.trim() || "기타", p: parseNum(d.querySelector(".mo-p").value) || 0, x: parseNum(d.querySelector(".mo-x").value) || 0 })).filter((x) => x.p || x.x);
+  return [...document.querySelectorAll("#f-addlist .mo-addrow")].map((d) => { const o = { k: d.querySelector(".mo-k").value, n: d.querySelector(".mo-n").value.trim() || "기타", p: parseNum(d.querySelector(".mo-p").value) || 0, x: parseNum(d.querySelector(".mo-x").value) || 0 }; if (d.dataset.src) o.src = d.dataset.src; return o; }).filter((x) => x.p || x.x);
 }
 function moAddSync() {
   const s = { insadong: 0, market: 0, bojagi: 0 };
@@ -23337,12 +23338,20 @@ function cfmExtraGroups(c){
   (c.extra||[]).forEach((x,i)=>{const n=cfmExBase(x.n),key=x.k+'|'+n;(G[key]=G[key]||{k:x.k,n:n,a:0,idx:[],on:!CFM_EX_ONLINE.test(x.n)}).a+=x.a;G[key].idx.push(i);if(CFM_EX_ONLINE.test(x.n))G[key].on=false;});
   return Object.values(G);
 }
-function cfmExtraPushHtml(c){
-  const G=cfmExtraGroups(c);if(!G.length)return '';
+/* v446: 매출현황 월별에 이미 있는 '포스 밖' 항목 중 지금 ⑩에 없는 것 (옛 이름·직접 넣은 것) — 체크를 풀면 반영할 때 지움 */
+function cfmOldExtraCats(c,y,mo){
+  const cur=(((S.data.monthly||{})[y]||{}).months||{})[mo]||{};
+  const old=typeof monthlyCats==='function'?monthlyCats(cur):[];
+  const gN=new Set(cfmExtraGroups(c).map(g=>g.k+'|'+g.n));
+  return old.map((x,i)=>({x,i})).filter(o=>o.x&&o.x.src!=='etc'&&Number(o.x.x)>0&&!gN.has(o.x.k+'|'+o.x.n));
+}
+function cfmExtraPushHtml(c,y,mo){
+  const G=cfmExtraGroups(c);const OL=(y&&mo)?cfmOldExtraCats(c,y,mo):[];if(!G.length&&!OL.length)return '';
   const F=v=>Math.round(v||0).toLocaleString("ko-KR");const NM={insadong:'인사동',market:'마켓',bojagi:'보자기'};
   return `<div style="margin-top:12px;border:1px solid #c7d2fe;background:#f8faff;border-radius:10px;padding:10px 12px">
     <div style="font-weight:700;font-size:13.5px;margin-bottom:6px">⑩ 기타 거래처 → 매출현황에 더하기 <span class="form-hint" style="margin:0;font-weight:400">(포스에 안 찍힌 매출 · '따로 보여줄 매출'로 들어가요)</span></div>
     ${G.map((g,i)=>`<label style="display:flex;gap:8px;align-items:center;font-size:13px;margin:3px 0;cursor:pointer"><input type="checkbox" class="cfm-exq" data-i="${i}" ${g.on?'checked':''}> <span style="min-width:56px;color:var(--sub)">${NM[g.k]||g.k}</span> <b>${esc(g.n)}</b> <span style="margin-left:auto">${F(g.a)}원</span></label>`).join('')}
+    ${OL.length?`<div style="font-weight:700;font-size:13px;margin:10px 0 4px;padding-top:8px;border-top:1px dashed #c7d2fe">매출현황에 이미 있는 다른 포스 밖 매출 <span class="form-hint" style="margin:0;font-weight:400">(⑩에 없는 이름 — 옛 이름이거나 직접 넣은 것 · <b>체크를 풀면 지워요</b>)</span></div>`+OL.map(o=>`<label style="display:flex;gap:8px;align-items:center;font-size:13px;margin:3px 0;cursor:pointer"><input type="checkbox" class="cfm-exold" data-n="${esc(o.x.k+'|'+o.x.n)}" checked> <span style="min-width:56px;color:var(--sub)">${({insadong:'인사동',market:'마켓',bojagi:'보자기'})[o.x.k]||o.x.k}</span> <b>${esc(o.x.n)}</b> <span style="margin-left:auto">${F(o.x.x)}원</span></label>`).join(''):''}
     <div class="form-hint" style="margin-top:6px">체크한 것만 월별 ${'인사동·마켓·보자기'} 금액에 더해지고, 금액을 누르면 이름별로 보여요. 판매대행(네이버·카페24 등)은 온라인과 겹칠 수 있어 기본으로 빼 뒀어요. 다시 반영하면 이전에 넣은 ⑩ 항목은 새로 바꿔요.</div></div>`;
 }
 function cfmOpenPushModal(){
@@ -23366,7 +23375,7 @@ function cfmOpenPushModal(){
     ];
     const body=`<table class="rpt" style="width:100%">`+rows.map(r=>
       `<tr><td class="l">${r[0]}</td><td>${r[1]>0?F(r[1])+"원":'<span class="dim">값 없음 — 건너뜀</span>'}</td></tr>`).join("")+`</table>
-      ${cfmExtraPushHtml(c)}
+      ${cfmExtraPushHtml(c,y,mo)}
       ${c.coupangTemp?'<div class="check-box warn" style="margin-top:10px">⏳ 쿠팡이츠 임시값이 포함돼 있어요. 국세청 금액 확정 후 이 버튼을 다시 눌러주세요.</div>':""}
       <div class="form-hint" style="margin-top:10px">값이 있는 항목만 저장돼요. 마켓 "기타(명절음식)"·비고 등 나머지는 그대로 유지돼요. 판매대행은 채널 이름에 쿠팡/스마트가 들어간 채널만 채워요.</div>`;
     openModal(`${y}년 ${mo}월 매출확정 → 보고 반영`,body,
@@ -23391,11 +23400,12 @@ async function cfmDoPush(){
     { /* v433: ⑩ 기타 거래처 체크한 것 → 따로 보여줄 매출(포스 밖 금액 x) */
       const G=cfmExtraGroups(c);
       const chk=[...document.querySelectorAll('#modal-body .cfm-exq')];
-      if(G.length||(cur.ev&&Array.isArray(cur.ev.cats)&&cur.ev.cats.some(x=>x&&x.src==='etc'))){
+      const drop=new Set([...document.querySelectorAll('#modal-body .cfm-exold')].filter(e=>!e.checked).map(e=>e.dataset.n));
+      if(G.length||drop.size||(cur.ev&&Array.isArray(cur.ev.cats)&&cur.ev.cats.some(x=>x&&x.src==='etc'))){
         const pick=G.filter((g,i)=>{const cb=chk.find(e=>+e.dataset.i===i);return cb?cb.checked:g.on;});
         const old=(cur.ev&&Array.isArray(cur.ev.cats))?cur.ev.cats:(typeof monthlyCats==='function'?monthlyCats(cur):[]);
-        const names=new Set(pick.map(g=>g.k+'|'+g.n));
-        const cats=old.filter(x=>x&&x.src!=='etc'&&!names.has(x.k+'|'+x.n)).concat(pick.map(g=>({k:g.k,n:g.n,p:0,x:R(g.a),src:'etc'})));
+        const names=new Set(G.map(g=>g.k+'|'+g.n)); /* v446: 체크를 푼 ⑩ 이름도 (표시가 지워졌어도) 빼기 */
+        const cats=old.filter(x=>x&&x.src!=='etc'&&!names.has(x.k+'|'+x.n)&&!(Number(x.x)>0&&drop.has(x.k+'|'+x.n))).concat(pick.map(g=>({k:g.k,n:g.n,p:0,x:R(g.a),src:'etc'})));
         const add={};cats.forEach(x=>{if(Number(x.x))add[x.k]=(add[x.k]||0)+Number(x.x);});
         if(cats.length){cur.ev={cats};if(Object.keys(add).length)cur.ev.add=add;}else delete cur.ev;
       }
