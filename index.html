@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v441</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v442</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -1913,6 +1913,44 @@ const SALES_TPL_B64="UEsDBBQAAAAIADZLSF0TXr5l+gAAAN8CAAALAAAAX3JlbHMvLnJlbHOtks9
 function tplB64U8(b64){const bin=atob(b64);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u;}
 function tplColNum(L){let n=0;for(const ch of L)n=n*26+(ch.charCodeAt(0)-64);return n;}
 const TPL_NS="http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+/* v442: 글자 길이 → 엑셀 열 너비 (한글 2칸) */
+function xlsTextW(t){let w=0;for(const ch of String(t||""))w+=ch.charCodeAt(0)>0x2E80?1.75:1.0;return Math.ceil(w+3);}
+function xlsColN(L){let n=0;for(const ch of L)n=n*26+(ch.charCodeAt(0)-64);return n;}
+function xlsColL(n){let s="";while(n>0){const r=(n-1)%26;s=String.fromCharCode(65+r)+s;n=Math.floor((n-1)/26);}return s;}
+/* 수식·범위 안의 칸 주소를 한 열 오른쪽으로 */
+function xlsShiftRefs(str){
+  return String(str).replace(/(\$?)([A-Z]{1,3})(\$?)(\d+)/g,(m,d1,col,d2,row,off,all)=>{
+    const pv=off>0?all[off-1]:"",nx=all[off+m.length]||"";
+    if(/[A-Za-z0-9_.]/.test(pv)||/[A-Za-z0-9_(]/.test(nx))return m;
+    return d1+xlsColL(Math.min(16384,xlsColN(col)+1))+d2+row;
+  });
+}
+function xlsInsertColA(x,widths){
+  x=x.replace(/(<c\b[^>]*?\br=")([A-Z]+)(\d+)"/g,(m,a,col,row)=>a+xlsColL(xlsColN(col)+1)+row+'"');
+  x=x.replace(/(<f\b[^>]*>)([^<]*)(<\/f>)/g,(m,a,f,b)=>a+xlsShiftRefs(f)+b);
+  x=x.replace(/(<f\b[^>]*?\bref=")([^"]+)"/g,(m,a,r)=>a+xlsShiftRefs(r)+'"');
+  x=x.replace(/(<(?:mergeCell|dimension|hyperlink|autoFilter)\b[^>]*?\bref=")([^"]+)"/g,(m,a,r)=>a+xlsShiftRefs(r)+'"');
+  x=x.replace(/(<(?:conditionalFormatting|dataValidation)\b[^>]*?\bsqref=")([^"]+)"/g,(m,a,r)=>a+xlsShiftRefs(r)+'"');
+  x=x.replace(/(<sheetView\b[^>]*?\btopLeftCell=")([^"]+)"/g,(m,a,r)=>a+xlsShiftRefs(r)+'"');
+  x=x.replace(/(<row\b[^>]*?)\sspans="[^"]*"/g,"$1");
+  /* 열 너비: 한 칸씩 밀고 A열(좁게) 추가 */
+  const colA='<col min="1" max="1" width="2.6" customWidth="1"/>';
+  if(/<cols>/.test(x)){
+    x=x.replace(/<cols>([\s\S]*?)<\/cols>/,(m,inner)=>{
+      let out=inner.replace(/<col\b([^>]*)\/>/g,(m2,attrs)=>{
+        const mn=+(attrs.match(/\bmin="(\d+)"/)||[0,0])[1],mx=+(attrs.match(/\bmax="(\d+)"/)||[0,0])[1];
+        if(mn>=16384)return "";
+        return "<col"+attrs.replace(/\bmin="\d+"/,'min="'+(mn+1)+'"').replace(/\bmax="\d+"/,'max="'+Math.min(16384,mx+1)+'"')+"/>";
+      });
+      if(widths)for(const n in widths){
+        const re=new RegExp('<col\\b([^>]*?)\\bmin="'+n+'"([^>]*?)\\bmax="'+n+'"([^>]*)/>');
+        if(re.test(out))out=out.replace(re,(m3,a,b,c)=>("<col"+a+'min="'+n+'"'+b+'max="'+n+'"'+c+"/>").replace(/\bwidth="[\d.]+"/,'width="'+widths[n]+'"').replace(/\bbestFit="1"\s*/,""));
+      }
+      return "<cols>"+colA+out+"</cols>";
+    });
+  }else x=x.replace(/<sheetData>/,"<cols>"+colA+"</cols><sheetData>");
+  return x;
+}
 async function exportSalesAll(){
   try{
     toast("엑셀 파일 만드는 중… (원본 양식에 값 채우기)");
@@ -1950,6 +1988,7 @@ async function exportSalesAll(){
       const wipe=cel=>{for(const tag of["f","v","is"])for(const x of[...cel.getElementsByTagName(tag)])cel.removeChild(x);cel.removeAttribute("t");};
       return {
         doc,
+        clr(addr){const cel=cells[addr];if(cel)wipe(cel);},
         setN(addr,v){if(v==null||v==="")return;const cel=ensure(addr);wipe(cel);const vv=doc.createElementNS(TPL_NS,"v");vv.textContent=String(Math.round(v));cel.appendChild(vv);},
         setF(addr,fx,styleFrom){const cel=ensure(addr);wipe(cel);const ff=doc.createElementNS(TPL_NS,"f");ff.textContent=fx;cel.appendChild(ff);if(styleFrom&&cells[styleFrom]&&cells[styleFrom].getAttribute("s"))cel.setAttribute("s",cells[styleFrom].getAttribute("s"));},
         setT(addr,t){if(t==null||t==="")return;const cel=ensure(addr);wipe(cel);cel.setAttribute("t","inlineStr");const is=doc.createElementNS(TPL_NS,"is"),tt=doc.createElementNS(TPL_NS,"t");tt.setAttribute("xml:space","preserve");tt.textContent=t;is.appendChild(tt);cel.appendChild(is);},
@@ -1991,6 +2030,7 @@ async function exportSalesAll(){
       }
       if(zip.file("xl/calcChain.xml"))zip.remove("xl/calcChain.xml");
     }catch(e){console.warn("매출비교 시트 제거",e);}
+    const XW={}; /* v442: 비고 열 너비(글자 길이) */
     /* ── 월별 (sheet2) ── */
     const yearM=latestYearOf("monthly");
     {
@@ -2000,8 +2040,38 @@ async function exportSalesAll(){
         const r=5+i,c=monthlyCalc(yearM,m);
         sh.setN("B"+r,c.insadong);sh.setN("C"+r,c.market);sh.setN("D"+r,c.online);sh.setN("E"+r,c.bojagi);
         const nt=[c.note,monthlyDetailText(c)].filter(Boolean).join(" / ");
-        if(nt)sh.setT("H"+r,nt);
+        if(nt){sh.setT("H"+r,nt);XW.monthlyNote=Math.max(XW.monthlyNote||0,xlsTextW(nt));}
+        if(c.has){const lm=Number(m);if(!XW.lastM||lm>XW.lastM)XW.lastM=lm;}
       });
+      /* v442: 온라인 열(D) 숨기지 않기 + 합계 칸 수식 */
+      for(const col of [...sh.doc.getElementsByTagName("col")])if(col.getAttribute("min")==="4"&&col.getAttribute("max")==="4")col.removeAttribute("hidden");
+      sh.setF("D17","SUM(D5:D16)","C17");
+      /* v442: 칸 색 — 온라인 없음, 보자기 = 합계였던 회청색, 합계 = 보자기였던 살구색 */
+      {
+        let st=await zip.file("xl/styles.xml").async("string");
+        const xfsM=st.match(/<cellXfs count="(\d+)">([\s\S]*?)<\/cellXfs>/);
+        const xfs=xfsM[2].match(/<xf\b[^>]*?(?:\/>|>[\s\S]*?<\/xf>)/g);
+        const add=[],cache={};
+        const recolor=(addr,fid)=>{
+          const cel=[...sh.doc.getElementsByTagName("c")].find(c=>c.getAttribute("r")===addr);if(!cel)return;
+          const si=+(cel.getAttribute("s")||0),key=si+"|"+fid;
+          if(cache[key]==null){
+            let xf=xfs[si]||xfs[0];
+            xf=xf.replace(/\bfillId="\d+"/,'fillId="'+fid+'"');
+            if(!/applyFill=/.test(xf))xf=xf.replace(/<xf\b/,'<xf applyFill="1"');
+            add.push(xf);cache[key]=xfs.length+add.length-1;
+          }
+          cel.setAttribute("s",String(cache[key]));
+        };
+        const fid=(addr)=>{const cel=[...sh.doc.getElementsByTagName("c")].find(c=>c.getAttribute("r")===addr);const xf=xfs[+(cel&&cel.getAttribute("s")||0)]||"";return +((xf.match(/\bfillId="(\d+)"/)||[0,0])[1]);};
+        const bjF=fid("E5"),totF=fid("G5");
+        for(let r=3;r<=17;r++){
+          if(r>=4)recolor("D"+r,0);
+          if(r>=4)recolor("E"+r,totF);
+          recolor("G"+r,bjF);
+        }
+        if(add.length){st=st.replace(/<cellXfs count="\d+">/,'<cellXfs count="'+(xfs.length+add.length)+'">').replace(/<\/cellXfs>/,add.join("")+"</cellXfs>");zip.file("xl/styles.xml",st);}
+      }
       await sh.save();
     }
     /* ── 일평균 (sheet3) ── */
@@ -2021,8 +2091,7 @@ async function exportSalesAll(){
         if(pt!=null)sh.setN("H"+r,pt); /* 합계: 원본 양식에 수식 없는 달(8월~)도 값으로 채움 */
         if(ct!=null)sh.setN("I"+r,ct);
         const days=S.data.dailyAvg[year]?.days?.[m]||{};
-        const note=S.data.dailyAvg[year]?.notes?.[m]||"";
-        if(note)sh.setT("J"+r,note);
+        sh.clr("J"+r); /* v442: 일평균 비고는 비움 (앱에도 안 보임) */
         if(days.market!=null)sh.setN("K"+r,days.market);
         if(days.insadong!=null)sh.setN("L"+r,days.insadong);
       });
@@ -2040,11 +2109,13 @@ async function exportSalesAll(){
         if(c.other)sh.setN("D"+r,c.net); /* 기타(명절음식 등)가 있는 달은 순매출을 앱 값으로 */
         if(c.daily!=null)sh.setN("E"+r,c.daily);
         if(c.has){mkT.net+=c.net||0;if(c.net!=null&&c.days)mkT.days+=c.days;}
-        if(c.note)sh.setT("F"+r,c.note);
+        sh.clr("F"+r);if(c.pgsn)sh.setN("F"+r,c.pgsn); /* v442: 판공+사내 금액 (앱 마켓매출 표와 같게) */
         const d=(S.data.marketDetail[year]?.months||{})[m]||{};
         sh.setN("I"+r,d.hanwoo);sh.setN("J"+r,d.pork);
       });
       if(mkT.days)sh.setN("E16",mkT.net/mkT.days);
+      if(sh.txt("F3").trim()==="비고")sh.setT("F3","판공+사내");
+      sh.clr("F16");sh.setF("F16","SUM(F4:F15)","E16");
       await sh.save();
     }
     /* ── 판매대행 (sheet5): 올해 블록(4~15행)만, 채널명으로 열 매칭 ── */
@@ -2110,7 +2181,8 @@ async function exportSalesAll(){
         const tot={};
         for(const m of monthsD){let t={k:0,p:0,d:0,sum:0};for(const id in (mdAll[m]||{})){const q=mdAll[m][id];t.k+=q.k||0;t.p+=q.p||0;t.d+=q.d||0;}t.sum=t.k+t.p+t.d;tot[m]=t;}
         const R=[];const MG=[];
-        const cell=(v,xf,txt)=>({v,xf,txt});
+        const cell=(v,xf,txt,f)=>({v,xf,txt,f});
+        const CL=(ci)=>pnlColL(ci); /* v442: 수식용 열 문자 */
         const push=(cellsArr,ht)=>R.push({cells:cellsArr,ht});
         /* 제목 */
         push([cell(`${year}년 보자기 ${kind==="menu"?"메뉴별":"주류·음료별"} 판매현황 (단위: 개)`,XF2(F.title,L.none,bIdx("lrtb"),0,"c"),true)],45);
@@ -2141,14 +2213,15 @@ async function exportSalesAll(){
               cell(ci===0?cat:"",XF2(F.data,L.none,bIdx(("lr"+top)),0,"c"),true),
               cell(it.name,XF2(F.data,fl,bIdx(("lr"+top)),0,"l"),true)
             ];
-            monthsD.forEach(m=>{
+            monthsD.forEach((m,bi)=>{
               const q=(mdAll[m]||{})[it.id];
               const sum=q?(q.k||0)+(q.p||0)+(q.d||0):null;
+              const c0=2+bi*W,rr=ri+1;
               row.push(cell(q?q.k:null,XF2(F.data,fl,bIdx(top||""),3,"r")));
               row.push(cell(q?q.p:null,XF2(F.data,fl,bIdx(top||""),3,"r")));
               row.push(cell(q?q.d:null,XF2(F.data,fl,bIdx(top||""),3,"r")));
-              row.push(cell(sum,XF2(F.head,fl,bIdx(top||""),3,"r")));
-              row.push(cell(sum!=null&&tot[m].sum?sum/tot[m].sum:null,XF2(F.data,fl,bIdx(("r"+top)),9,"c")));
+              row.push(cell(sum,XF2(F.head,fl,bIdx(top||""),3,"r"),false,q?`SUM(${CL(c0)}${rr}:${CL(c0+2)}${rr})`:null));
+              row.push(cell(sum!=null&&tot[m].sum?sum/tot[m].sum:null,XF2(F.data,fl,bIdx(("r"+top)),9,"c"),false,q?`IF(${CL(c0+3)}$TOTR=0,"",${CL(c0+3)}${rr}/${CL(c0+3)}$TOTR)`:null));
             });
             push(row,16.5);ri++;
           });
@@ -2156,13 +2229,16 @@ async function exportSalesAll(){
         }
         /* 합계 */
         const tr=[cell("합계",XF2(F.head,L.orange,bIdx("ltb"),0,"c"),true),cell("",XF2(F.head,L.orange,bIdx("rtb"),0,"c"),true)];
-        monthsD.forEach(m=>{
-          tr.push(cell(tot[m].k,XF2(F.head,L.orange,bIdx("tb"),3,"r")));
-          tr.push(cell(tot[m].p,XF2(F.head,L.orange,bIdx("tb"),3,"r")));
-          tr.push(cell(tot[m].d,XF2(F.head,L.orange,bIdx("tb"),3,"r")));
-          tr.push(cell(tot[m].sum,XF2(F.head,L.orange,bIdx("tb"),3,"r")));
-          tr.push(cell(1,XF2(F.head,L.orange,bIdx("rtb"),9,"c")));
+        const TR=ri+1,D0=4,D1=ri; /* 합계 행 번호 · 메뉴 줄 범위 */
+        monthsD.forEach((m,bi)=>{
+          const c0=2+bi*W,sm=(c)=>`SUM(${CL(c)}${D0}:${CL(c)}${D1})`;
+          tr.push(cell(tot[m].k,XF2(F.head,L.orange,bIdx("tb"),3,"r"),false,sm(c0)));
+          tr.push(cell(tot[m].p,XF2(F.head,L.orange,bIdx("tb"),3,"r"),false,sm(c0+1)));
+          tr.push(cell(tot[m].d,XF2(F.head,L.orange,bIdx("tb"),3,"r"),false,sm(c0+2)));
+          tr.push(cell(tot[m].sum,XF2(F.head,L.orange,bIdx("tb"),3,"r"),false,sm(c0+3)));
+          tr.push(cell(1,XF2(F.head,L.orange,bIdx("rtb"),9,"c"),false,`IF(${CL(c0+3)}${TR}=0,"",1)`));
         });
+        R.forEach(rw=>rw.cells.forEach(c=>{if(c.f)c.f=c.f.replace(/\$TOTR/g,()=>"$"+TR);}));
         push(tr,16.5);
         MG.push([ri,0,ri,1]);
         /* 메뉴별: 월별 판매수량(소계) 피벗 추가 */
@@ -2172,6 +2248,7 @@ async function exportSalesAll(){
           const mT={};let grand2=0;
           monthsAsc.forEach(m=>{let t2=0;for(const id in (mdAll[m]||{}))t2+=itemSum(mdAll[m][id]);mT[m]=t2;grand2+=t2;});
           const orderedItems=cats.flatMap(cc=>items.filter(i=>i.cat===cc));
+          const PV={rows:[],cS:0};
           const bands2=bojagiBandColor(orderedItems);
           push([],10);
           let r0=R.length;
@@ -2191,16 +2268,19 @@ async function exportSalesAll(){
               const q2=(mdAll[m]||{})[it.id];const v2=q2?itemSum(q2):0;sum2+=v2;
               row2.push(cell(v2||null,XF2(F.data,fl2,bIdx(""),3,"r")));
             });
-            row2.push(cell(sum2||null,XF2(F.head,fl2,bIdx(""),3,"r")));
-            row2.push(cell(sum2&&grand2?sum2/grand2:null,XF2(F.data,fl2,bIdx("r"),9,"c")));
-            const rr2=R.length;
+            const rr2=R.length,xr=rr2+1,cS=2+monthsAsc.length;
+            PV.rows.push(xr);PV.cS=cS;
+            row2.push(cell(sum2||null,XF2(F.head,fl2,bIdx(""),3,"r"),false,`IF(SUM(${CL(2)}${xr}:${CL(cS-1)}${xr})=0,"",SUM(${CL(2)}${xr}:${CL(cS-1)}${xr}))`));
+            row2.push(cell(sum2&&grand2?sum2/grand2:null,XF2(F.data,fl2,bIdx("r"),9,"c"),false,`IF(N(${CL(cS)}${xr})=0,"",${CL(cS)}${xr}/${CL(cS)}$PVT)`));
             push(row2,16.5);MG.push([rr2,0,rr2,1]);
           });
           const r3=R.length;
           const tr2=[cell("합계",XF2(F.head,L.orange,bIdx("ltb"),0,"c"),true),cell("",XF2(F.head,L.orange,bIdx("tb"),0,"c"),true)];
-          monthsAsc.forEach(m=>tr2.push(cell(mT[m]||null,XF2(F.head,L.orange,bIdx("tb"),3,"r"))));
-          tr2.push(cell(grand2||null,XF2(F.head,L.orange,bIdx("tb"),3,"r")));
-          tr2.push(cell(grand2?1:null,XF2(F.head,L.orange,bIdx("rtb"),9,"c")));
+          const P0=PV.rows[0],P1=PV.rows[PV.rows.length-1],PT=r3+1;
+          monthsAsc.forEach((m,mi)=>tr2.push(cell(mT[m]||null,XF2(F.head,L.orange,bIdx("tb"),3,"r"),false,P0?`SUM(${CL(2+mi)}${P0}:${CL(2+mi)}${P1})`:null)));
+          tr2.push(cell(grand2||null,XF2(F.head,L.orange,bIdx("tb"),3,"r"),false,P0?`SUM(${CL(PV.cS)}${P0}:${CL(PV.cS)}${P1})`:null));
+          tr2.push(cell(grand2?1:null,XF2(F.head,L.orange,bIdx("rtb"),9,"c"),false,P0?`IF(N(${CL(PV.cS)}${PT})=0,"",1)`:null));
+          R.forEach(rw=>rw.cells.forEach(c=>{if(c.f)c.f=c.f.replace(/\$PVT/g,()=>"$"+PT);}));
           push(tr2,16.5);MG.push([r3,0,r3,1]);
         }
         /* XML */
@@ -2210,6 +2290,7 @@ async function exportSalesAll(){
         R.forEach((row,ri2)=>{
           x+=`<row r="${ri2+1}" ht="${row.ht}" customHeight="1">`;
           row.cells.forEach((c,ci)=>{
+            if(c.f){x+=`<c r="${pnlColL(ci)+(ri2+1)}" s="${c.xf}"><f>${pnlXEsc(c.f)}</f>${c.v!=null&&c.v!==""?`<v>${c.v}</v>`:""}</c>`;return;}
             if(c.v==null&&!c.txt&&c.v!==0){x+=`<c r="${pnlColL(ci)+(ri2+1)}" s="${c.xf}"/>`;return;}
             const ref=pnlColL(ci)+(ri2+1);
             if(c.txt)x+=`<c r="${ref}" s="${c.xf}" t="inlineStr"><is><t xml:space="preserve">${pnlXEsc(c.v==null?"":c.v)}</t></is></c>`;
@@ -2234,10 +2315,15 @@ async function exportSalesAll(){
       zip.file("xl/_rels/workbook.xml.rels",rlx);
       zip.file("[Content_Types].xml",ctx);
     }
+    /* v442: 모든 탭 A열에 빈 칸 하나 넣기 (표가 B열부터) + 월별 비고 열은 글자 길이에 맞게 */
+    for(const path of Object.keys(zip.files).filter(n=>/^xl\/worksheets\/sheet\d+\.xml$/.test(n))){
+      const wset=path==="xl/worksheets/sheet2.xml"&&XW.monthlyNote?{9:Math.max(20.5,XW.monthlyNote)}:null; /* 비고 H → I(9) */
+      zip.file(path,xlsInsertColA(await zip.file(path).async("string"),wset));
+    }
     const blob=await zip.generateAsync({type:"blob",compression:"DEFLATE",mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
     const aEl=document.createElement("a");
     aEl.href=URL.createObjectURL(blob);
-    aEl.download=`매출현황 ${String(yearM).slice(2)}${String(new Date().getMonth()+1).padStart(2,"0")}.xlsx`;
+    aEl.download=`매출현황_${String(yearM).slice(2)}${String(XW.lastM||new Date().getMonth()+1).padStart(2,"0")}.xlsx`; /* v442: 받은 날이 아니라 반영된 마지막 달 */
     document.body.appendChild(aEl);aEl.click();
     setTimeout(()=>{URL.revokeObjectURL(aEl.href);aEl.remove();},2000);
     toast("원본 양식 그대로 채워서 내려받았어요"+(notes.length?" · "+notes.join(" / "):""));
@@ -2948,8 +3034,8 @@ function renderMonthly() {
     };
     rows += `<tr>
       <td class="lab sticky">${m}월</td>
-      ${dc("insadong", "cg")}${dc("market", "cy")}<td>${edNum(c.online, ds("online"))}</td>${dc("bojagi", "cp")}
-      <td>${c.has ? fmt(c.bukchon) : ""}</td><td class="cb"><b>${c.has ? fmt(c.total) : ""}</b></td>
+      ${dc("insadong", "cg")}${dc("market", "cy")}<td>${edNum(c.online, ds("online"))}</td>${dc("bojagi", "cb")}
+      <td>${c.has ? fmt(c.bukchon) : ""}</td><td class="cp"><b>${c.has ? fmt(c.total) : ""}</b></td>
       <td class="note">${edText(c.note, ds("note"))}</td></tr>`;
   }
   el.innerHTML = `
@@ -2961,13 +3047,13 @@ function renderMonthly() {
     <div class="table-wrap">
       <table class="rpt">
         <thead>
-          <tr><th class="c sticky" rowspan="2">월별</th><th rowspan="2" class="cg">인사동</th><th colspan="4" class="c">북촌</th><th rowspan="2" class="cb">합계</th><th rowspan="2" class="c">비고</th></tr>
-          <tr><th class="cy">마켓</th><th>온라인*</th><th class="cp">보자기<br><span style="font-weight:500;font-size:10px">(쿠팡이츠포함)</span></th><th>계</th></tr>
+          <tr><th class="c sticky" rowspan="2">월별</th><th rowspan="2" class="cg">인사동</th><th colspan="4" class="c">북촌</th><th rowspan="2" class="cp">합계</th><th rowspan="2" class="c">비고</th></tr>
+          <tr><th class="cy">마켓</th><th>온라인*</th><th class="cb">보자기<br><span style="font-weight:500;font-size:10px">(쿠팡이츠포함)</span></th><th>계</th></tr>
         </thead>
         <tbody>${rows}
           <tr class="total"><td class="lab sticky">합계</td>
-            <td class="cg">${fmt(sum.insadong)}</td><td class="cy">${fmt(sum.market)}</td><td>${fmt(sum.online)}</td><td class="cp">${fmt(sum.bojagi)}</td>
-            <td>${fmt(sum.bukchon)}</td><td class="cb">${fmt(sum.total)}</td><td></td></tr>
+            <td class="cg">${fmt(sum.insadong)}</td><td class="cy">${fmt(sum.market)}</td><td>${fmt(sum.online)}</td><td class="cb">${fmt(sum.bojagi)}</td>
+            <td>${fmt(sum.bukchon)}</td><td class="cp">${fmt(sum.total)}</td><td></td></tr>
         </tbody>
       </table>
     </div>
