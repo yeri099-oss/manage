@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v466</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v467</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -9399,6 +9399,67 @@ function payHolRates(cfg,mw,hr,oh){
   if(hm==="h"&&hr>0)return {hol:Math.round(hr*8*0.5),ot:Math.round(hr*(base*(jh?0.7:0.5)+over*0.5))};
   return null;
 }
+/* v467: 보고용 — 수당(계 K)이 있는 사람만 표 모양 그대로 */
+function payHolRepHtml(){
+  const P=window.__pay,sh=paySheetByName("휴일근무수당");if(!sh)return "";
+  const H=payHolHdr(sh);if(!H||!H.tot)return "";
+  const v=payMkVal(sh,(P.edits||{})["휴일근무수당"]||{});const n=(ref)=>Math.round(Number(v(ref))||0);
+  const HID=(((P.edits||{})["__hide"]||{})["휴일근무수당"])||{};
+  const E7=(P.edits||{})["휴일근무수당"]||{};
+  const t=(ref)=>{const e=E7[ref];if(e!==undefined&&typeof e==="string")return e.trim();const c=sh.cells[ref];if(c&&c.typ==="str")return String(c.v).trim();if(e!==undefined&&e!=="")return String(e);return "";};
+  const bd="border:1px solid #000;padding:5px 9px;font-size:13px;white-space:nowrap";
+  const th=bd+";background:#f2f2f2;font-weight:700;text-align:center";
+  const num=(x,b)=>`<td style="${bd};text-align:right${b?";font-weight:700":""}">${x?fmt(x):""}</td>`;
+  /* 머리글 (2줄) */
+  const r1=H.hdr,r2=H.hEnd>H.hdr?H.hdr+1:H.hdr;
+  const two=r2>r1;
+  const lab=(L,r)=>esc(t(L+r)||"");
+  let hd1="",hd2="";
+  for(const L of["A","B","C","D"])hd1+=`<td style="${th}"${two?' rowspan="2"':''}>${lab(L,r1)}</td>`;
+  hd1+=`<td style="${th}" colspan="3">${lab("E",r1)||"휴일근무"}</td><td style="${th}" colspan="3">${lab("H",r1)||"초과근무"}</td>`;
+  for(const L of["K","L","M"])hd1+=`<td style="${th}"${two?' rowspan="2"':''}>${lab(L,r1)}</td>`;
+  if(two)for(const L of["E","F","G","H","I","J"])hd2+=`<td style="${th}">${lab(L,r2)}</td>`;
+  /* 받는 사람만, 부서별로 */
+  const groups=[];let dept="",cur=null;
+  for(let r=H.hEnd+1;r<H.tot;r++){
+    const a=t("A"+r);if(a){dept=a;cur=null;}
+    if(HID[r])continue;
+    const nm=t("B"+r);if(!nm||n("K"+r)<=0)continue;
+    if(!cur){cur={dept,rows:[]};groups.push(cur);}
+    cur.rows.push(r);
+  }
+  if(!groups.length)return "";
+  const tot={F:0,G:0,I:0,J:0,K:0};let body="";
+  groups.forEach(g=>{
+    const gs=g.rows.reduce((s9,r)=>s9+n("K"+r),0);
+    g.rows.forEach((r,i)=>{
+      for(const L in tot)tot[L]+=n(L+r);
+      body+=`<tr>${i===0?`<td style="${bd};text-align:center;font-weight:700" rowspan="${g.rows.length}">${esc(g.dept)}</td>`:""}<td style="${bd};text-align:center">${esc(t("B"+r))}</td>${num(n("C"+r))}${num(n("D"+r))}${num(n("E"+r))}<td style="${bd};text-align:center">${n("F"+r)||""}</td>${num(n("G"+r))}${num(n("H"+r))}<td style="${bd};text-align:center">${n("I"+r)||""}</td>${num(n("J"+r))}${num(n("K"+r),1)}${i===0?`<td style="${bd};text-align:right;font-weight:700" rowspan="${g.rows.length}">${fmt(gs)}</td>`:""}<td style="${bd}">${esc(t("M"+r))}</td></tr>`;
+    });
+  });
+  const tb=bd+";background:#fff7e6;font-weight:700";
+  body+=`<tr><td style="${tb};text-align:center" colspan="2">계</td><td style="${tb}"></td><td style="${tb}"></td><td style="${tb}"></td><td style="${tb};text-align:center">${tot.F||""}</td><td style="${tb};text-align:right">${fmt(tot.G)}</td><td style="${tb}"></td><td style="${tb};text-align:center">${tot.I||""}</td><td style="${tb};text-align:right">${fmt(tot.J)}</td><td style="${tb};text-align:right">${fmt(tot.K)}</td><td style="${tb};text-align:right">${fmt(tot.K)}</td><td style="${tb}"></td></tr>`;
+  const title=t("A1")||"휴일/초과 근무수당",days=payHolDaysText();
+  return `<div style="background:#fff;padding:16px 18px;font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;color:#000;display:inline-block">
+    <div style="font-weight:800;font-size:18px;text-align:center;margin-bottom:6px">${esc(title)}</div>
+    ${days?`<div style="font-size:12.5px;margin-bottom:6px">${esc(days)}</div>`:""}
+    <table style="border-collapse:collapse;border:2px solid #000"><tr>${hd1}</tr>${two?`<tr>${hd2}</tr>`:""}${body}</table></div>`;
+}
+window.payHolRepCopy=async function(mode){
+  const html=payHolRepHtml();if(!html){toast("수당 받는 사람이 없어요",true);return;}
+  const box=document.createElement("div");box.style.cssText="position:fixed;left:-10000px;top:0";box.innerHTML=html;document.body.appendChild(box);
+  const el=box.firstElementChild;
+  try{
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
+    const cv=await html2canvas(el,{backgroundColor:"#ffffff",scale:2});
+    const blob=await new Promise(r=>cv.toBlob(r,"image/png"));
+    const nm="휴일초과근무수당.png";
+    const dl=()=>{const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=nm;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);};
+    if(mode==="dl"||!navigator.clipboard||typeof ClipboardItem==="undefined"){dl();toast("휴일/초과 이미지를 저장했어요");return;}
+    try{await navigator.clipboard.write([new ClipboardItem({"image/png":blob})]);toast("수당 받는 사람만 이미지로 복사했어요 — 보고 창에 Ctrl+V");}catch(e){dl();toast("복사가 막혀서 이미지 파일로 저장했어요");}
+  }catch(e){console.error(e);toast("이미지 만들기 실패: "+(e.message||e),true);}
+  finally{box.remove();}
+};
 function payHolCompactCtl(){
   const d=(((window.__pay.edits||{})["__holDays"])||[]);
   return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
@@ -9406,7 +9467,10 @@ function payHolCompactCtl(){
     ${d.map((x,i)=>`<span class="paychip" style="cursor:default">${esc(x)} <b style="cursor:pointer;color:#b45309" onclick="payHolDel(${i})" title="이 휴일 지우기">✕</b></span>`).join("")||'<span class="footnote">아직 없음</span>'}
     <input id="holNewDate" placeholder="예: 9월 6일" style="width:110px;padding:4px 8px;border:1px solid rgba(0,0,0,.2);border-radius:8px;font-family:inherit">
     <button class="btn btn-sm" onclick="payHolAdd()">➕ 휴일 추가</button>
-    <span class="footnote">휴일 1일수당을 정해둔 사람은 일수가 휴일 수로 자동으로 들어가요 · 날짜는 엑셀 표 위에 한 줄로 적혀요</span></div>
+    <span class="footnote">휴일 1일수당을 정해둔 사람은 일수가 휴일 수로 자동으로 들어가요 · 날짜는 엑셀 표 위에 한 줄로 적혀요</span>
+    <span style="flex:1"></span>
+    <button class="btn btn-sm" onclick="payHolRepCopy()" title="수당(계)이 있는 사람만 표 모양 그대로 이미지로 복사 — 보고 창에 Ctrl+V">📷 수당 받는 사람만 이미지 복사</button>
+    <button class="btn btn-sm" onclick="payHolRepCopy('dl')" title="같은 이미지를 파일로 저장">💾 저장</button></div>
   <details style="margin:0 0 10px;border:1px solid #c7d2fe;border-radius:10px;background:#f8faff;padding:8px 12px">
     <summary style="cursor:pointer;font-weight:700;font-size:13px">💡 휴일 1일수당 계산법 (월급제 / 시급제가 달라요) — 표 오른쪽 '계산법'에서 직원마다 고르면 앱이 계산해요</summary>
     <table class="rpt" style="font-size:12.5px;margin-top:8px;width:auto"><thead><tr><th class="l">구분</th><th class="l">1일수당 계산</th><th class="l">왜 그렇게</th><th class="l">예</th></tr></thead><tbody>
