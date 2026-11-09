@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v449</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v450</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -8082,12 +8082,15 @@ function payHdEdit(el){
 window.payHdEdit=payHdEdit;
 function payOtEdit(el){
   const r=el.dataset.r;
-  const t=String(el.textContent||"").replace(/[,\s]/g,"");
+  const t=String(el.textContent||"").replace(/[,\s원일]/g,"").replace(/[×xX]/g,"*");
   const P=window.__pay;
   P.edits=P.edits||{};
   const o=(P.edits["__ot"]=P.edits["__ot"]||{});
-  const n=Number(t);
-  if(!t||isNaN(n)||n===0)delete o[r];else o[r]=n;
+  const od=(P.edits["__otd"]=P.edits["__otd"]||{}); /* v450: 1일수당 × 일수 */
+  const mm=/^(\d+(?:\.\d+)?)\*(\d+(?:\.\d+)?)$/.exec(t);
+  if(mm){const d=Number(mm[1]),k=Number(mm[2]);o[r]=Math.round(d*k);od[r]={d:Math.round(d),n:k};}
+  else{const n=Number(t);delete od[r];if(!t||isNaN(n)||n===0)delete o[r];else o[r]=n;}
+  if(!Object.keys(od).length)delete P.edits["__otd"];
   if(!Object.keys(o).length)delete P.edits["__ot"];
   paySchedSave();
   renderPay();
@@ -8682,6 +8685,7 @@ async function payColsSync(){
     try{
       if(!P.wb.__gb){
         if(paySheetByName("휴일근무수당")){try{if(await payHolSumSplit())ch=true;}catch(e8){console.warn("휴일 합계 열",e8);}}
+        if(paySheetByName("휴일근무수당")){try{if(await payHolSumMerge())ch=true;}catch(e8){console.warn("휴일 합계 병합",e8);}}
         if(paySheetByName("휴일근무수당")&&await payNormHol())ch=true;
         if(paySheetByName("상여금")&&await payNormBj())ch=true;
       }
@@ -8945,6 +8949,83 @@ async function payHolSumSplit(){
   zip.file(sh.path,ser.serializeToString(doc));
   await payAdoptBuf(await zip.generateAsync({type:"arraybuffer",compression:"DEFLATE"}));
   return true;
+}
+/* v450: 휴일근무수당 '합계' 열 — 부서(부서명 병합)마다 한 칸으로 합치고 그 부서 '계' 합계, 맨 아래 '계' 줄은 전체 */
+async function payHolSumMerge(){
+  const P=window.__pay;const sh=paySheetByName("휴일근무수당");if(!sh||!P.wb)return false;
+  const ed0=((P.edits||{})["휴일근무수당"]||{});
+  const tx=(ref)=>{const e=ed0[ref];if(e!==undefined&&typeof e==="string")return e.replace(/\s+/g,"");const c=sh.cells[ref];return c&&c.typ==="str"?String(c.v).replace(/\s+/g,""):"";};
+  let hdr=0;for(let r=1;r<=8;r++)if(tx("B"+r)==="성명"){hdr=r;break;}
+  if(!hdr)return false;
+  const hm=(sh.merges||{})["A"+hdr];const hEnd=hdr+((hm&&hm.rs)?hm.rs-1:0);
+  let gC=0,sC=0;
+  for(let r=hdr;r<=hEnd;r++)for(let c=3;c<=sh.maxC;c++){const t=tx(payIdxCol(c)+r);if(t==="계"&&!gC)gC=c;if(t==="합계"&&!sC)sC=c;}
+  if(!gC||!sC)return false;
+  let tot=0;for(let r=hEnd+1;r<=sh.maxR;r++){if(tx("A"+r)==="계"){tot=r;break;}}
+  if(!tot)return false;
+  /* 부서 묶음: 부서명(A열) 병합 기준 */
+  const groups=[];
+  for(let r=hEnd+1;r<tot;){const m=(sh.merges||{})["A"+r];const rs=m&&m.rs?m.rs:1;
+    if(tx("A"+r)||m)groups.push([r,Math.min(r+rs-1,tot-1)]);r+=rs;}
+  if(!groups.length)return false;
+  const G=payIdxCol(gC),S2=payIdxCol(sC);
+  /* 이미 정리됨: 각 묶음 첫 칸이 SUM(계) 수식이고 병합돼 있으면 그대로 */
+  const done=groups.every(([a,b])=>{const c=sh.cells[S2+a];const m=(sh.merges||{})[S2+a];return c&&typeof c.f==="string"&&c.f.replace(/\$/g,"")===`SUM(${G}${a}:${G}${b})`&&(a===b||(m&&m.rs===b-a+1));});
+  if(done)return false;
+  const zip=await JSZip.loadAsync(P.wb.zipBuf.slice(0));const par=new DOMParser(),ser=new XMLSerializer();
+  const doc=par.parseFromString(await zip.file(sh.path).async("string"),"application/xml");
+  const T=ptxSheetTools(doc);
+  const E=(P.edits["휴일근무수당"]=P.edits["휴일근무수당"]||{}),AS=((P.autoSet||{})["휴일근무수당"])||{};
+  for(let r=hEnd+1;r<=tot;r++){delete E[S2+r];delete AS[S2+r];}
+  /* 합계 열의 데이터 쪽 병합은 지우고 다시 */
+  const mc=doc.getElementsByTagName("mergeCells")[0];
+  if(mc)for(const m of [...mc.getElementsByTagName("mergeCell")]){const mm=/^([A-Z]+)(\d+):([A-Z]+)(\d+)$/.exec(m.getAttribute("ref")||"");if(mm&&mm[1]===S2&&mm[3]===S2&&+mm[2]>hEnd)mc.removeChild(m);}
+  const refs=[];
+  groups.forEach(([a,b])=>{
+    T.setCell(S2+a,{f:`SUM(${G}${a}:${G}${b})`});refs.push(S2+a);
+    for(let r=a+1;r<=b;r++)T.setCell(S2+r,"");
+  });
+  T.setCell(S2+tot,{f:`SUM(${S2}${hEnd+1}:${S2}${tot-1})`});
+  let mc2=doc.getElementsByTagName("mergeCells")[0];
+  const addM=(ref)=>{if(!mc2){T.setMerges([ref]);mc2=doc.getElementsByTagName("mergeCells")[0];return;}const nm=doc.createElementNS(mc2.namespaceURI,"mergeCell");nm.setAttribute("ref",ref);mc2.appendChild(nm);};
+  groups.forEach(([a,b])=>{if(b>a)addM(`${S2}${a}:${S2}${b}`);});
+  if(mc2)mc2.setAttribute("count",String(mc2.getElementsByTagName("mergeCell").length));
+  zip.file(sh.path,ser.serializeToString(doc));
+  await payAdoptBuf(await zip.generateAsync({type:"arraybuffer",compression:"DEFLATE"}));
+  return true;
+}
+/* v450: 받는 엑셀의 휴일근무수당 오른쪽에 초과근무수당 표 (이름 · 초과근무(일수) · 1일수당 · 합계) */
+function payHolOtTable(doc,sh){
+  const P=window.__pay;const ot=(P.edits||{})["__ot"]||{},od=(P.edits||{})["__otd"]||{};
+  const em=payEmpRows();if(!em)return;
+  const list=em.rows.filter(x=>Number(ot[String(x.r)])).map(x=>({name:x.name,tot:Math.round(Number(ot[String(x.r)])),d:od[String(x.r)]}));
+  if(!list.length)return;
+  const T=ptxSheetTools(doc);
+  let hdr=0;for(let r=1;r<=8;r++){const b=sh.cells["B"+r];if(b&&b.typ==="str"&&String(b.v).replace(/\s+/g,"")==="성명"){hdr=r;break;}}
+  if(!hdr)return;
+  const hm=(sh.merges||{})["A"+hdr];const hEnd=hdr+((hm&&hm.rs)?hm.rs-1:0);
+  let maxC=0;for(const c of doc.getElementsByTagName("c")){const v=c.getElementsByTagName("v")[0]||c.getElementsByTagName("f")[0]||c.getElementsByTagName("is")[0];if(!v)continue;const ci=payColIdx(c.getAttribute("r").replace(/\d+/g,""));if(ci>maxC)maxC=ci;}
+  const c0=maxC+2,L=(i)=>payIdxCol(c0+i);
+  const sHead=T.sOf("B"+hdr),sName=T.sOf("B"+(hEnd+1)),sNum=T.sOf("C"+(hEnd+1));
+  const ym=payYm();const r0=hdr;
+  T.setCell(L(0)+r0,"초과근무수당",sHead);T.setCell(L(1)+r0,"",sHead);T.setCell(L(2)+r0,"",sHead);T.setCell(L(3)+r0,ym?ym.y+"년 "+Number(ym.m)+"월":"",sHead);
+  ["이름","초과근무","1일수당","합계"].forEach((h,i)=>T.setCell(L(i)+(r0+1),h,sHead));
+  list.forEach((x,i)=>{const r=r0+2+i;
+    T.setCell(L(0)+r,x.name,sName);
+    T.setCell(L(1)+r,x.d?x.d.n:"",sNum);
+    T.setCell(L(2)+r,x.d?x.d.d:"",sNum);
+    T.setCell(L(3)+r,x.d?{f:`${L(1)}${r}*${L(2)}${r}`}:x.tot,sNum);
+  });
+  for(const i of[0,1,2,3])for(let r=r0;r<=r0+1+list.length;r++){const c=T.cellOf(L(i)+r);if(c&&!c.getAttribute("s")){const s9=r<=r0+1?sHead:(i===0?sName:sNum);if(s9)c.setAttribute("s",s9);}}
+  let mc=doc.getElementsByTagName("mergeCells")[0];
+  if(!mc){T.setMerges([`${L(0)}${r0}:${L(2)}${r0}`]);}
+  else{const nm=doc.createElementNS(mc.namespaceURI,"mergeCell");nm.setAttribute("ref",`${L(0)}${r0}:${L(2)}${r0}`);mc.appendChild(nm);mc.setAttribute("count",String(mc.getElementsByTagName("mergeCell").length));}
+  /* 열 너비 */
+  const colsEl=doc.getElementsByTagName("cols")[0];
+  if(colsEl){for(const co of [...colsEl.getElementsByTagName("col")]){const mn=+co.getAttribute("min"),mx=+co.getAttribute("max");if(mx>=c0&&mn<=c0+3){if(mx>c0+3){const tl=co.cloneNode(false);tl.setAttribute("min",String(c0+4));colsEl.insertBefore(tl,co.nextSibling);}if(mn<c0)co.setAttribute("max",String(c0-1));else colsEl.removeChild(co);}}
+    let before=null;for(const co of colsEl.getElementsByTagName("col"))if(+co.getAttribute("min")>c0+3){before=co;break;}
+    [10,10,11,12].forEach((w,i)=>{const n=doc.createElementNS(colsEl.namespaceURI,"col");n.setAttribute("min",String(c0+i));n.setAttribute("max",String(c0+i));n.setAttribute("width",String(w));n.setAttribute("customWidth","1");colsEl.insertBefore(n,before);});}
+  T.setDim();
 }
 async function payNormHol(){
   return payBorderNormRun("휴일근무수당",(ctx)=>{
@@ -9446,6 +9527,7 @@ async function payDownload(){
           colExt[sh.name]={from:tblMax,to:newMax};
         }
       }
+      if(sh.name==="휴일근무수당"){try{payHolOtTable(doc,sh);}catch(e9){console.warn("초과근무수당 표",e9);}}
       /* 끊긴 공유수식 정리 + 선택영역 A1 */
       const masters=new Set();
       for(const fe of doc.getElementsByTagName("f"))if(fe.getAttribute("t")==="shared"&&fe.textContent)masters.add(fe.getAttribute("si"));
@@ -9818,7 +9900,7 @@ async function payResetApply(plan){
   P.undo={key:ym?ym.y+"-"+ym.m:"",zipBuf:P.wb.zipBuf.slice(0),fileName:P.wb.fileName,edits:JSON.stringify(P.edits||{}),autoSet:JSON.stringify(P.autoSet||{})};
   P.edits=P.edits||{};P.autoSet=P.autoSet||{};
   for(const nm in plan.del)for(const ref in plan.del[nm]){if(P.edits[nm])delete P.edits[nm][ref];if(P.autoSet[nm])delete P.autoSet[nm][ref];}
-  if(plan.ot){delete P.edits["__ot"];delete P.edits["__otbase"];}
+  if(plan.ot){delete P.edits["__ot"];delete P.edits["__otbase"];delete P.edits["__otd"];}
   if(plan.bjhist&&plan.bjhist.length){P.edits["__bjhist"]=P.edits["__bjhist"]||{};plan.bjhist.forEach((c)=>{P.edits["__bjhist"][c]=1;});}
   if(plan.bjpre.length&&P.edits["__bjpre"]){plan.bjpre.forEach((c)=>delete P.edits["__bjpre"][c]);if(!Object.keys(P.edits["__bjpre"]).length)delete P.edits["__bjpre"];}
   if(Object.keys(plan.blank).length){
@@ -10456,6 +10538,7 @@ async function payInsertRowAfter(shName,k,fill,opt){
     const o2={};
     for(const r0 in P.edits["__ot"])o2[String(Number(r0)>=k+1?Number(r0)+1:Number(r0))]=P.edits["__ot"][r0];
     P.edits["__ot"]=o2;
+    if(P.edits["__otd"]){const o3={};for(const r0 in P.edits["__otd"])o3[String(Number(r0)>=k+1?Number(r0)+1:Number(r0))]=P.edits["__otd"][r0];P.edits["__otd"]=o3;}
   }
   await payAdoptBuf(await zip.generateAsync({type:"arraybuffer",compression:"DEFLATE"}));
 }
@@ -11317,10 +11400,11 @@ function renderPay(){
               tds+=`<td class="ec ot${hv9!=null?" edited":""}" contenteditable="true" data-n="${esc(holNm[r])}" onblur="payHdEdit(this)" onkeydown="payKeyDownOt(event,this)">${hv9!=null?fmt(hv9):""}</td>`;
             }else tds+=`<td class="ot"></td>`;
           }
-          if(r===otHeadRow)tds+=`<td class="ot" style="font-weight:700">초과근무수당 ✍ 직접입력</td>`;
+          if(r===otHeadRow)tds+=`<td class="ot" style="font-weight:700" title="금액, 또는 1일수당*일수 (예: 174586*4)">초과근무수당 ✍ 직접입력<div style="font-weight:400;font-size:10.5px;color:#6b7280">금액 또는 1일수당*일수</div></td>`;
           else if(otEmpOf[r]!=null){
             const ov=((P.edits||{})["__ot"]||{})[String(otEmpOf[r])];
-            tds+=`<td class="ec ot${ov!=null?" edited":""}" contenteditable="true" data-r="${otEmpOf[r]}" onblur="payOtEdit(this)" onkeydown="payKeyDownOt(event,this)">${ov!=null?fmt(ov):""}</td>`;
+            const odv=((P.edits||{})["__otd"]||{})[String(otEmpOf[r])];
+            tds+=`<td class="ec ot${ov!=null?" edited":""}" contenteditable="true" data-r="${otEmpOf[r]}" onblur="payOtEdit(this)" onkeydown="payKeyDownOt(event,this)" title="1일수당*일수로 적으면(예: 174586*4) 엑셀 초과근무수당 표에 1일수당·일수가 같이 나가요">${ov!=null?fmt(ov):""}${odv?`<div style="font-size:10.5px;color:#6b7280">${fmt(odv.d)}×${odv.n}일</div>`:""}</td>`;
           }else tds+=`<td class="ot"></td>`;
         }
         if(hasAny)trs+=`<tr>${tds}</tr>`;
