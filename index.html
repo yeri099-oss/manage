@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v456</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v457</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -8167,7 +8167,8 @@ function payCellEdit(el){
   if(shName==="휴일근무수당"&&/^E\d+$/.test(ref)&&payHolIsCompact()){ /* v453: 휴일 1일수당 = 정해두기 (다음 달에도) */
     const hs9=paySheetByName("휴일근무수당"),nb9=hs9&&hs9.cells["B"+ref.slice(1)];
     const nk9=nb9&&nb9.typ==="str"?String(nb9.v).replace(/\s+/g,""):"";
-    if(nk9){S.data.payTax=S.data.payTax||{byName:{}};S.data.payTax.byName=S.data.payTax.byName||{};const cur9=S.data.payTax.byName[nk9]||{};
+    const cfgM9=(((S.data.payTax||{}).byName||{})[nk9]||{}).hm;
+    if(nk9&&!cfgM9){S.data.payTax=S.data.payTax||{byName:{}};S.data.payTax.byName=S.data.payTax.byName||{};const cur9=S.data.payTax.byName[nk9]||{};
       const n9=typeof v==="number"?Math.round(v):0;if(n9>0)cur9.hd=n9;else delete cur9.hd;S.data.payTax.byName[nk9]=cur9;try{payTaxSaveCfg();}catch(e){}
       const E9=(window.__pay.edits["휴일근무수당"]||{});delete E9[ref];try{payAutoFill();}catch(e){}}
   }
@@ -9204,6 +9205,16 @@ function payHolCompactAuto(hd,em){
   for(let r=H.hEnd+1;r<H.tot;r++){
     const n0=H.tx("B"+r).replace(/\s+/g,"");if(!n0||HID[r])continue;
     const cfg0=byT[n0];
+    if(cfg0&&(cfg0.hm==="m"||cfg0.hm==="h")){ /* v457: 계산법을 고른 사람 */
+      const vv=payMkVal(hd,hEd0);let mw=Math.round(Number(vv("C"+r))||0);
+      if(!mw&&em){const emp0=em.rows.find(x=>x.name.replace(/\s+/g,"")===n0);if(emp0)mw=em.val(em.cm.pay+emp0.r);}
+      const rt=payHolRates(cfg0,mw,Math.round(Number(vv("D"+r))||0));
+      if(rt){const eC=hd.cells["E"+r],hC=hd.cells["H"+r];
+        if(!(eC&&typeof eC.f==="string"))payEdit("휴일근무수당","E"+r,rt.hol,true);
+        if(!(hC&&typeof hC.f==="string"))payEdit("휴일근무수당","H"+r,rt.ot,true);}
+      continue;
+    }
+    if(cfg0&&cfg0.hm==="x")continue;
     let daily=cfg0&&Number(cfg0.hd)>0?Math.round(Number(cfg0.hd)):0;const hdv=daily;
     if(!daily&&cfg0&&cfg0.exec){
       let mw=0;const cCell=hd.cells["C"+r];if(cCell&&cCell.typ==="num"&&cCell.v!=="")mw=Number(cCell.v);
@@ -9216,6 +9227,26 @@ function payHolCompactAuto(hd,em){
     if(hdv&&nDays){const fC=hd.cells["F"+r];if(!(fC&&typeof fC.f==="string"))payEdit("휴일근무수당","F"+r,nDays,true);}
   }
 }
+/* v457: 직원별 수당 계산법 — 월급제: 휴일 = 월급÷241.6×14, 초과 = 월급÷241.6×(주휴 11.1 / 9.5)
+                              시급제: 휴일 = 시급×8×0.5, 초과 = 시급×8×(주휴 0.7 / 0.5) · 직접: 자동 계산 안 함 */
+function payHolCfgSet(nm,fn){
+  S.data.payTax=S.data.payTax||{byName:{}};S.data.payTax.byName=S.data.payTax.byName||{};
+  const cur=S.data.payTax.byName[nm]||{};fn(cur);S.data.payTax.byName[nm]=cur;try{payTaxSaveCfg();}catch(e){}
+}
+window.payHolMethod=function(nm,v){
+  payHolCfgSet(nm,c=>{if(v)c.hm=v;else delete c.hm;if(v==="m"||v==="h"||v==="x")delete c.hd;});
+  /* 방식을 바꾸면 이 사람의 자동 칸은 새로 계산되게 */
+  const P=window.__pay,hd=paySheetByName("휴일근무수당");
+  if(hd){for(let r=1;r<=hd.maxR;r++){const b=hd.cells["B"+r];if(b&&b.typ==="str"&&String(b.v).replace(/\s+/g,"")===nm){for(const L of["E","H"]){const as=((P.autoSet||{})["휴일근무수당"]||{});if(as[L+r]){delete as[L+r];delete ((P.edits||{})["휴일근무수당"]||{})[L+r];}}}}}
+  try{payAutoFill();}catch(e){}paySchedSave();renderPay();
+};
+window.payHolJh=function(nm,on){payHolCfgSet(nm,c=>{if(on)c.jh=1;else delete c.jh;});try{payAutoFill();}catch(e){}paySchedSave();renderPay();};
+function payHolRates(cfg,mw,hr){
+  const hm=cfg&&cfg.hm,jh=!!(cfg&&cfg.jh);
+  if(hm==="m"&&mw>0)return {hol:Math.round(mw/241.6*14),ot:Math.round(mw/241.6*(jh?11.1:9.5))};
+  if(hm==="h"&&hr>0)return {hol:Math.round(hr*8*0.5),ot:Math.round(hr*8*(jh?0.7:0.5))};
+  return null;
+}
 function payHolCompactCtl(){
   const d=(((window.__pay.edits||{})["__holDays"])||[]);
   return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
@@ -9225,12 +9256,12 @@ function payHolCompactCtl(){
     <button class="btn btn-sm" onclick="payHolAdd()">➕ 휴일 추가</button>
     <span class="footnote">휴일 1일수당을 정해둔 사람은 일수가 휴일 수로 자동으로 들어가요 · 날짜는 엑셀 표 위에 한 줄로 적혀요</span></div>
   <details style="margin:0 0 10px;border:1px solid #c7d2fe;border-radius:10px;background:#f8faff;padding:8px 12px">
-    <summary style="cursor:pointer;font-weight:700;font-size:13px">💡 휴일 1일수당 계산법 (월급제 / 시급제가 달라요)</summary>
+    <summary style="cursor:pointer;font-weight:700;font-size:13px">💡 휴일 1일수당 계산법 (월급제 / 시급제가 달라요) — 표 오른쪽 '계산법'에서 직원마다 고르면 앱이 계산해요</summary>
     <table class="rpt" style="font-size:12.5px;margin-top:8px;width:auto"><thead><tr><th class="l">구분</th><th class="l">1일수당 계산</th><th class="l">왜 그렇게</th><th class="l">예</th></tr></thead><tbody>
       <tr><td class="l"><b>월급제</b><br><span class="unit">꽃밥이야기·마켓·보자기 등</span></td><td class="l"><b>월급 ÷ 241.6 × 14</b></td>
         <td class="l">241.6 = 주 45시간(하루 9시간) 근무의 월 유급시간 (209 + 매일 1시간 연장분 32.6)<br>14 = 휴일 9시간 근무 = 8시간 × 1.5배 + 1시간 × 2.0배</td>
         <td class="l">6,000,000 ÷ 241.6 × 14 = 347,682<br>3,800,000 ÷ 241.6 × 14 = 220,199</td></tr>
-      <tr><td class="l"><b>시급제</b><br><span class="unit">인사동 파트 등</span></td><td class="l"><b>시급 × 8시간 × 0.5</b></td>
+      <tr><td class="l"><b>시급제</b><br><span class="unit">인사동 파트 등</span></td><td class="l"><b>시급 × 8시간 × 0.5</b><br><span class="unit">초과: 시급 × 8 × 0.5 (주휴 포함 0.7)</span></td>
         <td class="l">휴일에 일한 시간 자체는 시급직급여로 이미 받으니, 휴일 가산분 50%만 더 줘요</td>
         <td class="l">13,542 × 8 × 0.5 = 54,168</td></tr>
     </tbody></table>
@@ -11398,7 +11429,7 @@ function renderPay(){
   let wbBox="";
   if(wb){
     const PAY_ORDER=["상용직급여","휴일근무수당","상여금","시급직급여","용역직급여","손익","4대보험","급여품의","인건비현황"];
-    const PAY_LABEL={"상용직급여":"급여대장 (상용직)"};
+    const PAY_LABEL={"상용직급여":"급여대장 (상용직)","휴일근무수당":"휴일/초과"};
     if(P.sheet==="__hg")P.sheet="__tax"; /* v387: 한가람 대조는 세무사무실 탭으로 합침 */
     try{if(P.sheet)localStorage.setItem("salesApp_paySheet",P.sheet);}catch(e){}
     if(P.sheet==="__cfg"||P.sheet==="퇴직금")P.sheet=wb.sheets.some(x=>x.name==="상용직급여")?"상용직급여":wb.sheets[0].name;
@@ -11641,6 +11672,15 @@ function renderPay(){
             const cellO=(f,v,auto)=>`<td class="ec ot${v!=null&&v!==""?(auto?" autofill":" edited"):""}" contenteditable="true" data-r="${rk}" data-f="${f}" onblur="payOtCell(this)" onkeydown="payKeyDownOt(event,this)">${v!=null&&v!==""?fmt(v):""}</td>`;
             tds+=cellO("d",odv&&odv.d?odv.d:null)+cellO("n",odv&&odv.n?odv.n:null)+cellO("t",ov!=null?ov:null,!!(odv&&odv.d&&odv.n));
           }else tds+=`<td class="ot"></td><td class="ot"></td><td class="ot"></td>`;
+        }
+        if(holCompact){ /* v457: 직원별 수당 계산법 (월급제 / 시급제 / 직접) + 주휴 포함 */
+          const byH=((S.data.payTax||{}).byName)||{};
+          if(r===otHeadRow)tds+=`<td class="ot" colspan="2" style="font-weight:700;text-align:center" title="고르면 휴일·초과 1일수당을 앱이 계산해요 (직접 고친 칸은 그대로)">계산법 ✍</td>`;
+          else if(otHeadRow&&r===otHeadRow+1)tds+=`<td class="ot" style="font-weight:700;text-align:center">방식</td><td class="ot" style="font-weight:700;text-align:center" title="초과근무 1일수당에 주휴분(8시간×0.2)을 더할지">주휴 포함</td>`;
+          else if(holNm[r]){
+            const cf=byH[holNm[r]]||{},hm=cf.hm||"";
+            tds+=`<td class="ot"><select style="font:inherit;font-size:12px;padding:2px 4px;border:1px solid #d1d5db;border-radius:6px" onchange="payHolMethod('${esc(holNm[r])}',this.value)">${[["","선택"],["m","월급제"],["h","시급제"],["x","직접"]].map(([k,n])=>`<option value="${k}" ${hm===k?"selected":""}>${n}</option>`).join("")}</select></td><td class="ot" style="text-align:center"><input type="checkbox" ${cf.jh?"checked":""} ${hm==="m"||hm==="h"?"":"disabled"} onchange="payHolJh('${esc(holNm[r])}',this.checked)" style="width:16px;height:16px;cursor:pointer"></td>`;
+          }else tds+=`<td class="ot"></td><td class="ot"></td>`;
         }
         if(hasAny)trs+=`<tr>${tds}</tr>`;
       }
