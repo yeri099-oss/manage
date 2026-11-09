@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v458</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v459</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -9208,13 +9208,15 @@ function payHolCompactAuto(hd,em){
     if(cfg0&&(cfg0.hm==="m"||cfg0.hm==="h")){ /* v457: 계산법을 고른 사람 */
       const vv=payMkVal(hd,hEd0);let mw=Math.round(Number(vv("C"+r))||0);
       if(!mw&&em){const emp0=em.rows.find(x=>x.name.replace(/\s+/g,"")===n0);if(emp0)mw=em.val(em.cm.pay+emp0.r);}
-      const rt=payHolRates(cfg0,mw,Math.round(Number(vv("D"+r))||0));
+      const rt=payHolRates(cfg0,mw,Math.round(Number(vv("D"+r))||0),(((P.edits||{})["__oth"])||{})[n0]);
+      const AS9=((P.autoSet=P.autoSet||{})["휴일근무수당"]=(P.autoSet["휴일근무수당"]||{}));
+      const putA=(ref,v)=>{const E9=(P.edits["휴일근무수당"]=P.edits["휴일근무수당"]||{});if(E9[ref]!==undefined&&!AS9[ref])return;E9[ref]=v;AS9[ref]=1;}; /* v459: 파일 값과 같아도 자동 칸(초록)으로 */
       if(rt){const eC=hd.cells["E"+r],hC=hd.cells["H"+r];
-        if(!(eC&&typeof eC.f==="string"))payEdit("휴일근무수당","E"+r,rt.hol,true);
+        if(!(eC&&typeof eC.f==="string"))putA("E"+r,rt.hol);
         /* 초과 1일수당: 초과 일수를 적은 사람만 (없으면 자동으로 채웠던 값 지움) */
         const otDays=Number(vv("I"+r))||0;
         if(!(hC&&typeof hC.f==="string")){
-          if(otDays>0)payEdit("휴일근무수당","H"+r,rt.ot,true);
+          if(otDays>0)putA("H"+r,rt.ot);
           else{const as9=((P.autoSet||{})["휴일근무수당"]||{});if(as9["H"+r]&&hEd0["H"+r]!==undefined){delete hEd0["H"+r];delete as9["H"+r];}}
         }}
       continue;
@@ -9245,11 +9247,21 @@ window.payHolMethod=function(nm,v){
   if(hd){for(let r=1;r<=hd.maxR;r++){const b=hd.cells["B"+r];if(b&&b.typ==="str"&&String(b.v).replace(/\s+/g,"")===nm){for(const L of["E","H"]){const as=((P.autoSet||{})["휴일근무수당"]||{});if(as[L+r]){delete as[L+r];delete ((P.edits||{})["휴일근무수당"]||{})[L+r];}}}}}
   try{payAutoFill();}catch(e){}paySchedSave();renderPay();
 };
+window.payHolOth=function(el){
+  const nm=el.dataset.n,P=window.__pay;if(!nm)return;P.edits=P.edits||{};
+  const t=String(el.textContent||"").replace(/[^\d.]/g,"");const n=Number(t);
+  const o=(P.edits["__oth"]=P.edits["__oth"]||{});
+  if(!t||isNaN(n)||n<=0||n===8)delete o[nm];else o[nm]=n;
+  if(!Object.keys(o).length)delete P.edits["__oth"];
+  try{payAutoFill();}catch(e){}paySchedSave();renderPay();
+};
 window.payHolJh=function(nm,on){payHolCfgSet(nm,c=>{if(on)c.jh=1;else delete c.jh;});try{payAutoFill();}catch(e){}paySchedSave();renderPay();};
-function payHolRates(cfg,mw,hr){
+function payHolRates(cfg,mw,hr,oh){
   const hm=cfg&&cfg.hm,jh=!!(cfg&&cfg.jh);
-  if(hm==="m"&&mw>0)return {hol:Math.round(mw/241.6*14),ot:Math.round(mw/241.6*(jh?11.1:9.5))};
-  if(hm==="h"&&hr>0)return {hol:Math.round(hr*8*0.5),ot:Math.round(hr*8*(jh?0.7:0.5))};
+  /* v459: 초과근무 하루 시간(그 달에 적은 값, 비우면 8시간) — 8시간까지 기본(주휴 포함이면 ×1.2), 넘는 시간은 연장 ×1.5 */
+  const h=Number(oh)>0?Number(oh):8,base=Math.min(h,8),over=Math.max(h-8,0);
+  if(hm==="m"&&mw>0)return {hol:Math.round(mw/241.6*14),ot:Math.round(mw/241.6*(base*(jh?1.2:1)+over*1.5))};
+  if(hm==="h"&&hr>0)return {hol:Math.round(hr*8*0.5),ot:Math.round(hr*(base*(jh?0.7:0.5)+over*0.5))};
   return null;
 }
 function payHolCompactCtl(){
@@ -9272,8 +9284,10 @@ function payHolCompactCtl(){
     </tbody></table>
     <div style="font-weight:700;font-size:12.5px;margin-top:10px">초과근무수당 1일수당 (월급제, 쉬는 날 하루 9시간 더 일했을 때)</div>
     <table class="rpt" style="font-size:12.5px;margin-top:4px;width:auto"><tbody>
-      <tr><td class="l"><b>주휴 포함</b> (10월 방식)</td><td class="l"><b>월급 ÷ 241.6 × 11.1</b></td><td class="l">8시간 × 1.2배(1 + 주휴 0.2) + 1시간 연장 × 1.5배 = 11.1</td><td class="l">3,800,000 ÷ 241.6 × 11.1 = 174,586</td></tr>
-      <tr><td class="l">주휴 없이 (8월 방식)</td><td class="l">월급 ÷ 241.6 × 9.5</td><td class="l">8시간 × 1배 + 1시간 연장 × 1.5배 = 9.5</td><td class="l">3,800,000 ÷ 241.6 × 9.5 = 149,421</td></tr>
+      <tr><td class="l">8시간 · 주휴 포함</td><td class="l"><b>월급 ÷ 241.6 × 9.6</b></td><td class="l">8시간 × 1.2배(1 + 주휴 0.2)</td><td class="l">3,800,000 ÷ 241.6 × 9.6 = 150,993</td></tr>
+      <tr><td class="l">8시간 · 주휴 없이</td><td class="l">월급 ÷ 241.6 × 8</td><td class="l">8시간 × 1배</td><td class="l">3,800,000 ÷ 241.6 × 8 = 125,828</td></tr>
+      <tr><td class="l">9시간(하루 시간 9) · 주휴 포함 (10월 방식)</td><td class="l">월급 ÷ 241.6 × 11.1</td><td class="l">8시간 × 1.2배 + 1시간 연장 × 1.5배</td><td class="l">3,800,000 ÷ 241.6 × 11.1 = 174,586</td></tr>
+      <tr><td class="l">9시간(하루 시간 9) · 주휴 없이 (8월 방식)</td><td class="l">월급 ÷ 241.6 × 9.5</td><td class="l">8시간 × 1배 + 1시간 연장 × 1.5배</td><td class="l">3,800,000 ÷ 241.6 × 9.5 = 149,421</td></tr>
     </tbody></table>
     <div class="footnote" style="margin-top:6px">1일수당 칸에 한 번 적으면 다음 달에도 그 금액으로 채워져요 · 월급이 바뀌면 새로 계산해서 고쳐 주세요 · 두 방식 차이(25,165원)는 주휴분 8시간 × 0.2 = 1.6시간이에요</div>
   </details>`;
@@ -10069,6 +10083,7 @@ function payResetPlan(o){
   }
   if(o.ot&&payHolIsCompact()){
     const hd=paySheetByName("휴일근무수당");const H=payHolHdr(hd);
+    if((P.edits||{})["__oth"])plan.ot=true; /* v459: 초과근무 하루 시간도 비움 */
     if(H&&H.tot)for(let r=H.hEnd+1;r<H.tot;r++){clr(hd,"H"+r,"ot");clr(hd,"I"+r,"ot");if(E("휴일근무수당")["J"+r]!==undefined){(plan.del["휴일근무수당"]=plan.del["휴일근무수당"]||{})["J"+r]=1;cnt("ot");}}
   }
   if(o.hol&&!payHolIsCompact()){
@@ -10160,7 +10175,7 @@ async function payResetApply(plan){
   P.undo={key:ym?ym.y+"-"+ym.m:"",zipBuf:P.wb.zipBuf.slice(0),fileName:P.wb.fileName,edits:JSON.stringify(P.edits||{}),autoSet:JSON.stringify(P.autoSet||{})};
   P.edits=P.edits||{};P.autoSet=P.autoSet||{};
   for(const nm in plan.del)for(const ref in plan.del[nm]){if(P.edits[nm])delete P.edits[nm][ref];if(P.autoSet[nm])delete P.autoSet[nm][ref];}
-  if(plan.ot){delete P.edits["__ot"];delete P.edits["__otbase"];delete P.edits["__otd"];}
+  if(plan.ot){delete P.edits["__ot"];delete P.edits["__otbase"];delete P.edits["__otd"];delete P.edits["__oth"];}
   if(plan.holDaysClear){delete P.edits["__holDays"];const e9=(P.edits["휴일근무수당"]=P.edits["휴일근무수당"]||{});e9["A2"]="";}
   if(plan.bjhist&&plan.bjhist.length){P.edits["__bjhist"]=P.edits["__bjhist"]||{};plan.bjhist.forEach((c)=>{P.edits["__bjhist"][c]=1;});}
   if(plan.bjpre.length&&P.edits["__bjpre"]){plan.bjpre.forEach((c)=>delete P.edits["__bjpre"][c]);if(!Object.keys(P.edits["__bjpre"]).length)delete P.edits["__bjpre"];}
@@ -11680,12 +11695,12 @@ function renderPay(){
         }
         if(holCompact){ /* v457: 직원별 수당 계산법 (월급제 / 시급제 / 직접) + 주휴 포함 */
           const byH=((S.data.payTax||{}).byName)||{};
-          if(r===otHeadRow)tds+=`<td class="ot" style="font-weight:700;text-align:center" title="휴일근무수당 1일수당 계산 방식 — 월급제: 월급÷241.6×14 · 시급제: 시급×8×0.5">휴일근무수당 ✍</td><td class="ot" style="font-weight:700;text-align:center" title="초과근무수당 1일수당 — 주휴 포함: ×11.1(시급제 ×8×0.7) · 미포함: ×9.5(시급제 ×8×0.5) · 초과 일수를 적은 사람만 계산">초과근무수당 ✍</td>`;
-          else if(otHeadRow&&r===otHeadRow+1)tds+=`<td class="ot" style="font-weight:700;text-align:center">계산 방식</td><td class="ot" style="font-weight:700;text-align:center">주휴 포함</td>`;
+          if(r===otHeadRow)tds+=`<td class="ot" style="font-weight:700;text-align:center" title="휴일근무수당 1일수당 계산 방식 — 월급제: 월급÷241.6×14 · 시급제: 시급×8×0.5">휴일근무수당 ✍</td><td class="ot" colspan="2" style="font-weight:700;text-align:center" title="초과근무수당 1일수당 — 월급제: 월급÷241.6 × (8시간까지 ×1(주휴 포함 ×1.2) + 넘는 시간 ×1.5) · 시급제: 시급 × (8시간까지 ×0.5(주휴 0.7) + 넘는 시간 ×0.5) · 초과 일수를 적은 사람만 계산">초과근무수당 ✍</td>`;
+          else if(otHeadRow&&r===otHeadRow+1)tds+=`<td class="ot" style="font-weight:700;text-align:center">계산 방식</td><td class="ot" style="font-weight:700;text-align:center">주휴 포함</td><td class="ot" style="font-weight:700;text-align:center" title="초과근무한 날 하루 일한 시간 (비우면 8시간) — 8시간 넘는 시간은 연장 1.5배(시급제는 0.5 가산)">하루 시간</td>`;
           else if(holNm[r]){
             const cf=byH[holNm[r]]||{},hm=cf.hm||"";
-            tds+=`<td class="ot"><select style="font:inherit;font-size:12px;padding:2px 4px;border:1px solid #d1d5db;border-radius:6px" onchange="payHolMethod('${esc(holNm[r])}',this.value)">${[["","선택"],["m","월급제"],["h","시급제"],["x","직접"]].map(([k,n])=>`<option value="${k}" ${hm===k?"selected":""}>${n}</option>`).join("")}</select></td><td class="ot" style="text-align:center"><input type="checkbox" ${cf.jh?"checked":""} onchange="payHolJh('${esc(holNm[r])}',this.checked)" style="width:16px;height:16px;cursor:pointer"></td>`;
-          }else tds+=`<td class="ot"></td><td class="ot"></td>`;
+            tds+=`<td class="ot"><select style="font:inherit;font-size:12px;padding:2px 4px;border:1px solid #d1d5db;border-radius:6px" onchange="payHolMethod('${esc(holNm[r])}',this.value)">${[["","선택"],["m","월급제"],["h","시급제"],["x","직접"]].map(([k,n])=>`<option value="${k}" ${hm===k?"selected":""}>${n}</option>`).join("")}</select></td><td class="ot" style="text-align:center"><input type="checkbox" ${cf.jh?"checked":""} onchange="payHolJh('${esc(holNm[r])}',this.checked)" style="width:16px;height:16px;cursor:pointer"></td>${(()=>{const oh9=(((P.edits||{})["__oth"])||{})[holNm[r]];return `<td class="ec ot${oh9?" edited":""}" contenteditable="true" data-n="${esc(holNm[r])}" onblur="payHolOth(this)" onkeydown="payKeyDownOt(event,this)" style="text-align:center;min-width:48px" title="초과근무한 날 하루 몇 시간 일했는지 (비우면 8시간) — 이 달에만 적용">${oh9?esc(String(oh9)):'<span style="color:#b9b7ad">8</span>'}</td>`;})()}`;
+          }else tds+=`<td class="ot"></td><td class="ot"></td><td class="ot"></td>`;
         }
         if(hasAny)trs+=`<tr>${tds}</tr>`;
       }
