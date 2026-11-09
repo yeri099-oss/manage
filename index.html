@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v451</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v452</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -11268,7 +11268,7 @@ function renderPay(){
         }
       }
       /* 휴일 짝(시간·수당) 감지: 헤더도 데이터도 없는 짝은 숨김 */
-      let holHide=new Set(),holCtl="";
+      let holHide=new Set(),holCtl="",holSumPairs=[],holSumTot=null; /* v452: 오른쪽 휴일근무수당 요약(1일수당·일수·총수당)용 */
       if(isHol){
         let subRow=null;
         for(let r=1;r<=6&&!subRow;r++)for(let c=4;c<=sh.maxC;c++){
@@ -11322,6 +11322,7 @@ function renderPay(){
         if(holFix){try{paySchedSave();}catch(e){}}
         pairs.forEach(p=>{if(!p.active){holHide.add(p.c1);holHide.add(p.c2);}});
         window.__pay.holPairs=pairs;
+        holSumPairs=pairs.filter(p=>p.active);holSumTot=totIdx;
         const freeN=pairs.filter(p=>!p.active).length;
         holCtl=`<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
           <span class="footnote" style="font-weight:700">휴일:</span>
@@ -11410,15 +11411,19 @@ function renderPay(){
         if(isHol){
           {
             const byH=((S.data.payTax||{}).byName)||{};
-            if(r===otHeadRow)tds+=`<td class="ot" style="font-weight:700" title="정해두면 휴일을 추가할 때마다 이 금액이 그 사람 수당으로 바로 계산돼요">휴일 일급 ✍ 정해두기</td>`;
+            /* v452: 휴일근무수당 요약 — 1일수당(정해두기) · 일수 · 총수당 */
+            if(r===otHeadRow)tds+=`<td class="ot" colspan="3" style="font-weight:700;text-align:center" title="1일수당을 정해두면 휴일을 추가할 때마다 그 금액이 수당으로 바로 계산돼요. 일수·총수당은 왼쪽 표에서 자동으로 세요.">휴일근무수당 ✍</td>`;
+            else if(otHeadRow&&r===otHeadRow+1)tds+=`<td class="ot" style="font-weight:700;text-align:center">1일수당</td><td class="ot" style="font-weight:700;text-align:center">일수</td><td class="ot" style="font-weight:700;text-align:center">총수당</td>`;
             else if(holNm[r]){
               const hv9=byH[holNm[r]]&&Number(byH[holNm[r]].hd)>0?Number(byH[holNm[r]].hd):null;
-              tds+=`<td class="ec ot${hv9!=null?" edited":""}" contenteditable="true" data-n="${esc(holNm[r])}" onblur="payHdEdit(this)" onkeydown="payKeyDownOt(event,this)">${hv9!=null?fmt(hv9):""}</td>`;
-            }else tds+=`<td class="ot"></td>`;
+              const nD=holSumPairs.filter(p=>(Number(val(payIdxCol(p.c2)+r))||0)>0).length;
+              const tS=holSumTot?Math.round(Number(val(payIdxCol(holSumTot)+r))||0):0;
+              tds+=`<td class="ec ot${hv9!=null?" edited":""}" contenteditable="true" data-n="${esc(holNm[r])}" onblur="payHdEdit(this)" onkeydown="payKeyDownOt(event,this)" title="이 사람 휴일 1일수당 — 정해두면 휴일 수당 칸에 바로 들어가요">${hv9!=null?fmt(hv9):""}</td><td class="ot" style="text-align:center">${nD||""}</td><td class="ot" style="text-align:right;font-weight:${tS?700:400}">${tS?fmt(tS):""}</td>`;
+            }else tds+=`<td class="ot"></td><td class="ot"></td><td class="ot"></td>`;
           }
           /* v451: 초과근무수당 — 휴일근무수당처럼 1일수당 · 일수 · 수당 세 칸 (1일수당×일수 = 수당, 수당만 바로 적어도 됨) */
           if(r===otHeadRow)tds+=`<td class="ot" colspan="3" style="font-weight:700;text-align:center" title="1일수당과 일수를 적으면 수당이 계산돼요. 수당 칸에 금액만 바로 적어도 돼요.">초과근무수당 ✍</td>`;
-          else if(otHeadRow&&r===otHeadRow+1)tds+=`<td class="ot" style="font-weight:700;text-align:center">1일수당</td><td class="ot" style="font-weight:700;text-align:center">일수</td><td class="ot" style="font-weight:700;text-align:center">수당</td>`;
+          else if(otHeadRow&&r===otHeadRow+1)tds+=`<td class="ot" style="font-weight:700;text-align:center">1일수당</td><td class="ot" style="font-weight:700;text-align:center">일수</td><td class="ot" style="font-weight:700;text-align:center">총수당</td>`;
           else if(otEmpOf[r]!=null){
             const rk=String(otEmpOf[r]);
             const ov=((P.edits||{})["__ot"]||{})[rk];
