@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v455</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v456</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -9223,7 +9223,24 @@ function payHolCompactCtl(){
     ${d.map((x,i)=>`<span class="paychip" style="cursor:default">${esc(x)} <b style="cursor:pointer;color:#b45309" onclick="payHolDel(${i})" title="이 휴일 지우기">✕</b></span>`).join("")||'<span class="footnote">아직 없음</span>'}
     <input id="holNewDate" placeholder="예: 9월 6일" style="width:110px;padding:4px 8px;border:1px solid rgba(0,0,0,.2);border-radius:8px;font-family:inherit">
     <button class="btn btn-sm" onclick="payHolAdd()">➕ 휴일 추가</button>
-    <span class="footnote">휴일 1일수당을 정해둔 사람은 일수가 휴일 수로 자동으로 들어가요 · 날짜는 엑셀 표 위에 한 줄로 적혀요</span></div>`;
+    <span class="footnote">휴일 1일수당을 정해둔 사람은 일수가 휴일 수로 자동으로 들어가요 · 날짜는 엑셀 표 위에 한 줄로 적혀요</span></div>
+  <details style="margin:0 0 10px;border:1px solid #c7d2fe;border-radius:10px;background:#f8faff;padding:8px 12px">
+    <summary style="cursor:pointer;font-weight:700;font-size:13px">💡 휴일 1일수당 계산법 (월급제 / 시급제가 달라요)</summary>
+    <table class="rpt" style="font-size:12.5px;margin-top:8px;width:auto"><thead><tr><th class="l">구분</th><th class="l">1일수당 계산</th><th class="l">왜 그렇게</th><th class="l">예</th></tr></thead><tbody>
+      <tr><td class="l"><b>월급제</b><br><span class="unit">꽃밥이야기·마켓·보자기 등</span></td><td class="l"><b>월급 ÷ 241.6 × 14</b></td>
+        <td class="l">241.6 = 주 45시간(하루 9시간) 근무의 월 유급시간 (209 + 매일 1시간 연장분 32.6)<br>14 = 휴일 9시간 근무 = 8시간 × 1.5배 + 1시간 × 2.0배</td>
+        <td class="l">6,000,000 ÷ 241.6 × 14 = 347,682<br>3,800,000 ÷ 241.6 × 14 = 220,199</td></tr>
+      <tr><td class="l"><b>시급제</b><br><span class="unit">인사동 파트 등</span></td><td class="l"><b>시급 × 8시간 × 0.5</b></td>
+        <td class="l">휴일에 일한 시간 자체는 시급직급여로 이미 받으니, 휴일 가산분 50%만 더 줘요</td>
+        <td class="l">13,542 × 8 × 0.5 = 54,168</td></tr>
+    </tbody></table>
+    <div style="font-weight:700;font-size:12.5px;margin-top:10px">초과근무수당 1일수당 (월급제, 쉬는 날 하루 9시간 더 일했을 때)</div>
+    <table class="rpt" style="font-size:12.5px;margin-top:4px;width:auto"><tbody>
+      <tr><td class="l"><b>주휴 포함</b> (10월 방식)</td><td class="l"><b>월급 ÷ 241.6 × 11.1</b></td><td class="l">8시간 × 1.2배(1 + 주휴 0.2) + 1시간 연장 × 1.5배 = 11.1</td><td class="l">3,800,000 ÷ 241.6 × 11.1 = 174,586</td></tr>
+      <tr><td class="l">주휴 없이 (8월 방식)</td><td class="l">월급 ÷ 241.6 × 9.5</td><td class="l">8시간 × 1배 + 1시간 연장 × 1.5배 = 9.5</td><td class="l">3,800,000 ÷ 241.6 × 9.5 = 149,421</td></tr>
+    </tbody></table>
+    <div class="footnote" style="margin-top:6px">1일수당 칸에 한 번 적으면 다음 달에도 그 금액으로 채워져요 · 월급이 바뀌면 새로 계산해서 고쳐 주세요 · 두 방식 차이(25,165원)는 주휴분 8시간 × 0.2 = 1.6시간이에요</div>
+  </details>`;
 }
 async function payNormHol(){
   return payBorderNormRun("휴일근무수당",(ctx)=>{
