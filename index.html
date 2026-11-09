@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v461</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v462</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -17962,23 +17962,33 @@ window.payEcBody=function(){
 const PPST_COLS=[["급여","pay"],["제수당","alw"],["상여금","bon"],["특별상여금","sbon"],["지급총액","tot"],["소득세","tax"],["지방소득세","ltax"],["국민연금","np"],["건강보험","hi"],["장기요양보험","ltc"],["고용보험","ei"],["기지급액","pre"],["공제총액","ded"],["실지급액","net"]];
 function ppstParse(text){
   const lines=String(text||"").split(/\r?\n/).map(l=>l.split("\t"));
+  const norm=(x)=>String(x==null?"":x).replace(/\s+/g,"");
+  const COLS=PPST_COLS.concat([["연차수당","ann"]]);
   let hi=-1,cols=null;
-  for(let i=0;i<lines.length;i++){const t=lines[i].map(x=>String(x).replace(/\s+/g,""));const c0=t.indexOf("사원명");if(c0>=0){hi=i;cols={};t.forEach((h,ci)=>{const m=PPST_COLS.find(([n])=>n===h);if(m)cols[m[1]]=ci;});cols.name=c0;break;}}
-  if(hi<0)throw new Error("'사원명' 머리글이 있는 줄을 찾지 못했어요 — 표 전체(머리글 포함)를 복사해서 붙여넣어 주세요");
+  for(let i=0;i<lines.length;i++){const t=lines[i].map(norm);let c0=t.indexOf("사원명");if(c0<0)c0=t.indexOf("성명");
+    if(c0>=0&&t.some(h=>COLS.some(([n])=>n===h))){hi=i;cols={};t.forEach((h,ci)=>{const m=COLS.find(([n])=>n===h);if(m&&cols[m[1]]==null)cols[m[1]]=ci;});cols.name=c0;break;}}
+  if(hi<0)throw new Error("'사원명' 또는 '성명' 머리글이 있는 줄을 찾지 못했어요 — 표 전체(머리글 포함)를 복사해서 붙여넣어 주세요");
   const num=v=>{const t=String(v==null?"":v).replace(/[,\s원]/g,"");if(t===""||t==="-")return null;const n=Number(t);return isNaN(n)?null:Math.round(n);};
+  /* v462: 이카운트 급여대장(인쇄 화면) — 한 사람이 3줄: ① 금액 ② 고용보험·기지급액 ③ 사원번호·직위 */
+  let sub=null;
+  {const t2=(lines[hi+1]||[]).map(norm);if(t2.includes("고용보험")||t2.includes("기지급액")){sub={};t2.forEach((h,ci)=>{const m=COLS.find(([n])=>n===h);if(m&&sub[m[1]]==null)sub[m[1]]=ci;});}}
+  const SKIP=/^(성명|사원명|사원번호|소계|합계|총합계|직원급여|회사명|지급일자)/;
   const rows=[];
   for(let i=hi+1;i<lines.length;i++){
-    const c=lines[i];const nm=String(c[cols.name]||"").trim();
-    if(!nm||nm==="소계"||nm==="합계"||nm.indexOf("소계")>=0||nm.indexOf("합계")>=0)continue;
-    const o={name:nm,v:{}};
-    for(const k in cols){if(k==="name")continue;o.v[k]=num(c[cols[k]]);}
+    const c=lines[i];const nm=String(c[cols.name]||"").trim();const nn=norm(nm);
+    if(!nn||SKIP.test(nn)||nn.indexOf("소계")>=0||nn.indexOf("합계")>=0||/^\d+$/.test(nn)||/^\[/.test(nn)||/^\d{4}\/\d{2}\/\d{2}/.test(nn))continue;
+    const o={name:nm,v:{}};let anyNum=false;
+    for(const k in cols){if(k==="name")continue;o.v[k]=num(c[cols[k]]);if(o.v[k]!=null)anyNum=true;}
+    if(!anyNum)continue;
+    if(sub){const sl=lines[i+1]||[];if(!norm(sl[cols.name])){for(const k in sub)o.v[k]=num(sl[sub[k]]);i++;}}
     rows.push(o);
   }
-  return {rows,cols};
+  if(!rows.length)throw new Error("사람 줄을 찾지 못했어요 — 표 전체를 복사해서 붙여넣어 주세요");
+  return {rows,cols,ecount:!!sub};
 }
 window.payPasteOpen=function(){
   openModal("📋 상용직급여 최종 표 대조",
-    `<div class="footnote" style="margin-bottom:6px">엑셀에서 상용직급여 표(머리글 포함, 소계·합계 줄이 섞여 있어도 돼요)를 복사해 붙여넣으세요. 앱의 현재 값과 사람별·항목별로 비교해서 다른 칸만 보여줘요.</div>
+    `<div class="footnote" style="margin-bottom:6px">엑셀의 상용직급여 표, 또는 <b>이카운트 급여대장(인쇄 화면)을 통째로</b> 복사해 붙여넣으세요 (머리글·소계·합계·쪽 머리글이 섞여 있어도 돼요). 앱의 현재 값과 사람별·항목별로 비교해서 다른 칸만 보여줘요.</div>
      <textarea id="ppstTa" style="width:100%;min-height:160px;font-size:12px;border:1px solid var(--line,#ddd);border-radius:8px;padding:8px" placeholder="사원명\t급여\t제수당\t상여금\t지급총액\t소득세 …"></textarea>
      <div id="ppstOut" style="margin-top:8px"></div>`,
     `<button class="btn" onclick="closeModal()">닫기</button><button class="btn" onclick="payPasteCheck()">🔍 대조하기</button><button class="btn btn-primary" id="ppstApply" onclick="payPasteApply()" disabled>✅ 다른 칸 모두 반영</button>`);
@@ -17992,7 +18002,12 @@ function ppstDiff(){
   const byName={};em.rows.forEach(r=>byName[r.name.replace(/\s+/g,"")]=r);
   const diffs=[],missing=[],same=[];
   const label=Object.fromEntries(PPST_COLS.map(([n,k])=>[k,n]));
+  const noCol=[];
   for(const p of parsed.rows){
+    /* v462: 앱 표에 특별상여금 칸이 없으면 상여금 + 특별상여금으로 비교, 연차수당 칸이 없으면 따로 알림 */
+    if(!cm.sbon&&p.v.sbon!=null){p.v.bon=(p.v.bon||0)+(p.v.sbon||0);delete p.v.sbon;}
+    if(!cm.ann&&p.v.ann){noCol.push(p.name+" 연차수당 "+fmt(p.v.ann));}
+    delete p.v.ann;
     const row=byName[p.name.replace(/\s+/g,"")];
     if(!row){missing.push(p.name);continue;}
     let any=false;
@@ -18008,7 +18023,7 @@ function ppstDiff(){
     if(!any)same.push(p.name);
   }
   const notInPaste=em.rows.filter(r=>!parsed.rows.some(p=>p.name.replace(/\s+/g,"")===r.name.replace(/\s+/g,""))).map(r=>r.name);
-  return {diffs,missing,same,notInPaste,n:parsed.rows.length};
+  return {diffs,missing,same,notInPaste,n:parsed.rows.length,noCol,ecount:parsed.ecount};
 }
 window.payPasteCheck=function(){
   const out=document.getElementById("ppstOut");
@@ -18016,6 +18031,8 @@ window.payPasteCheck=function(){
     const D=ppstDiff();window.__ppst=D;
     const inputDiffs=D.diffs.filter(d=>!d.isF),calcDiffs=D.diffs.filter(d=>d.isF);
     let h=`<div class="footnote">붙여넣은 ${D.n}명 중 <b>${D.same.length}명</b>은 전부 일치, <b>${[...new Set(D.diffs.map(d=>d.name))].length}명</b>에서 차이 ${D.diffs.length}칸</div>`;
+    if(D.ecount)h+=`<div class="footnote" style="color:#2F6B3F">이카운트 급여대장 형식으로 읽었어요 (고용보험·기지급액은 둘째 줄에서)</div>`;
+    if(D.noCol&&D.noCol.length)h+=`<div style="margin:6px 0;padding:6px 10px;background:#FDF6EC;border:1px solid #E8C88A;border-radius:8px"><b>⚠ 앱 표에 칸이 없는 항목:</b> ${D.noCol.map(esc).join(", ")}</div>`;
     if(D.missing.length)h+=`<div style="margin:6px 0;padding:6px 10px;background:#FDF6EC;border:1px solid #E8C88A;border-radius:8px"><b>⚠ 앱 시트에 없는 사람:</b> ${D.missing.map(esc).join(", ")} — 엑셀에서 줄을 추가한 뒤 다시 올려주세요 (여기서는 반영 못 해요)</div>`;
     if(D.notInPaste.length)h+=`<div style="margin:6px 0;padding:6px 10px;background:#FDF6EC;border:1px solid #E8C88A;border-radius:8px"><b>⚠ 붙여넣은 표에 없는 사람(앱에만 있음):</b> ${D.notInPaste.map(esc).join(", ")}</div>`;
     if(inputDiffs.length){
