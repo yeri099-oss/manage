@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v465</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v466</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -8175,6 +8175,11 @@ function payCellEdit(el){
   if(pctIn&&typeof v==="number")v=v/100;
   payEdit(shName,ref,v);
   if(shName==="용역직급여"){try{payAutoFill();}catch(e){console.warn(e);}} /* v445: 용역대금 → 소득세·지방소득세 바로 */
+  if(shName==="휴일근무수당"&&/^C\d+$/.test(ref)&&payHolIsCompact()){ /* v466: 월급여액 → 급여대장(상용직) 급여에 바로 */
+    const hs9=paySheetByName("휴일근무수당"),nb9=hs9&&hs9.cells["B"+ref.slice(1)];const nk9=nb9&&nb9.typ==="str"?String(nb9.v).replace(/\s+/g,""):"";
+    const em9=payEmpRows();const emp9=em9&&nk9?em9.rows.find(x=>x.name.replace(/\s+/g,"")===nk9):null;
+    if(emp9){const E9=(window.__pay.edits["휴일근무수당"]||{});delete E9[ref];payEdit("상용직급여",em9.cm.pay+emp9.r,typeof v==="number"?v:"");try{payAutoFill();}catch(e){}toast(nk9+" 님 급여를 급여대장(상용직)에도 반영했어요");}
+  }
   if(shName==="휴일근무수당"&&/^E\d+$/.test(ref)&&payHolIsCompact()){ /* v453: 휴일 1일수당 = 정해두기 (다음 달에도) */
     const hs9=paySheetByName("휴일근무수당"),nb9=hs9&&hs9.cells["B"+ref.slice(1)];
     const nk9=nb9&&nb9.typ==="str"?String(nb9.v).replace(/\s+/g,""):"";
@@ -8430,6 +8435,23 @@ async function payXlsxSangReorder(zip){
     for(const fe of d2.getElementsByTagName("f")){const t0=fe.textContent||"";if(t0.indexOf(SN)<0)continue;const t1=remap(t0,true);if(t1!==t0){fe.textContent=t1;hit=true;}}
     if(hit)zip.file(o.path,ser.serializeToString(d2));}
   try{await payWbNames(zip,SN,(body)=>remap(body,true));}catch(e){console.warn(e);}
+  return true;
+}
+/* v466: 받는 엑셀의 시트 이름 바꾸기 (수식·이름 정의·문서 속성까지) */
+async function payXlsxRenameSheet(zip,from,to){
+  const wf=zip.file("xl/workbook.xml");if(!wf)return false;
+  let wb=await wf.async("string");
+  const esc9=(t)=>t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  if(wb.indexOf('name="'+esc9(from)+'"')<0)return false;
+  wb=wb.replace('name="'+esc9(from)+'"','name="'+esc9(to)+'"');
+  const rx=new RegExp("'?"+from.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"'?!","g"),q="'"+to.replace(/'/g,"''")+"'!";
+  wb=wb.replace(/(<definedName\b[^>]*>)([^<]*)(<\/definedName>)/g,(m,a,b,z)=>a+b.replace(rx,q)+z);
+  zip.file("xl/workbook.xml",wb);
+  for(const n of Object.keys(zip.files).filter(n=>/^xl\/worksheets\/sheet\d+\.xml$/.test(n))){
+    const x=await zip.file(n).async("string");if(x.indexOf(from)<0)continue;
+    const y=x.replace(/(<f\b[^>]*>)([^<]*)(<\/f>)/g,(m,a,b,z)=>a+b.replace(rx,q)+z);if(y!==x)zip.file(n,y);
+  }
+  const ap=zip.file("docProps/app.xml");if(ap){const x=await ap.async("string");zip.file("docProps/app.xml",x.split(">"+esc9(from)+"<").join(">"+esc9(to)+"<"));}
   return true;
 }
 function payUnshare(doc,sh){
@@ -8818,6 +8840,7 @@ async function payColsSync(){
     try{
       if(!P.wb.__gb){
         if(paySheetByName("휴일근무수당")){try{if(await payHolCompact())ch=true;}catch(e8){console.warn("휴일 새 모양",e8);}}
+        if(paySheetByName("휴일근무수당")){try{if(await payHolTidy())ch=true;}catch(e8){console.warn("휴일/초과 제목",e8);}}
         if(paySheetByName("휴일근무수당")){try{if(await payHolSumSplit())ch=true;}catch(e8){console.warn("휴일 합계 열",e8);}}
         if(paySheetByName("휴일근무수당")){try{if(await payHolSumMerge())ch=true;}catch(e8){console.warn("휴일 합계 병합",e8);}}
         if(paySheetByName("휴일근무수당")&&await payNormHol())ch=true;
@@ -9103,9 +9126,12 @@ async function payHolSumMerge(){
   for(let r=hEnd+1;r<tot;){const m=(sh.merges||{})["A"+r];const rs=m&&m.rs?m.rs:1;
     if(tx("A"+r)||m)groups.push([r,Math.min(r+rs-1,tot-1)]);r+=rs;}
   if(!groups.length)return false;
+  /* v466: 부서명이 없는 줄은 바로 위 부서에 붙임 (예: 인사동 칸이 한 줄만 병합돼 있던 경우) */
+  groups[0][0]=hEnd+1;
+  for(let i=0;i<groups.length;i++)groups[i][1]=i<groups.length-1?groups[i+1][0]-1:tot-1;
   const G=payIdxCol(gC),S2=payIdxCol(sC);
-  /* 이미 정리됨: 각 묶음 첫 칸이 SUM(계) 수식이고 병합돼 있으면 그대로 */
-  const done=groups.every(([a,b])=>{const c=sh.cells[S2+a];const m=(sh.merges||{})[S2+a];return c&&typeof c.f==="string"&&c.f.replace(/\$/g,"")===`SUM(${G}${a}:${G}${b})`&&(a===b||(m&&m.rs===b-a+1));});
+  /* 이미 정리됨: 각 묶음 첫 칸이 SUM(계) 수식이고 합계·부서명이 묶음 전체로 병합돼 있으면 그대로 */
+  const done=groups.every(([a,b])=>{const c=sh.cells[S2+a];const m=(sh.merges||{})[S2+a],mA=(sh.merges||{})["A"+a];return c&&typeof c.f==="string"&&c.f.replace(/\$/g,"")===`SUM(${G}${a}:${G}${b})`&&(a===b||(m&&m.rs===b-a+1&&mA&&mA.rs===b-a+1));});
   if(done)return false;
   const zip=await JSZip.loadAsync(P.wb.zipBuf.slice(0));const par=new DOMParser(),ser=new XMLSerializer();
   const doc=par.parseFromString(await zip.file(sh.path).async("string"),"application/xml");
@@ -9114,7 +9140,11 @@ async function payHolSumMerge(){
   for(let r=hEnd+1;r<=tot;r++){delete E[S2+r];delete AS[S2+r];}
   /* 합계 열의 데이터 쪽 병합은 지우고 다시 */
   const mc=doc.getElementsByTagName("mergeCells")[0];
-  if(mc)for(const m of [...mc.getElementsByTagName("mergeCell")]){const mm=/^([A-Z]+)(\d+):([A-Z]+)(\d+)$/.exec(m.getAttribute("ref")||"");if(mm&&mm[1]===S2&&mm[3]===S2&&+mm[2]>hEnd)mc.removeChild(m);}
+  if(mc)for(const m of [...mc.getElementsByTagName("mergeCell")]){const mm=/^([A-Z]+)(\d+):([A-Z]+)(\d+)$/.exec(m.getAttribute("ref")||"");if(mm&&((mm[1]===S2&&mm[3]===S2)||(mm[1]==="A"&&mm[3]==="A"))&&+mm[2]>hEnd&&+mm[2]<tot)mc.removeChild(m);}
+  /* 부서명 글자는 묶음 첫 줄로 */
+  groups.forEach(([a,b])=>{let lab="";for(let r=a;r<=b;r++){const t=sh.cells["A"+r];if(t&&t.typ==="str"&&String(t.v).trim()){lab=String(t.v);break;}}
+    for(let r=a+1;r<=b;r++){const c9=T.cellOf("A"+r);if(c9&&(c9.getElementsByTagName("v")[0]||c9.getElementsByTagName("is")[0]))T.setCell("A"+r,"");}
+    if(lab)T.setCell("A"+a,lab);});
   const refs=[];
   groups.forEach(([a,b])=>{
     T.setCell(S2+a,{f:`SUM(${G}${a}:${G}${b})`});refs.push(S2+a);
@@ -9123,7 +9153,7 @@ async function payHolSumMerge(){
   T.setCell(S2+tot,{f:`SUM(${S2}${hEnd+1}:${S2}${tot-1})`});
   let mc2=doc.getElementsByTagName("mergeCells")[0];
   const addM=(ref)=>{if(!mc2){T.setMerges([ref]);mc2=doc.getElementsByTagName("mergeCells")[0];return;}const nm=doc.createElementNS(mc2.namespaceURI,"mergeCell");nm.setAttribute("ref",ref);mc2.appendChild(nm);};
-  groups.forEach(([a,b])=>{if(b>a)addM(`${S2}${a}:${S2}${b}`);});
+  groups.forEach(([a,b])=>{if(b>a){addM(`${S2}${a}:${S2}${b}`);addM(`A${a}:A${b}`);}});
   if(mc2)mc2.setAttribute("count",String(mc2.getElementsByTagName("mergeCell").length));
   zip.file(sh.path,ser.serializeToString(doc));
   await payAdoptBuf(await zip.generateAsync({type:"arraybuffer",compression:"DEFLATE"}));
@@ -9298,9 +9328,17 @@ function payHolCompactAuto(hd,em){
   const P=window.__pay;const H=payHolHdr(hd);if(!H||!H.tot)return;
   const byT=((S.data.payTax||{}).byName)||{};const nDays=(((P.edits||{})["__holDays"])||[]).length;
   const HID=(((P.edits||{})["__hide"]||{})["휴일근무수당"])||{};
-  const hEd0=(P.edits||{})["휴일근무수당"]||{};
+  const hEd0=(P.edits["휴일근무수당"]=P.edits["휴일근무수당"]||{});
   for(let r=H.hEnd+1;r<H.tot;r++){
     const n0=H.tx("B"+r).replace(/\s+/g,"");if(!n0||HID[r])continue;
+    if(em){ /* v466: 월급여액은 급여대장(상용직)의 급여를 따라감 */
+      const emp=em.rows.find(x=>x.name.replace(/\s+/g,"")===n0);
+      if(emp){const pv=Math.round(Number(em.val(em.cm.pay+emp.r))||0);const cC=hd.cells["C"+r];
+        if(!(cC&&typeof cC.f==="string")){const E9=(P.edits["휴일근무수당"]=P.edits["휴일근무수당"]||{}),A9=((P.autoSet=P.autoSet||{})["휴일근무수당"]=(P.autoSet["휴일근무수당"]||{}));
+          const orig=cC&&cC.typ==="num"&&cC.v!==""?Number(cC.v):null;
+          if(pv&&pv!==orig){E9["C"+r]=pv;A9["C"+r]=1;}else{delete E9["C"+r];delete A9["C"+r];}
+          if(pv){P.__af=P.__af||{};P.__af["휴일근무수당!C"+r]=1;}}}
+    }
     const cfg0=byT[n0];
     if(cfg0&&(cfg0.hm==="m"||cfg0.hm==="h")){ /* v457: 계산법을 고른 사람 */
       const vv=payMkVal(hd,hEd0);let mw=Math.round(Number(vv("C"+r))||0);
@@ -9455,6 +9493,32 @@ async function payNormHol(){
     };
     return {cells:cells,donor:donor};
   });
+}
+/* v466: 휴일/초과(새 모양) — 제목 '휴일/초과 근무수당', 제목·휴일 줄은 비고(M)까지만 병합, 표 위쪽 M열 오른쪽 칸 지우기 */
+async function payHolTidy(){
+  if(!payHolIsCompact())return false;
+  const P=window.__pay,sh=paySheetByName("휴일근무수당");const H=payHolHdr(sh);if(!H||!H.tot)return false;
+  const TITLE="휴일/초과 근무수당";
+  const a1=sh.cells["A1"];const titleOk=a1&&a1.typ==="str"&&String(a1.v).trim()===TITLE;
+  let extra=false;for(const ref in sh.cells){const ci=payColIdx(ref.replace(/\d+/g,"")),rn=+ref.replace(/[A-Z]+/g,"");if(ci>13&&rn<=H.tot){extra=true;break;}}
+  const m1=(sh.merges||{})["A1"];const mOk=m1&&m1.cs===13;
+  if(titleOk&&!extra&&mOk)return false;
+  const zip=await JSZip.loadAsync(P.wb.zipBuf.slice(0));const par=new DOMParser(),ser=new XMLSerializer();
+  const doc=par.parseFromString(await zip.file(sh.path).async("string"),"application/xml");
+  const T=ptxSheetTools(doc);
+  if(!titleOk)T.setCell("A1",TITLE);
+  for(const rw of [...T.sd.getElementsByTagName("row")]){const rn=+rw.getAttribute("r");if(rn>H.tot)continue;
+    for(const c of [...rw.getElementsByTagName("c")])if(payColIdx(c.getAttribute("r").replace(/\d+/g,""))>13)rw.removeChild(c);}
+  const ml=[];
+  for(const m of [...doc.getElementsByTagName("mergeCell")]){const mm=/^([A-Z]+)(\d+):([A-Z]+)(\d+)$/.exec(m.getAttribute("ref")||"");if(!mm)continue;
+    if(+mm[2]===1)continue;
+    if(payColIdx(mm[3])>13&&+mm[2]<=H.tot)ml.push(mm[1]+mm[2]+":M"+mm[4]);else ml.push(m.getAttribute("ref"));}
+  ml.push("A1:M1");
+  T.setMerges([...new Set(ml)]);T.setDim();
+  { /* 같은 이름으로 앱 수정값에 남은 제목은 지움 */ const E9=((P.edits||{})["휴일근무수당"])||{};if(E9.A1!==undefined)delete E9.A1;}
+  zip.file(sh.path,ser.serializeToString(doc));
+  await payAdoptBuf(await zip.generateAsync({type:"arraybuffer",compression:"DEFLATE"}));
+  return true;
 }
 /* v461: 휴일/초과(새 모양) — 큰 묶음(부서명~시급 | 휴일근무수당 | 초과근무수당 | 계·합계·비고) 사이 세로 굵은 선 */
 async function payHolGroupBorders(){
@@ -9932,6 +9996,7 @@ async function payDownload(){
       }
     }catch(e){console.warn("인쇄 범위 조정 실패",e);}
     try{await payXlsxSangReorder(zip);}catch(e){console.warn("상용직급여 열 순서",e);}
+    try{await payXlsxRenameSheet(zip,"휴일근무수당","휴일·초과");}catch(e){console.warn("시트 이름",e);}
     try{
       const sf=zip.file("xl/styles.xml");
       if(sf)zip.file("xl/styles.xml",payDashZeroStyles(await sf.async("string")));
