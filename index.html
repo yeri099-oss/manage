@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v448</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v449</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -8681,6 +8681,7 @@ async function payColsSync(){
     try{if(await paySbMatSync())ch=true;}catch(e){console.warn("특별상여금 열 만들기 실패",e);}
     try{
       if(!P.wb.__gb){
+        if(paySheetByName("휴일근무수당")){try{if(await payHolSumSplit())ch=true;}catch(e8){console.warn("휴일 합계 열",e8);}}
         if(paySheetByName("휴일근무수당")&&await payNormHol())ch=true;
         if(paySheetByName("상여금")&&await payNormBj())ch=true;
       }
@@ -8900,6 +8901,51 @@ function payMediumEl(stDoc){
   return e;
 }
 /* 휴일근무수당: 부서 묶음 안은 가는 선, 묶음 사이·머리글 아래·계 위는 굵은 선, 세로선은 열마다 한 가지로 */
+/* v448: 휴일근무수당 — '비고' 열에 들어 있던 부서 합계 수식은 그대로 두고 그 열 이름을 '합계'로,
+   바로 오른쪽에 글만 적는 새 '비고' 열을 만들어 원래 적힌 글을 옮김 (다른 시트가 합계 칸을 참조해도 안 깨짐) */
+async function payHolSumSplit(){
+  const P=window.__pay;let sh=paySheetByName("휴일근무수당");if(!sh||!P.wb)return false;
+  const ed0=()=>((P.edits||{})["휴일근무수당"]||{});
+  const tx=(s9,ref)=>{const e=ed0()[ref];if(e!==undefined&&typeof e==="string")return e.replace(/\s+/g,"");const c=s9.cells[ref];return c&&c.typ==="str"?String(c.v).replace(/\s+/g,""):"";};
+  let hdr=0;for(let r=1;r<=8;r++)if(tx(sh,"B"+r)==="성명"){hdr=r;break;}
+  if(!hdr)return false;
+  const hm=(sh.merges||{})["A"+hdr];const hEnd=hdr+((hm&&hm.rs)?hm.rs-1:0);
+  let bc=0,bRow=0;
+  for(let r=hdr;r<=hEnd;r++)for(let c=3;c<=sh.maxC;c++){const t=tx(sh,payIdxCol(c)+r);if(t==="합계")return false;if(t==="비고"&&!bc){bc=c;bRow=r;}}
+  if(!bc)return false;
+  const L=payIdxCol(bc);let hasF=false;
+  for(let r=hEnd+1;r<=sh.maxR;r++){const c=sh.cells[L+r];if(c&&typeof c.f==="string"&&c.f){hasF=true;break;}}
+  if(!hasF)return false;
+  await payInsertColBefore("휴일근무수당",bc+1);
+  sh=paySheetByName("휴일근무수당");
+  const N=payIdxCol(bc+1);
+  /* 앱에서 적은 비고 글(문자) → 새 비고 열 */
+  const E=(P.edits["휴일근무수당"]=P.edits["휴일근무수당"]||{}),AS=((P.autoSet||{})["휴일근무수당"])||{};
+  for(const ref of Object.keys(E)){const col=ref.replace(/\d+/g,""),rn=+ref.replace(/[A-Z]/g,"");
+    if(col===L&&rn>hEnd&&typeof E[ref]==="string"){E[N+rn]=E[ref];delete E[ref];delete AS[ref];}}
+  const zip=await JSZip.loadAsync(P.wb.zipBuf.slice(0));const par=new DOMParser(),ser=new XMLSerializer();
+  const doc=par.parseFromString(await zip.file(sh.path).async("string"),"application/xml");
+  const T=ptxSheetTools(doc);
+  let endR=sh.maxR;for(let r=hEnd+1;r<=sh.maxR;r++){const a=sh.cells["A"+r];if(a&&a.typ==="str"&&String(a.v).replace(/\s+/g,"")==="계"){endR=r;break;}}
+  for(let r=hdr;r<=endR;r++){
+    const sL=T.sOf(L+r);
+    const c=sh.cells[L+r];
+    let moveTxt=null;
+    if(r===bRow){T.setCell(L+r,"합계");moveTxt="비고";}
+    else if(r>hEnd&&c&&c.typ==="str"&&!(typeof c.f==="string"&&c.f)&&String(c.v).trim()){moveTxt=String(c.v);T.setCell(L+r,"");}
+    if(moveTxt!=null)T.setCell(N+r,moveTxt,sL);else if(!T.cellOf(N+r))T.setCell(N+r,"",sL);
+    const nc=T.cellOf(N+r);if(nc&&sL!=null)nc.setAttribute("s",sL);
+  }
+  /* 머리글 병합(예: 비고 두 줄) 그대로 새 비고 열에도 */
+  const mc=doc.getElementsByTagName("mergeCells")[0];
+  if(mc)for(const m of [...mc.getElementsByTagName("mergeCell")]){
+    const mm=/^([A-Z]+)(\d+):([A-Z]+)(\d+)$/.exec(m.getAttribute("ref")||"");
+    if(mm&&mm[1]===L&&mm[3]===L){const nm=doc.createElementNS(mc.namespaceURI,"mergeCell");nm.setAttribute("ref",N+mm[2]+":"+N+mm[4]);mc.appendChild(nm);mc.setAttribute("count",String(mc.getElementsByTagName("mergeCell").length));}
+  }
+  zip.file(sh.path,ser.serializeToString(doc));
+  await payAdoptBuf(await zip.generateAsync({type:"arraybuffer",compression:"DEFLATE"}));
+  return true;
+}
 async function payNormHol(){
   return payBorderNormRun("휴일근무수당",(ctx)=>{
     const sh=ctx.sh;
