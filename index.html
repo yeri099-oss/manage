@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v447</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v448</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -12962,6 +12962,20 @@ function wdClean(r) {
     confirmed: !!r.confirmed, company: WD_COS.includes(r.company) ? r.company : WD_COS[0] };
 }
 const wdSortList = () => window.__wd.recs.sort((a, b) => b.date.localeCompare(a.date));
+// Firebase 규칙이 출금기록부 읽기를 막을 때: 관리자가 붙여넣을 규칙 안내 (직원=보기, 관리자=쓰기)
+// 일반 계정: 보기·추가·수정(입금확인·다음날 넘기기 포함) / 삭제는 기존 salesApp_* 규칙대로 관리자만
+const WD_RULE = `match /salesApp_withdraw/{doc} {
+  allow read, create, update: if salesActive();
+}`;
+function wdRuleHelp() {
+  return `<div class="card" style="border:1.5px solid #E4A2A2;background:#FDF3F3">
+    <div class="card-title">⚠ 이 계정(${esc(S.user?.username || "")})은 Firebase 규칙에서 출금기록부가 막혀 있어요</div>
+    <div class="footnote">관리자가 Firebase 콘솔 → Firestore Database → 규칙에서, 기존 규칙 안(다른 match들 옆, 맨 아래 <code>match /{document=**}</code> 위)에 아래 블록을 추가하고 <b>게시</b>하면 돼요. 일반 계정도 보기·입력·수정을 할 수 있고, 삭제는 관리자만 하는 규칙이에요.</div>
+    <pre style="background:#fff;border:1px solid rgba(0,0,0,.1);border-radius:8px;padding:10px;font-size:13px;overflow:auto;margin:8px 0">${esc(WD_RULE)}</pre>
+    <button class="btn btn-sm btn-primary" onclick="navigator.clipboard.writeText(WD_RULE).then(()=>toast('규칙을 복사했어요 — Firebase 규칙 창에 붙여넣으세요'),()=>toast('복사하지 못했어요. 위 글자를 직접 선택해 복사해주세요',true))">📋 규칙 복사</button>
+    <button class="btn btn-sm" onclick="window.__wd.err='';window.__wd.errPerm=false;renderWithdraw()">↻ 다시 시도</button>
+  </div>`;
+}
 async function wdLoad() {
   const W = window.__wd;
   W.loading = true; W.err = "";
@@ -12976,7 +12990,8 @@ async function wdLoad() {
     W.loaded = true;
   } catch (e) {
     console.error(e);
-    W.err = e.code === "permission-denied" || /permission/i.test(e.message || "") ? "출금기록부를 볼 권한이 없어요." : "불러오기 실패: " + (e.message || "");
+    W.errPerm = e.code === "permission-denied" || /permission/i.test(e.message || "");
+    W.err = W.errPerm ? "출금기록부를 볼 권한이 없어요." : "불러오기 실패: " + (e.message || "");
   }
   W.loading = false;
 }
@@ -12985,17 +13000,23 @@ async function wdPut(r) {
 }
 function wdSaveErr(e) {
   console.error(e);
+  if ((e.code === "permission-denied" || /permission/i.test(e.message || "")) && S.user?.role !== "admin") {
+    // 일반 계정 저장이 규칙에 막힘 → 관리자에게 보여줄 규칙 안내
+    openModal("저장 권한이 아직 없어요", wdRuleHelp(), `<button class="btn" onclick="closeModal()">닫기</button>`);
+    return;
+  }
   toast(e.code === "permission-denied" || /permission/i.test(e.message || "") ? "저장 권한이 없어요. 관리자 계정으로 로그인해주세요." : "저장 실패: " + (e.message || ""), true);
 }
 async function renderWithdraw() {
   const el = document.getElementById("tab-withdraw"); if (!el) return;
   if (!S.user) return;
-  const adm = S.user.role === "admin"; // 직원 계정은 보기만 (Firestore 규칙도 쓰기는 관리자만)
+  const adm = S.user.role === "admin";
+  const ed = true; // 일반 계정도 입력·수정·입금확인·넘기기 가능 / 삭제·가져오기·백업은 관리자만 (Firestore 규칙과 맞춤)
   const W = window.__wd;
   if (!W.date) W.date = wdToday();
   if (!W.month) W.month = W.date.slice(0, 7);
   if (!W.loaded) {
-    el.innerHTML = W.err ? `<div class="card">${esc(W.err)} <button class="btn btn-sm" onclick="window.__wd.err='';renderWithdraw()">다시 시도</button></div>`
+    el.innerHTML = W.err ? (W.errPerm ? wdRuleHelp() : `<div class="card">${esc(W.err)} <button class="btn btn-sm" onclick="window.__wd.err='';renderWithdraw()">다시 시도</button></div>`)
       : `<div class="loading"><span class="spin"></span><br>출금기록부를 불러오는 중…</div>`;
     if (!W.err && !W.loading) { await wdLoad(); renderWithdraw(); }
     return;
@@ -13017,8 +13038,8 @@ async function renderWithdraw() {
       <td style="font-weight:700;color:#0F6E56;white-space:nowrap">${fmt(r.amount)}</td>
       <td class="note">${esc(r.content) || "-"}</td>
       <td class="note" style="max-width:170px">${esc(r.note) || "-"}</td>
-      <td class="c${adm ? " wd-chk" : ""}" style="white-space:nowrap;${adm ? "cursor:pointer" : ""}" ${adm ? `onclick="wdToggle('${esc(r.id)}',this.querySelector('input'))" title="눌러서 입금확인 ${r.confirmed ? "취소" : ""}"` : ""}><span style="font-size:14px;color:${r.confirmed ? "#27ae60;font-weight:700" : "var(--ink-muted)"}"><input type="checkbox" ${r.confirmed ? "checked" : ""} ${adm ? "" : "disabled"} style="accent-color:#27ae60;vertical-align:-2px;pointer-events:none"> ${r.confirmed ? "확인" : "미확인"}</span></td>
-      ${adm ? `<td class="c" style="white-space:nowrap">${r.confirmed ? "" : `<button class="btn btn-sm" onclick="wdMove(['${esc(r.id)}'])" title="결재가 안 나서 못 보낸 건 → ${wdNextDay(r.date).slice(5).replace("-", "/")}로 넘기기">⏭ 다음날</button> `}<button class="btn btn-sm" onclick="wdForm('${esc(r.id)}')">수정</button> <button class="btn btn-sm" onclick="wdDel('${esc(r.id)}')">삭제</button></td>` : ""}
+      <td class="c${ed ? " wd-chk" : ""}" style="white-space:nowrap;${ed ? "cursor:pointer" : ""}" ${ed ? `onclick="wdToggle('${esc(r.id)}',this.querySelector('input'))" title="눌러서 입금확인 ${r.confirmed ? "취소" : ""}"` : ""}><span style="font-size:14px;color:${r.confirmed ? "#27ae60;font-weight:700" : "var(--ink-muted)"}"><input type="checkbox" ${r.confirmed ? "checked" : ""} ${ed ? "" : "disabled"} style="accent-color:#27ae60;vertical-align:-2px;pointer-events:none"> ${r.confirmed ? "확인" : "미확인"}</span></td>
+      ${ed ? `<td class="c" style="white-space:nowrap">${r.confirmed ? "" : `<button class="btn btn-sm" onclick="wdMove(['${esc(r.id)}'])" title="결재가 안 나서 못 보낸 건 → ${wdNextDay(r.date).slice(5).replace("-", "/")}로 넘기기">⏭ 다음날</button> `}<button class="btn btn-sm" onclick="wdForm('${esc(r.id)}')">수정</button> ${adm ? `<button class="btn btn-sm" onclick="wdDel('${esc(r.id)}')">삭제</button>` : ""}</td>` : ""}
     </tr>`).join("");
   el.innerHTML = `<style>
     #tab-withdraw .rpt{font-size:15.5px}
@@ -13043,11 +13064,11 @@ async function renderWithdraw() {
           const col = WD_COLOR[c], on = c === W.co;
           return `<button onclick="window.__wd.co='${c}';renderWithdraw()" style="font-family:inherit;font-size:16px;font-weight:700;padding:11px 26px;border-radius:10px;cursor:pointer;border:2px solid ${on ? col.main : "#ddd"};background:${on ? col.main : "#fff"};color:${on ? "#fff" : "#888"}${on ? ";box-shadow:0 2px 8px " + col.main + "55" : ""}">${c}</button>`;
         }).join("")}</div>
-        ${adm ? `<button onclick="wdForm()" style="font-family:inherit;font-size:16px;font-weight:700;padding:11px 26px;border-radius:10px;cursor:pointer;border:2px solid #c0392b;background:#c0392b;color:#fff;box-shadow:0 2px 8px #c0392b55">+ ${esc(W.co)} 내역 추가</button>` : ""}
+        ${ed ? `<button onclick="wdForm()" style="font-family:inherit;font-size:16px;font-weight:700;padding:11px 26px;border-radius:10px;cursor:pointer;border:2px solid #c0392b;background:#c0392b;color:#fff;box-shadow:0 2px 8px #c0392b55">+ ${esc(W.co)} 내역 추가</button>` : ""}
       </div>
       <div class="stat-tiles" style="margin-bottom:4px">
         <div class="stat-tile"><div class="k">날짜별 총금액 <input type="date" value="${W.date}" onchange="window.__wd.date=this.value||wdToday();renderWithdraw()" style="font-family:inherit;font-size:14px;border:1px solid var(--grid);border-radius:6px;padding:2px 6px;margin-left:4px"></div><div class="v" style="color:#0F6E56">${wdWon(dayTot)}</div>
-          <div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap"><button class="btn btn-sm" onclick="wdImage()" title="${esc(W.co)} ${W.date} 출금 내역을 보고용 이미지로 복사">📋 이미지 복사</button><button class="btn btn-sm btn-ghost" onclick="wdImage('dl')" title="이미지 파일로 저장">⬇</button>${adm && dayOpen.length ? `<button class="btn btn-sm" onclick="wdMove(window.__wd.dayOpenIds)" title="이 날짜의 미확인 내역을 모두 다음 영업일로">⏭ 미확인 ${dayOpen.length}건 다음날로</button>` : ""}</div></div>
+          <div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap"><button class="btn btn-sm" onclick="wdImage()" title="${esc(W.co)} ${W.date} 출금 내역을 보고용 이미지로 복사">📋 이미지 복사</button><button class="btn btn-sm btn-ghost" onclick="wdImage('dl')" title="이미지 파일로 저장">⬇</button>${ed && dayOpen.length ? `<button class="btn btn-sm" onclick="wdMove(window.__wd.dayOpenIds)" title="이 날짜의 미확인 내역을 모두 다음 영업일로">⏭ 미확인 ${dayOpen.length}건 다음날로</button>` : ""}</div></div>
         <div class="stat-tile"><div class="k">${Number(ym.slice(5))}월 건수</div><div class="v">${monRecs.length}건</div></div>
         <div class="stat-tile"><div class="k">${Number(ym.slice(5))}월 총 출금액</div><div class="v" style="color:#0F6E56">${wdWon(monRecs.reduce((s, r) => s + r.amount, 0))}</div></div>
       </div>
@@ -13061,10 +13082,10 @@ async function renderWithdraw() {
         </div>
       </div>
       <div class="table-wrap"><table class="rpt" style="white-space:normal">
-        <thead><tr><th style="cursor:pointer" onclick="wdSortDate()">날짜 ↕</th><th class="l">거래처</th><th>금액</th><th class="l">내용</th><th class="l">비고</th><th>입금확인</th>${adm ? "<th>넘기기·수정·삭제</th>" : ""}</tr></thead>
-        <tbody>${rows || `<tr><td colspan="${adm ? 7 : 6}" class="c dim" style="padding:30px">등록된 출금 내역이 없어요.</td></tr>`}</tbody>
+        <thead><tr><th style="cursor:pointer" onclick="wdSortDate()">날짜 ↕</th><th class="l">거래처</th><th>금액</th><th class="l">내용</th><th class="l">비고</th><th>입금확인</th>${ed ? `<th>${adm ? "넘기기·수정·삭제" : "넘기기·수정"}</th>` : ""}</tr></thead>
+        <tbody>${rows || `<tr><td colspan="${ed ? 7 : 6}" class="c dim" style="padding:30px">등록된 출금 내역이 없어요.</td></tr>`}</tbody>
       </table></div>
-      <div class="footnote">거래처 이름을 누르면 계좌 정보를 볼 수 있어요(파란 밑줄 = 계좌 등록됨).</div>
+      <div class="footnote">거래처 이름을 누르면 계좌 정보를 볼 수 있어요(파란 밑줄 = 계좌 등록됨).<br><span style="opacity:.75">서버에서 불러온 내역: 전체 ${W.recs.length}건 (${WD_COS.map((c) => `${c} ${W.recs.filter((r) => r.company === c).length}건`).join(", ")}) · 이 컴퓨터 날짜 ${wdToday()}</span></div>
       <div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;margin-top:10px">
         ${adm ? `<label class="btn btn-sm" style="cursor:pointer">📂 예전 data.json 가져오기<input type="file" accept=".json,application/json" style="display:none" onchange="wdImport(this)"></label>
         <button class="btn btn-sm" onclick="wdBackup()">💾 백업(JSON) 받기</button>` : ""}
