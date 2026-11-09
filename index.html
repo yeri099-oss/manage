@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v454</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v455</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -11598,7 +11598,7 @@ function renderPay(){
             const isDue=sh.name==="급여품의"&&P.dueRefs&&P.dueRefs[ref];
             const disp=isDue?payDateTxt(ed!==undefined?ed:cell.v):(ed!==undefined?fv(ed):(cell?(cell.typ==="str"?cell.v:fv(cell.v)):""));
             const isStr=isDue?true:(ed!==undefined?typeof ed!=="number":(cell?cell.typ==="str":false));
-            tds+=`<td class="ec${isStr?" ls":""}${ed!==undefined?(isAuto?" autofill":" edited"):""}"${span} style="${scss}" title="${isAuto?"자동 채움 — 직접 고치면 그 값이 우선돼요":""}" contenteditable="true" data-sh="${esc(sh.name)}" data-ref="${ref}" onblur="payCellEdit(this)" onkeydown="payKeyDown(event,this)">${esc(disp)}</td>`;
+            tds+=`<td class="ec${isStr?" ls":""}${ed!==undefined&&ed!==""?(isAuto?" autofill":" edited"):""}"${span} style="${scss}" title="${isAuto?"자동 채움 — 직접 고치면 그 값이 우선돼요":""}" contenteditable="true" data-sh="${esc(sh.name)}" data-ref="${ref}" onblur="payCellEdit(this)" onkeydown="payKeyDown(event,this)">${esc(disp)}</td>`;
           }
         }
         if(isHol&&!holCompact){
