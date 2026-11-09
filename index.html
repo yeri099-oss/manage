@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v450</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v451</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -8096,6 +8096,22 @@ function payOtEdit(el){
   renderPay();
 }
 window.payOtEdit=payOtEdit;
+/* v451: 초과근무수당 세 칸 (d = 1일수당, n = 일수, t = 수당) */
+function payOtCell(el){
+  const f=el.dataset.f;if(f==="t")return payOtEdit(el);
+  const r=el.dataset.r,P=window.__pay;P.edits=P.edits||{};
+  const o=(P.edits["__ot"]=P.edits["__ot"]||{}),od=(P.edits["__otd"]=P.edits["__otd"]||{});
+  const t=String(el.textContent||"").replace(/[,\s원일]/g,"");const n=Number(t);
+  const prev=od[r]||{},wasD=!!(prev.d&&prev.n);const cur=Object.assign({},prev);
+  if(!t||isNaN(n)||n===0)delete cur[f];else cur[f]=f==="d"?Math.round(n):n;
+  if(cur.d||cur.n)od[r]=cur;else delete od[r];
+  if(cur.d&&cur.n)o[r]=Math.round(cur.d*cur.n);
+  else if(wasD)delete o[r]; /* 1일수당×일수로 계산된 수당이었으면 지움, 수당만 직접 적어둔 건 그대로 */
+  if(!Object.keys(od).length)delete P.edits["__otd"];
+  if(!Object.keys(o).length)delete P.edits["__ot"];
+  paySchedSave();renderPay();
+}
+window.payOtCell=payOtCell;
 /* ---------- 셀 직접 수정 ---------- */
 function payCellEdit(el){
   const shName=el.dataset.sh,ref=el.dataset.ref;
@@ -11400,12 +11416,16 @@ function renderPay(){
               tds+=`<td class="ec ot${hv9!=null?" edited":""}" contenteditable="true" data-n="${esc(holNm[r])}" onblur="payHdEdit(this)" onkeydown="payKeyDownOt(event,this)">${hv9!=null?fmt(hv9):""}</td>`;
             }else tds+=`<td class="ot"></td>`;
           }
-          if(r===otHeadRow)tds+=`<td class="ot" style="font-weight:700" title="금액, 또는 1일수당*일수 (예: 174586*4)">초과근무수당 ✍ 직접입력<div style="font-weight:400;font-size:10.5px;color:#6b7280">금액 또는 1일수당*일수</div></td>`;
+          /* v451: 초과근무수당 — 휴일근무수당처럼 1일수당 · 일수 · 수당 세 칸 (1일수당×일수 = 수당, 수당만 바로 적어도 됨) */
+          if(r===otHeadRow)tds+=`<td class="ot" colspan="3" style="font-weight:700;text-align:center" title="1일수당과 일수를 적으면 수당이 계산돼요. 수당 칸에 금액만 바로 적어도 돼요.">초과근무수당 ✍</td>`;
+          else if(otHeadRow&&r===otHeadRow+1)tds+=`<td class="ot" style="font-weight:700;text-align:center">1일수당</td><td class="ot" style="font-weight:700;text-align:center">일수</td><td class="ot" style="font-weight:700;text-align:center">수당</td>`;
           else if(otEmpOf[r]!=null){
-            const ov=((P.edits||{})["__ot"]||{})[String(otEmpOf[r])];
-            const odv=((P.edits||{})["__otd"]||{})[String(otEmpOf[r])];
-            tds+=`<td class="ec ot${ov!=null?" edited":""}" contenteditable="true" data-r="${otEmpOf[r]}" onblur="payOtEdit(this)" onkeydown="payKeyDownOt(event,this)" title="1일수당*일수로 적으면(예: 174586*4) 엑셀 초과근무수당 표에 1일수당·일수가 같이 나가요">${ov!=null?fmt(ov):""}${odv?`<div style="font-size:10.5px;color:#6b7280">${fmt(odv.d)}×${odv.n}일</div>`:""}</td>`;
-          }else tds+=`<td class="ot"></td>`;
+            const rk=String(otEmpOf[r]);
+            const ov=((P.edits||{})["__ot"]||{})[rk];
+            const odv=((P.edits||{})["__otd"]||{})[rk]||null;
+            const cellO=(f,v,auto)=>`<td class="ec ot${v!=null&&v!==""?(auto?" autofill":" edited"):""}" contenteditable="true" data-r="${rk}" data-f="${f}" onblur="payOtCell(this)" onkeydown="payKeyDownOt(event,this)">${v!=null&&v!==""?fmt(v):""}</td>`;
+            tds+=cellO("d",odv&&odv.d?odv.d:null)+cellO("n",odv&&odv.n?odv.n:null)+cellO("t",ov!=null?ov:null,!!(odv&&odv.d&&odv.n));
+          }else tds+=`<td class="ot"></td><td class="ot"></td><td class="ot"></td>`;
         }
         if(hasAny)trs+=`<tr>${tds}</tr>`;
       }
