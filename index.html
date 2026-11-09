@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v453</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v454</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -8132,6 +8132,13 @@ function payCellEdit(el){
     if(s9!==cur9){payEdit(shName,ref,s9);paySchedSave();}
     renderPay();
     return;
+  }
+  /* v454: 휴일근무수당(새 모양) 1일수당·일수 칸은 비우면 빈칸 (파일 값으로 되돌리지 않음) */
+  if(t===""&&shName==="휴일근무수당"&&/^[EFHI]\d+$/.test(ref)&&payHolIsCompact()){
+    const P0=window.__pay,c0=(paySheetByName(shName)||{cells:{}}).cells[ref];
+    if(c0&&c0.typ==="num"&&c0.v!==""){if((P0.autoSet||{})[shName])delete P0.autoSet[shName][ref];P0.edits=P0.edits||{};(P0.edits[shName]=P0.edits[shName]||{})[ref]="";}
+    else if(((P0.edits||{})[shName]||{})[ref]!==undefined){delete P0.edits[shName][ref];if((P0.autoSet||{})[shName])delete P0.autoSet[shName][ref];}
+    paySchedSave();renderPay();return;
   }
   /* 수식 칸을 비우면 수식으로 복원 */
   {
