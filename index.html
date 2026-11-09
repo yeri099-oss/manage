@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v463</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v464</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -8338,6 +8338,91 @@ async function payWbNames(zip,shName,fn){
   });
   if(x1!==x0)zip.file("xl/workbook.xml",x1);
 }
+/* v464: 받는 엑셀의 상용직급여 열 순서 —
+   급여 · 제수당 · 상여금 · 특별상여금 · 지급총액 · 소득세 · 지방소득세 · 국민연금 · 건강보험 · 장기요양보험 · 고용보험 · 기지급액 · 공제총액 · 실지급액
+   (특별상여금·기지급액은 금액이 있을 때만) — 앱 안의 열 위치는 그대로, 받는 파일에서만 옮김 (수식·병합·열 너비·다른 시트 참조 같이) */
+async function payXlsxSangReorder(zip){
+  const sh=paySheetByName("상용직급여");if(!sh)return false;
+  const em=payEmpRows();if(!em||!em.rows.length)return false;const cm=em.cm;
+  const par=new DOMParser(),ser=new XMLSerializer();
+  const f0=zip.file(sh.path);if(!f0)return false;
+  const doc=par.parseFromString(await f0.async("string"),"application/xml");
+  /* 실제 머리글이 있는 열만 (기본값 열 문자는 믿지 않음) */
+  const hdrTxt=(L)=>{const ed=(((window.__pay.edits||{})["상용직급여"])||{})[L+cm.hRow];if(ed!==undefined)return String(ed||"").trim();const c=sh.cells[L+cm.hRow];return c&&c.typ==="str"?String(c.v).trim():"";};
+  const NAME={pay:"급여",alw:"제수당",bon:"상여금",sbon:"특별상여금",tot:"지급총액",tax:"소득세",ltax:"지방소득세",np:"국민연금",hi:"건강보험",ltc:"장기요양보험",ei:"고용보험",pre:"기지급액",ded:"공제총액",net:"실지급액"};
+  const order=["pay","alw","bon","sbon","tot","tax","ltax","np","hi","ltc","ei","pre","ded","net"];
+  const keyed={};for(const k of order){const L=cm[k];if(L&&hdrTxt(L)===NAME[k])keyed[k]=payColIdx(L);}
+  if(!keyed.pay||!keyed.tot||!keyed.net)return false;
+  const hasVal=(k)=>keyed[k]&&em.rows.some(r=>Math.round(Number(em.val(cm[k]+r.r))||0)!==0);
+  let maxC=0;for(const c of doc.getElementsByTagName("c")){const x=payColIdx(c.getAttribute("r").replace(/\d+/g,""));if(x>maxC)maxC=x;}
+  const drop=new Set();for(const k of["sbon","pre"])if(keyed[k]&&!hasVal(k))drop.add(keyed[k]);
+  const used=new Set([1]),seq=[1];
+  for(const k of order){const c=keyed[k];if(!c||used.has(c)||drop.has(c))continue;seq.push(c);used.add(c);}
+  for(let c=2;c<=maxC;c++){if(used.has(c)||drop.has(c))continue;seq.push(c);used.add(c);}
+  if(!drop.size&&seq.every((c,i)=>c===i+1))return false;
+  const perm={};seq.forEach((c,i)=>{perm[c]=i+1;});drop.forEach(c=>{perm[c]=0;});
+  const SN="상용직급여";
+  const remap=(f,qualOnly)=>String(f).replace(/((?:'(?:[^']|'')+'|[A-Za-z0-9_\u3131-\uD79D]+)!)?(\$?)([A-Z]{1,3})(\$?)(\d+)(?::(\$?)([A-Z]{1,3})(\$?)(\d+))?/g,(m,q,d1,c1,d2,r1,d3,c2,d4,r2,off,all)=>{
+    const pv=off>0?all[off-1]:"",nx=all[off+m.length]||"";
+    if(!q&&(/[A-Za-z0-9_.\u3131-\uD79D]/.test(pv)))return m;
+    if(nx==="(")return m;
+    const qn=q?q.slice(0,-1).replace(/^'|'$/g,"").replace(/''/g,"'"):null;
+    if(q?qn!==SN:qualOnly)return m;
+    const mp=(L)=>{const c=payColIdx(L);return perm[c]===undefined?c:perm[c];};
+    if(c2===undefined){const n=mp(c1);return n?(q||"")+d1+payIdxCol(n)+d2+r1:"0";}
+    let a=mp(c1),b=mp(c2);if(!a&&!b)return "0";a=a||b;b=b||a;
+    return (q||"")+d1+payIdxCol(Math.min(a,b))+d2+r1+":"+d3+payIdxCol(Math.max(a,b))+d4+r2;
+  });
+  /* 공유 수식은 풀어서(옮기면 상대 위치가 깨짐) */
+  for(const ce of [...doc.getElementsByTagName("c")]){
+    const fe=ce.getElementsByTagName("f")[0];if(!fe||fe.getAttribute("t")!=="shared")continue;
+    const pc=sh.cells[ce.getAttribute("r")];
+    if(pc&&typeof pc.f==="string"&&pc.f){for(const at of [...fe.attributes])fe.removeAttribute(at.name);fe.textContent=pc.f;}
+    else if(!fe.textContent)ce.removeChild(fe);
+    else{fe.removeAttribute("t");fe.removeAttribute("ref");fe.removeAttribute("si");}
+  }
+  for(const fe of doc.getElementsByTagName("f"))if(fe.textContent)fe.textContent=remap(fe.textContent,false);
+  /* 칸 옮기기 + 줄마다 정렬 */
+  for(const rw of [...doc.getElementsByTagName("row")]){
+    rw.removeAttribute("spans");
+    const cs=[...rw.getElementsByTagName("c")];
+    for(const c of cs){const ref=c.getAttribute("r"),L=ref.replace(/\d+/g,""),rn=ref.replace(/[A-Z]+/g,""),n=perm[payColIdx(L)];
+      if(n===0){rw.removeChild(c);continue;}if(n)c.setAttribute("r",payIdxCol(n)+rn);}
+    const rest=[...rw.getElementsByTagName("c")].sort((a,b)=>payColIdx(a.getAttribute("r").replace(/\d+/g,""))-payColIdx(b.getAttribute("r").replace(/\d+/g,"")));
+    for(const c of rest)rw.appendChild(c);
+  }
+  /* 병합 */
+  for(const mc of [...doc.getElementsByTagName("mergeCell")]){
+    const mm=/^([A-Z]+)(\d+):([A-Z]+)(\d+)$/.exec(mc.getAttribute("ref")||"");if(!mm)continue;
+    const nc=[];for(let c=payColIdx(mm[1]);c<=payColIdx(mm[3]);c++){const n=perm[c]===undefined?c:perm[c];if(n)nc.push(n);}
+    if(!nc.length){mc.parentNode.removeChild(mc);continue;}
+    mc.setAttribute("ref",payIdxCol(Math.min(...nc))+mm[2]+":"+payIdxCol(Math.max(...nc))+mm[4]);
+  }
+  {const mcs=doc.getElementsByTagName("mergeCells")[0];if(mcs)mcs.setAttribute("count",String(mcs.getElementsByTagName("mergeCell").length));}
+  for(const tag of["conditionalFormatting","dataValidation"])for(const el of [...doc.getElementsByTagName(tag)]){const sq=el.getAttribute("sqref");if(sq)el.setAttribute("sqref",remap(sq,false).split(" ").filter(x=>x!=="0").join(" "));}
+  for(const sel of [...doc.getElementsByTagName("selection")]){sel.setAttribute("activeCell","A1");sel.setAttribute("sqref","A1");}
+  for(const d of [...doc.getElementsByTagName("dimension")])d.parentNode.removeChild(d);
+  /* 열 너비 */
+  const colsEl=doc.getElementsByTagName("cols")[0];
+  if(colsEl){
+    const old=[...colsEl.getElementsByTagName("col")];
+    const of=(c)=>old.find(co=>+co.getAttribute("min")<=c&&c<=+co.getAttribute("max"))||null;
+    const tail=old.find(co=>+co.getAttribute("max")>maxC);
+    const mk=[];
+    seq.forEach((oc,i)=>{const src=of(oc);if(!src)return;const n=src.cloneNode(false);n.setAttribute("min",String(i+1));n.setAttribute("max",String(i+1));mk.push(n);});
+    if(tail){const n=tail.cloneNode(false);n.setAttribute("min",String(seq.length+1));if(+n.getAttribute("max")<seq.length+1)n.setAttribute("max",String(seq.length+1));mk.push(n);}
+    for(const co of old)colsEl.removeChild(co);
+    for(const n of mk)colsEl.appendChild(n);
+  }
+  zip.file(sh.path,ser.serializeToString(doc));
+  /* 다른 시트의 '상용직급여'!칸 참조 */
+  for(const o of window.__pay.wb.sheets){if(o.name===SN)continue;const zf=zip.file(o.path);if(!zf)continue;
+    const d2=par.parseFromString(await zf.async("string"),"application/xml");let hit=false;
+    for(const fe of d2.getElementsByTagName("f")){const t0=fe.textContent||"";if(t0.indexOf(SN)<0)continue;const t1=remap(t0,true);if(t1!==t0){fe.textContent=t1;hit=true;}}
+    if(hit)zip.file(o.path,ser.serializeToString(d2));}
+  try{await payWbNames(zip,SN,(body)=>remap(body,true));}catch(e){console.warn(e);}
+  return true;
+}
 function payUnshare(doc,sh){
   for(const ce of [...doc.getElementsByTagName("c")]){
     const fe=ce.getElementsByTagName("f")[0];
@@ -9837,6 +9922,7 @@ async function payDownload(){
         zip.file("xl/workbook.xml",wb9);
       }
     }catch(e){console.warn("인쇄 범위 조정 실패",e);}
+    try{await payXlsxSangReorder(zip);}catch(e){console.warn("상용직급여 열 순서",e);}
     try{
       const sf=zip.file("xl/styles.xml");
       if(sf)zip.file("xl/styles.xml",payDashZeroStyles(await sf.async("string")));
