@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v452</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v453</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -7273,6 +7273,7 @@ function payAutoFill(){
         if(h&&h.typ==="str"&&String(h.v).trim()==="계"){tcol=payIdxCol(c);break;}
       }
       if(tcol){
+        if(payHolIsCompact(hd))payHolCompactAuto(hd,em);else
         /* 임원 일급(⚙ 사원 설정 지정): 시간 칸의 숫자를 '일수'로 보고
            휴일 1일 = ROUND(월급여÷241.6×14) 로 수당 칸 자동 기입 */
         {
@@ -7363,8 +7364,9 @@ function payAutoFill(){
           if(!n||n==="성명")continue;
           const emp=em.rows.find(x=>x.name.replace(/\s+/g,"")===n);
           if(!emp)continue;
-          const ot=Number(((P.edits||{})["__ot"]||{})[String(emp.r)]||0);
-          const hol=Math.round(hv(tcol+r));
+          const hcp=payHolIsCompact(hd); /* v453: 새 모양은 계(K) = 휴일 + 초과 */
+          const ot=hcp?Math.round(Number(hv("J"+r))||0):Number(((P.edits||{})["__ot"]||{})[String(emp.r)]||0);
+          const hol=hcp?Math.round(hv(tcol+r))-ot:Math.round(hv(tcol+r));
           P.holOf[emp.r]=hol;
           const v=hol+Math.round(ot);
           /* 업로드된 완성 파일 보호: 파일에 이미 제수당 값이 있고, 이 사람에 대해
@@ -8039,6 +8041,7 @@ function payHolAdd(){
   const inp=document.getElementById("holNewDate");
   const label=inp?String(inp.value||"").trim():"";
   if(!label){toast("날짜를 먼저 적어주세요 (예: 9월 6일)",true);return;}
+  if(payHolIsCompact()){const d=(P.edits["__holDays"]=P.edits["__holDays"]||[]);d.push(label);payEdit("휴일근무수당","A2",payHolDaysText());try{payAutoFill();}catch(e){}paySchedSave();renderPay();return;}
   const pair=(P.holPairs||[]).find(p=>!p.active);
   if(!pair){toast("빈 휴일 열이 없어요 — 엑셀에서 시간·수당 열 한 쌍을 추가한 뒤 다시 올려주세요",true);return;}
   payEdit("휴일근무수당",pair.hdrRef,label);
@@ -8047,6 +8050,9 @@ function payHolAdd(){
 }
 function payHolDel(i){
   const P=window.__pay;
+  if(payHolIsCompact()){const d=P.edits["__holDays"]||[];d.splice(i,1);if(!d.length)delete P.edits["__holDays"];payEdit("휴일근무수당","A2",payHolDaysText());
+    /* 정해둔 사람의 자동 일수도 줄어듦 */
+    try{payAutoFill();}catch(e){}paySchedSave();renderPay();return;}
   const pair=(P.holPairs||[])[i];
   const sh=paySheetByName("휴일근무수당");
   if(!pair||!sh)return;
@@ -8151,6 +8157,13 @@ function payCellEdit(el){
   if(pctIn&&typeof v==="number")v=v/100;
   payEdit(shName,ref,v);
   if(shName==="용역직급여"){try{payAutoFill();}catch(e){console.warn(e);}} /* v445: 용역대금 → 소득세·지방소득세 바로 */
+  if(shName==="휴일근무수당"&&/^E\d+$/.test(ref)&&payHolIsCompact()){ /* v453: 휴일 1일수당 = 정해두기 (다음 달에도) */
+    const hs9=paySheetByName("휴일근무수당"),nb9=hs9&&hs9.cells["B"+ref.slice(1)];
+    const nk9=nb9&&nb9.typ==="str"?String(nb9.v).replace(/\s+/g,""):"";
+    if(nk9){S.data.payTax=S.data.payTax||{byName:{}};S.data.payTax.byName=S.data.payTax.byName||{};const cur9=S.data.payTax.byName[nk9]||{};
+      const n9=typeof v==="number"?Math.round(v):0;if(n9>0)cur9.hd=n9;else delete cur9.hd;S.data.payTax.byName[nk9]=cur9;try{payTaxSaveCfg();}catch(e){}
+      const E9=(window.__pay.edits["휴일근무수당"]||{});delete E9[ref];try{payAutoFill();}catch(e){}}
+  }
   paySchedSave();
   renderPay();
 }
@@ -8700,6 +8713,7 @@ async function payColsSync(){
     try{if(await paySbMatSync())ch=true;}catch(e){console.warn("특별상여금 열 만들기 실패",e);}
     try{
       if(!P.wb.__gb){
+        if(paySheetByName("휴일근무수당")){try{if(await payHolCompact())ch=true;}catch(e8){console.warn("휴일 새 모양",e8);}}
         if(paySheetByName("휴일근무수당")){try{if(await payHolSumSplit())ch=true;}catch(e8){console.warn("휴일 합계 열",e8);}}
         if(paySheetByName("휴일근무수당")){try{if(await payHolSumMerge())ch=true;}catch(e8){console.warn("휴일 합계 병합",e8);}}
         if(paySheetByName("휴일근무수당")&&await payNormHol())ch=true;
@@ -9012,6 +9026,7 @@ async function payHolSumMerge(){
 }
 /* v450: 받는 엑셀의 휴일근무수당 오른쪽에 초과근무수당 표 (이름 · 초과근무(일수) · 1일수당 · 합계) */
 function payHolOtTable(doc,sh){
+  if(payHolIsCompact(sh))return; /* v453: 새 모양은 초과근무수당이 표 안에 있음 */
   const P=window.__pay;const ot=(P.edits||{})["__ot"]||{},od=(P.edits||{})["__otd"]||{};
   const em=payEmpRows();if(!em)return;
   const list=em.rows.filter(x=>Number(ot[String(x.r)])).map(x=>({name:x.name,tot:Math.round(Number(ot[String(x.r)])),d:od[String(x.r)]}));
@@ -9042,6 +9057,166 @@ function payHolOtTable(doc,sh){
     let before=null;for(const co of colsEl.getElementsByTagName("col"))if(+co.getAttribute("min")>c0+3){before=co;break;}
     [10,10,11,12].forEach((w,i)=>{const n=doc.createElementNS(colsEl.namespaceURI,"col");n.setAttribute("min",String(c0+i));n.setAttribute("max",String(c0+i));n.setAttribute("width",String(w));n.setAttribute("customWidth","1");colsEl.insertBefore(n,before);});}
   T.setDim();
+}
+/* ===== v453: 휴일근무수당 새 모양 — 날짜별 칸 대신
+   E 휴일 1일수당 · F 일수 · G 총수당(=E×F) · H 초과 1일수당 · I 일수 · J 총수당(=H×I) · K 계(=G+J) · L 합계(부서별) · M 비고
+   휴일 날짜는 2행에 한 줄로 (P.edits.__holDays) ===== */
+function payHolIsCompact(sh){
+  sh=sh||paySheetByName("휴일근무수당");if(!sh)return false;
+  const ed=(((window.__pay||{}).edits||{})["휴일근무수당"])||{};
+  for(let r=1;r<=8;r++)for(let c=4;c<=Math.min(sh.maxC,20);c++){const ref=payIdxCol(c)+r;const e=ed[ref];const t=e!==undefined?String(e==null?"":e):(sh.cells[ref]&&sh.cells[ref].typ==="str"?String(sh.cells[ref].v):"");if(t.replace(/\s+/g,"")==="1일수당")return true;}
+  return false;
+}
+function payHolHdr(sh){
+  const ed=(((window.__pay||{}).edits||{})["휴일근무수당"])||{};
+  const tx=(ref)=>{const e=ed[ref];if(e!==undefined&&typeof e==="string")return e.trim();const c=sh.cells[ref];return c&&c.typ==="str"?String(c.v).trim():"";};
+  let hdr=0;for(let r=1;r<=8;r++)if(tx("B"+r).replace(/\s+/g,"")==="성명"){hdr=r;break;}
+  if(!hdr)return null;
+  const hm=(sh.merges||{})["A"+hdr];const hEnd=hdr+((hm&&hm.rs)?hm.rs-1:0);
+  let tot=0;for(let r=hEnd+1;r<=sh.maxR;r++)if(tx("A"+r).replace(/\s+/g,"")==="계"){tot=r;break;}
+  return {hdr,hEnd,tot,tx};
+}
+function payHolDaysText(){const d=((window.__pay.edits||{})["__holDays"])||[];return d.length?"휴일: "+d.join(", ")+"  ("+d.length+"일)":"";}
+async function payHolCompact(){
+  const P=window.__pay;const sh=paySheetByName("휴일근무수당");if(!sh||!P.wb)return false;
+  if(payHolIsCompact(sh))return false;
+  const H=payHolHdr(sh);if(!H||!H.tot||H.hEnd<H.hdr+1)return false;
+  const {hdr,hEnd,tot,tx}=H;
+  const ed=((P.edits||{})["휴일근무수당"])||{};
+  let gC=0,sC=0,bC=0;
+  for(let r=hdr;r<=hEnd;r++)for(let c=3;c<=sh.maxC;c++){const t=tx(payIdxCol(c)+r).replace(/\s+/g,"");if(t==="계"&&!gC)gC=c;if(t==="합계"&&!sC)sC=c;if(t==="비고"&&!bC)bC=c;}
+  if(!gC||gC<5)return false;
+  let subRow=0;for(let r=hdr;r<=hEnd&&!subRow;r++)for(let c=4;c<gC;c++){const t=tx(payIdxCol(c)+r);if(t==="시간"||t==="일수"){subRow=r;break;}}
+  const pairs=[];
+  if(subRow){const lr=payHolLblRow(sh,subRow);
+    for(let c=4;c<gC;c++){const t=tx(payIdxCol(c)+subRow);if(t!=="시간"&&t!=="일수")continue;
+      let lab="";for(let r=subRow-1;r>=1;r--){const v=tx(payIdxCol(c)+r);if(v){lab=v;break;}}
+      const lref=payIdxCol(c)+lr;if(ed[lref]!==undefined)lab=String(ed[lref]||"").trim();
+      pairs.push({c1:c,c2:c+1,lab});c++;}}
+  const val=payMkVal(sh,ed);
+  const em=payEmpRows();const ot=(P.edits||{})["__ot"]||{},otd=(P.edits||{})["__otd"]||{};
+  const rows={};
+  for(let r=hEnd+1;r<tot;r++){
+    const nm=tx("B"+r).replace(/\s+/g,"");
+    const o={};
+    if(nm){
+      const amts=pairs.map(p=>Math.round(Number(val(payIdxCol(p.c2)+r))||0)).filter(a=>a>0);
+      const total=Math.round(Number(val(payIdxCol(gC)+r))||0);
+      if(amts.length){o.n=amts.length;if(amts.every(a=>a===amts[0])&&amts[0]*amts.length===total)o.d=amts[0];else o.t=total;}
+      else if(total)o.t=total;
+      const emp=em?em.rows.find(x=>x.name.replace(/\s+/g,"")===nm):null;
+      if(emp){const k=String(emp.r);const dd=otd[k];if(dd&&dd.d&&dd.n){o.od=dd.d;o.on=dd.n;}else if(Number(ot[k]))o.ot=Math.round(Number(ot[k]));}
+    }
+    if(bC){const cb=sh.cells[payIdxCol(bC)+r];const nt=tx(payIdxCol(bC)+r);if(nt&&!(cb&&typeof cb.f==="string"&&cb.f))o.note=nt;}
+    rows[r]=o;
+  }
+  const days=pairs.map(p=>p.lab).filter(Boolean);
+  const zip=await JSZip.loadAsync(P.wb.zipBuf.slice(0));const par=new DOMParser(),ser=new XMLSerializer();
+  const doc=par.parseFromString(await zip.file(sh.path).async("string"),"application/xml");
+  const T=ptxSheetTools(doc);
+  /* 서식: 지우기 전에 기존 칸 서식 기억 */
+  const S0={};const sOf=(ref)=>T.sOf(ref);
+  for(let r=hdr;r<=tot;r++)S0[r]={D:sOf("D"+r),G:sOf(payIdxCol(gC)+r),S:sC?sOf(payIdxCol(sC)+r):null,B:bC?sOf(payIdxCol(bC)+r):null,
+    sub:pairs.length?sOf(payIdxCol(pairs[0].c1)+r):null,hd:pairs.length?sOf(payIdxCol(pairs[0].c1)+hdr):null};
+  /* 표 줄의 E열 이후 칸 지우기 */
+  for(const rw of [...T.sd.getElementsByTagName("row")]){
+    const rn=+rw.getAttribute("r");if(rn<hdr||rn>tot)continue;
+    for(const c of [...rw.getElementsByTagName("c")])if(payColIdx(c.getAttribute("r").replace(/\d+/g,""))>=5)rw.removeChild(c);
+  }
+  const L=(n)=>payIdxCol(n);
+  for(let r=hdr;r<=tot;r++){
+    const st=S0[r];const sNum=st.D,sG=st.G||st.D,sS=st.S||sG,sB=st.B||st.D;
+    if(r===hdr){
+      const sh0=st.hd||st.G||st.D;
+      T.setCell("E"+r,"휴일근무수당",sh0);T.setCell("F"+r,"",sh0);T.setCell("G"+r,"",sh0);
+      T.setCell("H"+r,"초과근무수당",sh0);T.setCell("I"+r,"",sh0);T.setCell("J"+r,"",sh0);
+      T.setCell("K"+r,"계",st.G||sh0);T.setCell("L"+r,"합계",st.S||st.G||sh0);T.setCell("M"+r,"비고",st.B||st.G||sh0);
+    }else if(r<=hEnd){
+      const ss=st.sub||st.D;
+      if(r===hEnd){["1일수당","일수","총수당","1일수당","일수","총수당"].forEach((h,i)=>T.setCell(L(5+i)+r,h,ss));}
+      else for(let i=0;i<6;i++)T.setCell(L(5+i)+r,"",ss);
+      T.setCell("K"+r,"",st.G||ss);T.setCell("L"+r,"",st.S||st.G||ss);T.setCell("M"+r,"",st.B||st.G||ss);
+    }else if(r<tot){
+      const o=rows[r]||{};
+      T.setCell("E"+r,o.d!=null?o.d:"",sNum);T.setCell("F"+r,o.n!=null?o.n:"",sNum);
+      T.setCell("G"+r,o.t!=null?o.t:{f:`E${r}*F${r}`},sNum);
+      T.setCell("H"+r,o.od!=null?o.od:"",sNum);T.setCell("I"+r,o.on!=null?o.on:"",sNum);
+      T.setCell("J"+r,o.ot!=null?o.ot:{f:`H${r}*I${r}`},sNum);
+      T.setCell("K"+r,{f:`G${r}+J${r}`},sG);T.setCell("L"+r,"",sS);T.setCell("M"+r,o.note||"",sB);
+    }else{
+      const sT=st.G||st.D;const R1=hEnd+1,R2=tot-1;
+      T.setCell("E"+r,"",sT);T.setCell("F"+r,{f:`SUM(F${R1}:F${R2})`},sT);T.setCell("G"+r,{f:`SUM(G${R1}:G${R2})`},sT);
+      T.setCell("H"+r,"",sT);T.setCell("I"+r,{f:`SUM(I${R1}:I${R2})`},sT);T.setCell("J"+r,{f:`SUM(J${R1}:J${R2})`},sT);
+      T.setCell("K"+r,{f:`SUM(K${R1}:K${R2})`},sT);T.setCell("L"+r,{f:`SUM(L${R1}:L${R2})`},st.S||sT);T.setCell("M"+r,"",st.B||sT);
+    }
+  }
+  /* 병합 다시 */
+  const ml=[];
+  for(const m of [...doc.getElementsByTagName("mergeCell")]){
+    const mm=/^([A-Z]+)(\d+):([A-Z]+)(\d+)$/.exec(m.getAttribute("ref")||"");if(!mm)continue;
+    const c1=payColIdx(mm[1]),c2=payColIdx(mm[3]),r1=+mm[2],r2=+mm[4];
+    if(c2<5){ml.push(m.getAttribute("ref"));continue;}
+    if(c1<5&&r2<hdr){ml.push(mm[1]+r1+":M"+r2);continue;} /* 제목처럼 표 위 가로 병합은 M열까지 */
+    if(r2<hdr||r1>tot)ml.push(m.getAttribute("ref"));
+  }
+  ml.push(`E${hdr}:G${hdr}`,`H${hdr}:J${hdr}`);
+  if(hdr>=3){for(let i=ml.length-1;i>=0;i--){const mm=/^[A-Z]+(\d+):[A-Z]+(\d+)$/.exec(ml[i]);if(mm&&+mm[1]<=2&&+mm[2]>=2&&+mm[1]>1)ml.splice(i,1);}ml.push("A2:M2");} /* 휴일 날짜 줄은 표 폭 전체로 */
+  if(hEnd>hdr){ml.push(`K${hdr}:K${hEnd}`,`L${hdr}:L${hEnd}`,`M${hdr}:M${hEnd}`);}
+  T.setMerges(ml);
+  /* 열 너비 */
+  const colsEl=doc.getElementsByTagName("cols")[0];
+  if(colsEl){
+    for(const co of [...colsEl.getElementsByTagName("col")]){const mn=+co.getAttribute("min"),mx=+co.getAttribute("max");if(mn>=5)colsEl.removeChild(co);else if(mx>=5)co.setAttribute("max","4");}
+    [11,7,12,11,7,12,12,12,28].forEach((w,i)=>{const n=doc.createElementNS(colsEl.namespaceURI,"col");n.setAttribute("min",String(5+i));n.setAttribute("max",String(5+i));n.setAttribute("width",String(w));n.setAttribute("customWidth","1");colsEl.appendChild(n);});
+  }
+  T.setDim();
+  zip.file(sh.path,ser.serializeToString(doc));
+  /* 다른 시트가 이 시트의 계·합계 칸을 참조하면 새 위치로 */
+  const mapC={};mapC[payIdxCol(gC)]="K";if(sC)mapC[payIdxCol(sC)]="L";
+  for(const o of P.wb.sheets){if(o.name==="휴일근무수당")continue;
+    const d2=par.parseFromString(await zip.file(o.path).async("string"),"application/xml");let hit=false;
+    for(const fe of d2.getElementsByTagName("f")){const t0=fe.textContent||"";if(t0.indexOf("휴일근무수당")<0)continue;
+      const t1=t0.replace(/('?휴일근무수당'?!)(\$?)([A-Z]{1,3})(\$?)(\d+)/g,(m,q,a,col,b,row)=>mapC[col]?q+a+mapC[col]+b+row:m);
+      if(t1!==t0){fe.textContent=t1;hit=true;}}
+    if(hit)zip.file(o.path,ser.serializeToString(d2));}
+  /* 앱 수정값: 표 쪽 E열 이후는 파일에 굳혔으니 지움, 초과근무 직접입력도 시트로 옮겼으니 지움 */
+  const E0=(P.edits["휴일근무수당"]=P.edits["휴일근무수당"]||{}),A0=((P.autoSet||{})["휴일근무수당"])||{};
+  for(const ref of Object.keys(E0)){const ci=payColIdx(ref.replace(/\d+/g,"")),rn=+ref.replace(/[A-Z]/g,"");if(ci>=5&&rn>=hdr&&rn<=tot){delete E0[ref];delete A0[ref];}}
+  delete P.edits["__ot"];delete P.edits["__otd"];
+  if(days.length)P.edits["__holDays"]=days;else delete P.edits["__holDays"];
+  await payAdoptBuf(await zip.generateAsync({type:"arraybuffer",compression:"DEFLATE"}));
+  if(hdr>=3){const t=payHolDaysText();payEdit("휴일근무수당","A2",t||"");}
+  return true;
+}
+/* 새 모양: 1일수당 자동(정해둔 휴일 일급 / 임원 월급÷241.6×14), 일수 자동(정해둔 사람 = 휴일 수) */
+function payHolCompactAuto(hd,em){
+  const P=window.__pay;const H=payHolHdr(hd);if(!H||!H.tot)return;
+  const byT=((S.data.payTax||{}).byName)||{};const nDays=(((P.edits||{})["__holDays"])||[]).length;
+  const HID=(((P.edits||{})["__hide"]||{})["휴일근무수당"])||{};
+  const hEd0=(P.edits||{})["휴일근무수당"]||{};
+  for(let r=H.hEnd+1;r<H.tot;r++){
+    const n0=H.tx("B"+r).replace(/\s+/g,"");if(!n0||HID[r])continue;
+    const cfg0=byT[n0];
+    let daily=cfg0&&Number(cfg0.hd)>0?Math.round(Number(cfg0.hd)):0;const hdv=daily;
+    if(!daily&&cfg0&&cfg0.exec){
+      let mw=0;const cCell=hd.cells["C"+r];if(cCell&&cCell.typ==="num"&&cCell.v!=="")mw=Number(cCell.v);
+      const cEd9=hEd0["C"+r];if(cEd9!==undefined&&cEd9!==""&&!isNaN(Number(String(cEd9).replace(/,/g,""))))mw=Number(String(cEd9).replace(/,/g,""));
+      if(!mw&&em){const emp0=em.rows.find(x=>x.name.replace(/\s+/g,"")===n0);if(emp0)mw=em.val(em.cm.pay+emp0.r);}
+      if(mw)daily=Math.round(mw/241.6*14);
+    }
+    const eC=hd.cells["E"+r];
+    if(daily&&!(eC&&typeof eC.f==="string"))payEdit("휴일근무수당","E"+r,daily,true);
+    if(hdv&&nDays){const fC=hd.cells["F"+r];if(!(fC&&typeof fC.f==="string"))payEdit("휴일근무수당","F"+r,nDays,true);}
+  }
+}
+function payHolCompactCtl(){
+  const d=(((window.__pay.edits||{})["__holDays"])||[]);
+  return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+    <span class="footnote" style="font-weight:700">휴일:</span>
+    ${d.map((x,i)=>`<span class="paychip" style="cursor:default">${esc(x)} <b style="cursor:pointer;color:#b45309" onclick="payHolDel(${i})" title="이 휴일 지우기">✕</b></span>`).join("")||'<span class="footnote">아직 없음</span>'}
+    <input id="holNewDate" placeholder="예: 9월 6일" style="width:110px;padding:4px 8px;border:1px solid rgba(0,0,0,.2);border-radius:8px;font-family:inherit">
+    <button class="btn btn-sm" onclick="payHolAdd()">➕ 휴일 추가</button>
+    <span class="footnote">휴일 1일수당을 정해둔 사람은 일수가 휴일 수로 자동으로 들어가요 · 날짜는 엑셀 표 위에 한 줄로 적혀요</span></div>`;
 }
 async function payNormHol(){
   return payBorderNormRun("휴일근무수당",(ctx)=>{
@@ -9827,7 +10002,16 @@ function payResetPlan(o){
     return hit;
   };
   const em=payEmpRows();
-  if(o.hol){
+  if(o.hol&&payHolIsCompact()){ /* v453: 새 모양 — 1일수당·일수와 휴일 날짜 비우기 */
+    const hd=paySheetByName("휴일근무수당");const H=payHolHdr(hd);
+    if(H&&H.tot){for(let r=H.hEnd+1;r<H.tot;r++){clr(hd,"E"+r,"hol");clr(hd,"F"+r,"hol");}
+      const dd=((P.edits||{})["__holDays"])||[];if(dd.length){plan.note.hol="휴일 "+dd.join(", ");plan.n.holDays=dd.length;}plan.holDaysClear=true;}
+  }
+  if(o.ot&&payHolIsCompact()){
+    const hd=paySheetByName("휴일근무수당");const H=payHolHdr(hd);
+    if(H&&H.tot)for(let r=H.hEnd+1;r<H.tot;r++){clr(hd,"H"+r,"ot");clr(hd,"I"+r,"ot");if(E("휴일근무수당")["J"+r]!==undefined){(plan.del["휴일근무수당"]=plan.del["휴일근무수당"]||{})["J"+r]=1;cnt("ot");}}
+  }
+  if(o.hol&&!payHolIsCompact()){
     const hd=paySheetByName("휴일근무수당");
     if(hd){
       const hE=E("휴일근무수당");
@@ -9917,6 +10101,7 @@ async function payResetApply(plan){
   P.edits=P.edits||{};P.autoSet=P.autoSet||{};
   for(const nm in plan.del)for(const ref in plan.del[nm]){if(P.edits[nm])delete P.edits[nm][ref];if(P.autoSet[nm])delete P.autoSet[nm][ref];}
   if(plan.ot){delete P.edits["__ot"];delete P.edits["__otbase"];delete P.edits["__otd"];}
+  if(plan.holDaysClear){delete P.edits["__holDays"];const e9=(P.edits["휴일근무수당"]=P.edits["휴일근무수당"]||{});e9["A2"]="";}
   if(plan.bjhist&&plan.bjhist.length){P.edits["__bjhist"]=P.edits["__bjhist"]||{};plan.bjhist.forEach((c)=>{P.edits["__bjhist"][c]=1;});}
   if(plan.bjpre.length&&P.edits["__bjpre"]){plan.bjpre.forEach((c)=>delete P.edits["__bjpre"][c]);if(!Object.keys(P.edits["__bjpre"]).length)delete P.edits["__bjpre"];}
   if(Object.keys(plan.blank).length){
@@ -11251,6 +11436,7 @@ function renderPay(){
       const mg=sh.merges||{},cov=sh.covered||{};
       /* 휴일근무수당 시트: 앱 전용 '초과근무수당(직접)' 열 준비 */
       const isHol=sh.name==="휴일근무수당";
+      const holCompact=isHol&&payHolIsCompact(sh); /* v453 */
       let otHeadRow=null,otEmpOf={};const holNm={};
       if(isHol){
         for(let r=1;r<=4;r++){const b0=sh.cells["B"+r];if(b0&&b0.typ==="str"&&String(b0.v).trim()==="성명"){otHeadRow=r;break;}}
@@ -11408,7 +11594,7 @@ function renderPay(){
             tds+=`<td class="ec${isStr?" ls":""}${ed!==undefined?(isAuto?" autofill":" edited"):""}"${span} style="${scss}" title="${isAuto?"자동 채움 — 직접 고치면 그 값이 우선돼요":""}" contenteditable="true" data-sh="${esc(sh.name)}" data-ref="${ref}" onblur="payCellEdit(this)" onkeydown="payKeyDown(event,this)">${esc(disp)}</td>`;
           }
         }
-        if(isHol){
+        if(isHol&&!holCompact){
           {
             const byH=((S.data.payTax||{}).byName)||{};
             /* v452: 휴일근무수당 요약 — 1일수당(정해두기) · 일수 · 총수당 */
@@ -11434,10 +11620,13 @@ function renderPay(){
         }
         if(hasAny)trs+=`<tr>${tds}</tr>`;
       }
+      if(holCompact)holCtl=payHolCompactCtl();
       let bjNote="";
       {const hr=Object.keys(hideR);if(hr.length){const nmOf=r=>{const a9=sh.cells["A"+r];return a9&&a9.typ==="str"?String(a9.v).trim():(r+"행");};
         bjNote+=` <span style="color:#6b7280">· 손익은 상용직급여를 그대로 따라가요. 이번 달 상용직급여에 없어 숨긴 줄 (엑셀에서도 숨김): <b>${hr.map(r=>esc(nmOf(r))).join(", ")}</b></span>`;}}
-      if(sh.name==="휴일근무수당"){
+      if(sh.name==="휴일근무수당"&&holCompact){
+        bjNote=` <b style="color:#2F6B3F">휴일근무수당·초과근무수당 모두 1일수당과 일수를 적으면 총수당이 계산되고, 계(휴일+초과)가 상용직급여 제수당에 자동 반영돼요.</b> <span style="color:#6b7280">휴일 1일수당을 바꾸면 다음 달에도 그 금액으로 채워져요 · 총수당 칸에 금액을 바로 적어도 돼요</span>`;
+      }else if(sh.name==="휴일근무수당"){
         bjNote=` <b style="color:#2F6B3F">시간을 적으면 수당이 계산되고, 맨 오른쪽 '초과근무수당 직접입력' 열(다른 엑셀에서 정리한 값)과 합쳐져 상용직급여 제수당에 자동 반영돼요.</b> <span style="color:#6B5B95"><b style="color:#2F6B3F">'휴일 일급'을 정해둔 사람은 휴일을 추가하면 수당이 바로 계산돼요(1일 기준). 그날 근무하지 않았으면 시간 칸에 0, 이틀 치면 2를 적어요.</b> 임원 일급: 시간 칸에 <b>일수</b>만 적으면 1일 = 월급여÷241.6×14 (8h×1.5+초과1h×2)로 수당이 자동 계산돼요. 평일 초과근무는 1일 = 월급여÷241.6×9.5 — 초과근무수당 직접입력 열에 금액으로 적어주세요.</span>`;
       }
       let bjCtl="",pnlCtl="";
