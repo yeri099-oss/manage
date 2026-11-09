@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v464</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v465</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -7156,8 +7156,9 @@ function payAutoFill(){
     }
     /* 특별상여 내역 열을 상용직급여에 표시 (엑셀 다운로드에도 포함) */
     {
-      const spOf=P.bjSpecialOf||{};
-      const specTotal=Math.round(P.bjSpecialSum||0);
+      const spOf=Object.assign({},P.bjSpecialOf||{});
+      {const eSb=((P.edits||{})["__epcSb"])||{};for(const rk in eSb){const v=Math.round(Number(eSb[rk])||0);if(v>(spOf[rk]||0))spOf[rk]=v;}} /* v465: 이카운트 특별상여금 */
+      const specTotal=Math.round(Object.values(spOf).reduce((a,b)=>a+(Number(b)||0),0));
       let shHdr=3;
       for(let r=1;r<=5;r++){const a0=sh.cells["A"+r];if(a0&&a0.typ==="str"&&String(a0.v).trim()==="사원명"){shHdr=r;break;}}
       P.edits=P.edits||{};
@@ -7212,6 +7213,7 @@ function payAutoFill(){
         const emp2=em.rows.find(x=>x.name.replace(/\s+/g,"")===e2.name.replace(/\s+/g,""));
         if(emp2&&e2.prepaid>0)epcPre[emp2.r]=e2.prepaid;
       });
+      {const eP=((P.edits||{})["__epcPre"])||{};for(const rk in eP){const v=Math.round(Number(eP[rk])||0);if(v>(epcPre[rk]||0))epcPre[rk]=v;}} /* v465 */
       const preAmt={};let preTotal=0;
       for(const row of em.rows){
         const v3=Math.max(Math.round(preOf[row.r]||0),Math.round(epcPre[row.r]||0));
@@ -7506,6 +7508,7 @@ function payAutoFill(){
         const monAll=gSum(allRows,em.cm.bon);
         let sb=0;
         if(P.epc)P.epc.emps.forEach(e=>{sb+=e.sbonus||0;});
+        else{const eSb=((P.edits||{})["__epcSb"])||{};for(const rk in eSb)sb+=Number(eSb[rk])||0;}
         const spec=Math.round(P.bjSpecialSum||0);
         if(em.cm.sbon){
           /* 특별상여금 열이 있으면 두 열을 그대로 (이카운트 값이든 웹 상여금 시트 값이든 급여대장에 들어간 그대로) */
@@ -7572,8 +7575,13 @@ function payApplyEpc(){
     /* 지급 항목: 직원 줄 위치가 달라도 이름으로 매칭해 전부 가져옴 */
     vals[cmE.pay]=e.pay;
     vals[cmE.alw]=(e.sudang||0)+(e.yeoncha||0);
-    if(cmE.sbon){vals[cmE.bon]=e.bonus1;vals[cmE.sbon]=e.sbonus;}
-    else vals[cmE.bon]=(e.bonus1||0)+(e.sbonus||0);
+    /* v465: 상여금 칸엔 상여금만, 특별상여금·기지급액은 달 파일에 저장해 두고 특별상여금·기지급액 열로 (새로고침해도 유지) */
+    vals[cmE.bon]=e.bonus1;
+    if(cmE.sbon)vals[cmE.sbon]=e.sbonus;
+    P.edits=P.edits||{};
+    {const sbM=(P.edits["__epcSb"]=P.edits["__epcSb"]||{}),prM=(P.edits["__epcPre"]=P.edits["__epcPre"]||{});
+     if(Math.round(e.sbonus||0)>0)sbM[String(row.r)]=Math.round(e.sbonus);else delete sbM[String(row.r)];
+     if(Math.round(e.prepaid||0)>0)prM[String(row.r)]=Math.round(e.prepaid);else delete prM[String(row.r)];}
     vals[cmE.tax]=e.tax;vals[cmE.ltax]=e.ltax;vals[cmE.np]=e.pension;vals[cmE.hi]=e.health;vals[cmE.ltc]=e.care;vals[cmE.ei]=e.employ;
     for(const col in vals){
       const v9=Math.round(vals[col]||0);
@@ -7586,6 +7594,7 @@ function payApplyEpc(){
     }
     matched.push(row.name);
   }
+  for(const k9 of["__epcSb","__epcPre"])if(P.edits[k9]&&!Object.keys(P.edits[k9]).length)delete P.edits[k9];
   try{payAutoFill();}catch(e9){} /* 웹에서 적은 초과근무수당까지 넣은 값으로 대사 */
   const em2=payEmpRows();/* 반영 후 값으로 대사 */
   for(const row of em2.rows){
@@ -10142,6 +10151,7 @@ async function payStartMonth(y2,m2,rst){
   payEdit("급여품의","A1",y2+"년 "+m2+"월 인건비 현황");
   P.wb.fileName=payNameYm(P.wb.fileName,{y:y2,m:m2});
   P.epc=null;P.result=null;
+  if(P.edits){delete P.edits["__epcSb"];delete P.edits["__epcPre"];} /* v465: 지난달 이카운트 특별상여·기지급은 새 달로 안 넘김 */
   /* 상여금 시트에 새 달 열이 없으면 빈 열에 만들어 줌 */
   const BJ=payBjCols();
   if(BJ&&!BJ.monthCol){
@@ -10917,6 +10927,7 @@ async function payInsertRowAfter(shName,k,fill,opt){
     const o2={};
     for(const r0 in P.edits["__ot"])o2[String(Number(r0)>=k+1?Number(r0)+1:Number(r0))]=P.edits["__ot"][r0];
     P.edits["__ot"]=o2;
+    for(const k9 of["__epcSb","__epcPre"])if(P.edits[k9]){const o4={};for(const r0 in P.edits[k9])o4[String(Number(r0)>=k+1?Number(r0)+1:Number(r0))]=P.edits[k9][r0];P.edits[k9]=o4;}
     if(P.edits["__otd"]){const o3={};for(const r0 in P.edits["__otd"])o3[String(Number(r0)>=k+1?Number(r0)+1:Number(r0))]=P.edits["__otd"][r0];P.edits["__otd"]=o3;}
   }
   await payAdoptBuf(await zip.generateAsync({type:"arraybuffer",compression:"DEFLATE"}));
