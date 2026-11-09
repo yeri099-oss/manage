@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v460</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v461</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -8725,6 +8725,7 @@ async function payColsSync(){
         if(paySheetByName("휴일근무수당")){try{if(await payHolSumSplit())ch=true;}catch(e8){console.warn("휴일 합계 열",e8);}}
         if(paySheetByName("휴일근무수당")){try{if(await payHolSumMerge())ch=true;}catch(e8){console.warn("휴일 합계 병합",e8);}}
         if(paySheetByName("휴일근무수당")&&await payNormHol())ch=true;
+        if(paySheetByName("휴일근무수당")){try{if(await payHolGroupBorders())ch=true;}catch(e8){console.warn("휴일/초과 묶음 선",e8);}}
         if(paySheetByName("상여금")&&await payNormBj())ch=true;
       }
     }catch(e){console.warn("테두리 바로잡기 실패",e);}
@@ -9357,6 +9358,20 @@ async function payNormHol(){
       return null;
     };
     return {cells:cells,donor:donor};
+  });
+}
+/* v461: 휴일/초과(새 모양) — 큰 묶음(부서명~시급 | 휴일근무수당 | 초과근무수당 | 계·합계·비고) 사이 세로 굵은 선 */
+async function payHolGroupBorders(){
+  if(!payHolIsCompact())return false;
+  return payBorderNormRun("휴일근무수당",(ctx)=>{
+    const H=payHolHdr(ctx.sh);if(!H||!H.tot)return null;
+    const thick=payMediumEl(ctx.stDoc);const cells=[];
+    for(let r=H.hdr;r<=H.tot;r++){
+      for(const c of [4,7,10])cells.push({r,c,fill:true,spec:{right:thick}});
+      for(const c of [5,8,11])cells.push({r,c,fill:true,spec:{left:thick}});
+    }
+    const donor=(r,c,cx2)=>{const L=payIdxCol(c);for(let d=1;d<=H.tot-H.hdr;d++){if(r-d>=H.hdr&&cx2.has(L+(r-d)))return L+(r-d);if(r+d<=H.tot&&cx2.has(L+(r+d)))return L+(r+d);}return null;};
+    return {cells,donor};
   });
 }
 /* 상여금: 금액 칸은 모두 가는 선. 굵은 선은 표 바깥, 머리글 위아래, 이름과 금액 사이, 합계 줄 위아래에만 */
@@ -11648,7 +11663,10 @@ function renderPay(){
           const span=m?` colspan="${spanC}" rowspan="${m.rsV||m.rs}"`:"";
           const cell=sh.cells[ref];
           if(hasTxt(cell)||edits[ref]!==undefined)hasAny=true;
-          const scss=KCSS[curKind]||"";
+          /* v461: 휴일/초과 큰 묶음 사이 굵은 세로선 (D|E, G|H, J|K) — 받는 엑셀과 같게 */
+          const gEnd=m?c+m.cs-1:c,gRow=Number(ref.replace(/[A-Z]+/,""));
+          const gB=holCompact&&otHeadRow&&gRow>=otHeadRow?((gEnd===4||gEnd===7||gEnd===10)?"border-right:2px solid #555;":"")+((c===5||c===8||c===11)?"border-left:2px solid #555;":""):"";
+          const scss=(KCSS[curKind]||"")+gB;
           const pct=cell&&payIsPct(ST,cell.s);
           const fv=(x)=>pct&&x!==""&&x!=null&&!isNaN(Number(x))&&String(x)!==""?(Math.round(Number(x)*10000)/100)+"%":payFmtCell(x);
           const edObjF=(edits[ref]&&typeof edits[ref]==="object"&&edits[ref].f)?edits[ref].f:"";
