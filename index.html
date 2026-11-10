@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v469</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v470</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -9396,7 +9396,7 @@ function payHolRates(cfg,mw,hr,oh){
   /* v459: 초과근무 하루 시간(그 달에 적은 값, 비우면 8시간) — 8시간까지 기본(주휴 포함이면 ×1.2), 넘는 시간은 연장 ×1.5 */
   const h=Number(oh)>0?Number(oh):8,base=Math.min(h,8),over=Math.max(h-8,0);
   /* v469: 초과근무 = 통상시급(월급÷241.6) × 1.5 × 근무시간 — 주휴 포함/미포함 구분 없음 */
-  if(hm==="m"&&mw>0)return {hol:Math.round(mw/241.6*14),ot:Math.round(mw/241.6*1.5*h)};
+  if(hm==="m"&&mw>0)return {hol:Math.round(mw/241.6*14),ot:Math.round(Math.round(mw/241.6)*1.5*h)}; /* v470: 통상시급을 원 단위로 반올림한 뒤 곱함 (15,728 × 1.5 × 9 = 212,328) */
   /* v468: 시급제는 휴일근무수당에도 같은 하루 시간 적용 (예: 4시간 → 시급×4×0.5) · 8시간 넘는 시간은 휴일연장 가산 1.0 */
   if(hm==="h"&&hr>0)return {hol:Math.round(hr*(base*0.5+over*1.0)),ot:Math.round(hr*0.5*h)};
   return null;
@@ -9485,9 +9485,9 @@ function payHolCompactCtl(){
     </tbody></table>
     <div style="font-weight:700;font-size:12.5px;margin-top:10px">초과근무수당 1일수당 (월급제) = 통상시급 × 1.5 × 근무시간</div>
     <table class="rpt" style="font-size:12.5px;margin-top:4px;width:auto"><tbody>
-      <tr><td class="l">통상시급</td><td class="l"><b>월급 ÷ 241.6</b></td><td class="l">241.6 = 주 45시간(하루 9시간) = 기본 209시간 + 매일 1시간(한 달 32.6시간)</td><td class="l">3,800,000 ÷ 241.6 = 15,728</td></tr>
-      <tr><td class="l">9시간 (하루 시간 9)</td><td class="l"><b>통상시급 × 1.5 × 9</b></td><td class="l">초과한 근무시간 전부 1.5배 · 주휴 포함/미포함 구분 없음</td><td class="l">15,728 × 1.5 × 9 = 212,334</td></tr>
-      <tr><td class="l">8시간 (비워 두면)</td><td class="l">통상시급 × 1.5 × 8</td><td class="l"></td><td class="l">15,728 × 1.5 × 8 = 188,742</td></tr>
+      <tr><td class="l">통상시급</td><td class="l"><b>월급 ÷ 241.6</b> (원 단위 반올림)</td><td class="l">241.6 = 주 45시간(하루 9시간) = 기본 209시간 + 매일 1시간(한 달 32.6시간)</td><td class="l">3,800,000 ÷ 241.6 = 15,728</td></tr>
+      <tr><td class="l">9시간 (하루 시간 9)</td><td class="l"><b>통상시급 × 1.5 × 9</b></td><td class="l">초과한 근무시간 전부 1.5배 · 주휴 포함/미포함 구분 없음</td><td class="l">15,728 × 1.5 × 9 = 212,328</td></tr>
+      <tr><td class="l">8시간 (비워 두면)</td><td class="l">통상시급 × 1.5 × 8</td><td class="l"></td><td class="l">15,728 × 1.5 × 8 = 188,736</td></tr>
     </tbody></table>
     <div class="footnote" style="margin-top:6px">하루 시간은 표 오른쪽 '하루 시간' 칸에 적어요 (비우면 8시간)</div>
   </details>`;
