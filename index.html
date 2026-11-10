@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v472</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v473</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -18155,6 +18155,7 @@ function pecYong(){
     else if(!cm.net&&h.indexOf("실지급")>=0)cm.net=col;
     else if(!cm.dept&&(h==="부서"||h==="사업장"||h==="소속"||h==="부서명"))cm.dept=col;
     else if(!cm.rrn&&/^주민(등록)?번호$/.test(h))cm.rrn=col; /* v472 */
+    else if(!cm.pre&&h.indexOf("기지급")>=0)cm.pre=col; /* v473 */
     else if(!cm.memo&&(h==="비고"||h==="내용"))cm.memo=col;}
   if(!cm.amt)cm.amt="E";if(!cm.net)cm.net="J";
   const g=(ref)=>Math.round(yv(ref)||0);
@@ -18170,7 +18171,9 @@ function pecYong(){
     let guess=null;if(dept){if(dept.indexOf("마켓")>=0)guess="mk";else if(dept.indexOf("피다")>=0||dept.indexOf("인사동")>=0)guess="ep";else if(dept.indexOf("보자기")>=0)guess="bj";}
     if(!guess)guess=pecGuess(nm);
     const raw=(ref)=>{if(!ref)return "";const e=ed[ref];if(e!==undefined)return String(e).trim();const c=ys.cells[ref];return c&&c.v!=null&&c.v!==""?String(c.v).trim():"";};
-    per.push({name:nm,biz:pecBizOf(nm)||guess,auto:!pecBizOf(nm),amt,tax,ltax,net,dept,rrn:cm.rrn?raw(cm.rrn+r):"",memo:cm.memo?raw(cm.memo+r):""});
+    per.push({name:nm,biz:pecBizOf(nm)||guess,auto:!pecBizOf(nm),amt,tax,ltax,net,dept,rrn:cm.rrn?raw(cm.rrn+r):"",memo:cm.memo?raw(cm.memo+r):"",
+      /* v473: 기지급액(먼저 준 용역비) — 열이 있으면 그 값, 없으면 지급액 − 세금 − 실지급액 */
+      pre:cm.pre?g(cm.pre+r):Math.max(0,amt-tax-ltax-net)});
   }
   return {per,cm,hRow};
 }
@@ -18180,11 +18183,13 @@ function pecYongRows(Y){
   const B=["mk","ep","bj"];
   for(const b of B){
     const ppl=Y.per.filter(x=>x.biz===b);if(!ppl.length)continue;
-    let tax=0,ltax=0,net=0;
-    for(const x of ppl){rows.push({grp:"3차",code:"8060",acct:"용역직급여",sub:x.name,dr:x.amt,cr:0,memo:"용역직급여 "+ym,biz:PEC_LABEL[b],blk:b+"|8060"});tax+=x.tax;ltax+=x.ltax;net+=x.net;}
+    let tax=0,ltax=0,net=0,pre=0;
+    for(const x of ppl){pre+=x.pre||0;rows.push({grp:"3차",code:"8060",acct:"용역직급여",sub:x.name,dr:x.amt,cr:0,memo:"용역직급여 "+ym,biz:PEC_LABEL[b],blk:b+"|8060"});tax+=x.tax;ltax+=x.ltax;net+=x.net;}
     if(tax)rows.push({grp:"4대",code:"2547",acct:"예수금(원천세)",sub:"95164 국세",dr:0,cr:tax,memo:"소득세 "+ym,biz:PEC_LABEL[b],blk:b+"|2547"});
     if(ltax)rows.push({grp:"4대",code:"2547",acct:"예수금(원천세)",sub:"95165 지방세",dr:0,cr:ltax,memo:"소득세 "+ym,biz:PEC_LABEL[b],blk:b+"|2547"});
     if(net)rows.push({grp:"4대",code:"2540",acct:"미지급급여",sub:"",dr:0,cr:net,memo:"용역직급여 "+ym,biz:PEC_LABEL[b],blk:b+"|2540"});
+    /* v473: 먼저 지급한 용역비(기지급액)는 지급할 때 미지급급여로 잡았으니, 여기서 미지급급여 대변으로 (상용직 특별상여 기지급과 같은 방식) */
+    if(pre)rows.push({grp:"4대",code:"2540",acct:"미지급급여",sub:"",dr:0,cr:pre,memo:"용역직급여 "+ym+" 기지급",biz:PEC_LABEL[b],blk:b+"|2540"});
   }
   return rows;
 }
