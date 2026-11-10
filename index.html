@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v473</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v474</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -11656,6 +11656,7 @@ function renderPay(){
         <div style="flex:1;min-width:150px;background:rgba(47,107,63,.12);border-radius:10px;padding:10px 12px"><div style="font-size:12px;color:var(--sub)">실지급액 (이체 합계)</div><div style="font-size:18px;font-weight:700">${fmt(sm.net)}원</div></div>
       </div>
       ${deptLine}
+      ${(()=>{const wl=payWorkLogData();return wl?`<div style="margin-top:10px;padding:8px 12px;border:1px solid #c7e3cc;background:#F4F9F4;border-radius:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span class="footnote" style="font-weight:700">📄 업무일지용</span><span style="font-weight:700;font-size:14px">${esc(wl.txt)}</span>${wl.un.length?`<span class="footnote" style="color:#b45309">사업장 미지정(이야기에 포함): ${wl.un.map(esc).join(", ")}</span>`:""}</div>`:"";})()}
       </div>`;
   }
   /* 급여지급표 (통장별) */
@@ -12052,11 +12053,20 @@ async function payRecordMonth(){
   }
   renderPay();
 }
+/* v474: 업무일지용 — 이야기(마켓·보자기) / 피다 / 용역 실지급액 */
+function payWorkLogData(){
+  let C=null,Y=null;try{C=pecCalc();}catch(e){}try{Y=pecYong();}catch(e){}
+  if(!C&&!Y)return null;
+  const o={mi:0,ep:0,yong:0,un:[]};
+  if(C)for(const x of C.per){if(!x.biz){o.un.push(x.name);o.mi+=x.net;}else if(x.biz==="ep")o.ep+=x.net;else o.mi+=x.net;}
+  if(Y)for(const x of Y.per)o.yong+=x.net;
+  o.txt="이야기 - "+fmt(o.mi)+" / 피다 - "+fmt(o.ep)+" / 용역 - "+fmt(o.yong);
+  return o;
+}
 async function paySummaryCopy(btn){
-  const sm=paySummaryData();
-  if(!sm)return;
-  const ym=payYm();
-  const txt=(ym?ym.y+"년 "+ym.m+"월 ":"")+"급여 지급 — 지급총액 "+fmt(sm.total)+"원, 공제총액 "+fmt(sm.deduct)+"원, 실지급액 "+fmt(sm.net)+"원 ("+sm.count+"명)";
+  const wl=payWorkLogData();
+  if(!wl)return;
+  const txt=wl.txt;
   try{
     if(navigator.clipboard&&navigator.clipboard.writeText)await navigator.clipboard.writeText(txt);
     else{const ta=document.createElement("textarea");ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand("copy");ta.remove();}
