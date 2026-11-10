@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v470</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v471</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -9390,13 +9390,20 @@ window.payHolOth=function(el){
   if(!Object.keys(o).length)delete P.edits["__oth"];
   try{payAutoFill();}catch(e){}paySchedSave();renderPay();
 };
+window.payHolOtm=function(v){
+  const P=window.__pay;P.edits=P.edits||{};if(v==="old")P.edits["__otm"]="old";else delete P.edits["__otm"];
+  try{payAutoFill();}catch(e){}paySchedSave();renderPay();
+  toast(v==="old"?"이 달 초과근무수당을 원래 산식으로 계산해요 (예: 3,800,000 ÷ 241.6 × 11.1 = 174,586)":"이 달 초과근무수당을 새 산식으로 계산해요 (예: 15,728 × 1.5 × 9 = 212,328)");
+};
 window.payHolJh=function(nm,on){payHolCfgSet(nm,c=>{if(on)c.jh=1;else delete c.jh;});try{payAutoFill();}catch(e){}paySchedSave();renderPay();};
 function payHolRates(cfg,mw,hr,oh){
   const hm=cfg&&cfg.hm,jh=!!(cfg&&cfg.jh);
   /* v459: 초과근무 하루 시간(그 달에 적은 값, 비우면 8시간) — 8시간까지 기본(주휴 포함이면 ×1.2), 넘는 시간은 연장 ×1.5 */
   const h=Number(oh)>0?Number(oh):8,base=Math.min(h,8),over=Math.max(h-8,0);
   /* v469: 초과근무 = 통상시급(월급÷241.6) × 1.5 × 근무시간 — 주휴 포함/미포함 구분 없음 */
-  if(hm==="m"&&mw>0)return {hol:Math.round(mw/241.6*14),ot:Math.round(Math.round(mw/241.6)*1.5*h)}; /* v470: 통상시급을 원 단위로 반올림한 뒤 곱함 (15,728 × 1.5 × 9 = 212,328) */
+  /* v471: 이 달 초과근무 산식 선택 — 원래 산식(8시간까지 ×1.2(주휴 포함) + 넘는 시간 ×1.5) / 새 산식(통상시급 × 1.5 × 시간) */
+  const otOld=((((window.__pay||{}).edits||{})["__otm"])==="old");
+  if(hm==="m"&&mw>0)return {hol:Math.round(mw/241.6*14),ot:otOld?Math.round(mw/241.6*(base*1.2+over*1.5)):Math.round(Math.round(mw/241.6)*1.5*h)}; /* v470: 통상시급을 원 단위로 반올림한 뒤 곱함 (15,728 × 1.5 × 9 = 212,328) */
   /* v468: 시급제는 휴일근무수당에도 같은 하루 시간 적용 (예: 4시간 → 시급×4×0.5) · 8시간 넘는 시간은 휴일연장 가산 1.0 */
   if(hm==="h"&&hr>0)return {hol:Math.round(hr*(base*0.5+over*1.0)),ot:Math.round(hr*0.5*h)};
   return null;
@@ -9469,6 +9476,11 @@ function payHolCompactCtl(){
     ${d.map((x,i)=>`<span class="paychip" style="cursor:default">${esc(x)} <b style="cursor:pointer;color:#b45309" onclick="payHolDel(${i})" title="이 휴일 지우기">✕</b></span>`).join("")||'<span class="footnote">아직 없음</span>'}
     <input id="holNewDate" placeholder="예: 9월 6일" style="width:110px;padding:4px 8px;border:1px solid rgba(0,0,0,.2);border-radius:8px;font-family:inherit">
     <button class="btn btn-sm" onclick="payHolAdd()">➕ 휴일 추가</button>
+    <span class="footnote" style="font-weight:700;margin-left:10px">초과근무 산식:</span>
+    <select onchange="payHolOtm(this.value)" style="font:inherit;font-size:12.5px;padding:3px 6px;border:1px solid #d1d5db;border-radius:8px" title="이 달 월급제 초과근무 1일수당 계산 방식">
+      <option value="" ${(((window.__pay.edits||{})["__otm"])!=="old")?"selected":""}>새 산식 — 통상시급 × 1.5 × 시간</option>
+      <option value="old" ${(((window.__pay.edits||{})["__otm"])==="old")?"selected":""}>원래 산식 — 통상시급 × (8시간 × 1.2 + 넘는 시간 × 1.5)</option>
+    </select>
     <span class="footnote">휴일 1일수당을 정해둔 사람은 일수가 휴일 수로 자동으로 들어가요 · 날짜는 엑셀 표 위에 한 줄로 적혀요</span>
     <span style="flex:1"></span>
     <button class="btn btn-sm" onclick="payHolRepCopy()" title="수당(계)이 있는 사람만 표 모양 그대로 이미지로 복사 — 보고 창에 Ctrl+V">📷 수당 받는 사람만 이미지 복사</button>
@@ -9489,7 +9501,7 @@ function payHolCompactCtl(){
       <tr><td class="l">9시간 (하루 시간 9)</td><td class="l"><b>통상시급 × 1.5 × 9</b></td><td class="l">초과한 근무시간 전부 1.5배 · 주휴 포함/미포함 구분 없음</td><td class="l">15,728 × 1.5 × 9 = 212,328</td></tr>
       <tr><td class="l">8시간 (비워 두면)</td><td class="l">통상시급 × 1.5 × 8</td><td class="l"></td><td class="l">15,728 × 1.5 × 8 = 188,736</td></tr>
     </tbody></table>
-    <div class="footnote" style="margin-top:6px">하루 시간은 표 오른쪽 '하루 시간' 칸에 적어요 (비우면 8시간)</div>
+    <div class="footnote" style="margin-top:6px">하루 시간은 표 오른쪽 '하루 시간' 칸에 적어요 (비우면 8시간) · 위 '초과근무 산식'에서 <b>원래 산식</b>을 고르면: 월급 ÷ 241.6 × (8시간 × 1.2(주휴 포함) + 넘는 시간 × 1.5) — 9시간이면 × 11.1 = 174,586</div>
   </details>`;
 }
 async function payNormHol(){
@@ -10327,6 +10339,7 @@ function payResetPlan(o){
   if(o.ot&&payHolIsCompact()){
     const hd=paySheetByName("휴일근무수당");const H=payHolHdr(hd);
     if((P.edits||{})["__oth"])plan.ot=true; /* v459: 초과근무 하루 시간도 비움 */
+    if((P.edits||{})["__otm"])plan.ot=true; /* v471: 이 달 초과근무 산식 선택도 새 달엔 새 산식으로 */
     if(H&&H.tot)for(let r=H.hEnd+1;r<H.tot;r++){clr(hd,"H"+r,"ot");clr(hd,"I"+r,"ot");if(E("휴일근무수당")["J"+r]!==undefined){(plan.del["휴일근무수당"]=plan.del["휴일근무수당"]||{})["J"+r]=1;cnt("ot");}}
   }
   if(o.hol&&!payHolIsCompact()){
@@ -10418,7 +10431,7 @@ async function payResetApply(plan){
   P.undo={key:ym?ym.y+"-"+ym.m:"",zipBuf:P.wb.zipBuf.slice(0),fileName:P.wb.fileName,edits:JSON.stringify(P.edits||{}),autoSet:JSON.stringify(P.autoSet||{})};
   P.edits=P.edits||{};P.autoSet=P.autoSet||{};
   for(const nm in plan.del)for(const ref in plan.del[nm]){if(P.edits[nm])delete P.edits[nm][ref];if(P.autoSet[nm])delete P.autoSet[nm][ref];}
-  if(plan.ot){delete P.edits["__ot"];delete P.edits["__otbase"];delete P.edits["__otd"];delete P.edits["__oth"];}
+  if(plan.ot){delete P.edits["__ot"];delete P.edits["__otbase"];delete P.edits["__otd"];delete P.edits["__oth"];delete P.edits["__otm"];}
   if(plan.holDaysClear){delete P.edits["__holDays"];const e9=(P.edits["휴일근무수당"]=P.edits["휴일근무수당"]||{});e9["A2"]="";}
   if(plan.bjhist&&plan.bjhist.length){P.edits["__bjhist"]=P.edits["__bjhist"]||{};plan.bjhist.forEach((c)=>{P.edits["__bjhist"][c]=1;});}
   if(plan.bjpre.length&&P.edits["__bjpre"]){plan.bjpre.forEach((c)=>delete P.edits["__bjpre"][c]);if(!Object.keys(P.edits["__bjpre"]).length)delete P.edits["__bjpre"];}
