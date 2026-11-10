@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v468</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v469</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -9395,9 +9395,10 @@ function payHolRates(cfg,mw,hr,oh){
   const hm=cfg&&cfg.hm,jh=!!(cfg&&cfg.jh);
   /* v459: 초과근무 하루 시간(그 달에 적은 값, 비우면 8시간) — 8시간까지 기본(주휴 포함이면 ×1.2), 넘는 시간은 연장 ×1.5 */
   const h=Number(oh)>0?Number(oh):8,base=Math.min(h,8),over=Math.max(h-8,0);
-  if(hm==="m"&&mw>0)return {hol:Math.round(mw/241.6*14),ot:Math.round(mw/241.6*(base*(jh?1.2:1)+over*1.5))};
+  /* v469: 초과근무 = 통상시급(월급÷241.6) × 1.5 × 근무시간 — 주휴 포함/미포함 구분 없음 */
+  if(hm==="m"&&mw>0)return {hol:Math.round(mw/241.6*14),ot:Math.round(mw/241.6*1.5*h)};
   /* v468: 시급제는 휴일근무수당에도 같은 하루 시간 적용 (예: 4시간 → 시급×4×0.5) · 8시간 넘는 시간은 휴일연장 가산 1.0 */
-  if(hm==="h"&&hr>0)return {hol:Math.round(hr*(base*0.5+over*1.0)),ot:Math.round(hr*(base*(jh?0.7:0.5)+over*0.5))};
+  if(hm==="h"&&hr>0)return {hol:Math.round(hr*(base*0.5+over*1.0)),ot:Math.round(hr*0.5*h)};
   return null;
 }
 /* v467: 보고용 — 수당(계 K)이 있는 사람만 표 모양 그대로 */
@@ -9478,18 +9479,17 @@ function payHolCompactCtl(){
       <tr><td class="l"><b>월급제</b><br><span class="unit">꽃밥이야기·마켓·보자기 등</span></td><td class="l"><b>월급 ÷ 241.6 × 14</b></td>
         <td class="l">241.6 = 주 45시간(하루 9시간) 근무의 월 유급시간 (209 + 매일 1시간 연장분 32.6)<br>14 = 휴일 9시간 근무 = 8시간 × 1.5배 + 1시간 × 2.0배</td>
         <td class="l">6,000,000 ÷ 241.6 × 14 = 347,682<br>3,800,000 ÷ 241.6 × 14 = 220,199</td></tr>
-      <tr><td class="l"><b>시급제</b><br><span class="unit">인사동 파트 등</span></td><td class="l"><b>시급 × 8시간 × 0.5</b><br><span class="unit">오른쪽 '하루 시간'을 적으면 그 시간으로 (예: 4시간 → 시급 × 4 × 0.5)</span><br><span class="unit">초과: 시급 × 8 × 0.5 (주휴 포함 0.7)</span></td>
+      <tr><td class="l"><b>시급제</b><br><span class="unit">인사동 파트 등</span></td><td class="l"><b>시급 × 8시간 × 0.5</b><br><span class="unit">오른쪽 '하루 시간'을 적으면 그 시간으로 (예: 4시간 → 시급 × 4 × 0.5)</span><br><span class="unit">초과: 시급 × 0.5 × 근무시간</span></td>
         <td class="l">휴일에 일한 시간 자체는 시급직급여로 이미 받으니, 휴일 가산분 50%만 더 줘요</td>
         <td class="l">13,542 × 8 × 0.5 = 54,168</td></tr>
     </tbody></table>
-    <div style="font-weight:700;font-size:12.5px;margin-top:10px">초과근무수당 1일수당 (월급제, 쉬는 날 하루 9시간 더 일했을 때)</div>
+    <div style="font-weight:700;font-size:12.5px;margin-top:10px">초과근무수당 1일수당 (월급제) = 통상시급 × 1.5 × 근무시간</div>
     <table class="rpt" style="font-size:12.5px;margin-top:4px;width:auto"><tbody>
-      <tr><td class="l">8시간 · 주휴 포함</td><td class="l"><b>월급 ÷ 241.6 × 9.6</b></td><td class="l">8시간 × 1.2배(1 + 주휴 0.2)</td><td class="l">3,800,000 ÷ 241.6 × 9.6 = 150,993</td></tr>
-      <tr><td class="l">8시간 · 주휴 없이</td><td class="l">월급 ÷ 241.6 × 8</td><td class="l">8시간 × 1배</td><td class="l">3,800,000 ÷ 241.6 × 8 = 125,828</td></tr>
-      <tr><td class="l">9시간(하루 시간 9) · 주휴 포함 (10월 방식)</td><td class="l">월급 ÷ 241.6 × 11.1</td><td class="l">8시간 × 1.2배 + 1시간 연장 × 1.5배</td><td class="l">3,800,000 ÷ 241.6 × 11.1 = 174,586</td></tr>
-      <tr><td class="l">9시간(하루 시간 9) · 주휴 없이 (8월 방식)</td><td class="l">월급 ÷ 241.6 × 9.5</td><td class="l">8시간 × 1배 + 1시간 연장 × 1.5배</td><td class="l">3,800,000 ÷ 241.6 × 9.5 = 149,421</td></tr>
+      <tr><td class="l">통상시급</td><td class="l"><b>월급 ÷ 241.6</b></td><td class="l">241.6 = 주 45시간(하루 9시간) = 기본 209시간 + 매일 1시간(한 달 32.6시간)</td><td class="l">3,800,000 ÷ 241.6 = 15,728</td></tr>
+      <tr><td class="l">9시간 (하루 시간 9)</td><td class="l"><b>통상시급 × 1.5 × 9</b></td><td class="l">초과한 근무시간 전부 1.5배 · 주휴 포함/미포함 구분 없음</td><td class="l">15,728 × 1.5 × 9 = 212,334</td></tr>
+      <tr><td class="l">8시간 (비워 두면)</td><td class="l">통상시급 × 1.5 × 8</td><td class="l"></td><td class="l">15,728 × 1.5 × 8 = 188,742</td></tr>
     </tbody></table>
-    <div class="footnote" style="margin-top:6px">1일수당 칸에 한 번 적으면 다음 달에도 그 금액으로 채워져요 · 월급이 바뀌면 새로 계산해서 고쳐 주세요 · 두 방식 차이(25,165원)는 주휴분 8시간 × 0.2 = 1.6시간이에요</div>
+    <div class="footnote" style="margin-top:6px">하루 시간은 표 오른쪽 '하루 시간' 칸에 적어요 (비우면 8시간)</div>
   </details>`;
 }
 async function payNormHol(){
@@ -11944,12 +11944,12 @@ function renderPay(){
         }
         if(holCompact){ /* v457: 직원별 수당 계산법 (월급제 / 시급제 / 직접) + 주휴 포함 */
           const byH=((S.data.payTax||{}).byName)||{};
-          if(r===otHeadRow)tds+=`<td class="ot" style="font-weight:700;text-align:center" title="휴일근무수당 1일수당 계산 방식 — 월급제: 월급÷241.6×14 · 시급제: 시급×하루 시간(비우면 8)×0.5">휴일근무수당 ✍</td><td class="ot" colspan="2" style="font-weight:700;text-align:center" title="초과근무수당 1일수당 — 월급제: 월급÷241.6 × (8시간까지 ×1(주휴 포함 ×1.2) + 넘는 시간 ×1.5) · 시급제: 시급 × (8시간까지 ×0.5(주휴 0.7) + 넘는 시간 ×0.5) · 초과 일수를 적은 사람만 계산">초과근무수당 ✍</td>`;
-          else if(otHeadRow&&r===otHeadRow+1)tds+=`<td class="ot" style="font-weight:700;text-align:center">계산 방식</td><td class="ot" style="font-weight:700;text-align:center">주휴 포함</td><td class="ot" style="font-weight:700;text-align:center" title="초과근무한 날 하루 일한 시간 (비우면 8시간) — 8시간 넘는 시간은 연장 1.5배(시급제는 0.5 가산) · 시급제는 휴일근무수당에도 이 시간이 적용돼요">하루 시간</td>`;
+          if(r===otHeadRow)tds+=`<td class="ot" style="font-weight:700;text-align:center" title="휴일근무수당 1일수당 계산 방식 — 월급제: 월급÷241.6×14 · 시급제: 시급×하루 시간(비우면 8)×0.5">휴일근무수당 ✍</td><td class="ot" style="font-weight:700;text-align:center" title="초과근무수당 1일수당 — 월급제: 월급÷241.6 × 1.5 × 근무시간 · 시급제: 시급 × 0.5 × 근무시간 · 초과 일수를 적은 사람만 계산">초과근무수당 ✍</td>`;
+          else if(otHeadRow&&r===otHeadRow+1)tds+=`<td class="ot" style="font-weight:700;text-align:center">계산 방식</td><td class="ot" style="font-weight:700;text-align:center" title="초과근무한 날 하루 일한 시간 (비우면 8시간) — 월급제: 통상시급×1.5×시간 · 시급제: 시급×0.5×시간 · 시급제는 휴일근무수당에도 이 시간이 적용돼요">하루 시간</td>`;
           else if(holNm[r]){
             const cf=byH[holNm[r]]||{},hm=cf.hm||"";
-            tds+=`<td class="ot"><select style="font:inherit;font-size:12px;padding:2px 4px;border:1px solid #d1d5db;border-radius:6px" onchange="payHolMethod('${esc(holNm[r])}',this.value)">${[["","선택"],["m","월급제"],["h","시급제"],["x","직접"]].map(([k,n])=>`<option value="${k}" ${hm===k?"selected":""}>${n}</option>`).join("")}</select></td><td class="ot" style="text-align:center"><input type="checkbox" ${cf.jh?"checked":""} onchange="payHolJh('${esc(holNm[r])}',this.checked)" style="width:16px;height:16px;cursor:pointer"></td>${(()=>{const oh9=(((P.edits||{})["__oth"])||{})[holNm[r]];return `<td class="ec ot${oh9?" edited":""}" contenteditable="true" data-n="${esc(holNm[r])}" onblur="payHolOth(this)" onkeydown="payKeyDownOt(event,this)" style="text-align:center;min-width:48px" title="초과근무한 날 하루 몇 시간 일했는지 (비우면 8시간) — 이 달에만 적용">${oh9?esc(String(oh9)):'<span style="color:#b9b7ad">8</span>'}</td>`;})()}`;
-          }else tds+=`<td class="ot"></td><td class="ot"></td><td class="ot"></td>`;
+            tds+=`<td class="ot"><select style="font:inherit;font-size:12px;padding:2px 4px;border:1px solid #d1d5db;border-radius:6px" onchange="payHolMethod('${esc(holNm[r])}',this.value)">${[["","선택"],["m","월급제"],["h","시급제"],["x","직접"]].map(([k,n])=>`<option value="${k}" ${hm===k?"selected":""}>${n}</option>`).join("")}</select></td>${(()=>{const oh9=(((P.edits||{})["__oth"])||{})[holNm[r]];return `<td class="ec ot${oh9?" edited":""}" contenteditable="true" data-n="${esc(holNm[r])}" onblur="payHolOth(this)" onkeydown="payKeyDownOt(event,this)" style="text-align:center;min-width:48px" title="초과근무한 날 하루 몇 시간 일했는지 (비우면 8시간) — 이 달에만 적용">${oh9?esc(String(oh9)):'<span style="color:#b9b7ad">8</span>'}</td>`;})()}`;
+          }else tds+=`<td class="ot"></td><td class="ot"></td>`;
         }
         if(hasAny)trs+=`<tr>${tds}</tr>`;
       }
