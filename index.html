@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v474</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v475</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -16246,13 +16246,14 @@ async function buyJsRender(ym){
     return;
   }
   const gye=(m.members&&m.members.bojagiGye)||0;
-  m.buyBojagi=m.buyBojagi||[];m.buyPida=m.buyPida||[];
+  m.buyBojagi=m.buyBojagi||[];m.buyPida=m.buyPida||[];m.buyMarket=m.buyMarket||[];
   const rows=(list,key)=>list.map((it,i)=>`<tr>
     <td><input type="text" value="${esc(it.name||"")}" onchange="buyJsEdit('${ym}','${key}',${i},'name',this.value)"></td>
     <td><input type="text" inputmode="numeric" style="text-align:right" value="${it.amt?fmt(it.amt):""}" onchange="buyJsEdit('${ym}','${key}',${i},'amt',this.value)"></td>
     <td><button class="btn btn-sm" style="padding:1px 7px" onclick="buyJsDel('${ym}','${key}',${i})">×</button></td></tr>`).join("");
   const sb=m.buyBojagi.reduce((a,b)=>a+(b.amt||0),0);
   const sp=m.buyPida.reduce((a,b)=>a+(b.amt||0),0);
+  const sm=m.buyMarket.reduce((a,b)=>a+(b.amt||0),0);
   box2.innerHTML=`<div style="max-width:640px">
     <span id="buyJsSt" class="footnote" style="float:right"></span>
     <table class="rpt buy-tbl" style="max-width:460px;margin:8px 0 0 0"><thead><tr><th class="l">보자기 매입정산</th><th style="width:130px">금액</th><th style="width:30px"></th></tr></thead><tbody>
@@ -16266,11 +16267,16 @@ async function buyJsRender(ym){
       <tr><td colspan="3"><button class="btn btn-sm" onclick="buyJsAdd('${ym}','buyPida')">＋ 항목 추가</button></td></tr>
       <tr style="background:#eef3ee"><td class="l"><b>합계</b></td><td style="text-align:right"><b>${fmt(sp)}</b></td><td></td></tr>
     </tbody></table>
+    <table class="rpt buy-tbl" style="max-width:460px;margin:14px 0 0 0"><thead><tr><th class="l" title="꽃밥에피다 이름으로 샀지만 마켓 매입인 것">마켓 매입정산 <span class="unit">(피다에서 샀지만 마켓 매입)</span></th><th style="width:130px">금액</th><th style="width:30px"></th></tr></thead><tbody>
+      ${rows(m.buyMarket,"buyMarket")}
+      <tr><td colspan="3"><button class="btn btn-sm" onclick="buyJsAdd('${ym}','buyMarket')">＋ 항목 추가</button></td></tr>
+      <tr style="background:#eef3ee"><td class="l"><b>합계</b></td><td style="text-align:right"><b>${fmt(sm)}</b></td><td></td></tr>
+    </tbody></table>
     <div style="display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap">
       <button class="btn btn-primary btn-sm" onclick="buyJsToStat('${ym}')">📤 매입현황에 반영</button>
       <span class="unit">${buyJsAppliedNote(ym)}</span></div>
   </div>
-  ${buyJsVoucherHtml(ym,gye+sb,sp)}`;
+  ${buyJsVoucherHtml(ym,gye+sb,sp,sm)}`;
 }
 
 /* ---------- 매입현황 월 요약 (보고용: ① 사업장별 합계 ② 증감 큰 거래처 ③ 특이사항) — 이미지·텍스트 복사 ---------- */
@@ -16446,7 +16452,7 @@ window.buySumCopy=async function(mode){
 function buyJsStatY(ym){return String(2000+Number(String(ym).slice(0,2)));}
 function buyJsAppliedNote(ym){
   try{const y=buyJsStatY(ym),d=bd().stat[y],a=d&&d.jsApplied&&d.jsApplied[String(+String(ym).slice(2))];
-    return a?"마지막 반영 "+new Date(a.at).toLocaleString("ko-KR",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"})+" · 고친 뒤 다시 누르면 바뀐 만큼만 다시 맞춰요":"피다 칸 → 보자기 칸으로 옮겨요 (피다 매입정산은 반대로) · 전체 금액은 그대로";}catch(e){return "";}
+    return a?"마지막 반영 "+new Date(a.at).toLocaleString("ko-KR",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"})+" · 고친 뒤 다시 누르면 바뀐 만큼만 다시 맞춰요":"보자기: 피다 칸 → 보자기 칸 · 피다: 보자기 칸 → 피다 칸 · 마켓: 피다 칸 → 마켓 칸으로 옮겨요 · 전체 금액은 그대로";}catch(e){return "";}
 }
 window.buyJsToStat=function(ym){
   const M=buyJsMonths(),m=M&&M[ym];if(!m){toast("매입정산 자료가 없어요",true);return;}
@@ -16459,6 +16465,7 @@ window.buyJsToStat=function(ym){
   if(gye){const mk2=names.find(n=>/꽃밥이야기/.test(n))||"(주)꽃밥이야기";mv.push({src:"꽃밥마켓 (자동)",name:mk2,isNew:!names.includes(mk2),from:"pida",to:"bojagi",amt:gye});}
   (m.buyBojagi||[]).forEach(it=>add(it.name,it.amt,"pida","bojagi"));
   (m.buyPida||[]).forEach(it=>add(it.name,it.amt,"bojagi","pida"));
+  (m.buyMarket||[]).forEach(it=>add(it.name,it.amt,"pida","market")); /* v475: 피다에서 샀지만 마켓 매입 → 피다 칸 → 마켓 칸 */
   const prev=(d.jsApplied&&d.jsApplied[mk])||null;
   if(!mv.length&&!prev){toast("반영할 금액이 없어요",true);return;}
   const val=(sc,nm)=>{const r=buyFindRow(y,sc,nm);return (r&&r.m[mk])||0;};
@@ -16469,7 +16476,7 @@ window.buyJsToStat=function(ym){
   /* 옮길 칸에 금액이 모자라면 있는 만큼만 빼고(take), 나머지는 새 매입으로 더해져 전체도 늘어남 */
   if(prev)for(const x of prev.list){const tk=x.take!=null?x.take:x.amt;put(x.from,x.name,get(x.from,x.name)+tk);put(x.to,x.name,get(x.to,x.name)-x.amt);}
   for(const x of mv){x.take=Math.min(x.amt,Math.max(0,get(x.from,x.name)));put(x.from,x.name,get(x.from,x.name)-x.take);put(x.to,x.name,get(x.to,x.name)+x.amt);}
-  const L={pida:"피다",bojagi:"보자기"};
+  const L={pida:"피다",bojagi:"보자기",market:"마켓"};
   const lines=mv.map(x=>`· ${x.src}${x.src!==x.name?" → "+x.name:""}${x.isNew?" (새 거래처)":""}: ${fmt(x.amt)}원  ${x.take>=x.amt?L[x.from]+"→"+L[x.to]:x.take>0?L[x.from]+"에서 "+fmt(x.take)+"원만 옮기고 나머지는 "+L[x.to]+"에 추가":L[x.to]+"에 추가 ("+L[x.from]+" 칸에 금액 없음)"}`);
   const neg=Object.keys(sim).filter(k=>sim[k]<0).map(k=>{const [sc,nm]=k.split("|");return `${nm} ${L[sc]||sc} ${fmt(sim[k])}`;});
   const msg=`${y}년 ${mo}월 매입현황에 반영할까요?\n\n${lines.join("\n")||"(이번엔 옮길 항목 없음)"}${prev?"\n\n※ 지난번 반영분("+prev.list.length+"건)은 되돌리고 새로 맞춰요":""}${neg.length?"\n\n⚠ 옮긴 뒤 마이너스가 되는 칸: "+neg.join(", ")+"\n   (거래처 이름이 맞는지 확인하세요)":""}`;
@@ -16487,20 +16494,21 @@ window.buyJsToStat=function(ym){
   buyJsRender(ym);
 };
 /* 이카운트 전표: 1469 상품 / 거래처 95263 매입(손익)정산 — 보자기 +, 피다 − (피다 정산이 있으면 반대 짝 한 줄 더) */
-function buyJsVoucherRows(ym,bj,pd){
+function buyJsVoucherRows(ym,bj,pd,mk){
   const rows=[];
   const add=(dr,biz,blk)=>rows.push({grp:"3차",code:"1469",acct:"상품",sub:"95263 매입(손익)정산",dr,cr:0,memo:"매입정산",biz,blk});
   if(bj){add(bj,"보자기꽃밥","bj");add(-bj,"꽃밥에피다","bj");}
   if(pd){add(pd,"꽃밥에피다","pd");add(-pd,"보자기꽃밥","pd");}
+  if(mk){add(mk,"꽃밥마켓","mk");add(-mk,"꽃밥에피다","mk");} /* v475: 마켓 매입정산 — 꽃밥마켓 +, 꽃밥에피다 − */
   return rows;
 }
-function buyJsVoucherHtml(ym,bj,pd){
-  const rows=buyJsVoucherRows(ym,bj,pd);
+function buyJsVoucherHtml(ym,bj,pd,mk){
+  const rows=buyJsVoucherRows(ym,bj,pd,mk);
   if(!rows.length)return `<div class="footnote" style="margin-top:12px">금액이 들어오면 아래에 이카운트 전표(1469 상품 / 매입(손익)정산)가 만들어져요.</div>`;
   const fmtS=(n)=>n<0?"−"+fmt(-n):fmt(n);
   const tr=rows.map((x,i)=>{const nb=i>0&&rows[i-1].blk!==x.blk;return `<tr${nb?' style="border-top:2.5px solid #555"':""}><td style="color:var(--sub)">${i+1}</td><td>${x.grp}</td><td class="l">${x.code} ${esc(x.acct)}</td><td class="l">${esc(x.sub)}</td><td style="text-align:right"><b>${fmtS(x.dr)}</b></td><td></td><td class="l">${esc(x.memo)}</td><td class="l">${esc(x.biz)}</td></tr>`;}).join("");
   const sum=rows.reduce((a,x)=>a+x.dr,0);
-  return `<div style="display:flex;gap:8px;align-items:center;margin-top:16px;flex-wrap:wrap"><b>🧾 이카운트 전표 — 매입정산</b><button class="btn btn-sm" onclick="buyJsCopy('${ym}')">📄 표 복사</button><span class="unit">보자기 합계는 보자기꽃밥 +, 꽃밥에피다 − 로 한 번에</span></div>
+  return `<div style="display:flex;gap:8px;align-items:center;margin-top:16px;flex-wrap:wrap"><b>🧾 이카운트 전표 — 매입정산</b><button class="btn btn-sm" onclick="buyJsCopy('${ym}')">📄 표 복사</button><span class="unit">보자기 합계는 보자기꽃밥 +, 꽃밥에피다 − 로 한 번에 · 마켓 매입정산은 꽃밥마켓 +, 꽃밥에피다 −</span></div>
   <div class="table-wrap" style="margin-top:4px"><table class="rpt" style="font-size:12.5px;max-width:760px;margin:0"><thead><tr><th style="width:28px"></th><th>구분</th><th class="l">계정</th><th class="l">보조(거래처)</th><th>차변</th><th>대변</th><th class="l">적요</th><th class="l">사업장</th></tr></thead><tbody>${tr}</tbody>
   <tfoot><tr class="total" style="border-top:2.5px solid #555"><td colspan="4" class="l"><b>합계</b></td><td style="text-align:right"><b>${fmtS(sum)}</b></td><td style="text-align:right"><b>0</b></td><td></td><td></td></tr></tfoot></table></div>
   <div class="footnote" style="margin-top:6px">차변 합이 0이 되는 정산 전표예요(대변 없음). 꽃밥마켓이 꽃밥에피다 앞으로 발행한 계산서에 섞인 보자기꽃밥 몫과, 거래처가 꽃밥에피다 이름으로 발행했지만 보자기꽃밥이 매입한 금액을 보자기꽃밥으로 옮기는 내용이에요.</div>`;
@@ -16510,7 +16518,8 @@ window.buyJsCopy=function(ym){
   const gye=(m.members&&m.members.bojagiGye)||0;
   const bj=gye+(m.buyBojagi||[]).reduce((a,b)=>a+(b.amt||0),0);
   const pd=(m.buyPida||[]).reduce((a,b)=>a+(b.amt||0),0);
-  const rows=buyJsVoucherRows(ym,bj,pd);
+  const mk=(m.buyMarket||[]).reduce((a,b)=>a+(b.amt||0),0);
+  const rows=buyJsVoucherRows(ym,bj,pd,mk);
   const txt=["구분\t계정코드\t계정\t거래처\t차변\t대변\t적요\t부서"].concat(rows.map(x=>[x.grp,x.code,x.acct,x.sub,x.dr,"",x.memo,x.biz].join("\t"))).join("\n");
   navigator.clipboard.writeText(txt).then(()=>toast("전표 "+rows.length+"줄을 복사했어요")).catch(()=>toast("복사 실패",true));
 };
@@ -21114,7 +21123,7 @@ function emptyMonth(){return{
   kkotbap:{catchGye:0,catchGong:0,catchBuga:0,card:0,cash:0,ntsCard:0,ntsCardGong:0,ntsCardBuga:0,ntsHyeon:0,ntsHyeonGong:0,ntsHyeonBuga:0,guest:0},
   misc:{jaegoMarket:0,jaegoBojagi:0,jaegoPida:0,feeMarket:0,feeBojagi:0,feePida:0},
   kkotbapPos:null,
-  extra:[],buyBojagi:[],buyPida:[],memo:'',savedAt:null
+  extra:[],buyBojagi:[],buyPida:[],buyMarket:[],memo:'',savedAt:null
 };}
 function fillDefaults(m){const e=emptyMonth();for(const k in e){if(m[k]===undefined)m[k]=e[k];else if(typeof e[k]==='object'&&!Array.isArray(e[k])&&e[k]!==null){for(const k2 in e[k])if(m[k][k2]===undefined)m[k][k2]=e[k][k2];}}return m;}
 function migrate(m){
@@ -21159,7 +21168,7 @@ function migrate(m){
   n.misc.jaegoMarket=g(o.misc,'jaegoMarket');n.misc.jaegoBojagi=g(o.misc,'jaegoBojagi');n.misc.jaegoPida=g(o.misc,'jaegoPida');
   n.misc.feeMarket=g(o.misc,'feeMarket');n.misc.feeBojagi=g(o.misc,'feeBojagi');n.misc.feePida=g(o.misc,'feePida');
   if(!n.misc.feeMarket&&!n.misc.feeBojagi&&g(o.misc,'feeKkotbap'))n.misc.feeMarket=g(o.misc,'feeKkotbap');
-  n.extra=o.extra||[];n.buyBojagi=o.buyBojagi||[];n.buyPida=o.buyPida||[];n.memo=o.memo||'';n.savedAt=o.savedAt||null;
+  n.extra=o.extra||[];n.buyBojagi=o.buyBojagi||[];n.buyPida=o.buyPida||[];n.buyMarket=o.buyMarket||[];n.memo=o.memo||'';n.savedAt=o.savedAt||null;
   return n;
 }
 /* ============ 파생값 (엑셀 수식과 동일) ============ */
@@ -22719,6 +22728,11 @@ function renderInput(){
     ${buyRows(m.buyPida,'buyPida')}
     <tr><td colspan="6" style="text-align:left;border:1px solid var(--line);padding:6px"><span class="addrow" data-buyadd="buyPida">+ 항목 추가</span></td></tr>
     <tr><td class="lb">합계</td>`+autoCell('buy_pd_tot',mm=>mm.buyPida.reduce((a,b)=>a+(b.amt||0),0),true)+`<td class="au" colspan="4"></td></tr>
+  </table>
+  <table class="g" style="margin-top:10px"><tr><th style="width:160px">마켓 매입정산</th><th>금액</th><th style="width:70px"></th><th colspan="3" style="text-align:left;font-weight:400;color:var(--sub)">피다에서 샀지만 마켓 매입</th></tr>
+    ${buyRows(m.buyMarket=m.buyMarket||[],'buyMarket')}
+    <tr><td colspan="6" style="text-align:left;border:1px solid var(--line);padding:6px"><span class="addrow" data-buyadd="buyMarket">+ 항목 추가</span></td></tr>
+    <tr><td class="lb">합계</td>`+autoCell('buy_mk_tot',mm=>(mm.buyMarket||[]).reduce((a,b)=>a+(b.amt||0),0),true)+`<td class="au" colspan="4"></td></tr>
   </table></div>`;
   const exUnits=[['insadong','인사동'],['market','마켓'],['bojagi','보자기']];
   const selSt='font:inherit;font-size:13px;padding:4px 6px;border:1px solid var(--line);border-radius:6px';
