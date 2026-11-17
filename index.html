@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v483</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v484</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -22562,7 +22562,7 @@ window.cfmRemDel=function(id){if(!confirm('이 알림을 지울까요? (모든 �
 window.cfmRemAdd=function(){const t=(document.getElementById('remT')||{}).value||'';if(!t.trim())return;const kw=((document.getElementById('remK')||{}).value||'').trim();REMIND=remindList().concat([{id:'r'+Date.now(),t:t.trim(),kw}]);remindSave();renderInput();};
 /* v478: 매출확정 입력 — 사업장별 한눈에 보기 (넣을 파일 · 직접 넣을 값 · 진행) + 사업장별로 카드만 보기 */
 let CFM_GRP=(()=>{try{return localStorage.getItem('ssv2_cfmGrp')||'all';}catch(e){return 'all';}})();
-const CFM_GRPS=[['all','전체'],['mk','🛒 꽃밥마켓'],['bj','🍱 보자기꽃밥'],['ep','🍽 꽃밥에피다'],['on','🛍 온라인'],['end','📦 정산·마감']];
+const CFM_GRPS=[['all','전체'],['mk','🛒 꽃밥마켓'],['bj','🍱 보자기꽃밥'],['ep','🍽 꽃밥에피다'],['on','🛍 온라인'],['end','📝 기타 거래처']];
 let CFM_GO=[];
 /* 카드 제목(h2 앞부분) → 보여줄 사업장 (null = 항상) */
 function cfmCardGrps(t){
@@ -22608,16 +22608,14 @@ function cfmGuideItems(m){
         I('국세청 제로페이','kkotbap.ntsZero',{where:'⑦ 홈택스 · 있을 때',opt:1}),
         I('고객수','kkotbap.guest',{where:'⑦'})],
     on:[{k:'i',nm:'스마트스토어 과세·면세',v:ss,done:ss>0,go:'input[data-p="ss.gwase"]',where:'⑤ 부가세 신고내역'}],
-    end:[{k:'i',nm:'재고 (마켓·보자기·피다)',v:g('misc.jaegoMarket')+g('misc.jaegoBojagi')+g('misc.jaegoPida'),done:g('misc.jaegoMarket')>0&&g('misc.jaegoBojagi')>0&&g('misc.jaegoPida')>0,go:'nav:stock',where:'→ 비용정리'},
-         {k:'i',nm:'판매수수료 (마켓·보자기·피다)',v:fee+g('misc.feePida'),done:fee>0&&g('misc.feePida')>0,go:'nav:fee',where:'→ 비용정리'},
-         {k:'i',nm:'매입정산',v:buy,done:buy>0,opt:true,go:'nav:js',where:'→ 매입 탭 · 해당 있을 때'},
+    end:[ /* v484: 재고·판매수수료·매입정산은 비용정리·매입 탭에서 — 여기선 뺌 */
          {k:'i',nm:'기타 거래처 매출',v:ex,done:ex>0,opt:true,go:'#exAdd',where:'⑩ 해당 있을 때'}]
   };
 }
 function cfmGuideHtml(m){
   const G=cfmGuideItems(m);CFM_GO=[];
   const cnt=(L)=>{const need=L.filter(x=>!x.opt);return [need.filter(x=>x.done).length,need.length];};
-  const chip=(k,n)=>{let lab=n;if(G[k]){const [d,t]=cnt(G[k]);lab+=` <span style="font-size:11.5px;font-weight:700;color:${CFM_GRP===k?'#fff':d===t?'#15803d':'#b45309'}">${d}/${t}</span>`;}
+  const chip=(k,n)=>{let lab=n;if(G[k]&&cnt(G[k])[1]){const [d,t]=cnt(G[k]);lab+=` <span style="font-size:11.5px;font-weight:700;color:${CFM_GRP===k?'#fff':d===t?'#15803d':'#b45309'}">${d}/${t}</span>`;}
     const on=CFM_GRP===k;
     return `<button type="button" onclick="cfmGrpSet('${k}')" style="font:inherit;font-size:13.5px;padding:6px 13px;border-radius:999px;cursor:pointer;border:1.5px solid ${on?'#2F6B3F':'#d6d3c4'};background:${on?'#2F6B3F':'#fff'};color:${on?'#fff':'inherit'};font-weight:${on?700:500}">${lab}</button>`;};
   const item=(x)=>{
@@ -22629,7 +22627,7 @@ function cfmGuideHtml(m){
       <span style="width:18px;text-align:center">${st}</span><span style="flex:1;min-width:0">${esc(x.nm)} <span style="color:#9ca3af;font-size:11.5px">${esc(x.where||'')}</span></span>${val}</div>`;};
   const box=(k,n)=>{const L=G[k];const files=L.filter(x=>x.k==='f'),ins=L.filter(x=>x.k==='i');const [d,t]=cnt(L);
     return `<div style="flex:1;min-width:280px;max-width:520px;border:1px solid #e5e2d5;border-radius:12px;padding:10px 12px;background:#fff">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><b style="font-size:15px">${n}</b><span style="margin-left:auto;font-size:12px;font-weight:700;color:${d===t?'#15803d':'#b45309'}">${d===t?'✔ 다 했어요':d+' / '+t+' 완료'}</span></div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><b style="font-size:15px">${n}</b><span style="margin-left:auto;font-size:12px;font-weight:700;color:${d===t?'#15803d':'#b45309'}">${!t?'해당 있을 때만':d===t?'✔ 다 했어요':d+' / '+t+' 완료'}</span></div>
       ${files.length?`<div class="cfmgh">📂 넣을 파일</div>${files.map(item).join('')}`:''}
       ${ins.length?`<div class="cfmgh">✍ 직접 넣을 값</div>${ins.map(item).join('')}`:''}</div>`;};
   const show=CFM_GRP==='all'?CFM_GRPS.slice(1):CFM_GRPS.filter(([k])=>k===CFM_GRP);
