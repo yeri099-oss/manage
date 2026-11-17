@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v486</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v487</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -20468,7 +20468,7 @@ function renderFree(){
     ${!hasZ?`<div class="check-box warn" style="margin-top:6px">② 제로페이 결제내역(또는 ③ 카드단말기 내역)을 올려야 대조돼요.</div>`:""}
     ${!doc.pos?`<div class="check-box warn" style="margin-top:6px">① 오케이포스 승인현황을 올려야 대조돼요.</div>`:""}
     ${hasZ&&doc.pos&&!bad.length&&!cOnly.length?`<div class="check-box ok" style="margin-top:6px">✓ 임의결제 ${act.length}건이 모두 제로페이·카드단말기 내역에 있어요.</div>`:""}
-    ${(()=>{const nOut=zRest.filter(x=>x.r.src==="nice");return nOut.length?`<div class="check-box warn" style="margin-top:6px">💳 카드단말기 ${nOut.length}건(${fmt(sum(nOut))}원)은 포스에 없어요 → 매출확정 ⑩ 기타 거래처 '카드단말기 (마켓)'로 들어가요.</div>`:"";})()}</div>`;
+    ${(()=>{const nOut=zRest.filter(x=>x.r.src==="nice");return nOut.length?`<div class="check-box warn" style="margin-top:6px;cursor:pointer" onclick="cfmGoNice('${key}')" title="눌러서 매출확정 💳 카드단말기로 가기">💳 카드단말기 ${nOut.length}건(${fmt(sum(nOut))}원)은 포스에 없어요 → 매출확정 ⑩ 기타 거래처 '카드단말기 (마켓)'로 들어가요. <b style="color:#2563eb;white-space:nowrap">매출확정에서 보기 ▶</b></div>`:"";})()}</div>`;
   const zInfo=(z)=>z?`${z.r.day!==undefined?z.r.day.slice(5).replace("-","/"):""} ${z.r.t.slice(0,5)} · ${esc(z.r.kind)} · ${fmt(z.r.amt)}원`:"";
   const res=(x)=>x.st==="ok"?`<span class="fr-ok">✓</span> ${zInfo(x.z)}`
     :x.st==="split"?`<span class="fr-ok">✓ 나눠 결제 ${x.zs.length}건</span> — ${x.zs.slice().sort((a,b)=>a.r.t.localeCompare(b.r.t)).map(z=>`${z.r.t.slice(0,5)} ${esc(z.r.kind.replace(/\s*\(.*$/,""))} ${fmt(z.r.amt)}`).join(" + ")} = ${fmt(x.r.amt)}원`
@@ -20517,20 +20517,24 @@ function renderFree(){
     const Lp=P.filter(x=>showC||(x.st!=="canc"));const Lz=M.Z.filter(x=>showC||(x.st!=="canc"));
     const days=[...new Set(Lp.map(x=>x.r.day).concat(Lz.map(x=>x.r.day)))].sort();
     const byT=(a,b)=>a.r.t.localeCompare(b.r.t);
-    const cell=(x,side)=>{if(!x)return `<td class="fr-e"></td><td class="fr-e"></td><td class="fr-e${side==="p"?" fr-mid":""}"></td>`;const g=gOf.get(x);const c=x.st==="canc"?" fr-cx":"";
+    /* v487: 오른쪽은 구분(제로페이 / 💳 단말기) 칸을 따로 — 단말기 줄은 주황 바탕 */
+    const badge=(x)=>x.r.src==="nice"?'<span style="display:inline-block;padding:1px 7px;border-radius:999px;background:#FFEDD5;color:#C2410C;font-size:11.5px;font-weight:700;white-space:nowrap">💳 단말기</span>':'<span style="display:inline-block;padding:1px 7px;border-radius:999px;background:#DBEAFE;color:#1D4ED8;font-size:11.5px;font-weight:700;white-space:nowrap">제로페이</span>';
+    const cell=(x,side)=>{if(!x)return `${side==="z"?'<td class="fr-e"></td>':""}<td class="fr-e"></td><td class="fr-e"></td><td class="fr-e${side==="p"?" fr-mid":""}"></td>`;const g=gOf.get(x);const c=x.st==="canc"?" fr-cx":"";
       const at=g?` data-g="${g}" onmouseenter="freeHi(${g},true)" onmouseleave="freeHi(${g},false)"`:"";
-      return `<td class="fr-t${c}"${at}${tip(x,side)}>${x.r.src==="nice"?'<span title="카드단말기(NICE)">💳</span>':""}${x.r.t.slice(0,5)}</td><td class="n${c}"${at}${tip(x,side)}>${fmt(x.r.amt)}</td><td class="fr-k${side==="p"?" fr-mid":""}${c}"${at}${tip(x,side)}>${mk(x,side)}</td>`;};
+      const bg=side==="z"&&x.r.src==="nice"?' style="background:#FFF7ED"':"";
+      return `${side==="z"?`<td${bg}${at}>${badge(x)}</td>`:""}<td class="fr-t${c}"${at}${tip(x,side)}${bg}>${x.r.t.slice(0,5)}</td><td class="n${c}"${at}${tip(x,side)}${bg}>${fmt(x.r.amt)}</td><td class="fr-k${side==="p"?" fr-mid":""}${c}"${at}${tip(x,side)}${bg}>${mk(x,side)}</td>`;};
     let tP=0,tZ=0;
     const body=days.map(d=>{const a=Lp.filter(x=>x.r.day===d).sort(byT),b=Lz.filter(x=>x.r.day===d).sort(byT);
       const sp=a.filter(x=>x.st!=="canc"&&x.st!=="cancOnly").reduce((s,x)=>s+x.r.amt,0),sz=b.filter(x=>x.st!=="canc"&&x.st!=="cancOnly").reduce((s,x)=>s+x.r.amt,0);tP+=sp;tZ+=sz;
       const diff=sp-sz;const n=Math.max(a.length,b.length);
-      let h=`<tr class="fr-day"><td colspan="3" class="fr-mid">${d.slice(5).replace("-","/")} (${"일월화수목금토"[new Date(d+"T00:00:00").getDay()]}) <span style="float:right">${sp?fmt(sp):""}</span></td><td colspan="3"><span style="float:right">${sz?fmt(sz):""}${sp||sz?` <span class="${diff?(sp?"fr-no":"unit"):"fr-ok"}" style="margin-left:6px">${diff?"차이 "+fmt(diff):"✓"}</span>`:""}</span></td></tr>`;
+      const bz=b.filter(x=>x.st!=="canc"&&x.st!=="cancOnly"),szZ=bz.filter(x=>x.r.src!=="nice").reduce((s,x)=>s+x.r.amt,0),szN=bz.filter(x=>x.r.src==="nice").reduce((s,x)=>s+x.r.amt,0);
+      let h=`<tr class="fr-day"><td colspan="3" class="fr-mid">${d.slice(5).replace("-","/")} (${"일월화수목금토"[new Date(d+"T00:00:00").getDay()]}) <span style="float:right">${sp?fmt(sp):""}</span></td><td colspan="4">${szZ&&szN?`<span class="unit" style="font-weight:400">제로페이 ${fmt(szZ)} · 💳 단말기 ${fmt(szN)}</span>`:""}<span style="float:right">${sz?fmt(sz):""}${sp||sz?` <span class="${diff?(sp?"fr-no":"unit"):"fr-ok"}" style="margin-left:6px">${diff?"차이 "+fmt(diff):"✓"}</span>`:""}</span></td></tr>`;
       for(let i=0;i<n;i++)h+=`<tr>${cell(a[i],"p")}${cell(b[i],"z")}</tr>`;return h;}).join("");
     sideHtml=`<div class="card"><div class="card-head"><div class="card-title">나란히 보기 <span class="unit">줄에 마우스를 올리면 짝이 함께 칠해져요</span></div>
       <label style="font-size:12.5px;cursor:pointer"><input type="checkbox" ${showC?"checked":""} onchange="freeShowCanc(this.checked)"> 취소된 건도 보기</label></div>
-      ${days.length?`<table class="fr fr-side" style="margin-top:8px"><thead><tr><th colspan="3" class="fr-mid" style="background:#EAF1E7">오케이포스 임의결제</th><th colspan="3" style="background:#EAF0FA">제로페이 · 💳 카드단말기</th></tr>
-        <tr><th>시간</th><th>금액</th><th class="fr-mid"></th><th>시간</th><th>금액</th><th></th></tr></thead><tbody>${body}
-        <tr style="font-weight:700;background:#F6F8F4"><td>합계</td><td class="n">${fmt(tP)}</td><td class="fr-mid"></td><td></td><td class="n">${fmt(tZ)}</td><td class="n" style="white-space:nowrap">${tP-tZ?"차이 "+fmt(tP-tZ):"✓"}</td></tr></tbody></table>`
+      ${days.length?`<table class="fr fr-side" style="margin-top:8px"><thead><tr><th colspan="3" class="fr-mid" style="background:#EAF1E7">오케이포스 임의결제</th><th colspan="4" style="background:#EAF0FA">제로페이 · 💳 카드단말기</th></tr>
+        <tr><th>시간</th><th>금액</th><th class="fr-mid"></th><th>구분</th><th>시간</th><th>금액</th><th></th></tr></thead><tbody>${body}
+        <tr style="font-weight:700;background:#F6F8F4"><td>합계</td><td class="n">${fmt(tP)}</td><td class="fr-mid"></td><td colspan="2" style="font-weight:400;font-size:12px;color:var(--sub)">${(()=>{const L=Lz.filter(x=>x.st!=="canc"&&x.st!=="cancOnly");const a=L.filter(x=>x.r.src!=="nice").reduce((s,x)=>s+x.r.amt,0),b2=L.filter(x=>x.r.src==="nice").reduce((s,x)=>s+x.r.amt,0);return (a?"제로페이 "+fmt(a):"")+(a&&b2?" · ":"")+(b2?"💳 단말기 "+fmt(b2):"");})()}</td><td class="n">${fmt(tZ)}</td><td class="n" style="white-space:nowrap">${tP-tZ?"차이 "+fmt(tP-tZ):"✓"}</td></tr></tbody></table>`
       :`<div class="footnote" style="padding:12px 0">표시할 내역이 없어요.</div>`}
       <div class="footnote" style="margin-top:6px">✓ 짝 있음 &nbsp; ⚠ 날짜 하루 다름, 짝 없는 취소 &nbsp; ❌ 짝 없음 또는 금액 다름 &nbsp; — 제로페이·단말기에만 있음 &nbsp; 💳 카드단말기 &nbsp;(칸에 마우스를 올리면 이유가 나와요)</div></div>`;
   }
@@ -22824,6 +22828,15 @@ async function niceFile(f){
 /* v486: 임의결제 탭에서 쓰는 함수들 — 같은 달 매출확정에도 넣음 (임의결제 대조 결과로 포스 등록 자동 체크) */
 window.__niceRead=async function(f){const buf=await f.arrayBuffer();await loadScript("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");let enc=false;try{enc=!!XLSX.CFB.find(XLSX.CFB.read(new Uint8Array(buf),{type:'array'}),'EncryptedPackage');}catch(e){}return enc?niceReadAoa(f):null;};
 window.__niceIsAoa=niceIsAoa;window.__niceParse=niceParse;
+/* v487: 다른 탭에서 매출확정 💳 카드단말기로 바로 가기 (그 달로) */
+window.cfmGoNice=async function(key){
+  switchTab('confirmapp');
+  for(let i=0;i<40&&!__cfmReady;i++)await new Promise(r=>setTimeout(r,100));
+  if(key&&key!==CUR){if(!MONTHS[key]&&typeof buyJsEnsure==='function')await buyJsEnsure(key);if(MONTHS[key]){try{selectMonth(key);}catch(e){}}}
+  try{showTab('input');}catch(e){}
+  if(CFM_GRP!=='all'&&CFM_GRP!=='mk'){CFM_GRP='mk';try{localStorage.setItem('ssv2_cfmGrp','mk');}catch(e){}renderInput();}
+  setTimeout(()=>{const c=document.getElementById('cfmNiceCard');if(!c)return;const y=c.getBoundingClientRect().top+window.scrollY-200;window.scrollTo({top:Math.max(0,y),behavior:'smooth'});c.style.transition='box-shadow .3s';c.style.boxShadow='0 0 0 3px #f59e0b, 0 0 18px rgba(245,158,11,.4)';setTimeout(()=>{c.style.boxShadow='';},2500);},300);
+};
 window.__cfmNiceApply=async function(key,rows,name){
   let m=MONTHS[key];if(!m&&typeof buyJsEnsure==='function')m=await buyJsEnsure(key);if(!m)return;
   const old={};((m.nice&&m.nice.rows)||[]).forEach(r=>{old[r.no+'|'+r.d+'|'+r.cancel]=r;});
