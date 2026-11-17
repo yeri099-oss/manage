@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v482</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v483</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -16224,7 +16224,7 @@ function renderBuyJs(){
   const el=document.getElementById("tab-buyjs");if(!el)return;
   const key=buyJsCur();const y=2000+Number(key.slice(0,2)),mo=Number(key.slice(2));
   const now=new Date();const years=[];for(let yy=2024;yy<=now.getFullYear()+1;yy++)years.push(yy);
-  el.innerHTML=`<div class="card"><div class="card-head"><div class="card-title">⑨ 매입정산 <span class="unit">매출확정과 같은 저장소 — 여기 적으면 매출확정 ⑨에도 그대로 반영돼요</span></div>
+  el.innerHTML=`<div class="card"><div class="card-head"><div class="card-title">⑨ 매입정산 <span class="unit">매출확정과 같은 저장소 — 여기 적으면 매출확정 계산에도 그대로 반영돼요</span></div>
       <div class="card-actions"><select class="ctl" onchange="buyJsSel(this.value,${mo})">${years.map(yy=>`<option ${yy===y?"selected":""}>${yy}</option>`).join("")}</select>
       <select class="ctl" onchange="buyJsSel(${y},this.value)">${Array.from({length:12},(_,i)=>`<option value="${i+1}" ${i+1===mo?"selected":""}>${i+1}월</option>`).join("")}</select></div></div>
     <div style="font-weight:700;font-size:15px;margin:2px 0 8px">${y}년 ${mo}월분</div>
@@ -18498,9 +18498,9 @@ function renderExpCheck(){
 window.renderExpense=renderExpense;
 /* === 재고 · 판매수수료 — 매출확정 ⑧(misc) 같은 저장소 === */
 const EXP_MISC={
-  stock:{title:"📦 재고 (부가세 제외)",unit:"매출확정 ⑧ 재고 칸과 같은 저장소 — 매출확정 화면에선 입력하지 않고 여기서만 적어요",rows:[["jaegoMarket","마켓"],["jaegoBojagi","보자기"],["jaegoPida","피다"]],sumLabel:"합계"},
+  stock:{title:"📦 재고 (부가세 제외)",unit:"매출확정과 같은 저장소 — 여기서 넣으면 매출확정 계산에도 그대로 반영돼요",rows:[["jaegoMarket","마켓"],["jaegoBojagi","보자기"],["jaegoPida","피다"]],sumLabel:"합계"},
   promo:{title:"🎁 판매촉진비 (포인트)",unit:"매출확정 마켓 '포인트 적립'·'포인트 사용 (계)'와 같은 저장소 — 여기서 고치면 매출확정에도 반영돼요",path:"market",rows:[["pointAccum","포인트 적립"],["point","포인트 사용 (계)"]],sumLabel:"",extra:"포인트 사용은 마켓 결제합계에서 현금 몫을 계산할 때 쓰는 값이라, 매출확정에서 확정한 값을 그대로 두고 여기서는 확인용으로 보는 게 안전해요. 포인트 적립만 여기서 고쳐도 돼요."},
-  fee:{title:"💳 판매수수료",unit:"매출확정 ⑧ 판매수수료와 같은 저장소 — 여기서 고치면 매출확정에도 그대로 반영돼요",rows:[["feeMarket","마켓"],["feeBojagi","보자기"],["feePida","피다"]],sumLabel:"합계 (꽃밥이야기 여신금융 = 마켓+보자기)",sumFn:(mi)=>(mi.feeMarket||0)+(mi.feeBojagi||0),extra:"꽃밥이야기(여신금융 합계)는 마켓+보자기예요. 매출확정에서 합계를 넣으면 매출 비율로 자동 배분되고, 여기서는 사업장별 금액을 직접 고쳐요. 출처: 여신금융 → 월별매입내역 → 수수료계"}
+  fee:{title:"💳 판매수수료",unit:"매출확정과 같은 저장소 — 여기서 넣으면 매출확정 계산에도 그대로 반영돼요",rows:[["feeMarket","마켓"],["feeBojagi","보자기"],["feePida","피다"]],sumLabel:"합계 (꽃밥이야기 여신금융 = 마켓+보자기)",sumFn:(mi)=>(mi.feeMarket||0)+(mi.feeBojagi||0),extra:"꽃밥이야기(여신금융 합계)는 마켓+보자기예요. 위 '여신금융 합계'에 넣으면 그 달 카드 매출 비율(매출확정 카드 배분표)로 마켓·보자기에 자동으로 나눠요 · 사업장별 금액은 직접 고칠 수도 있어요. 출처: 여신금융 → 월별매입내역 → 수수료계"}
 };
 async function renderExpMisc(kind){
   const el=document.getElementById("tab-exp"+kind);if(!el)return;
@@ -18523,6 +18523,7 @@ async function renderExpMisc(kind){
   const yTr=cfg.rows.map(([k,n])=>`<tr><td class="l" style="white-space:nowrap">${n}</td>${Array.from({length:12},(_,i)=>{const key=String(ym.y).slice(2)+String(i+1).padStart(2,"0");const mm=M[key];const v=mm&&mm[path]?mm[path][k]||0:null;return `<td style="text-align:right;cursor:pointer;${i+1===ym.m?"background:#F4F9F4":""}" onclick="expSel(${ym.y},${i+1})">${v==null?'<span style="color:#ccc">–</span>':v?fmt(v):'<span style="color:#ccc">0</span>'}</td>`;}).join("")}</tr>`).join("");
   const yTot=cfg.sumLabel===""?"":`<tr class="total"><td class="l"><b>${cfg.sumFn?"마켓+보자기":"합계"}</b></td>${Array.from({length:12},(_,i)=>{const key=String(ym.y).slice(2)+String(i+1).padStart(2,"0");const mm=M[key];if(!mm||!mm[path])return '<td style="text-align:right;color:#ccc">–</td>';const t=cfg.sumFn?cfg.sumFn(mm[path]):cfg.rows.reduce((a,[k])=>a+(mm[path][k]||0),0);return `<td style="text-align:right"><b>${fmt(t)}</b></td>`;}).join("")}</tr>`;
   el.innerHTML=head+`<span id="expMiscSt" class="footnote" style="float:right"></span>
+    ${kind==="fee"?`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 10px;padding:8px 12px;background:#F4F9F4;border:1px solid #c7e3cc;border-radius:10px;max-width:560px"><b>꽃밥이야기 여신금융 합계</b><input type="text" inputmode="numeric" value="${(mi.feeMarket||0)+(mi.feeBojagi||0)?fmt((mi.feeMarket||0)+(mi.feeBojagi||0)):""}" onchange="expFeeTotal('${ym.key}',this.value)" style="width:140px;text-align:right;font:inherit;font-size:13px;padding:4px 6px;border:1px solid #d1d5db;border-radius:6px"><span class="footnote">넣으면 마켓·보자기로 자동 나눠요</span></div>`:""}
     <table class="rpt" style="max-width:360px;margin:0"><thead><tr><th class="l">${cfg.path==="market"?"항목":"사업장"}</th><th>금액</th></tr></thead><tbody>${trs}
       ${cfg.sumLabel?`<tr style="background:#eef3ee"><td class="l"><b>${cfg.sumLabel}</b></td><td style="text-align:right"><b>${fmt(sum)}</b></td></tr>`:""}</tbody></table>
     ${cfg.extra?`<div class="footnote" style="margin-top:8px">${cfg.extra}</div>`:""}
@@ -18569,6 +18570,17 @@ window.expFeeCopy=function(key){
   const rows=expFeeVoucherRows(m.misc||{});
   const txt=["구분\t계정코드\t계정\t거래처\t차변\t대변\t적요\t부서"].concat(rows.map(x=>[x.grp,x.code,x.acct,x.sub,x.dr||"",x.cr||"",x.memo,x.biz].join("\t"))).join("\n");
   navigator.clipboard.writeText(txt).then(()=>toast("전표 "+rows.length+"줄을 복사했어요")).catch(()=>toast("복사 실패",true));
+};
+/* v483: 여신금융 합계 → 마켓·보자기 (매출확정 카드 배분표의 마켓포스 카드 : 전체 비율, 예전 매출확정 ⑧과 같은 계산) */
+window.expFeeTotal=function(key,v){
+  const A=window.__cfmApp;const m=A&&A.MONTHS[key];if(!m)return;m.misc=m.misc||{};
+  const n=String(v).replace(/[,\s원]/g,"");const total=n===""?0:Math.round(Number(n)||0);
+  let fm=total;try{const V=A.compute(m);if(V.M19>0)fm=Math.round(total*V.M17/V.M19);}catch(e){}
+  m.misc.feeMarket=fm;m.misc.feeBojagi=total-fm;
+  const st=document.getElementById("expMiscSt");if(st)st.textContent="☁ 저장 중…";
+  clearTimeout(window.__exp.miscTimer);
+  window.__exp.miscTimer=setTimeout(async()=>{await buyJsSaveNow(key);const st2=document.getElementById("expMiscSt");if(st2)st2.textContent=(typeof IS_DEMO!=="undefined"&&IS_DEMO)?"미리보기(저장 안 됨)":"☁ 저장됨 ✓";},800);
+  renderExpMisc("fee");
 };
 window.expMiscEdit=function(key,k,v,kind){
   const A=window.__cfmApp;const m=A&&A.MONTHS[key];if(!m)return;
@@ -22596,10 +22608,9 @@ function cfmGuideItems(m){
         I('국세청 제로페이','kkotbap.ntsZero',{where:'⑦ 홈택스 · 있을 때',opt:1}),
         I('고객수','kkotbap.guest',{where:'⑦'})],
     on:[{k:'i',nm:'스마트스토어 과세·면세',v:ss,done:ss>0,go:'input[data-p="ss.gwase"]',where:'⑤ 부가세 신고내역'}],
-    end:[I('재고 — 마켓','misc.jaegoMarket',{where:'⑧'}),I('재고 — 보자기','misc.jaegoBojagi',{where:'⑧'}),I('재고 — 피다','misc.jaegoPida',{where:'⑧'}),
-         {k:'i',nm:'판매수수료 (여신금융 합계)',v:fee,done:fee>0,go:'#feeTotalIn',where:'⑧'},
-         I('판매수수료 — 피다','misc.feePida',{where:'⑧'}),
-         {k:'i',nm:'매입정산',v:buy,done:buy>0,opt:true,go:'[data-buyadd="buyBojagi"]',where:'⑨ 해당 있을 때'},
+    end:[{k:'i',nm:'재고 (마켓·보자기·피다)',v:g('misc.jaegoMarket')+g('misc.jaegoBojagi')+g('misc.jaegoPida'),done:g('misc.jaegoMarket')>0&&g('misc.jaegoBojagi')>0&&g('misc.jaegoPida')>0,go:'nav:stock',where:'→ 비용정리'},
+         {k:'i',nm:'판매수수료 (마켓·보자기·피다)',v:fee+g('misc.feePida'),done:fee>0&&g('misc.feePida')>0,go:'nav:fee',where:'→ 비용정리'},
+         {k:'i',nm:'매입정산',v:buy,done:buy>0,opt:true,go:'nav:js',where:'→ 매입 탭 · 해당 있을 때'},
          {k:'i',nm:'기타 거래처 매출',v:ex,done:ex>0,opt:true,go:'#exAdd',where:'⑩ 해당 있을 때'}]
   };
 }
@@ -22642,8 +22653,14 @@ function cfmApplyGrp(pg){
     try{const tp=document.querySelector('#cfm-root .top');const t0=tp?parseFloat(getComputedStyle(tp).top)||53:53;bar.style.top=(t0+(tp?tp.offsetHeight:60)+6)+'px';}catch(e){}
     bar.innerHTML=`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><b style="font-size:15px">⬇ 입력칸 보기</b>${CFM_GRPS.map(([k,nm])=>`<button type="button" onclick="cfmGrpSet('${k}')" style="font:inherit;font-size:13px;padding:4px 11px;border-radius:999px;cursor:pointer;border:1.5px solid ${CFM_GRP===k?'#2F6B3F':'#d6d3c4'};background:${CFM_GRP===k?'#2F6B3F':'#fff'};color:${CFM_GRP===k?'#fff':'inherit'};font-weight:${CFM_GRP===k?700:500}">${nm}</button>`).join('')}${CFM_GRP==='all'?'':`<span style="color:var(--sub);font-size:12.5px">— 아래에 <b>${n}</b> 입력칸만 보여요</span>`}</div>`;}
 }
+/* v483: 다른 탭(비용정리 재고·판매수수료 / 매입 매입정산)으로 같은 달로 이동 */
+window.cfmNav=function(k){
+  const y=2000+Number(String(CUR).slice(0,2)),mo=Number(String(CUR).slice(2));
+  if(k==='js'){window.__buy.ui.jsKey=CUR;switchTab('buy');setBuySub('js');return;}
+  window.__exp.ui.y=y;window.__exp.ui.m=mo;setExpSub(k);
+};
 window.cfmGo=function(i){
-  const sel=CFM_GO[i];const pg=$("#pg-input");if(!pg||!sel)return;let el=null;try{el=pg.querySelector(sel);}catch(e){}
+  const sel=CFM_GO[i];if(sel&&sel.indexOf('nav:')===0)return window.cfmNav(sel.slice(4));const pg=$("#pg-input");if(!pg||!sel)return;let el=null;try{el=pg.querySelector(sel);}catch(e){}
   if(!el)return;
   let card=el.closest('.card');
   if(card&&card.style.display==='none'){CFM_GRP='all';try{localStorage.setItem('ssv2_cfmGrp','all');}catch(e){}renderInput();el=pg.querySelector(sel);if(!el)return;card=el.closest('.card');}
@@ -22849,33 +22866,14 @@ function renderInput(){
   </div>
   ${hyBoxHtml('epida')}
   </div>`;
-  // ⑧ 재고·수수료
-  h+=`<div class="card"><h2>⑧ 재고 · 판매수수료</h2>
-  <table class="g"><tr><th style="width:160px">재고 (부가세 제외)</th><th>금액</th><th style="width:190px">판매수수료</th><th>금액</th><th colspan="2"></th></tr>
-    <tr><td class="lb">마켓</td>${inp('misc.jaegoMarket')}<td class="lb">꽃밥이야기 (여신금융 합계)<div class="hint">여신금융 → 월별매입내역 → 수수료계</div></td><td><input id="feeTotalIn"></td>${blank(2)}</tr>
-    <tr><td class="lb">보자기</td>${inp('misc.jaegoBojagi')}<td class="lb">└ 마켓 (자동·수정 가능)</td>${inp('misc.feeMarket')}${blank(2)}</tr>
-    <tr><td class="lb">피다</td>${inp('misc.jaegoPida')}<td class="lb">└ 보자기 (자동·수정 가능)</td>${inp('misc.feeBojagi')}${blank(2)}</tr>
-    <tr><td class="lb"></td><td class="au"></td><td class="lb">피다</td>${inp('misc.feePida')}${blank(2)}</tr>
-  </table></div>`;
-  // ⑨ 매입정산
-  const buyRows=(list,key)=>list.map((it,i)=>`<tr><td class="lb"><input class="txt" data-buy="${key}.${i}.name" value="${esc(it.name)}" style="width:150px"></td><td><input data-buy="${key}.${i}.amt" value="${it.amt?fmt(it.amt):''}"></td><td class="au" style="text-align:center"><span class="addrow" data-buydel="${key}.${i}">삭제</span></td><td class="au" colspan="3"></td></tr>`).join('');
-  h+=`<div class="card"><h2>⑨ 매입정산</h2>
-  <table class="g"><tr><th style="width:160px">보자기 매입정산</th><th>금액</th><th style="width:70px"></th><th colspan="3"></th></tr>
-    <tr><td class="lb">꽃밥마켓 (자동)</td>`+autoCell('buy_kkotbap',mm=>mm.members.bojagiGye)+`<td class="au"></td><td class="au" colspan="3" style="text-align:left;color:var(--sub)">회원분석 '보자기' 계와 동일</td></tr>
-    ${buyRows(m.buyBojagi,'buyBojagi')}
-    <tr><td colspan="6" style="text-align:left;border:1px solid var(--line);padding:6px"><span class="addrow" data-buyadd="buyBojagi">+ 항목 추가</span></td></tr>
-    <tr><td class="lb">합계 (꽃밥마켓+항목)</td>`+autoCell('buy_bj_tot',mm=>mm.members.bojagiGye+mm.buyBojagi.reduce((a,b)=>a+(b.amt||0),0),true)+`<td class="au"></td><td class="au" colspan="3" style="text-align:left;color:var(--sub)">이카운트에 한 번에 입력하는 금액</td></tr>
-  </table>
-  <table class="g" style="margin-top:10px"><tr><th style="width:160px">피다 매입정산</th><th>금액</th><th style="width:70px"></th><th colspan="3"></th></tr>
-    ${buyRows(m.buyPida,'buyPida')}
-    <tr><td colspan="6" style="text-align:left;border:1px solid var(--line);padding:6px"><span class="addrow" data-buyadd="buyPida">+ 항목 추가</span></td></tr>
-    <tr><td class="lb">합계</td>`+autoCell('buy_pd_tot',mm=>mm.buyPida.reduce((a,b)=>a+(b.amt||0),0),true)+`<td class="au" colspan="4"></td></tr>
-  </table>
-  <table class="g" style="margin-top:10px"><tr><th style="width:160px">마켓 매입정산</th><th>금액</th><th style="width:70px"></th><th colspan="3" style="text-align:left;font-weight:400;color:var(--sub)">피다에서 샀지만 마켓 매입</th></tr>
-    ${buyRows(m.buyMarket=m.buyMarket||[],'buyMarket')}
-    <tr><td colspan="6" style="text-align:left;border:1px solid var(--line);padding:6px"><span class="addrow" data-buyadd="buyMarket">+ 항목 추가</span></td></tr>
-    <tr><td class="lb">합계</td>`+autoCell('buy_mk_tot',mm=>(mm.buyMarket||[]).reduce((a,b)=>a+(b.amt||0),0),true)+`<td class="au" colspan="4"></td></tr>
-  </table></div>`;
+  // v483: ⑧ 재고·판매수수료는 비용정리, ⑨ 매입정산은 매입 탭에서 입력 (같은 저장소라 값은 그대로)
+  h+=`<div class="card" style="padding:12px 16px"><h2 style="margin-bottom:6px">⑧ 재고 · 판매수수료 / ⑨ 매입정산 <small>다른 탭으로 옮겼어요 — 같은 저장소라 거기서 넣으면 매출확정 계산에도 그대로 반영돼요</small></h2>
+    <div class="flex" style="gap:8px">
+      <button class="btn sm line" onclick="cfmNav('stock')">📦 재고 → 비용정리 › 재고</button>
+      <button class="btn sm line" onclick="cfmNav('fee')">💳 판매수수료 → 비용정리 › 판매수수료</button>
+      <button class="btn sm line" onclick="cfmNav('js')">⚖ 매입정산 → 매입 › 매입정산</button>
+      <span class="hint">이번 달: 재고 ${fmt((m.misc.jaegoMarket||0)+(m.misc.jaegoBojagi||0)+(m.misc.jaegoPida||0))} · 수수료 ${fmt((m.misc.feeMarket||0)+(m.misc.feeBojagi||0)+(m.misc.feePida||0))} · 매입정산 ${fmt((m.buyBojagi||[]).concat(m.buyPida||[],m.buyMarket||[]).reduce((a,b)=>a+(b.amt||0),0)+(m.members.bojagiGye||0))}</span>
+    </div></div>`;
   const exUnits=[['insadong','인사동'],['market','마켓'],['bojagi','보자기']];
   const selSt='font:inherit;font-size:13px;padding:4px 6px;border:1px solid var(--line);border-radius:6px';
   const exRows=(m.extra||[]).map((it,i)=>{const sp=exSplit(it);return `<tr>
