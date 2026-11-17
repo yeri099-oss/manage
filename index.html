@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v476</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v477</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -13808,7 +13808,10 @@ function wdForm(id) {
   if (id && !r) return;
   const v = r || { date: wdToday(), vendor: "", amount: "", content: "", note: "", holder: "", bank: "", account: "" };
   const f = (k, label, extra) => `<div class="form-field"><label>${label}</label><input id="wd-${k}" value="${esc(v[k])}" ${extra || ""}></div>`;
-  openModal(r ? "출금 내역 수정" : `새 출금 내역 — ${W.co}`, `
+  const co = r ? r.company : W.co;
+  openModal(r ? "출금 내역 수정" : "새 출금 내역", `
+    <div class="form-field" style="margin-bottom:12px"><label>사업장</label><input type="hidden" id="wd-company" value="${esc(co)}">
+      <div style="display:flex;gap:8px">${WD_COS.map((c) => `<button type="button" class="wd-co" data-co="${c}" onclick="wdPickCo('${c}')" style="flex:1;font-family:inherit;font-size:15px;font-weight:700;padding:9px 0;border-radius:10px;cursor:pointer"></button>`).join("")}</div></div>
     <div class="form-row">${f("date", "날짜", 'type="date"')}${f("vendor", "거래처 이름")}</div>
     <div class="form-row"><div class="form-field"><label>금액 (원)</label><input id="wd-amount" class="num" inputmode="numeric" value="${v.amount ? Number(v.amount).toLocaleString("ko-KR") : ""}" oninput="wdAmtInput(this)"></div></div>
     <div class="form-hint">금액 칸에서 + 를 누르면 000이 붙어요.</div>
@@ -13820,13 +13823,27 @@ function wdForm(id) {
     <div class="form-row">${f("note", "비고")}</div>`,
     `<span class="dim" style="font-size:12px;margin-right:auto;align-self:center">F8 = ${r ? "수정 완료" : "저장"}</span><button class="btn" onclick="closeModal()">취소</button><button class="btn btn-primary" onclick="wdSave('${r ? esc(r.id) : ""}')">${r ? "수정 완료" : "저장"}</button>`);
   W.formId = r ? r.id : "";
+  wdPickCo(co);
   setTimeout(() => document.getElementById(r ? "wd-amount" : "wd-vendor")?.focus(), 50);
+}
+// 추가·수정 창의 사업장 선택 (잘못 넣은 사업장을 고칠 때)
+function wdPickCo(c) {
+  const h = document.getElementById("wd-company"); if (!h) return;
+  h.value = c;
+  document.querySelectorAll("#modal-body .wd-co").forEach((b) => {
+    const on = b.dataset.co === c, col = WD_COLOR[b.dataset.co].main;
+    b.textContent = (on ? "✓ " : "") + b.dataset.co;
+    b.style.border = `2px solid ${on ? col : "#ddd"}`;
+    b.style.background = on ? col : "#fff";
+    b.style.color = on ? "#fff" : "#888";
+  });
 }
 async function wdSave(id) {
   const W = window.__wd;
   const g = (k) => (document.getElementById("wd-" + k)?.value || "").trim();
   const old = id ? W.recs.find((x) => x.id === id) : null;
   const r = wdClean({ ...(old || { id: Date.now() + "_" + Math.random().toString(36).slice(2), confirmed: false, company: W.co }),
+    company: g("company") || W.co,
     date: g("date"), vendor: g("vendor"), amount: Number(wdDigits(g("amount"))), content: g("content"), note: g("note"), holder: g("holder"), bank: g("bank"), account: g("account") });
   if (!r.date || !r.vendor || !r.amount) { toast("날짜, 거래처, 금액은 꼭 넣어주세요", true); return; }
   if (W.saving) return; // F8 연타로 같은 내역이 두 번 들어가지 않게
@@ -13834,10 +13851,11 @@ async function wdSave(id) {
   document.querySelectorAll("#modal-foot button").forEach((b) => (b.disabled = true));
   try {
     await wdPut(r);
+    const moved = old && old.company !== r.company ? old.company : "";
     if (old) Object.assign(old, r); else W.recs.push(r);
     wdSortList();
-    logAction(`출금기록부 ${old ? "수정" : "추가"}: ${r.company} ${r.date} ${r.vendor} ${fmt(r.amount)}원`);
-    closeModal(); toast(old ? "수정했어요" : "저장했어요");
+    logAction(`출금기록부 ${old ? "수정" : "추가"}: ${r.company} ${r.date} ${r.vendor} ${fmt(r.amount)}원${moved ? ` (${moved}에서 옮김)` : ""}`);
+    closeModal(); toast(r.company !== W.co ? `${r.company}(으)로 ${old ? "옮겼어요" : "저장했어요"} — ${r.company} 버튼을 누르면 보여요` : old ? "수정했어요" : "저장했어요");
     renderWithdraw();
   } catch (e) { wdSaveErr(e); }
   W.saving = false;
