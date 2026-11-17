@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v481</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v482</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -12917,7 +12917,7 @@ function vatExpected(ym){
   const A=window.__cfmApp,m=vatCfm(ym);if(!m||!A)return null;
   const V=A.compute(m),r=x=>Math.round(x||0);
   if(window.__vat.ui.co==="epida"){const k=m.kkotbap,kb=A.kkotbapCalc(m);
-    return{"pida.card":[r(k.ntsCardGong),r(k.ntsCardBuga)],"pida.hyeon":[r(k.ntsHyeonGong),r(k.ntsHyeonBuga)],"pida.somae":[r(kb.somaeGong),r(kb.somae-kb.somaeGong)],"pida.catch":[r(k.catchGong),r(k.catchBuga)]};}
+    return{"pida.card":[r(k.ntsCardGong+(k.ntsZeroGong||0)),r(k.ntsCardBuga+(k.ntsZeroBuga||0))],"pida.hyeon":[r(k.ntsHyeonGong),r(k.ntsHyeonBuga)],"pida.somae":[r(kb.somaeGong),r(kb.somae-kb.somaeGong)],"pida.catch":[r(k.catchGong),r(k.catchBuga)]};}
   return{"boj.card":[r(V.B24),r(V.C24)],"boj.somae":[r(V.B25),r(V.C25)],
     "onl.card":[r(V.B27),r(V.C27)],"onl.card.m":[r(V.E27),0],"onl.hyeon":[r(V.B28),r(V.C28)],"onl.hyeon.m":[r(V.E28),0],"onl.somae":[r(V.B29),r(V.C29)],"onl.somae.m":[r(V.E29),0],
     "mkt.card":[r(V.B31),r(V.C31)],"mkt.card.m":[r(V.E31),0],"mkt.hyeon":[r(V.B32),r(V.C32)],"mkt.hyeon.m":[r(V.E32),0],"mkt.somae":[r(V.B33),r(V.C33)],"mkt.somae.m":[r(V.E33),0],
@@ -12978,7 +12978,7 @@ function vatVerifyHtml(){
   const cfmOk=!!(window.__cfmApp&&window.__cfmApp.MONTHS);
   let warn=0;
   /* ① 국세청 */
-  const items=ep?[["card","신용카드",m=>m.kkotbap.ntsCard],["hyeon","현금영수증",m=>m.kkotbap.ntsHyeon]]
+  const items=ep?[["card","신용카드",m=>m.kkotbap.ntsCard],["zero","제로페이",m=>m.kkotbap.ntsZero||0],["hyeon","현금영수증",m=>m.kkotbap.ntsHyeon]]
     :[["card","신용카드",m=>m.nts.card],["zero","제로페이",m=>m.nts.zeropay],["hyeon","현금영수증",m=>(m.nts.hyeonGong||0)+(m.nts.hyeonBuga||0)+(m.nts.hyeonMyeon||0)]];
   let r1="";
   for(const ym of yms){const m=vatCfm(ym),vf=(R&&R.verify&&R.verify[ym])||{};
@@ -21139,7 +21139,7 @@ function emptyMonth(){return{
   nts:{card:0,zeropay:0,zeropayVat:null,hyeonGong:0,hyeonBuga:0,hyeonMyeon:0,cardGong:null,cardBuga:null},
   ss:{gwase:0,myeon:0,card:0,hyeon:0,gita:0,split:null},
   taxEtc:{gong:0,buga:0,myeon:0},
-  kkotbap:{catchGye:0,catchGong:0,catchBuga:0,card:0,cash:0,ntsCard:0,ntsCardGong:0,ntsCardBuga:0,ntsHyeon:0,ntsHyeonGong:0,ntsHyeonBuga:0,guest:0},
+  kkotbap:{catchGye:0,catchGong:0,catchBuga:0,card:0,cash:0,ntsCard:0,ntsCardGong:0,ntsCardBuga:0,ntsHyeon:0,ntsHyeonGong:0,ntsHyeonBuga:0,ntsZero:0,ntsZeroGong:0,ntsZeroBuga:0,guest:0},
   misc:{jaegoMarket:0,jaegoBojagi:0,jaegoPida:0,feeMarket:0,feeBojagi:0,feePida:0},
   kkotbapPos:null,
   extra:[],buyBojagi:[],buyPida:[],buyMarket:[],memo:'',savedAt:null
@@ -21378,9 +21378,10 @@ function compute(m){
 function kkotbapCalc(m){
   const gye=m.kkotbap.card+m.kkotbap.cash;
   const all=gye+m.kkotbap.catchGye;
-  const somae=gye-m.kkotbap.ntsCard-m.kkotbap.ntsHyeon;
+  /* v482: 피다 제로페이(홈택스 제로페이 자료)도 소매에서 뺌 */
+  const somae=gye-m.kkotbap.ntsCard-m.kkotbap.ntsHyeon-(m.kkotbap.ntsZero||0);
   const gong=exVat(gye);
-  const somaeGong=gong-m.kkotbap.ntsCardGong-m.kkotbap.ntsHyeonGong;
+  const somaeGong=gong-m.kkotbap.ntsCardGong-m.kkotbap.ntsHyeonGong-(m.kkotbap.ntsZeroGong||0);
   return{gye,all,somae,gong,buga:gye-gong,somaeGong};
 }
 function validations(m){
@@ -22592,6 +22593,7 @@ function cfmGuideItems(m){
         I('캐치테이블','kkotbap.catchGye',{where:'⑦',opt:1}),
         I('국세청 카드','kkotbap.ntsCard',{where:'⑦ 홈택스'}),
         I('국세청 현금영수증','kkotbap.ntsHyeon',{where:'⑦ 홈택스'}),
+        I('국세청 제로페이','kkotbap.ntsZero',{where:'⑦ 홈택스 · 있을 때',opt:1}),
         I('고객수','kkotbap.guest',{where:'⑦'})],
     on:[{k:'i',nm:'스마트스토어 과세·면세',v:ss,done:ss>0,go:'input[data-p="ss.gwase"]',where:'⑤ 부가세 신고내역'}],
     end:[I('재고 — 마켓','misc.jaegoMarket',{where:'⑧'}),I('재고 — 보자기','misc.jaegoBojagi',{where:'⑧'}),I('재고 — 피다','misc.jaegoPida',{where:'⑧'}),
@@ -22829,7 +22831,8 @@ function renderInput(){
     <tr><td class="lb">피다 계 (자동)</td>`+autoCell('kb_gye',mm=>kkotbapCalc(mm).gye,true)+autoCell('kb_gong',mm=>kkotbapCalc(mm).gong)+autoCell('kb_buga',mm=>kkotbapCalc(mm).buga)+blank(2)+`</tr>
     <tr><td class="lb">국세청 카드</td>${inp('kkotbap.ntsCard')}${inp('kkotbap.ntsCardGong')}${inp('kkotbap.ntsCardBuga')}${blank(2)}</tr>
     <tr><td class="lb">국세청 현금영수증</td>${inp('kkotbap.ntsHyeon')}${inp('kkotbap.ntsHyeonGong')}${inp('kkotbap.ntsHyeonBuga')}${blank(2)}</tr>
-    <tr><td class="lb">소매 (자동)</td>`+autoCell('kb_sm',mm=>kkotbapCalc(mm).somae)+autoCell('kb_smg',mm=>kkotbapCalc(mm).somaeGong)+autoCell('kb_smv',mm=>{const k=kkotbapCalc(mm);return k.somae-k.somaeGong;})+`<td class="au" colspan="2" style="text-align:left;color:var(--sub)">피다 계 − 국세청 카드 − 현금영수증</td></tr>
+    <tr><td class="lb">국세청 제로페이</td>${inp('kkotbap.ntsZero')}${inp('kkotbap.ntsZeroGong')}${inp('kkotbap.ntsZeroBuga')}<td class="au" colspan="2" style="text-align:left;color:var(--sub);font-size:12px">홈택스 '제로(온누리)페이 자료' 피다 금액 · 이카운트엔 카드 줄에 합쳐요</td></tr>
+    <tr><td class="lb">소매 (자동)</td>`+autoCell('kb_sm',mm=>kkotbapCalc(mm).somae)+autoCell('kb_smg',mm=>kkotbapCalc(mm).somaeGong)+autoCell('kb_smv',mm=>{const k=kkotbapCalc(mm);return k.somae-k.somaeGong;})+`<td class="au" colspan="2" style="text-align:left;color:var(--sub)">피다 계 − 국세청 카드 − 현금영수증 − 제로페이</td></tr>
     <tr><td class="lb">전체 (캐치 포함, 자동)</td>`+autoCell('kb_all',mm=>kkotbapCalc(mm).all,true)+blank(4)+`</tr>
     <tr><td class="lb">고객수</td>${inp('kkotbap.guest')}<td class="au" colspan="4" style="text-align:left;color:var(--sub)">명</td></tr>
   </table>
@@ -22922,7 +22925,7 @@ function renderInput(){
       if(m.autoVat&&/(\.gong|Gong|\.buga|Buga)$/.test(el.dataset.p)){delete m.autoVat[el.dataset.p.replace(/\.buga$/,'.gong').replace(/Buga$/,'Gong')];} /* v432: 직접 고친 공급가·부가세는 자동 계산 안 함 */
       if((el.dataset.p==='nts.zeropay'||el.dataset.p==='nts.zeropayVat')&&m.nts.zpHold)setTimeout(renderInput,0); /* v424: 제로페이 대조 다시 보기 */
       /* 피다: 계 입력 → 공급가·부가세 자동 (전부 과세 ÷1.1, 이후 수정 가능) */
-      const ASPL={'kkotbap.catchGye':['kkotbap.catchGong','kkotbap.catchBuga'],'kkotbap.ntsCard':['kkotbap.ntsCardGong','kkotbap.ntsCardBuga'],'kkotbap.ntsHyeon':['kkotbap.ntsHyeonGong','kkotbap.ntsHyeonBuga']};
+      const ASPL={'kkotbap.catchGye':['kkotbap.catchGong','kkotbap.catchBuga'],'kkotbap.ntsCard':['kkotbap.ntsCardGong','kkotbap.ntsCardBuga'],'kkotbap.ntsZero':['kkotbap.ntsZeroGong','kkotbap.ntsZeroBuga'],'kkotbap.ntsHyeon':['kkotbap.ntsHyeonGong','kkotbap.ntsHyeonBuga']};
       const asp=ASPL[el.dataset.p];
       if(asp){
         const t0=val||0,g0=exVat(t0);
@@ -23077,6 +23080,7 @@ function autofillEmpty(m){
   fill('catchGong','catchBuga',m.kkotbap.catchGye,'kkotbap');
   fill('ntsCardGong','ntsCardBuga',m.kkotbap.ntsCard,'kkotbap');
   fill('ntsHyeonGong','ntsHyeonBuga',m.kkotbap.ntsHyeon,'kkotbap');
+  fill('ntsZeroGong','ntsZeroBuga',m.kkotbap.ntsZero||0,'kkotbap');
   return changed;
 }
 AUTO.tx_slip_g=mm=>derived(mm).taxinvGong;
@@ -23451,11 +23455,12 @@ function renderMonths(){
     let b='';
     const smBuga=kb.somae-kb.somaeGong;
     b+=grp('꽃밥에피다 (인사동)',4);
-    b+=row3('카드',m.kkotbap.ntsCardGong,m.kkotbap.ntsCardBuga,m.kkotbap.ntsCard,'','pida.card');
+    const zG=m.kkotbap.ntsZeroGong||0,zV=m.kkotbap.ntsZeroBuga||0,zT=m.kkotbap.ntsZero||0;
+    b+=row3(zT?'카드 (제로페이 포함)':'카드',m.kkotbap.ntsCardGong+zG,m.kkotbap.ntsCardBuga+zV,m.kkotbap.ntsCard+zT,'','pida.card');
     b+=row3('현영',m.kkotbap.ntsHyeonGong,m.kkotbap.ntsHyeonBuga,m.kkotbap.ntsHyeon,'','pida.hyeon');
     b+=row3('소매',kb.somaeGong,smBuga,kb.somae,'','pida.somae');
     b+=row3('캐치테이블',m.kkotbap.catchGong,m.kkotbap.catchBuga,m.kkotbap.catchGye,'','pida.catch');
-    const insG=m.kkotbap.ntsCardGong+m.kkotbap.ntsHyeonGong+kb.somaeGong+m.kkotbap.catchGong,insV=m.kkotbap.ntsCardBuga+m.kkotbap.ntsHyeonBuga+smBuga+m.kkotbap.catchBuga;
+    const insG=m.kkotbap.ntsCardGong+zG+m.kkotbap.ntsHyeonGong+kb.somaeGong+m.kkotbap.catchGong,insV=m.kkotbap.ntsCardBuga+zV+m.kkotbap.ntsHyeonBuga+smBuga+m.kkotbap.catchBuga;
     /* v294: ⑩ 기타 거래처 중 소속 '인사동' (네이버파이낸셜 등 판매대행) — 전부 과세로 보고 공급가/부가세 분리 */
     const insEx=(m.extra||[]).filter(x=>x.unit==='insadong'&&x.amt);
     b+=row3(insEx.length?'계 (캐치 포함)':'인사동 계',insG,insV,kb.all,insEx.length?'sub':'tot');
