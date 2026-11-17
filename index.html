@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v484</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v485</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -21648,7 +21648,7 @@ async function apCornerPick(inp){
   inp.value='';
   try{
     const aoa=await apReadXlsx(f);
-    let ym=null,hi=-1,cCard=-1,cAmt=-1,cGubun=-1;
+    let ym=null,hi=-1,cCard=-1,cAmt=-1,cGubun=-1,cNo=-1;const aprNos=[];
     for(let i=0;i<Math.min(aoa.length,12);i++){
       const r=aoa[i]||[];
       const joined=r.join(' ');
@@ -21660,6 +21660,7 @@ async function apCornerPick(inp){
           const t=String(r[c]||'').replace(/\s/g,'');
           if(t.includes('카드번호'))cCard=c;
           if(t==='승인금액')cAmt=c;
+          if(t==='승인번호')cNo=c;
           if(t==='승인')cGubun=c;
         }
       }
@@ -21671,6 +21672,7 @@ async function apCornerPick(inp){
       if(!/^\d+$/.test(String(r[0]||'').trim()))continue;
       const amt=Number(String(r[cAmt]||'').replace(/,/g,''))||0;
       tot+=amt;n++;
+      if(cNo>=0&&String(r[cNo]||'').trim())aprNos.push(String(r[cNo]).trim());
       const digits=String(r[cCard]||'').replace(/[^0-9]/g,'');
       if(!digits){noCard+=amt;noN++;}
     }
@@ -21679,6 +21681,7 @@ async function apCornerPick(inp){
     const m=MONTHS[CUR];
     m.corner.cardTotal=Math.round(tot);
     m.uploads=m.uploads||{};m.uploads.corner=1;
+    if(aprNos.length){m.cornerApr=aprNos;if(m.nice){niceAutoPos(m);niceSyncExtra(m);}} /* v485: 단말기 건 자동 체크용 */
     touch();renderInput();
     alert("마켓포스 카드승인현황 반영 완료\n\n· 카드 전체: "+fmt(m.corner.cardTotal)+"원 ("+n+"건, 취소 차감)\n· 이 중 카드번호 없는 단말기 간편결제: "+fmt(noCard)+"원 ("+noN+"건) — 제로페이 건은 홈택스에선 '제로페이 자료'로 따로 잡혀요\n\n카드 '보자기 몫'은 직접 입력해 주세요.");
   }catch(e){alert("읽기 실패: "+(e.message||e));}
@@ -21865,8 +21868,13 @@ async function uplRouterPick(inp){
     try{
       const buf=await f.arrayBuffer();
       const head=new Uint8Array(buf.slice(0,4));
+      if(head[0]===0xD0&&head[1]===0xCF){ /* v485: 비밀번호 걸린 엑셀(나이스 등) */
+        let enc=false;try{await loadScript("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");enc=!!XLSX.CFB.find(XLSX.CFB.read(new Uint8Array(buf),{type:'array'}),'EncryptedPackage');}catch(e){}
+        if(enc){try{await niceFile(f);}catch(e){alert(f.name+' 읽기 실패: '+(e.message||e));}continue;}
+      }
       if((head[0]===0x50&&head[1]===0x4B)||(head[0]===0xD0&&head[1]===0xCF)){ // xlsx · 옛 xls(이진)
         const aoa=await apReadXlsx(f);
+        if(niceIsAoa(aoa)){try{await niceFile(f);}catch(e){alert(f.name+' 읽기 실패: '+(e.message||e));}continue;}
         if(hyIsAoa(aoa)){ /* v481: 홈택스 현금영수증 매출내역 */
           const ep=!confirm(f.name+'\n\n홈택스 현금영수증 매출내역이에요.\n꽃밥이야기(마켓·보자기) 것이면 [확인], 꽃밥에피다(인사동) 것이면 [취소]를 눌러주세요.');
           if(typeof CFM_GRP!=='undefined'&&CFM_GRP!=='all'&&CFM_GRP!==(ep?'ep':'mk'))window.cfmGrpSet(ep?'ep':'mk');
@@ -22553,7 +22561,9 @@ function remindHtml(m){
       <td style="white-space:nowrap;padding:6px 8px">${hit.length?'':`<label style="font-size:12px;cursor:pointer"><input type="checkbox" style="width:auto;margin:0 3px 0 0;vertical-align:middle" ${none[r.id]?'checked':''} onchange="cfmRemNone('${r.id}',this.checked)">이번 달 없음</label>`}
         <span class="addrow" style="margin-left:6px;color:#b91c1c" onclick="cfmRemDel('${r.id}')">삭제</span></td></tr>`;}).join('');
   const warn=L.some(r=>{let re=null;try{re=r.kw?new RegExp(r.kw):null;}catch(e){}return re&&!names.some(n=>re.test(n))&&!none[r.id];});
-  return `<div class="card" style="border:2px solid ${warn?'#f59e0b':'#86efac'};background:${warn?'#fffbeb':'#f0fdf4'}"><h2>📌 매달 잊지 말 것 <small>매출확정할 때마다 확인 · 찾을 이름이 ⑩ 기타 거래처에 있으면 자동으로 ✓</small></h2>
+  /* v485: 이번 달 할 일 카드 안에 넣음 */
+  return `<div style="margin-top:12px;border:1.5px solid ${warn?'#f59e0b':'#bbe5c4'};background:${warn?'#fffbeb':'#fff'};border-radius:12px;padding:10px 12px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><b style="font-size:15px">📌 매달 잊지 말 것</b><span style="color:var(--sub);font-size:12px">찾을 이름이 ⑩ 기타 거래처에 있으면 자동으로 ✓</span>${warn?'<span style="margin-left:auto;font-size:12px;font-weight:700;color:#b45309">⚠ 확인할 것 있음</span>':'<span style="margin-left:auto;font-size:12px;font-weight:700;color:#15803d">✔ 다 했어요</span>'}</div>
     <table class="g" style="width:100%">${rows||'<tr><td style="color:var(--sub)">적어둔 항목이 없어요</td></tr>'}</table>
     <div class="flex" style="margin-top:8px;gap:6px;flex-wrap:wrap"><input id="remT" class="txt" placeholder="잊지 말 것 (예: 새 카드단말기 매출 ⑩에 추가)" style="flex:1;min-width:240px"><input id="remK" class="txt" placeholder="찾을 이름 (예: 페스타|단말기)" style="width:180px"><span class="addrow" onclick="cfmRemAdd()">+ 추가</span></div></div>`;
 }
@@ -22575,6 +22585,7 @@ function cfmCardGrps(t){
   if(/^④/.test(t))return ['mk','bj'];
   if(/^⑤/.test(t))return ['on'];
   if(/^⑥/.test(t))return ['mk'];
+  if(/^💳 카드단말기/.test(t))return ['mk'];
   if(/^⑦/.test(t))return ['ep'];
   if(/^[⑧⑨⑩⑪]/.test(t))return ['end'];
   return null;
@@ -22591,6 +22602,7 @@ function cfmGuideItems(m){
         F('마켓포스 카드승인현황','오케이포스',UP.corner||g('corner.cardTotal')>0),
         F('회원구매현황','오케이포스',UP.members||g('members.insadongGye')>0),
         F('제로페이 부가세내역','홈택스',UP.ntszp||g('nts.zeropay')>0),
+        Object.assign(F('카드단말기 거래상세내역','나이스 · 사용한 달만',!!m.nice,m.nice?'포스에 없음 '+fmt(((m.nice.rows)||[]).filter(r=>!r.pos).reduce((a,r)=>a+(r.cancel?-1:1)*r.amt,0)):''),{opt:true,go:'#cfmNiceCard'}),
         I('카드 — 보자기 몫','corner.cardBojagi',{where:'승인현황'}),
         I('마켓 면세','market.myeon',{where:'①'}),
         I('정육 (면세·과세)',['market.jeongyukMyeon','market.jeongyukGwase'],{where:'①'}),
@@ -22634,7 +22646,8 @@ function cfmGuideHtml(m){
   return `<div class="card" id="cfmGuide" style="border:1.5px solid #c7d9c9;background:#F7FAF6"><h2>🗂 이번 달 할 일 — 사업장별 <small>항목을 누르면 입력하는 곳으로 가요 · 위에서 사업장을 고르면 아래에 그 사업장 칸만 보여요</small></h2>
     <style>.cfmgi{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:8px;cursor:pointer;font-size:13.5px}.cfmgi:hover{background:#EEF5EE}.cfmgh{font-size:11.5px;color:var(--sub);font-weight:700;margin:8px 0 2px}.cfmflash{outline:3px solid #f59e0b!important;outline-offset:2px}</style>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${CFM_GRPS.map(([k,n])=>chip(k,n)).join('')}</div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap">${show.map(([k,n])=>box(k,n)).join('')}</div></div>`;
+    <div style="display:flex;gap:10px;flex-wrap:wrap">${show.map(([k,n])=>box(k,n)).join('')}</div>
+    ${remindHtml(m)}</div>`;
 }
 function cfmGuideRefresh(){try{const g=document.getElementById('cfmGuide');const m=MONTHS[CUR];if(g&&m)g.outerHTML=cfmGuideHtml(m);}catch(e){console.warn(e);}}
 window.cfmGrpSet=function(k){CFM_GRP=k;try{localStorage.setItem('ssv2_cfmGrp',k);}catch(e){}
@@ -22667,13 +22680,150 @@ window.cfmGo=function(i){
   tgt.classList.add('cfmflash');setTimeout(()=>tgt.classList.remove('cfmflash'),1800);
   if(el.matches('input:not([readonly]),textarea'))setTimeout(()=>{try{el.focus({preventScroll:true});}catch(e){}},450);
 };
+/* ===== v485: 카드단말기(NICE 통합거래조회) — 포스에 등록 안 한 건만 ⑩ 기타 거래처 '카드단말기 (마켓)'으로 =====
+   비밀번호 걸린 엑셀(Agile 암호화)도 이 브라우저에서 풀어서 읽음 (비밀번호는 이 브라우저에만 기억) */
+function niceSha1(bytes){
+  const l=bytes.length,wl=((l+8)>>6)+1,w=new Uint32Array(wl*16);
+  for(let i=0;i<l;i++)w[i>>2]|=bytes[i]<<(24-(i%4)*8);
+  w[l>>2]|=0x80<<(24-(l%4)*8);w[wl*16-1]=l*8;
+  let a=0x67452301,b=0xEFCDAB89,c=0x98BADCFE,d=0x10325476,e=0xC3D2E1F0;const W=new Uint32Array(80);
+  for(let i=0;i<w.length;i+=16){
+    for(let t=0;t<16;t++)W[t]=w[i+t];
+    for(let t=16;t<80;t++){const x=W[t-3]^W[t-8]^W[t-14]^W[t-16];W[t]=(x<<1)|(x>>>31);}
+    let A=a,B=b,C=c,D=d,E=e;
+    for(let t=0;t<80;t++){const f=t<20?((B&C)|(~B&D))+0x5A827999:t<40?(B^C^D)+0x6ED9EBA1:t<60?((B&C)|(B&D)|(C&D))+0x8F1BBCDC:(B^C^D)+0xCA62C1D6;
+      const T=(((A<<5)|(A>>>27))+f+E+W[t])|0;E=D;D=C;C=(B<<30)|(B>>>2);B=A;A=T;}
+    a=(a+A)|0;b=(b+B)|0;c=(c+C)|0;d=(d+D)|0;e=(e+E)|0;
+  }
+  const o=new Uint8Array(20);[a,b,c,d,e].forEach((v,i)=>{o[i*4]=v>>>24;o[i*4+1]=(v>>>16)&255;o[i*4+2]=(v>>>8)&255;o[i*4+3]=v&255;});return o;
+}
+function niceCat(...xs){const n=xs.reduce((a,x)=>a+x.length,0),o=new Uint8Array(n);let p=0;for(const x of xs){o.set(x,p);p+=x.length;}return o;}
+function niceU32(i){return new Uint8Array([i&255,(i>>>8)&255,(i>>>16)&255,(i>>>24)&255]);}
+function niceB64(s){return Uint8Array.from(atob(s),c=>c.charCodeAt(0));}
+async function niceHash(alg,bytes){if(alg==='SHA1'||alg==='SHA-1')return niceSha1(bytes);return new Uint8Array(await crypto.subtle.digest(alg.replace(/^SHA(\d)/,'SHA-$1'),bytes));}
+/* AES-CBC 패딩 없이 풀기 (WebCrypto는 패딩을 요구 → 마지막에 패딩 블록을 만들어 붙여서 풂) */
+async function niceCbc(keyBytes,iv,data){
+  const k=await crypto.subtle.importKey('raw',keyBytes,{name:'AES-CBC'},false,['encrypt','decrypt']);
+  const last=data.slice(data.length-16);
+  const pad=new Uint8Array(await crypto.subtle.encrypt({name:'AES-CBC',iv:last},k,new Uint8Array(16).fill(16))).slice(0,16);
+  return new Uint8Array(await crypto.subtle.decrypt({name:'AES-CBC',iv},k,niceCat(data,pad)));
+}
+/* 암호 걸린 엑셀이면 풀어서 xlsx(zip) 바이트를 돌려줌 · 암호가 없으면 null */
+async function niceDecrypt(buf,pw){
+  await loadScript("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");
+  const cfb=XLSX.CFB.read(new Uint8Array(buf),{type:'array'});
+  const ei=XLSX.CFB.find(cfb,'EncryptionInfo'),ep=XLSX.CFB.find(cfb,'EncryptedPackage');
+  if(!ei||!ep)return null;
+  const info=new Uint8Array(ei.content),xml=new TextDecoder().decode(info.slice(8));
+  const at=(tag,name)=>{const m=new RegExp('<(?:\\w+:)?'+tag+'\\b[^>]*\\s'+name+'="([^"]*)"').exec(xml);return m?m[1]:null;};
+  if(!at('keyData','saltValue'))throw new Error('이 암호 방식은 아직 못 풀어요 — 엑셀에서 열어 암호 없이 저장한 파일을 넣어주세요.');
+  const kd={salt:niceB64(at('keyData','saltValue')),bits:+at('keyData','keyBits'),alg:at('keyData','hashAlgorithm'),bs:+at('keyData','blockSize')};
+  const ek={salt:niceB64(at('encryptedKey','saltValue')),bits:+at('encryptedKey','keyBits'),alg:at('encryptedKey','hashAlgorithm'),spin:+at('encryptedKey','spinCount'),val:niceB64(at('encryptedKey','encryptedKeyValue'))};
+  const pwb=new Uint8Array(pw.length*2);for(let i=0;i<pw.length;i++){const c=pw.charCodeAt(i);pwb[i*2]=c&255;pwb[i*2+1]=c>>8;}
+  let h=await niceHash(ek.alg,niceCat(ek.salt,pwb));
+  for(let i=0;i<ek.spin;i++)h=await niceHash(ek.alg,niceCat(niceU32(i),h));
+  let kk=await niceHash(ek.alg,niceCat(h,new Uint8Array([0x14,0x6e,0x0b,0xe7,0xab,0xac,0xd0,0xd6])));
+  const kl=ek.bits/8;if(kk.length<kl){const t=new Uint8Array(kl).fill(0x36);t.set(kk);kk=t;}else kk=kk.slice(0,kl);
+  const key=(await niceCbc(kk,ek.salt,ek.val)).slice(0,kd.bits/8);
+  const pkg=new Uint8Array(ep.content),size=pkg[0]|(pkg[1]<<8)|(pkg[2]<<16)|(pkg[3]*16777216),data=pkg.slice(8);
+  const out=new Uint8Array(size);
+  for(let i=0,p=0;p<size;i++){
+    const seg=data.slice(i*4096,Math.min((i+1)*4096,data.length));if(!seg.length)break;
+    const iv=(await niceHash(kd.alg,niceCat(kd.salt,niceU32(i)))).slice(0,kd.bs);
+    const dec=await niceCbc(key,iv,seg);out.set(dec.slice(0,Math.min(dec.length,size-p)),p);p+=dec.length;
+  }
+  if(!(out[0]===0x50&&out[1]===0x4B))throw new Error('비밀번호가 맞지 않아요.');
+  return out;
+}
+/* 파일 → (암호면 풀어서) 표 */
+async function niceReadAoa(f){
+  const buf=await f.arrayBuffer();const h=new Uint8Array(buf.slice(0,4));
+  if(h[0]===0xD0&&h[1]===0xCF){
+    let enc=false;try{await loadScript("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");const cfb=XLSX.CFB.read(new Uint8Array(buf),{type:'array'});enc=!!XLSX.CFB.find(cfb,'EncryptedPackage');}catch(e){}
+    if(enc){
+      let pw=null;try{pw=localStorage.getItem('ssv2_nicePw');}catch(e){}
+      for(let tries=0;tries<3;tries++){
+        if(!pw){pw=prompt(f.name+'\n\n비밀번호가 걸린 엑셀이에요. 비밀번호를 넣어주세요 (이 브라우저에만 기억해요).');if(!pw)throw new Error('비밀번호를 넣지 않았어요.');}
+        try{toast('엑셀 암호 푸는 중…');const x=await niceDecrypt(buf,pw);try{localStorage.setItem('ssv2_nicePw',pw);}catch(e){}return await apReadXlsx(new File([x],f.name.replace(/\.\w+$/,'')+'.xlsx'));}
+        catch(e){if(/비밀번호가 맞지/.test(e.message||'')){pw=null;try{localStorage.removeItem('ssv2_nicePw');}catch(e2){}alert('비밀번호가 맞지 않아요. 다시 넣어주세요.');continue;}throw e;}
+      }
+      throw new Error('비밀번호가 맞지 않아요.');
+    }
+  }
+  return apReadXlsx(f);
+}
+function niceIsAoa(aoa){for(let i=0;i<Math.min(aoa.length,20);i++){const r=(aoa[i]||[]).map(x=>String(x).replace(/\s/g,''));if(r.includes('CAT_ID')&&r.includes('승인번호')&&r.includes('금액'))return true;}return false;}
+function niceParse(aoa){
+  let hi=-1;const C={};
+  for(let i=0;i<aoa.length;i++){const r=(aoa[i]||[]).map(x=>String(x).replace(/\s/g,''));if(r.includes('CAT_ID')&&r.includes('승인번호')){hi=i;r.forEach((t,j)=>{if(C[t]==null)C[t]=j;});break;}}
+  if(hi<0)throw new Error('나이스 거래상세내역 머리글(CAT_ID·승인번호)을 찾지 못했어요.');
+  const num=v=>{const n=Number(String(v==null?'':v).replace(/[,\s원]/g,''));return isNaN(n)?0:n;};
+  const rows=[];
+  for(let i=hi+1;i<aoa.length;i++){const r=aoa[i]||[];if(!/^\d+$/.test(String(r[0]||'').trim()))continue;
+    const d=String(r[C['거래일자']]||'').trim();if(!/^\d{4}-\d{2}-\d{2}/.test(d))continue;
+    const cancel=/취소/.test(String(r[C['구분']]||''))||(C['취소여부']!=null&&/^(Y|취소)$/.test(String(r[C['취소여부']]||'').trim()));
+    const amt=num(r[C['금액']]),vat=num(r[C['부가세']]),my=C['면세금액']!=null?num(r[C['면세금액']]):0;
+    rows.push({d,t:String(r[C['거래시간']]||'').trim(),co:String(r[C['발급사']]||r[C['매입사']]||'').trim(),no:String(r[C['승인번호']]||'').trim(),amt,vat,my,cancel,pay:String(r[C['간편결제수단']]||'').trim()});}
+  if(!rows.length)throw new Error('거래 줄을 찾지 못했어요.');
+  return rows;
+}
+/* 포스 카드승인현황에 같은 승인번호가 있으면 '포스에 있음' */
+function niceAutoPos(m){const L=(m.cornerApr||[]);const set=new Set(L.map(x=>String(x).replace(/^0+/,'')));for(const r of (m.nice&&m.nice.rows)||[]){if(r.pos==null&&L.length)r.pos=set.has(String(r.no).replace(/^0+/,''))?true:null;}}
+const NICE_EX='카드단말기 (마켓)';
+/* 포스에 없는 건 → ⑩ 기타 거래처 '카드단말기 (마켓)' (과세 / 면세 따로) */
+function niceSyncExtra(m){
+  const R=(m.nice&&m.nice.rows)||[];let g=0,v=0,my=0;
+  for(const r of R){if(r.pos)continue;const sg=r.cancel?-1:1;my+=sg*(r.my||0);v+=sg*(r.vat||0);g+=sg*((r.amt||0)-(r.vat||0)-(r.my||0));}
+  m.extra=m.extra||[];
+  const put=(name,tax,amt,gong,buga)=>{let it=m.extra.find(x=>x.name===name&&x.nice);
+    if(!amt){if(it)m.extra.splice(m.extra.indexOf(it),1);return;}
+    if(!it){it={name,unit:'market',nice:1};m.extra.push(it);}
+    Object.assign(it,{tax,amt,gong,buga,unit:'market'});};
+  put(NICE_EX,'과세',g+v,g,v);put(NICE_EX+' 면세','면세',my,my,0);
+}
+async function niceFile(f){
+  const aoa=await niceReadAoa(f);
+  if(!niceIsAoa(aoa))throw new Error(f.name+': 나이스 카드단말기 거래상세내역이 아니에요.');
+  const rows=niceParse(aoa);
+  const yms={};rows.forEach(r=>{const k=r.d.slice(2,4)+r.d.slice(5,7);(yms[k]=yms[k]||[]).push(r);});
+  const keys=Object.keys(yms).sort();let tgt=CUR;
+  if(!yms[CUR]){if(keys.length===1&&!confirm('파일은 '+ymLabel(keys[0])+' 거래인데 지금 화면은 '+ymLabel(CUR)+'이에요. 그래도 지금 달에 넣을까요?'))return;}
+  const m=MONTHS[tgt];const list=yms[CUR]||rows;
+  const old={};((m.nice&&m.nice.rows)||[]).forEach(r=>{old[r.no+'|'+r.d+'|'+r.cancel]=r.pos;});
+  list.forEach(r=>{const k=r.no+'|'+r.d+'|'+r.cancel;r.pos=k in old?old[k]:null;});
+  m.nice={name:f.name,at:Date.now(),rows:list};
+  niceAutoPos(m);niceSyncExtra(m);
+  m.uploads=m.uploads||{};m.uploads.nice=1;
+  touch();renderInput();
+  if(keys.length>1)alert('여러 달 거래가 섞여 있어서 '+ymLabel(CUR)+' 거래만 넣었어요.');
+  setTimeout(()=>{const c=document.getElementById('cfmNiceCard');if(c)c.scrollIntoView({behavior:'smooth',block:'start'});},200);
+}
+window.nicePick=async function(inp){const f=inp.files&&inp.files[0];inp.value='';if(!f)return;try{await niceFile(f);}catch(e){alert('읽기 실패: '+(e.message||e));}};
+window.niceSetPos=function(i,on){const m=MONTHS[CUR];if(!m||!m.nice)return;const r=m.nice.rows[i];if(!r)return;r.pos=on?true:false;niceSyncExtra(m);touch();renderInput();};
+window.niceDrop=function(){const m=MONTHS[CUR];if(!m||!m.nice)return;if(!confirm('카드단말기 내역을 지울까요? (⑩의 카드단말기 줄도 같이 지워요)'))return;delete m.nice;m.extra=(m.extra||[]).filter(x=>!x.nice);if(m.uploads)delete m.uploads.nice;touch();renderInput();};
+function niceHtml(m){
+  const N=m.nice;
+  const up=`<label class="btn sm" style="cursor:pointer;display:inline-flex;align-items:center">📂 나이스 거래상세내역 엑셀 선택<input type="file" accept=".xls,.xlsx" onchange="nicePick(this)" style="display:none"></label>`;
+  if(!N)return `<div class="card" id="cfmNiceCard"><h2>💳 카드단말기 (NICE) — 포스 등록 확인 <small>마켓 무선 단말기 · 포스에 안 넣은 건만 ⑩ 기타 거래처로</small></h2>
+    <div class="flex">${up}<span class="hint">나이스 가맹점 사이트 → 통합거래조회 → 거래상세내역 엑셀 (비밀번호 걸린 파일도 돼요) · 이번 달 단말기 사용이 없으면 안 넣어도 돼요</span></div></div>`;
+  const R=N.rows;let inT=0,outT=0;
+  const tr=R.map((r,i)=>{const sg=r.cancel?-1:1;if(r.pos)inT+=sg*r.amt;else outT+=sg*r.amt;
+    return `<tr${r.pos?'':' style="background:#FFF8E6"'}><td style="text-align:center">${esc(r.d.slice(5))} ${esc(r.t.slice(0,5))}</td><td style="text-align:left">${esc(r.co)}${r.pay?` <span style="color:var(--sub);font-size:11.5px">${esc(r.pay)}</span>`:''}</td><td style="text-align:center">${esc(r.no)}</td>
+      <td>${r.cancel?'<b style="color:#b91c1c">취소</b> −':''}${fmt(r.amt)}</td>
+      <td style="text-align:center"><label style="cursor:pointer;font-size:12.5px"><input type="checkbox" style="width:auto;margin:0 4px 0 0;vertical-align:middle" ${r.pos?'checked':''} onchange="niceSetPos(${i},this.checked)">포스에 등록함</label></td>
+      <td style="text-align:left;font-size:12px;color:${r.pos?'#15803d':'#b45309'}">${r.pos?'포스 매출에 이미 있음 — 안 더함':'⑩ 기타 거래처로 더함'}</td></tr>`;}).join('');
+  return `<div class="card" id="cfmNiceCard"><h2>💳 카드단말기 (NICE) — 포스 등록 확인 <small>포스에 등록한 건은 체크 · 체크 안 한 건만 ⑩ 기타 거래처 '${NICE_EX}'로 들어가요</small></h2>
+    <table class="g"><tr><th style="width:110px">거래일시</th><th>카드사</th><th>승인번호</th><th>금액</th><th style="width:120px">포스</th><th>처리</th></tr>${tr}
+      <tr><td class="lb" colspan="3">포스에 있음 (안 더함)</td><td class="au">${fmt(inT)}</td><td class="au" colspan="2"></td></tr>
+      <tr><td class="lb" colspan="3">포스에 없음 → ⑩ 기타 거래처 (마켓)</td><td class="au strong">${fmt(outT)}</td><td class="au" colspan="2" style="text-align:left;color:var(--sub);font-size:12px">${(m.cornerApr||[]).length?'카드승인현황과 승인번호가 같은 건은 자동으로 체크해요':'마켓포스 카드승인현황을 넣으면 승인번호로 자동 체크해요 (파일에 승인번호 칸이 있을 때)'}</td></tr></table>
+    <div class="flex" style="margin-top:8px">${up}<span class="hint">${esc(N.name||'')} · 홈택스 국세청 카드에는 단말기 매출이 이미 다 들어 있어서 따로 할 일 없어요</span><span class="addrow" style="color:#b91c1c" onclick="niceDrop()">지우기</span></div></div>`;
+}
 function renderInput(){
   {const m0=MONTHS[CUR];if(m0&&m0.nts&&m0.uploads&&m0.uploads.ntszp&&!(m0.nts.card>0)&&m0.nts.zeropay>0&&!m0.nts.zpHold){ /* v423: 카드 없이 들어간 제로페이 → 보관으로 */
     m0.nts.zpHold={tot:m0.nts.zeropay,vat:m0.nts.zeropayVat==null?0:m0.nts.zeropayVat,n:0,ym:CUR,name:'제로페이 자료',at:Date.now()};m0.nts.zeropay=0;m0.nts.zeropayVat=null;try{touch();}catch(e){}}}
   const m=MONTHS[CUR];
   const pg=$("#pg-input");
   let h='';
-  h+=remindHtml(m);
   h+=cfmGuideHtml(m);
   h+=`<div id="cfmGrpBar" class="card" style="position:sticky;top:0;z-index:20;padding:9px 14px;background:#F7FAF6;border:1.5px solid #c7d9c9;box-shadow:0 2px 6px rgba(0,0,0,.06)"></div>`;
   h+=`<div class="card" style="padding:10px 16px"><span class="hint">🪄 비어있는 공급가·부가세는 계·면세를 입력하면 <b>자동으로 바로</b> 채워져요 — 직접 입력한 칸은 건드리지 않아요.</span></div>`;
@@ -22689,6 +22839,7 @@ function renderInput(){
     <tr><td class="lb">쿠팡이츠 주문내역 (.xlsx)</td><td class="au">쿠팡이츠</td><td class="au" style="text-align:left;cursor:pointer" title="채우는 곳: ③ 쿠팡이츠 계·공급가·부가세 + 메뉴별 수량 (매월 5일 이후 다운 가능)" onclick="cfmUpSrcEdit('coupang')">${esc(upSrc('coupang'))} <span style="color:#94a3b8;font-size:11px">✏</span></td><td class="au">${okC(UP.coupang,m.bpos.coupangGye>0)}${m.bpos.coupangGye>0&&m.bpos.coupangTemp?' <span style="color:#b45309;font-size:11px">임시값</span>':''}</td></tr>
     <tr><td class="lb">회원구매현황 (.xls·.xlsx)</td><td class="au">오케이포스</td><td class="au" style="text-align:left;cursor:pointer" title="채우는 곳: ② 인사동·보자기·판공 계/부가세 + 사내(→마켓매출 '사내')" onclick="cfmUpSrcEdit('members')">${esc(upSrc('members'))} <span style="color:#94a3b8;font-size:11px">✏</span></td><td class="au">${okC(UP.members,m.members.insadongGye>0)}</td></tr>
     <tr><td class="lb">피다 일일매출상세내역 (.xls)</td><td class="au">POPS CLOUD</td><td class="au" style="text-align:left;cursor:pointer" title="채우는 곳: ⑦ 피다 카드·현금·고객수 + 매출현황 피다탭(피다매출·메뉴별·주류별) 자동 반영" onclick="cfmUpSrcEdit('pops')">${esc(upSrc('pops'))} <span style="color:#94a3b8;font-size:11px">✏</span></td><td class="au">${okC(UP.pops,m.kkotbap.card>0||m.kkotbap.cash>0)}</td></tr>
+    <tr><td class="lb">카드단말기 거래상세내역 (.xlsx · 비밀번호 가능)</td><td class="au">나이스</td><td class="au" style="text-align:left;cursor:pointer" title="채우는 곳: 💳 카드단말기 — 포스에 안 넣은 건은 ⑩ 기타 거래처 '카드단말기 (마켓)'" onclick="cfmUpSrcEdit('nice')">${esc(upSrc('nice'))} <span style="color:#94a3b8;font-size:11px">✏</span></td><td class="au">${okC(UP.nice,!!m.nice)}</td></tr>
     <tr><td class="lb">제로페이 부가세내역 (.xls)</td><td class="au">홈택스</td><td class="au" style="text-align:left;cursor:pointer" title="채우는 곳: ④ 제로페이·기타수단 총액 + 부가세 합" onclick="cfmUpSrcEdit('ntszp')">${esc(upSrc('ntszp'))} <span style="color:#94a3b8;font-size:11px">✏</span></td><td class="au">${okC(UP.ntszp,m.nts.zeropay>0&&m.nts.zeropayVat!=null)}</td></tr>
   </table>
   <div class="hint">사진(스크린샷)은 읽지 못해요 — 각 화면의 '엑셀 내려받기'로 받은 파일을 넣어주세요. 각 카드에 있는 개별 업로드 칸을 써도 결과는 같아요. 나머지 항목(카드 보자기 몫, 매출분석 숫자, 홈택스 카드·현금영수증 등)은 지금처럼 직접 입력해요.</div></div>`;
@@ -22837,6 +22988,7 @@ function renderInput(){
     <tr><td class="lb">기타 세금계산서</td>${inp('taxEtc.gong')}${inp('taxEtc.buga')}${inp('taxEtc.myeon')}`+autoCell('taxetc_t',mm=>mm.taxEtc.gong+mm.taxEtc.buga+mm.taxEtc.myeon)+blank(1)+`</tr>
   <tr><td colspan="6" class="au" style="text-align:left;color:var(--sub);font-size:12px"><b>세금계산서를 발행했을 때 — "이 매출이 마켓포스에 찍혔나?"로 판단하세요.</b><br>① 포스에 찍힘 + 인사동·보자기·판공(회원 거래) → <b>아무것도 안 적어요</b> (②에서 이미 처리)<br>② 포스에 찍힘 + 회원 거래 아님 → <b>여기 ⑥에</b> 적어요 (포스 매출과 겹치는 만큼 확정표 소계에서 차감 — 드물어서 보통은 비워둬요)<br>③ 포스에 안 찍힘 (농림부·네니아 등 계좌이체 직거래) → <b>⑩ 기타 거래처 매출에</b> 적어요 (확정표와 무관, 보고앱 매출비교에만 합산)</td></tr>
   </table></div>`;
+  h+=niceHtml(m); /* v485 */
   // ⑦ 꽃밥
   h+=`<div class="card"><h2>⑦ 꽃밥에피다 — 인사동 식당 <small>기록용 (확정표와 별도)</small></h2>
   <table class="g"><tr><th style="width:160px">항목</th><th>계</th><th>공급가</th><th>부가세</th><th colspan="2"></th></tr>
