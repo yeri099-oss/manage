@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v475</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v476</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -13663,14 +13663,14 @@ function wdClean(r) {
 }
 const wdSortList = () => window.__wd.recs.sort((a, b) => b.date.localeCompare(a.date));
 // Firebase 규칙이 출금기록부 읽기를 막을 때: 관리자가 붙여넣을 규칙 안내 (직원=보기, 관리자=쓰기)
-// 일반 계정: 보기·추가·수정(입금확인·다음날 넘기기 포함) / 삭제는 기존 salesApp_* 규칙대로 관리자만
+// 일반 계정도 보기·추가·수정·삭제(입금확인·다음날 넘기기 포함)
 const WD_RULE = `match /salesApp_withdraw/{doc} {
-  allow read, create, update: if salesActive();
+  allow read, write: if salesActive();
 }`;
 function wdRuleHelp() {
   return `<div class="card" style="border:1.5px solid #E4A2A2;background:#FDF3F3">
     <div class="card-title">⚠ 이 계정(${esc(S.user?.username || "")})은 Firebase 규칙에서 출금기록부가 막혀 있어요</div>
-    <div class="footnote">관리자가 Firebase 콘솔 → Firestore Database → 규칙에서, 기존 규칙 안(다른 match들 옆, 맨 아래 <code>match /{document=**}</code> 위)에 아래 블록을 추가하고 <b>게시</b>하면 돼요. 일반 계정도 보기·입력·수정을 할 수 있고, 삭제는 관리자만 하는 규칙이에요.</div>
+    <div class="footnote">관리자가 Firebase 콘솔 → Firestore Database → 규칙에서, 기존 규칙 안(다른 match들 옆, 맨 아래 <code>match /{document=**}</code> 위)에 아래 블록을 추가하고 <b>게시</b>하면 돼요. 일반 계정도 보기·입력·수정·삭제를 할 수 있는 규칙이에요.</div>
     <pre style="background:#fff;border:1px solid rgba(0,0,0,.1);border-radius:8px;padding:10px;font-size:13px;overflow:auto;margin:8px 0">${esc(WD_RULE)}</pre>
     <button class="btn btn-sm btn-primary" onclick="navigator.clipboard.writeText(WD_RULE).then(()=>toast('규칙을 복사했어요 — Firebase 규칙 창에 붙여넣으세요'),()=>toast('복사하지 못했어요. 위 글자를 직접 선택해 복사해주세요',true))">📋 규칙 복사</button>
     <button class="btn btn-sm" onclick="window.__wd.err='';window.__wd.errPerm=false;renderWithdraw()">↻ 다시 시도</button>
@@ -13711,7 +13711,7 @@ async function renderWithdraw() {
   const el = document.getElementById("tab-withdraw"); if (!el) return;
   if (!S.user) return;
   const adm = S.user.role === "admin";
-  const ed = true; // 일반 계정도 입력·수정·입금확인·넘기기 가능 / 삭제·가져오기·백업은 관리자만 (Firestore 규칙과 맞춤)
+  const ed = true; // 일반 계정도 입력·수정·삭제·입금확인·넘기기 가능 / 가져오기·백업은 관리자만 (Firestore 규칙과 맞춤)
   const W = window.__wd;
   if (!W.date) W.date = wdToday();
   if (!W.month) W.month = W.date.slice(0, 7);
@@ -13739,7 +13739,7 @@ async function renderWithdraw() {
       <td class="note">${esc(r.content) || "-"}</td>
       <td class="note" style="max-width:170px">${esc(r.note) || "-"}</td>
       <td class="c${ed ? " wd-chk" : ""}" style="white-space:nowrap;${ed ? "cursor:pointer" : ""}" ${ed ? `onclick="wdToggle('${esc(r.id)}',this.querySelector('input'))" title="눌러서 입금확인 ${r.confirmed ? "취소" : ""}"` : ""}><span style="font-size:14px;color:${r.confirmed ? "#27ae60;font-weight:700" : "var(--ink-muted)"}"><input type="checkbox" ${r.confirmed ? "checked" : ""} ${ed ? "" : "disabled"} style="accent-color:#27ae60;vertical-align:-2px;pointer-events:none"> ${r.confirmed ? "확인" : "미확인"}</span></td>
-      ${ed ? `<td class="c" style="white-space:nowrap">${r.confirmed ? "" : `<button class="btn btn-sm" onclick="wdMove(['${esc(r.id)}'])" title="결재가 안 나서 못 보낸 건 → ${wdNextDay(r.date).slice(5).replace("-", "/")}로 넘기기">⏭ 다음날</button> `}<button class="btn btn-sm" onclick="wdForm('${esc(r.id)}')">수정</button> ${adm ? `<button class="btn btn-sm" onclick="wdDel('${esc(r.id)}')">삭제</button>` : ""}</td>` : ""}
+      ${ed ? `<td class="c" style="white-space:nowrap">${r.confirmed ? "" : `<button class="btn btn-sm" onclick="wdMove(['${esc(r.id)}'])" title="결재가 안 나서 못 보낸 건 → ${wdNextDay(r.date).slice(5).replace("-", "/")}로 넘기기">⏭ 다음날</button> `}<button class="btn btn-sm" onclick="wdForm('${esc(r.id)}')">수정</button> <button class="btn btn-sm" onclick="wdDel('${esc(r.id)}')">삭제</button></td>` : ""}
     </tr>`).join("");
   el.innerHTML = `<style>
     #tab-withdraw .rpt{font-size:15.5px}
@@ -13782,7 +13782,7 @@ async function renderWithdraw() {
         </div>
       </div>
       <div class="table-wrap"><table class="rpt" style="white-space:normal">
-        <thead><tr><th style="cursor:pointer" onclick="wdSortDate()">날짜 ↕</th><th class="l">거래처</th><th>금액</th><th class="l">내용</th><th class="l">비고</th><th>입금확인</th>${ed ? `<th>${adm ? "넘기기·수정·삭제" : "넘기기·수정"}</th>` : ""}</tr></thead>
+        <thead><tr><th style="cursor:pointer" onclick="wdSortDate()">날짜 ↕</th><th class="l">거래처</th><th>금액</th><th class="l">내용</th><th class="l">비고</th><th>입금확인</th>${ed ? "<th>넘기기·수정·삭제</th>" : ""}</tr></thead>
         <tbody>${rows || `<tr><td colspan="${ed ? 7 : 6}" class="c dim" style="padding:30px">등록된 출금 내역이 없어요.</td></tr>`}</tbody>
       </table></div>
       <div class="footnote">거래처 이름을 누르면 계좌 정보를 볼 수 있어요(파란 밑줄 = 계좌 등록됨).<br><span style="opacity:.75">서버에서 불러온 내역: 전체 ${W.recs.length}건 (${WD_COS.map((c) => `${c} ${W.recs.filter((r) => r.company === c).length}건`).join(", ")}) · 이 컴퓨터 날짜 ${wdToday()}</span></div>
