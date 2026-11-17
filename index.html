@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v479</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v480</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -20985,7 +20985,7 @@ document.addEventListener("DOMContentLoaded", () => {
 #cfm-root dialog::backdrop{background:rgba(0,0,0,.3)}
 #cfm-root .addrow{color:var(--accent);cursor:pointer;font-size:13px;font-weight:600}
 #cfm-root{box-sizing:border-box}
-#cfm-root .wrap{max-width:none;padding:4px 0 60px}
+#cfm-root .wrap{max-width:1240px;margin:0 auto;padding:4px 0 60px} /* v480: 너무 넓지 않게 */
 #cfm-root .top{position:sticky;top:53px;z-index:26}
 
 </style>
@@ -22541,7 +22541,7 @@ function cfmCardGrps(t){
   if(/엑셀 업로드 체크리스트/.test(t))return ['mk','bj','ep'];
   if(/^승인현황/.test(t))return ['mk','bj'];
   if(/^①/.test(t))return ['mk'];
-  if(/^②/.test(t))return ['mk','bj'];
+  if(/^②/.test(t))return ['mk']; /* v480: 꽃밥마켓이 발행하는 세금계산서 */
   if(/^③/.test(t))return ['bj'];
   if(/^④/.test(t))return ['mk','bj'];
   if(/^⑤/.test(t))return ['on'];
@@ -22610,9 +22610,19 @@ function cfmGuideHtml(m){
     <div style="display:flex;gap:10px;flex-wrap:wrap">${show.map(([k,n])=>box(k,n)).join('')}</div></div>`;
 }
 function cfmGuideRefresh(){try{const g=document.getElementById('cfmGuide');const m=MONTHS[CUR];if(g&&m)g.outerHTML=cfmGuideHtml(m);}catch(e){console.warn(e);}}
-window.cfmGrpSet=function(k){CFM_GRP=k;try{localStorage.setItem('ssv2_cfmGrp',k);}catch(e){}renderInput();};
+window.cfmGrpSet=function(k){CFM_GRP=k;try{localStorage.setItem('ssv2_cfmGrp',k);}catch(e){}
+  const y=window.scrollY;renderInput();try{window.scrollTo({top:y});}catch(e){}};
 function cfmApplyGrp(pg){
   [...pg.children].forEach(c=>{if(!c.classList||!c.classList.contains('card'))return;const h=c.querySelector('h2');const gs=cfmCardGrps(h?h.textContent.trim():'');c.style.display=(CFM_GRP==='all'||!gs||gs.includes(CFM_GRP))?'':'none';});
+  /* v480: 엑셀 업로드 체크리스트도 그 사업장 파일 줄만 */
+  const up=pg.querySelector('#cfmUpCard');
+  if(up)up.querySelectorAll('table tr').forEach(tr=>{const td=tr.querySelector('td.lb');if(!td)return;const t=td.textContent;
+    const b=/키오스크|쿠팡이츠/.test(t)?'bj':/피다 일일/.test(t)?'ep':'mk';tr.style.display=(CFM_GRP==='all'||CFM_GRP===b)?'':'none';});
+  /* 입력칸 위 안내 줄 */
+  const bar=pg.querySelector('#cfmGrpBar');
+  if(bar){const n=(CFM_GRPS.find(x=>x[0]===CFM_GRP)||[])[1]||'';
+    try{const tp=document.querySelector('#cfm-root .top');const t0=tp?parseFloat(getComputedStyle(tp).top)||53:53;bar.style.top=(t0+(tp?tp.offsetHeight:60)+6)+'px';}catch(e){}
+    bar.innerHTML=`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><b style="font-size:15px">⬇ 입력칸 보기</b>${CFM_GRPS.map(([k,nm])=>`<button type="button" onclick="cfmGrpSet('${k}')" style="font:inherit;font-size:13px;padding:4px 11px;border-radius:999px;cursor:pointer;border:1.5px solid ${CFM_GRP===k?'#2F6B3F':'#d6d3c4'};background:${CFM_GRP===k?'#2F6B3F':'#fff'};color:${CFM_GRP===k?'#fff':'inherit'};font-weight:${CFM_GRP===k?700:500}">${nm}</button>`).join('')}${CFM_GRP==='all'?'':`<span style="color:var(--sub);font-size:12.5px">— 아래에 <b>${n}</b> 입력칸만 보여요</span>`}</div>`;}
 }
 window.cfmGo=function(i){
   const sel=CFM_GO[i];const pg=$("#pg-input");if(!pg||!sel)return;let el=null;try{el=pg.querySelector(sel);}catch(e){}
@@ -22632,6 +22642,7 @@ function renderInput(){
   let h='';
   h+=remindHtml(m);
   h+=cfmGuideHtml(m);
+  h+=`<div id="cfmGrpBar" class="card" style="position:sticky;top:0;z-index:20;padding:9px 14px;background:#F7FAF6;border:1.5px solid #c7d9c9;box-shadow:0 2px 6px rgba(0,0,0,.06)"></div>`;
   h+=`<div class="card" style="padding:10px 16px"><span class="hint">🪄 비어있는 공급가·부가세는 계·면세를 입력하면 <b>자동으로 바로</b> 채워져요 — 직접 입력한 칸은 건드리지 않아요.</span></div>`;
   // 📂 엑셀 업로드 체크리스트
   const UP=m.uploads||{};
