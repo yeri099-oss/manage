@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v477</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v478</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -22531,6 +22531,99 @@ function remindHtml(m){
 window.cfmRemNone=function(id,on){const m=MONTHS[CUR];if(!m)return;m.remindNone=m.remindNone||{};if(on)m.remindNone[id]=1;else delete m.remindNone[id];touch();renderInput();};
 window.cfmRemDel=function(id){if(!confirm('이 알림을 지울까요? (모든 달에서 사라져요)'))return;REMIND=remindList().filter(x=>x.id!==id);remindSave();renderInput();};
 window.cfmRemAdd=function(){const t=(document.getElementById('remT')||{}).value||'';if(!t.trim())return;const kw=((document.getElementById('remK')||{}).value||'').trim();REMIND=remindList().concat([{id:'r'+Date.now(),t:t.trim(),kw}]);remindSave();renderInput();};
+/* v478: 매출확정 입력 — 사업장별 한눈에 보기 (넣을 파일 · 직접 넣을 값 · 진행) + 사업장별로 카드만 보기 */
+let CFM_GRP=(()=>{try{return localStorage.getItem('ssv2_cfmGrp')||'all';}catch(e){return 'all';}})();
+const CFM_GRPS=[['all','전체'],['mk','🛒 꽃밥마켓'],['bj','🍱 보자기꽃밥'],['ep','🍽 꽃밥에피다'],['on','🛍 온라인'],['end','📦 정산·마감']];
+let CFM_GO=[];
+/* 카드 제목(h2 앞부분) → 보여줄 사업장 (null = 항상) */
+function cfmCardGrps(t){
+  t=String(t||'');
+  if(/엑셀 업로드 체크리스트/.test(t))return ['mk','bj','ep'];
+  if(/^승인현황/.test(t))return ['mk','bj'];
+  if(/^①/.test(t))return ['mk'];
+  if(/^②/.test(t))return ['mk','bj'];
+  if(/^③/.test(t))return ['bj'];
+  if(/^④/.test(t))return ['mk','bj'];
+  if(/^⑤/.test(t))return ['on'];
+  if(/^⑥/.test(t))return ['mk'];
+  if(/^⑦/.test(t))return ['ep'];
+  if(/^[⑧⑨⑩⑪]/.test(t))return ['end'];
+  return null;
+}
+function cfmGuideItems(m){
+  const UP=m.uploads||{},g=(p)=>Number(getPath(m,p))||0;
+  const F=(nm,where,done,extra)=>({k:'f',nm,where,done:!!done,extra:extra||'',go:'#cfmUpCard'});
+  const I=(nm,p,opt)=>{opt=opt||{};const ps=[].concat(p);const v=ps.reduce((a,x)=>a+g(x),0);return {k:'i',nm,v,done:v>0,opt:!!opt.opt,go:'input[data-p="'+ps[0]+'"]',where:opt.where||''};};
+  const ss=g('ss.gwase')+g('ss.myeon'),fee=g('misc.feeMarket')+g('misc.feeBojagi');
+  const buy=(m.buyBojagi||[]).concat(m.buyPida||[],m.buyMarket||[]).reduce((a,b)=>a+(b.amt||0),0);
+  const ex=(m.extra||[]).reduce((a,b)=>a+(b.amt||0),0);
+  return {
+    mk:[F('마켓포스 월별 매출현황','오케이포스',UP.msales||g('market.total')>0),
+        F('마켓포스 카드승인현황','오케이포스',UP.corner||g('corner.cardTotal')>0),
+        F('회원구매현황','오케이포스',UP.members||g('members.insadongGye')>0),
+        F('제로페이 부가세내역','홈택스',UP.ntszp||g('nts.zeropay')>0),
+        I('카드 — 보자기 몫','corner.cardBojagi',{where:'승인현황'}),
+        I('마켓 면세','market.myeon',{where:'①'}),
+        I('정육 (면세·과세)',['market.jeongyukMyeon','market.jeongyukGwase'],{where:'①'}),
+        I('포인트 적립','market.pointAccum',{where:'①'}),
+        I('고객수','market.guest',{where:'①'}),
+        I('국세청 카드','nts.card',{where:'④ 홈택스'}),
+        I('국세청 현금영수증',['nts.hyeonGong','nts.hyeonBuga','nts.hyeonMyeon'],{where:'④ 홈택스'})],
+    bj:[F('키오스크 매출분석','키오스크',UP.kiosk||g('bpos.kioskGye')>0),
+        F('쿠팡이츠 주문내역','쿠팡이츠 · 5일 이후',UP.coupang||g('bpos.coupangGye')>0,m.bpos&&m.bpos.coupangTemp?'임시값':''),
+        I('마켓포스 보자기 결제분','bpos.marketpos',{where:'③'})],
+    ep:[F('피다 일일매출상세내역','POPS CLOUD',UP.pops||g('kkotbap.card')>0||g('kkotbap.cash')>0),
+        I('캐치테이블','kkotbap.catchGye',{where:'⑦',opt:1}),
+        I('국세청 카드','kkotbap.ntsCard',{where:'⑦ 홈택스'}),
+        I('국세청 현금영수증','kkotbap.ntsHyeon',{where:'⑦ 홈택스'}),
+        I('고객수','kkotbap.guest',{where:'⑦'})],
+    on:[{k:'i',nm:'스마트스토어 과세·면세',v:ss,done:ss>0,go:'input[data-p="ss.gwase"]',where:'⑤ 부가세 신고내역'}],
+    end:[I('재고 — 마켓','misc.jaegoMarket',{where:'⑧'}),I('재고 — 보자기','misc.jaegoBojagi',{where:'⑧'}),I('재고 — 피다','misc.jaegoPida',{where:'⑧'}),
+         {k:'i',nm:'판매수수료 (여신금융 합계)',v:fee,done:fee>0,go:'#feeTotalIn',where:'⑧'},
+         I('판매수수료 — 피다','misc.feePida',{where:'⑧'}),
+         {k:'i',nm:'매입정산',v:buy,done:buy>0,opt:true,go:'[data-buyadd="buyBojagi"]',where:'⑨ 해당 있을 때'},
+         {k:'i',nm:'기타 거래처 매출',v:ex,done:ex>0,opt:true,go:'#exAdd',where:'⑩ 해당 있을 때'}]
+  };
+}
+function cfmGuideHtml(m){
+  const G=cfmGuideItems(m);CFM_GO=[];
+  const cnt=(L)=>{const need=L.filter(x=>!x.opt);return [need.filter(x=>x.done).length,need.length];};
+  const chip=(k,n)=>{let lab=n;if(G[k]){const [d,t]=cnt(G[k]);lab+=` <span style="font-size:11.5px;font-weight:700;color:${CFM_GRP===k?'#fff':d===t?'#15803d':'#b45309'}">${d}/${t}</span>`;}
+    const on=CFM_GRP===k;
+    return `<button type="button" onclick="cfmGrpSet('${k}')" style="font:inherit;font-size:13.5px;padding:6px 13px;border-radius:999px;cursor:pointer;border:1.5px solid ${on?'#2F6B3F':'#d6d3c4'};background:${on?'#2F6B3F':'#fff'};color:${on?'#fff':'inherit'};font-weight:${on?700:500}">${lab}</button>`;};
+  const item=(x)=>{
+    const i=CFM_GO.push(x.go)-1;
+    const st=x.done?'✅':(x.opt?'➖':'⬜');
+    const val=x.k==='f'?`<span style="color:${x.done?'#15803d':'#b45309'};font-size:12px;white-space:nowrap">${x.done?'넣음':'아직'}${x.extra?` <b style="color:#b45309">· ${esc(x.extra)}</b>`:''}</span>`
+      :`<span style="font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:${x.v?700:400};color:${x.v?'inherit':x.opt?'#9ca3af':'#b45309'};font-size:13px">${x.v?fmt(x.v):(x.opt?'없음':'비어 있음')}</span>`;
+    return `<div class="cfmgi" onclick="cfmGo(${i})" title="눌러서 입력하는 곳으로 가기">
+      <span style="width:18px;text-align:center">${st}</span><span style="flex:1;min-width:0">${esc(x.nm)} <span style="color:#9ca3af;font-size:11.5px">${esc(x.where||'')}</span></span>${val}</div>`;};
+  const box=(k,n)=>{const L=G[k];const files=L.filter(x=>x.k==='f'),ins=L.filter(x=>x.k==='i');const [d,t]=cnt(L);
+    return `<div style="flex:1;min-width:280px;max-width:520px;border:1px solid #e5e2d5;border-radius:12px;padding:10px 12px;background:#fff">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><b style="font-size:15px">${n}</b><span style="margin-left:auto;font-size:12px;font-weight:700;color:${d===t?'#15803d':'#b45309'}">${d===t?'✔ 다 했어요':d+' / '+t+' 완료'}</span></div>
+      ${files.length?`<div class="cfmgh">📂 넣을 파일</div>${files.map(item).join('')}`:''}
+      ${ins.length?`<div class="cfmgh">✍ 직접 넣을 값</div>${ins.map(item).join('')}`:''}</div>`;};
+  const show=CFM_GRP==='all'?CFM_GRPS.slice(1):CFM_GRPS.filter(([k])=>k===CFM_GRP);
+  return `<div class="card" id="cfmGuide" style="border:1.5px solid #c7d9c9;background:#F7FAF6"><h2>🗂 이번 달 할 일 — 사업장별 <small>항목을 누르면 입력하는 곳으로 가요 · 위에서 사업장을 고르면 아래에 그 사업장 칸만 보여요</small></h2>
+    <style>.cfmgi{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:8px;cursor:pointer;font-size:13.5px}.cfmgi:hover{background:#EEF5EE}.cfmgh{font-size:11.5px;color:var(--sub);font-weight:700;margin:8px 0 2px}.cfmflash{outline:3px solid #f59e0b!important;outline-offset:2px}</style>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${CFM_GRPS.map(([k,n])=>chip(k,n)).join('')}</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">${show.map(([k,n])=>box(k,n)).join('')}</div></div>`;
+}
+function cfmGuideRefresh(){try{const g=document.getElementById('cfmGuide');const m=MONTHS[CUR];if(g&&m)g.outerHTML=cfmGuideHtml(m);}catch(e){console.warn(e);}}
+window.cfmGrpSet=function(k){CFM_GRP=k;try{localStorage.setItem('ssv2_cfmGrp',k);}catch(e){}renderInput();};
+function cfmApplyGrp(pg){
+  [...pg.children].forEach(c=>{if(!c.classList||!c.classList.contains('card'))return;const h=c.querySelector('h2');const gs=cfmCardGrps(h?h.textContent.trim():'');c.style.display=(CFM_GRP==='all'||!gs||gs.includes(CFM_GRP))?'':'none';});
+}
+window.cfmGo=function(i){
+  const sel=CFM_GO[i];const pg=$("#pg-input");if(!pg||!sel)return;let el=null;try{el=pg.querySelector(sel);}catch(e){}
+  if(!el)return;
+  let card=el.closest('.card');
+  if(card&&card.style.display==='none'){CFM_GRP='all';try{localStorage.setItem('ssv2_cfmGrp','all');}catch(e){}renderInput();el=pg.querySelector(sel);if(!el)return;card=el.closest('.card');}
+  el.scrollIntoView({behavior:'smooth',block:'center'});
+  const tgt=el.matches('input,textarea')?el:(el.closest('tr')||card||el);
+  tgt.classList.add('cfmflash');setTimeout(()=>tgt.classList.remove('cfmflash'),1800);
+  if(el.matches('input:not([readonly]),textarea'))setTimeout(()=>{try{el.focus({preventScroll:true});}catch(e){}},450);
+};
 function renderInput(){
   {const m0=MONTHS[CUR];if(m0&&m0.nts&&m0.uploads&&m0.uploads.ntszp&&!(m0.nts.card>0)&&m0.nts.zeropay>0&&!m0.nts.zpHold){ /* v423: 카드 없이 들어간 제로페이 → 보관으로 */
     m0.nts.zpHold={tot:m0.nts.zeropay,vat:m0.nts.zeropayVat==null?0:m0.nts.zeropayVat,n:0,ym:CUR,name:'제로페이 자료',at:Date.now()};m0.nts.zeropay=0;m0.nts.zeropayVat=null;try{touch();}catch(e){}}}
@@ -22538,11 +22631,12 @@ function renderInput(){
   const pg=$("#pg-input");
   let h='';
   h+=remindHtml(m);
+  h+=cfmGuideHtml(m);
   h+=`<div class="card" style="padding:10px 16px"><span class="hint">🪄 비어있는 공급가·부가세는 계·면세를 입력하면 <b>자동으로 바로</b> 채워져요 — 직접 입력한 칸은 건드리지 않아요.</span></div>`;
   // 📂 엑셀 업로드 체크리스트
   const UP=m.uploads||{};
   const okC=(up,man)=>up?'<span style="color:#15803d;font-weight:700">✓ 엑셀 업로드됨</span>':(man?'<span style="color:#2563eb">✎ 직접 입력됨</span>':'<span style="color:#9ca3af">— 아직</span>');
-  h+=`<div class="card"><h2>📂 엑셀 업로드 체크리스트 <small>매달 아래 파일들을 내려받아 여기에 한꺼번에 넣으면, 종류를 자동으로 알아보고 알맞은 칸을 채워요</small></h2>
+  h+=`<div class="card" id="cfmUpCard"><h2>📂 엑셀 업로드 체크리스트 <small>매달 아래 파일들을 내려받아 여기에 한꺼번에 넣으면, 종류를 자동으로 알아보고 알맞은 칸을 채워요</small></h2>
   <div class="hint" style="background:#f0f7ff;border:1px dashed #93c5fd;border-radius:8px;padding:8px 10px"><b>파일 선택 (여러 개 한꺼번에 가능)</b> — <input type="file" multiple accept=".xls,.xlsx,.html" onchange="uplRouterPick(this)" style="font-size:12px"></div>
   <table class="g" style="margin-top:8px"><tr><th style="width:230px">파일</th><th style="width:110px">어디서</th><th>받는 곳 (메뉴 경로) <span style="font-weight:400;font-size:11px;color:var(--sub)">✏ 눌러서 고칠 수 있어요 · 칸에 마우스를 올리면 채우는 곳</span></th><th style="width:90px">상태</th></tr>
     <tr><td class="lb">마켓포스 월별 매출현황 (.xls·.xlsx)<br><span style="font-weight:400;font-size:11px;color:var(--sub)">또는 결제수단별(일별종합) — 고객수까지</span></td><td class="au">오케이포스</td><td class="au" style="text-align:left;cursor:pointer" title="채우는 곳: ① 포스 전체 계 + 승인현황 카드·현금 전체 + 외상·포인트·기타수단" onclick="cfmUpSrcEdit('msales')">${esc(upSrc('msales'))} <span style="color:#94a3b8;font-size:11px">✏</span></td><td class="au">${okC(UP.msales,m.market.total>0)}</td></tr>
@@ -22782,6 +22876,7 @@ function renderInput(){
   </div>`;
   h+=`<div class="card"><h2>⑪ 메모</h2><textarea data-memo="1" style="min-height:70px;font-family:inherit;font-size:13px">${esc(m.memo||'')}</textarea></div>`;
   pg.innerHTML=h;
+  try{cfmApplyGrp(pg);}catch(e){console.warn(e);}
   // 값 채우기 + 이벤트
   const NEEDIN=['market.myeon','market.jeongyukMyeon','market.jeongyukGwase','market.pointAccum','market.guest']; /* v426 */
   pg.querySelectorAll("input[data-p]").forEach(el=>{
@@ -22812,7 +22907,7 @@ function renderInput(){
         const ft=$("#feeTotalIn");
         if(ft){const sfee=m.misc.feeMarket+m.misc.feeBojagi;ft.value=sfee?fmt(sfee):'';}
       }
-      touch();recalcAutos();refreshNtsTag();refreshValidWarns();
+      touch();recalcAutos();refreshNtsTag();refreshValidWarns();cfmGuideRefresh();
       if((el.dataset.p==='market.jeongyukMyeon'||el.dataset.p==='market.jeongyukGwase')&&typeof window.cfmSyncJeongyuk==='function')window.cfmSyncJeongyuk(CUR,m);
       if(el.dataset.p==='market.guest'&&typeof window.cfmSyncGuest==='function')window.cfmSyncGuest(CUR,m);
       if((el.dataset.p==='ss.gwase'||el.dataset.p==='ss.myeon')&&typeof window.cfmSyncSS==='function')window.cfmSyncSS(CUR,m);
@@ -22833,7 +22928,7 @@ function renderInput(){
       const[key,i,f]=el.dataset.buy.split('.');
       if(f==='name')m[key][+i].name=el.value;
       else{const n=parseNum(el.value);m[key][+i].amt=n==null?0:Math.round(n);el.value=m[key][+i].amt?fmt(m[key][+i].amt):'';}
-      touch();recalcAutos();
+      touch();recalcAutos();cfmGuideRefresh();
     });
   });
   pg.querySelectorAll("[data-buyadd]").forEach(el=>el.addEventListener("click",()=>{m[el.dataset.buyadd].push({name:'',amt:0});touch();renderInput();}));
@@ -22872,7 +22967,7 @@ function renderInput(){
       m.misc.feeMarket=fm;m.misc.feeBojagi=total-fm;
       const a1=pg.querySelector('input[data-p="misc.feeMarket"]');if(a1)a1.value=fm?fmt(fm):'';
       const a2=pg.querySelector('input[data-p="misc.feeBojagi"]');if(a2)a2.value=(total-fm)?fmt(total-fm):'';
-      touch();recalcAutos();
+      touch();recalcAutos();cfmGuideRefresh();
     });
   }
   const exAdd=$("#exAdd");if(exAdd)exAdd.addEventListener("click",()=>{m.extra.push({name:'',amt:0,unit:'market',tax:'과세',gong:0,buga:0});touch();renderInput();});
