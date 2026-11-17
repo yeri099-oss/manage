@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v487</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v488</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -20426,6 +20426,10 @@ function freeMatch(doc){
   act.filter(x=>!x.st).forEach(x=>{x.st="none";});
   return {P,Z};
 }
+/* v488: 매출확정에서 넣은 나이스 내역도 임의결제 대조에 */
+window.freeNiceStore=function(key,rows,name){const B=freeStore();const doc=B[key]=B[key]||{memo:{}};
+  doc.nice=rows.map(r=>({day:r.d.slice(0,10),t:(r.t+":00").slice(0,8),amt:r.cancel?-Math.abs(r.amt):r.amt,kind:"💳 카드단말기 · "+r.co+(r.pay?" ("+r.pay+")":""),st:r.cancel?"취소":"승인",id:"n"+r.no+(r.cancel?"c":""),no:r.no,src:"nice",raw:Object.assign({},r,{pos:undefined,posManual:undefined})}));
+  doc.niceFile=name;doc.up=Date.now();freeSave(key);};
 window.freeMemo=function(key,id,v){const doc=freeStore()[key];if(!doc)return;doc.memo=doc.memo||{};v=String(v||"").trim();if(v)doc.memo[id]=v;else delete doc.memo[id];freeSave(key);renderFree();};
 window.freeSetKey=function(k){window.__free.ui.key=k;renderFree();};
 window.freeView=function(v){window.__free.ui.view=v;renderFree();};
@@ -22619,7 +22623,7 @@ function cfmGuideItems(m){
         F('마켓포스 카드승인현황','오케이포스',UP.corner||g('corner.cardTotal')>0),
         F('회원구매현황','오케이포스',UP.members||g('members.insadongGye')>0),
         F('제로페이 부가세내역','홈택스',UP.ntszp||g('nts.zeropay')>0),
-        Object.assign(F('카드단말기 거래상세내역','나이스 · 사용한 달만',!!m.nice,m.nice?'포스에 없음 '+fmt(((m.nice.rows)||[]).filter(r=>!r.pos).reduce((a,r)=>a+(r.cancel?-1:1)*r.amt,0)):''),{opt:true,go:'#cfmNiceCard'}),
+        Object.assign(F('카드단말기 거래상세내역','나이스 · 사용한 달만',!!m.nice,m.nice?'포스에 없음 '+fmt(((m.nice.rows)||[]).filter(r=>!r.pos).reduce((a,r)=>a+(r.cancel?-1:1)*r.amt,0)):''),{opt:true,go:'nav:free'}),
         I('카드 — 보자기 몫','corner.cardBojagi',{where:'승인현황'}),
         I('마켓 면세','market.myeon',{where:'①'}),
         I('정육 (면세·과세)',['market.jeongyukMyeon','market.jeongyukGwase'],{where:'①'}),
@@ -22685,6 +22689,7 @@ function cfmApplyGrp(pg){
 window.cfmNav=function(k){
   const y=2000+Number(String(CUR).slice(0,2)),mo=Number(String(CUR).slice(2));
   if(k==='js'){window.__buy.ui.jsKey=CUR;switchTab('buy');setBuySub('js');return;}
+  if(k==='free'){window.cfmGoFree();return;}
   window.__exp.ui.y=y;window.__exp.ui.m=mo;setExpSub(k);
 };
 window.cfmGo=function(i){
@@ -22791,9 +22796,10 @@ function niceAutoPos(m,key){const L=(m.cornerApr||[]);const set=new Set(L.map(x=
     if(doc&&doc.pos&&doc.nice&&typeof freeMatch==='function'){const M=freeMatch(doc);const hit=new Set(M.Z.filter(z=>z.r.src==='nice'&&z.p).map(z=>String(z.r.no)));
       for(const r of (m.nice&&m.nice.rows)||[]){if(r.posManual||r.cancel)continue;r.pos=hit.has(String(r.no))||set.has(String(r.no).replace(/^0+/,''))?true:false;}}}catch(e){console.warn(e);}}
 /* v486: ⑩에 직접 적어둔 단말기 줄과 겹치는지 */
-function niceDupCheck(m){
+function niceDupCheck(m,force){
   const dup=(m.extra||[]).filter(x=>!x.nice&&x.amt&&/단말기|페스타.*카드|카드.*페스타/.test(x.name||''));
   if(!dup.length)return;
+  const sig=dup.map(x=>x.name+':'+x.amt).join('|');if(!force&&m.niceDupNo===sig)return;m.niceDupNo=sig;
   if(confirm('⑩ 기타 거래처에 카드단말기와 겹칠 수 있는 줄이 있어요:\n\n'+dup.map(x=>'· '+x.name+' '+fmt(x.amt)+'원').join('\n')+"\n\n나이스 파일로 넣은 '"+NICE_EX+"'과 중복일 수 있어요. 이 줄들을 지울까요?\n(현금 매출 줄은 나이스에 없으니 남겨두세요)")){m.extra=m.extra.filter(x=>!dup.includes(x));}
 }
 const NICE_EX='카드단말기 (마켓)';
@@ -22819,8 +22825,9 @@ async function niceFile(f){
   const old={};((m.nice&&m.nice.rows)||[]).forEach(r=>{old[r.no+'|'+r.d+'|'+r.cancel]=r.pos;});
   list.forEach(r=>{const k=r.no+'|'+r.d+'|'+r.cancel;r.pos=k in old?old[k]:null;});
   m.nice={name:f.name,at:Date.now(),rows:list};
-  niceAutoPos(m,CUR);niceSyncExtra(m);niceDupCheck(m);
+  niceAutoPos(m,CUR);niceSyncExtra(m);niceDupCheck(m,true);
   m.uploads=m.uploads||{};m.uploads.nice=1;
+  try{if(typeof window.freeNiceStore==='function')window.freeNiceStore(CUR,list,f.name);}catch(e){console.warn(e);} /* v488 */
   touch();renderInput();
   if(keys.length>1)alert('여러 달 거래가 섞여 있어서 '+ymLabel(CUR)+' 거래만 넣었어요.');
   setTimeout(()=>{const c=document.getElementById('cfmNiceCard');if(c)c.scrollIntoView({behavior:'smooth',block:'start'});},200);
@@ -22843,27 +22850,25 @@ window.__cfmNiceApply=async function(key,rows,name){
   const list=rows.map(r=>{const o=old[r.no+'|'+r.d+'|'+r.cancel];return Object.assign({},r,o&&o.posManual?{pos:o.pos,posManual:1}:{pos:null});});
   m.nice={name:name||'',at:Date.now(),rows:list};
   niceAutoPos(m,key);niceSyncExtra(m);m.uploads=m.uploads||{};m.uploads.nice=1;
+  niceDupCheck(m); /* v488: 임의결제에서 대조한 뒤에도 ⑩ 겹치는 줄 알림 */
   if(key===CUR){touch();try{renderInput();}catch(e){}}else if(typeof buyJsSaveNow==='function')await buyJsSaveNow(key);
 };
 window.nicePick=async function(inp){const f=inp.files&&inp.files[0];inp.value='';if(!f)return;try{await niceFile(f);}catch(e){alert('읽기 실패: '+(e.message||e));}};
 window.niceSetPos=function(i,on){const m=MONTHS[CUR];if(!m||!m.nice)return;const r=m.nice.rows[i];if(!r)return;r.pos=on?true:false;r.posManual=1;niceSyncExtra(m);touch();renderInput();};
 window.niceDrop=function(){const m=MONTHS[CUR];if(!m||!m.nice)return;if(!confirm('카드단말기 내역을 지울까요? (⑩의 카드단말기 줄도 같이 지워요)'))return;delete m.nice;m.extra=(m.extra||[]).filter(x=>!x.nice);if(m.uploads)delete m.uploads.nice;touch();renderInput();};
+/* v488: 매출확정에선 합계만 — 상세 올리기·대조는 임의결제 탭 (대조 결과가 여기로 자동 반영) */
+window.cfmGoFree=function(){try{window.__free.ui.key=CUR;}catch(e){}switchTab('free');setTimeout(()=>{const c=document.querySelector('#tab-free .card');if(c)window.scrollTo({top:0,behavior:'smooth'});},200);};
 function niceHtml(m){
   const N=m.nice;
-  const up=`<label class="btn sm" style="cursor:pointer;display:inline-flex;align-items:center">📂 나이스 거래상세내역 엑셀 선택<input type="file" accept=".xls,.xlsx" onchange="nicePick(this)" style="display:none"></label>`;
-  if(!N)return `<div class="card" id="cfmNiceCard"><h2>💳 카드단말기 (NICE) — 포스 등록 확인 <small>마켓 무선 단말기 · 포스에 안 넣은 건만 ⑩ 기타 거래처로</small></h2>
-    <div class="flex">${up}<span class="hint">나이스 가맹점 사이트 → 통합거래조회 → 거래상세내역 엑셀 (비밀번호 걸린 파일도 돼요) · 이번 달 단말기 사용이 없으면 안 넣어도 돼요</span></div></div>`;
-  const R=N.rows;let inT=0,outT=0;
-  const tr=R.map((r,i)=>{const sg=r.cancel?-1:1;if(r.pos)inT+=sg*r.amt;else outT+=sg*r.amt;
-    return `<tr${r.pos?'':' style="background:#FFF8E6"'}><td style="text-align:center">${esc(r.d.slice(5))} ${esc(r.t.slice(0,5))}</td><td style="text-align:left">${esc(r.co)}${r.pay?` <span style="color:var(--sub);font-size:11.5px">${esc(r.pay)}</span>`:''}</td><td style="text-align:center">${esc(r.no)}</td>
-      <td>${r.cancel?'<b style="color:#b91c1c">취소</b> −':''}${fmt(r.amt)}</td>
-      <td style="text-align:center"><label style="cursor:pointer;font-size:12.5px"><input type="checkbox" style="width:auto;margin:0 4px 0 0;vertical-align:middle" ${r.pos?'checked':''} onchange="niceSetPos(${i},this.checked)">포스에 등록함</label></td>
-      <td style="text-align:left;font-size:12px;color:${r.pos?'#15803d':'#b45309'}">${r.pos?'포스 매출에 이미 있음 — 안 더함':'⑩ 기타 거래처로 더함'}</td></tr>`;}).join('');
-  return `<div class="card" id="cfmNiceCard"><h2>💳 카드단말기 (NICE) — 포스 등록 확인 <small>포스에 등록한 건은 체크 · 체크 안 한 건만 ⑩ 기타 거래처 '${NICE_EX}'로 들어가요</small></h2>
-    <table class="g"><tr><th style="width:110px">거래일시</th><th>카드사</th><th>승인번호</th><th>금액</th><th style="width:120px">포스</th><th>처리</th></tr>${tr}
-      <tr><td class="lb" colspan="3">포스에 있음 (안 더함)</td><td class="au">${fmt(inT)}</td><td class="au" colspan="2"></td></tr>
-      <tr><td class="lb" colspan="3">포스에 없음 → ⑩ 기타 거래처 (마켓)</td><td class="au strong">${fmt(outT)}</td><td class="au" colspan="2" style="text-align:left;color:var(--sub);font-size:12px">${(m.cornerApr||[]).length?'카드승인현황과 승인번호가 같은 건은 자동으로 체크해요':'마켓포스 카드승인현황을 넣으면 승인번호로 자동 체크해요 (파일에 승인번호 칸이 있을 때)'}</td></tr></table>
-    <div class="flex" style="margin-top:8px">${up}<span class="hint">${esc(N.name||'')} · 홈택스 국세청 카드에는 단말기 매출이 이미 다 들어 있어서 따로 할 일 없어요</span><span class="addrow" style="color:#b91c1c" onclick="niceDrop()">지우기</span></div></div>`;
+  const go=`<button class="btn sm" onclick="cfmGoFree()">📂 상세내역 넣기 · 대조 → 임의결제 탭</button>`;
+  if(!N)return `<div class="card" id="cfmNiceCard"><h2>💳 카드단말기 (NICE) <small>마켓 무선 단말기 · 포스에 안 넣은 건만 ⑩ 기타 거래처 '${NICE_EX}'로 자동</small></h2>
+    <div class="flex">${go}<span class="hint">임의결제 탭에서 나이스 거래상세내역(비밀번호 파일 가능)을 오케이포스 승인현황과 같이 올리면, 대조한 결과가 여기로 자동 반영돼요 · 단말기를 안 쓴 달은 안 해도 돼요</span></div></div>`;
+  const R=N.rows;let inT=0,outT=0,inN=0,outN=0,all=0;
+  R.forEach(r=>{const v=(r.cancel?-1:1)*r.amt;all+=v;if(r.pos){inT+=v;if(!r.cancel)inN++;}else{outT+=v;if(!r.cancel)outN++;}});
+  const box=(t,v,sub,c)=>`<div style="flex:1;min-width:170px;background:${c||'#f8fafc'};border:1px solid var(--line);border-radius:10px;padding:8px 12px"><div style="font-size:12px;color:var(--sub)">${t}</div><div style="font-size:17px;font-weight:700">${fmt(v)}원</div><div style="font-size:11.5px;color:var(--sub)">${sub}</div></div>`;
+  return `<div class="card" id="cfmNiceCard"><h2>💳 카드단말기 (NICE) <small>임의결제 탭에서 대조한 결과 · 포스에 없는 건만 ⑩ 기타 거래처 '${NICE_EX}'로</small></h2>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">${box('단말기 결제 합계',all,R.length+'줄 (취소 차감)')}${box('포스에 있음 (안 더함)',inT,inN+'건')}${box('포스에 없음 → ⑩ 기타 거래처',outT,outN+'건','#FFF7ED')}</div>
+    <div class="flex" style="margin-top:8px">${go}<span class="hint">${esc(N.name||'')} · 건별 내역과 짝은 임의결제 탭에서 봐요 · 홈택스 국세청 카드에는 단말기 매출이 이미 다 들어 있어요</span><span class="addrow" style="color:#b91c1c" onclick="niceDrop()">지우기</span></div></div>`;
 }
 function renderInput(){
   {const m0=MONTHS[CUR];if(m0&&m0.nts&&m0.uploads&&m0.uploads.ntszp&&!(m0.nts.card>0)&&m0.nts.zeropay>0&&!m0.nts.zpHold){ /* v423: 카드 없이 들어간 제로페이 → 보관으로 */
@@ -22886,7 +22891,7 @@ function renderInput(){
     <tr><td class="lb">쿠팡이츠 주문내역 (.xlsx)</td><td class="au">쿠팡이츠</td><td class="au" style="text-align:left;cursor:pointer" title="채우는 곳: ③ 쿠팡이츠 계·공급가·부가세 + 메뉴별 수량 (매월 5일 이후 다운 가능)" onclick="cfmUpSrcEdit('coupang')">${esc(upSrc('coupang'))} <span style="color:#94a3b8;font-size:11px">✏</span></td><td class="au">${okC(UP.coupang,m.bpos.coupangGye>0)}${m.bpos.coupangGye>0&&m.bpos.coupangTemp?' <span style="color:#b45309;font-size:11px">임시값</span>':''}</td></tr>
     <tr><td class="lb">회원구매현황 (.xls·.xlsx)</td><td class="au">오케이포스</td><td class="au" style="text-align:left;cursor:pointer" title="채우는 곳: ② 인사동·보자기·판공 계/부가세 + 사내(→마켓매출 '사내')" onclick="cfmUpSrcEdit('members')">${esc(upSrc('members'))} <span style="color:#94a3b8;font-size:11px">✏</span></td><td class="au">${okC(UP.members,m.members.insadongGye>0)}</td></tr>
     <tr><td class="lb">피다 일일매출상세내역 (.xls)</td><td class="au">POPS CLOUD</td><td class="au" style="text-align:left;cursor:pointer" title="채우는 곳: ⑦ 피다 카드·현금·고객수 + 매출현황 피다탭(피다매출·메뉴별·주류별) 자동 반영" onclick="cfmUpSrcEdit('pops')">${esc(upSrc('pops'))} <span style="color:#94a3b8;font-size:11px">✏</span></td><td class="au">${okC(UP.pops,m.kkotbap.card>0||m.kkotbap.cash>0)}</td></tr>
-    <tr><td class="lb">카드단말기 거래상세내역 (.xlsx · 비밀번호 가능)</td><td class="au">나이스</td><td class="au" style="text-align:left;cursor:pointer" title="채우는 곳: 💳 카드단말기 — 포스에 안 넣은 건은 ⑩ 기타 거래처 '카드단말기 (마켓)'" onclick="cfmUpSrcEdit('nice')">${esc(upSrc('nice'))} <span style="color:#94a3b8;font-size:11px">✏</span></td><td class="au">${okC(UP.nice,!!m.nice)}</td></tr>
+    <tr><td class="lb">카드단말기 거래상세내역 (.xlsx · 비밀번호 가능)<br><span style="font-weight:400;font-size:11px;color:var(--sub)">임의결제 탭에서 승인현황과 같이 넣으면 대조까지</span></td><td class="au">나이스</td><td class="au" style="text-align:left;cursor:pointer" title="채우는 곳: 💳 카드단말기 — 포스에 안 넣은 건은 ⑩ 기타 거래처 '카드단말기 (마켓)'" onclick="cfmUpSrcEdit('nice')">${esc(upSrc('nice'))} <span style="color:#94a3b8;font-size:11px">✏</span></td><td class="au">${okC(UP.nice,!!m.nice)}</td></tr>
     <tr><td class="lb">제로페이 부가세내역 (.xls)</td><td class="au">홈택스</td><td class="au" style="text-align:left;cursor:pointer" title="채우는 곳: ④ 제로페이·기타수단 총액 + 부가세 합" onclick="cfmUpSrcEdit('ntszp')">${esc(upSrc('ntszp'))} <span style="color:#94a3b8;font-size:11px">✏</span></td><td class="au">${okC(UP.ntszp,m.nts.zeropay>0&&m.nts.zeropayVat!=null)}</td></tr>
   </table>
   <div class="hint">사진(스크린샷)은 읽지 못해요 — 각 화면의 '엑셀 내려받기'로 받은 파일을 넣어주세요. 각 카드에 있는 개별 업로드 칸을 써도 결과는 같아요. 나머지 항목(카드 보자기 몫, 매출분석 숫자, 홈택스 카드·현금영수증 등)은 지금처럼 직접 입력해요.</div></div>`;
