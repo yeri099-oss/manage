@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v489</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v490</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -18519,27 +18519,29 @@ async function renderExpMisc(kind){
   const sum=cfg.sumFn?cfg.sumFn(mi):cfg.rows.reduce((a,[k])=>a+(mi[k]||0),0);
   const inp9=(k)=>`<input type="text" inputmode="numeric" value="${mi[k]?fmt(mi[k]):""}" onchange="expMiscEdit('${ym.key}','${k}',this.value,'${kind}')" style="width:140px;text-align:right;font:inherit;font-size:13px;padding:4px 6px;border:1px solid var(--line,#ddd);border-radius:6px">`;
   const trs=kind==="fee"?( /* v489 */
-    `<tr style="background:#F7FAF6"><td class="l"><b>꽃밥이야기</b> <span class="unit">(여신금융 = 마켓+보자기)</span></td><td style="text-align:right"><b>${fmt((mi.feeMarket||0)+(mi.feeBojagi||0))}</b></td></tr>
-     <tr><td class="l" style="padding-left:22px">└ 마켓</td><td>${inp9("feeMarket")}</td></tr>
-     <tr><td class="l" style="padding-left:22px">└ 보자기</td><td>${inp9("feeBojagi")}</td></tr>
-     <tr style="background:#F7FAF6"><td class="l"><b>꽃밥에피다</b> <span class="unit">(피다)</span></td><td>${inp9("feePida")}</td></tr>`)
+    /* v490: 꽃밥이야기(세로로 합친 칸) | 마켓·보자기 / 꽃밥에피다(가로로 합친 칸) */
+    `<tr><td class="l" rowspan="2" style="vertical-align:middle;border-right:1px solid var(--line,#e3e3e3)"><b>꽃밥이야기</b><div class="unit" style="font-weight:400">마켓+보자기 ${fmt((mi.feeMarket||0)+(mi.feeBojagi||0))}</div></td><td class="l">마켓</td><td>${inp9("feeMarket")}</td></tr>
+     <tr><td class="l">보자기</td><td>${inp9("feeBojagi")}</td></tr>
+     <tr><td class="l" colspan="2"><b>꽃밥에피다</b></td><td>${inp9("feePida")}</td></tr>`)
     :cfg.rows.map(([k,n])=>`<tr><td class="l">${n}</td><td><input type="text" inputmode="numeric" value="${mi[k]?fmt(mi[k]):""}" onchange="expMiscEdit('${ym.key}','${k}',this.value,'${kind}')" style="width:140px;text-align:right;font:inherit;font-size:13px;padding:4px 6px;border:1px solid var(--line,#ddd);border-radius:6px"></td></tr>`).join("");
   /* 연간 표 (메모리에 있는 달만) */
   const M=window.__cfmApp.MONTHS||{};
   const yRow=(lab,fn,st)=>`<tr${st?` style="${st}"`:""}><td class="l" style="white-space:nowrap">${lab}</td>${Array.from({length:12},(_,i)=>{const key=String(ym.y).slice(2)+String(i+1).padStart(2,"0");const mm=M[key];const v=mm&&mm[path]?fn(mm[path]):null;return `<td style="text-align:right;cursor:pointer;${i+1===ym.m?"background:#F4F9F4":""}" onclick="expSel(${ym.y},${i+1})">${v==null?'<span style="color:#ccc">–</span>':v?fmt(v):'<span style="color:#ccc">0</span>'}</td>`;}).join("")}</tr>`;
   const yTr=kind==="fee"?( /* v489: 꽃밥이야기 소계 / 꽃밥에피다 */
-    yRow("<b>꽃밥이야기</b>",x=>(x.feeMarket||0)+(x.feeBojagi||0),"font-weight:700;background:#F7FAF6")+yRow('<span style="padding-left:12px">└ 마켓</span>',x=>x.feeMarket||0)+yRow('<span style="padding-left:12px">└ 보자기</span>',x=>x.feeBojagi||0)+yRow("<b>꽃밥에피다</b>",x=>x.feePida||0,"font-weight:700;background:#F7FAF6"))
+    yRow('<b>꽃밥이야기</b></td><td class="l">마켓',x=>x.feeMarket||0).replace('<td class="l" style="white-space:nowrap"><b>꽃밥이야기','<td class="l" rowspan="2" style="white-space:nowrap;vertical-align:middle;border-right:1px solid var(--line,#e3e3e3)"><b>꽃밥이야기')
+    +yRow('보자기',x=>x.feeBojagi||0)
+    +yRow('<b>꽃밥에피다</b>',x=>x.feePida||0).replace('<td class="l" style="white-space:nowrap"><b>꽃밥에피다','<td class="l" colspan="2" style="white-space:nowrap"><b>꽃밥에피다'))
     :cfg.rows.map(([k,n])=>yRow(n,x=>x[k]||0)).join("");
-  const yTot=cfg.sumLabel===""?"":`<tr class="total"><td class="l"><b>${cfg.sumFn?"마켓+보자기":kind==="fee"?"총 합계":"합계"}</b></td>${Array.from({length:12},(_,i)=>{const key=String(ym.y).slice(2)+String(i+1).padStart(2,"0");const mm=M[key];if(!mm||!mm[path])return '<td style="text-align:right;color:#ccc">–</td>';const t=cfg.sumFn?cfg.sumFn(mm[path]):cfg.rows.reduce((a,[k])=>a+(mm[path][k]||0),0);return `<td style="text-align:right"><b>${fmt(t)}</b></td>`;}).join("")}</tr>`;
+  const yTot=cfg.sumLabel===""?"":`<tr class="total"><td class="l"${kind==="fee"?' colspan="2"':""}><b>${cfg.sumFn?"마켓+보자기":kind==="fee"?"총 합계":"합계"}</b></td>${Array.from({length:12},(_,i)=>{const key=String(ym.y).slice(2)+String(i+1).padStart(2,"0");const mm=M[key];if(!mm||!mm[path])return '<td style="text-align:right;color:#ccc">–</td>';const t=cfg.sumFn?cfg.sumFn(mm[path]):cfg.rows.reduce((a,[k])=>a+(mm[path][k]||0),0);return `<td style="text-align:right"><b>${fmt(t)}</b></td>`;}).join("")}</tr>`;
   el.innerHTML=head+`<span id="expMiscSt" class="footnote" style="float:right"></span>
     ${kind==="fee"?`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 10px;padding:8px 12px;background:#F4F9F4;border:1px solid #c7e3cc;border-radius:10px;max-width:560px"><b>꽃밥이야기 여신금융 합계</b><input type="text" inputmode="numeric" value="${(mi.feeMarket||0)+(mi.feeBojagi||0)?fmt((mi.feeMarket||0)+(mi.feeBojagi||0)):""}" onchange="expFeeTotal('${ym.key}',this.value)" style="width:140px;text-align:right;font:inherit;font-size:13px;padding:4px 6px;border:1px solid #d1d5db;border-radius:6px"><span class="footnote">넣으면 마켓·보자기로 자동 나눠요</span></div>`:""}
-    <table class="rpt" style="max-width:360px;margin:0"><thead><tr><th class="l">${cfg.path==="market"?"항목":"사업장"}</th><th>금액</th></tr></thead><tbody>${trs}
-      ${cfg.sumLabel?`<tr style="background:#eef3ee"><td class="l"><b>${cfg.sumLabel}</b></td><td style="text-align:right"><b>${fmt(sum)}</b></td></tr>`:""}</tbody></table>
+    <table class="rpt" style="max-width:${kind==="fee"?420:360}px;margin:0"><thead><tr><th class="l"${kind==="fee"?' colspan="2"':""}>${cfg.path==="market"?"항목":"사업장"}</th><th>금액</th></tr></thead><tbody>${trs}
+      ${cfg.sumLabel?`<tr style="background:#eef3ee"><td class="l"${kind==="fee"?' colspan="2"':""}><b>${cfg.sumLabel}</b></td><td style="text-align:right"><b>${fmt(sum)}</b></td></tr>`:""}</tbody></table>
     ${cfg.extra?`<div class="footnote" style="margin-top:8px">${cfg.extra}</div>`:""}
     ${kind==="fee"?expFeeVoucherHtml(ym.key,m.misc):""}${kind==="promo"?expPromoVoucherHtml(ym.key,m.market):""}
   </div>
   <div class="card"><div class="card-head"><div class="card-title">${ym.y}년 월별 <span class="unit">매출확정에 있는 달만 보여요 · 칸을 누르면 그 달로</span> <button class="btn btn-sm" onclick="expMiscLoadYear(${ym.y})">이 해 전체 불러오기</button></div></div>
-    <div class="table-wrap"><table class="rpt" style="font-size:12.5px"><thead><tr><th class="l">${cfg.path==="market"?"항목":"사업장"}</th>${Array.from({length:12},(_,i)=>`<th>${i+1}월</th>`).join("")}</tr></thead><tbody>${yTr}${yTot}</tbody></table></div></div>`;
+    <div class="table-wrap"><table class="rpt" style="font-size:12.5px"><thead><tr><th class="l"${kind==="fee"?' colspan="2"':""}>${cfg.path==="market"?"항목":"사업장"}</th>${Array.from({length:12},(_,i)=>`<th>${i+1}월</th>`).join("")}</tr></thead><tbody>${yTr}${yTot}</tbody></table></div></div>`;
 }
 /* 판매수수료 이카운트 전표: 3차 8399 판매수수료(판) 차변 / 4대 1089 외상매출금 대변 — 거래처 1234 신용카드, 적요 '카드매출 수수료', 사업장별 */
 function expFeeVoucherRows(mi){
