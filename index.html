@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v480</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v481</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -20906,6 +20906,7 @@ document.addEventListener("DOMContentLoaded", () => {
 #cfm-root .txslipbox:hover{border-color:#2563eb !important;box-shadow:0 0 0 2px rgba(37,99,235,.15)} /* v430: 매출확정 표는 모두 제목처럼 왼쪽 정렬 (가운데 몰림 X) */
 #cfm-root table.g th, #cfm-root table.g td{border:1px solid var(--line);padding:5px 8px;font-size:13px;text-align:right;white-space:nowrap}
 #cfm-root table.g th{background:#f9fafb;text-align:center;color:#374151}
+#cfm-root table.g td[colspan]{white-space:normal;line-height:1.45} /* v481: 설명 칸은 줄바꿈 (화면이 옆으로 길어지지 않게) */
 #cfm-root table.g td.lb{text-align:left;font-weight:600;background:#fafafa}
 #cfm-root table.g td.au{color:#374151;background:#f8fafc}
 #cfm-root table.g td.au.strong{font-weight:700;background:#eef2ff}
@@ -21853,6 +21854,14 @@ async function uplRouterPick(inp){
       const head=new Uint8Array(buf.slice(0,4));
       if((head[0]===0x50&&head[1]===0x4B)||(head[0]===0xD0&&head[1]===0xCF)){ // xlsx · 옛 xls(이진)
         const aoa=await apReadXlsx(f);
+        if(hyIsAoa(aoa)){ /* v481: 홈택스 현금영수증 매출내역 */
+          const ep=!confirm(f.name+'\n\n홈택스 현금영수증 매출내역이에요.\n꽃밥이야기(마켓·보자기) 것이면 [확인], 꽃밥에피다(인사동) 것이면 [취소]를 눌러주세요.');
+          if(typeof CFM_GRP!=='undefined'&&CFM_GRP!=='all'&&CFM_GRP!==(ep?'ep':'mk'))window.cfmGrpSet(ep?'ep':'mk');
+          const w=document.getElementById('hy-wrap-'+(ep?'epida':'story'));
+          if(!w){alert('현금영수증 파일은 매출확정 › 입력 화면에서 넣어주세요.');continue;}
+          await hyFileW(w,f);try{w.scrollIntoView({behavior:'smooth',block:'center'});}catch(e){}
+          alert('현금영수증 '+(ep?'꽃밥에피다':'꽃밥이야기')+' 내역을 읽었어요.\n미리보기에서 확인하고 [적용하기]를 눌러주세요.');
+          continue;}
         {const pk=popsKindAoa(aoa); /* v421: POPS 일일매출상세내역 / 전체판매별 — v422: 다른 파일이 화면을 다시 그려도 미리보기가 안 지워지게 맨 마지막에 처리 */
           if(pk){popsQ.push({f,pk});continue;}}
         let isCorner=false,isMb0=false;
@@ -22250,15 +22259,22 @@ function hyGwase(o){return o.tot-o.myeon-o.svc;}
 function hyBoxHtml(biz){
   const label=biz==='epida'?'피다 (인사동)':'꽃밥이야기 (마켓·보자기)';
   return `
-  <div class="flex" style="margin-top:8px"><span class="addrow hyBtn">📋 홈택스 현금영수증 매출내역 붙여넣기 — ${label}</span></div>
+  <div class="flex" style="margin-top:8px"><span class="addrow hyBtn">📋 홈택스 현금영수증 매출내역 — 엑셀 파일 또는 붙여넣기 — ${label}</span></div>
   <div class="hy-wrap" id="hy-wrap-${biz}" data-hybiz="${biz}" style="display:none;margin-top:8px">
     <div class="hint">홈택스 현금영수증 매출내역을 그대로 붙여넣으세요 — 엑셀 다운로드 내용도, 조회 화면에서 긁어 복사한 것도 다 돼요. 부가세 0원 줄은 면세, 부가세 있는 줄은 과세로 나누고, 한 영수증에 과세·면세가 섞인 줄도 자동으로 갈라내요. 여러 달이 섞여 있으면 달별로 나눠서 보여줘요.${biz==='epida'?' 피다는 전부 과세라 면세가 나오면 경고만 하고 반영하지 않아요.':''}</div>
     <textarea class="hyTa" style="min-height:110px" placeholder="여기에 표를 붙여넣으세요"></textarea>
-    <div class="flex" style="margin-top:6px"><button class="btn sm hyGo">정리하기</button></div>
+    <div class="flex" style="margin-top:6px"><button class="btn sm hyGo">정리하기</button><label class="btn sm" style="cursor:pointer;display:inline-flex;align-items:center">📂 엑셀 파일 선택 (.xls·.xlsx)<input type="file" class="hyFile" accept=".xls,.xlsx" style="display:none"></label><span class="hint">홈택스에서 내려받은 엑셀을 그대로 넣어도 돼요</span></div>
     <div class="hyPrev" style="margin-top:8px"></div>
     <div class="err hyErr" style="display:none"></div>
   </div>`;
 }
+/* v481: 홈택스 현금영수증 매출내역 엑셀(.xls) → 붙여넣기 칸에 표로 넣고 바로 정리 */
+async function hyFileW(wrap,f){
+  const ee=wrap.querySelector('.hyErr');if(ee)ee.style.display='none';
+  try{const aoa=await apReadXlsx(f);wrap.style.display='block';wrap.querySelector('.hyTa').value=aoa.map(r=>r.map(x=>String(x==null?'':x)).join('\t')).join('\n');await hyParseClickW(wrap);}
+  catch(e){if(ee){ee.style.display='block';ee.textContent=f.name+' 읽기 실패: '+(e.message||e);}console.error(e);}
+}
+function hyIsAoa(aoa){for(let i=0;i<Math.min(aoa.length,8);i++){const r=(aoa[i]||[]).map(x=>String(x).replace(/\s/g,''));if(r.some(t=>t.indexOf('매출일시')>=0||t.indexOf('거래일시')>=0)&&r.includes('부가세')&&r.some(t=>t.indexOf('총금액')>=0)&&r.some(t=>t.indexOf('승인번호')>=0||t.indexOf('용도구분')>=0||t.indexOf('발행구분')>=0))return true;}return false;}
 async function hyParseClickW(wrap){
   const ee=wrap.querySelector('.hyErr');if(ee)ee.style.display='none';
   try{
@@ -22985,6 +23001,7 @@ function renderInput(){
   const ecB=$("#ecPasteBtn");if(ecB)ecB.addEventListener("click",()=>{const b=$("#ecPasteBox");b.style.display=b.style.display==='none'?'block':'none';});
   pg.querySelectorAll(".hyBtn").forEach(btn=>btn.addEventListener("click",()=>{const w=btn.closest(".flex").nextElementSibling;if(w)w.style.display=w.style.display==='none'?'block':'none';}));
   pg.querySelectorAll(".hy-wrap .hyGo").forEach(b=>b.addEventListener("click",()=>hyParseClickW(b.closest(".hy-wrap"))));
+  pg.querySelectorAll(".hy-wrap .hyFile").forEach(fi=>fi.addEventListener("change",()=>{const f=fi.files&&fi.files[0];fi.value='';if(f)hyFileW(fi.closest(".hy-wrap"),f);}));
   const ppB=pg.querySelector(".ppBtn");if(ppB)ppB.addEventListener("click",()=>{const w=document.getElementById("pp-wrap");if(w)w.style.display=w.style.display==='none'?'block':'none';});
   const ppG=pg.querySelector(".pp-wrap .ppGo");if(ppG)ppG.addEventListener("click",()=>ppParseClickW(document.getElementById("pp-wrap")));
   const ppF=pg.querySelector(".pp-wrap .ppFile");if(ppF)ppF.addEventListener("change",()=>ppFilePickW(document.getElementById("pp-wrap"),ppF));
