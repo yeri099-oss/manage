@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v478</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v479</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -24074,7 +24074,10 @@ window.__cfmApp={get MONTHS(){return MONTHS},get CUR(){return CUR},compute,deriv
   }
   setInterval(sync,700);sync();
   try{
-    RENDERERS.confirmapp=function(){if(!isAdmin())return;ensureAttached();if(window.__cfmInit)window.__cfmInit();};
+    RENDERERS.confirmapp=function(){if(!isAdmin())return;ensureAttached();
+      /* v479: 새로고침 직후엔 탭 전환 때 이 패널이 아직 화면에 안 붙어 있어 '숨김'이 그대로 남음 → 붙인 뒤 직접 보이게 */
+      try{if(S.ui.tab==='confirmapp'&&sec)sec.classList.remove('hidden');}catch(e){}
+      if(window.__cfmInit)window.__cfmInit();};
   }catch(e){console.warn('RENDERERS 연결 실패',e);}
 })();
 </script>
