@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v494</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v495</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -2801,6 +2801,113 @@ function scGet(y, m, ent) {
   return doc[ent]?.[m];
 }
 function setCompareEntity(ent) { S.ui.compareEntity = ent; renderCompare(); }
+/* ===== v495: 매출비교 월 요약 (보고용) — ① 사업장별 매출(이번 달·지난달·전년 같은 달·누적) ② 특이사항 · 이미지/텍스트 복사 ===== */
+window.__scSum=window.__scSum||{};
+function scSumNotes(){S.data.compareNotes=S.data.compareNotes||null;return S.data.compareNotes;}
+async function scSumLoadNotes(){if(S.data.compareNotes)return S.data.compareNotes;let n={};try{if(!IS_DEMO){const d=await fsCol("config").doc("compareNotes").get();n=(d.data()||{}).notes||{};}}catch(e){console.warn(e);}S.data.compareNotes=n;return n;}
+function scSumSaveNotes(){clearTimeout(window.__scSum.t);window.__scSum.t=setTimeout(async()=>{try{if(!IS_DEMO)await fsCol("config").doc("compareNotes").set({notes:S.data.compareNotes||{}});}catch(e){console.warn(e);toast("특이사항 저장 실패 (보기는 그대로 돼요)",true);}},800);}
+function scSumPct(a,b){return a!=null&&b?(a/b-1):null;}
+function scSumPctTx(r){return r==null?"—":(r>0?"+":"")+(r*100).toFixed(1)+"%";}
+function scSumData(y,m){
+  const pv=m>1?{y,m:m-1}:{y:y-1,m:12};
+  const ents=SC_ENTITIES.map(e=>e.key);
+  const lines=ents.map(k=>{
+    const e=SC_ENTITIES.find(x=>x.key===k);
+    const cur=scGet(y,m,k),prev=scGet(pv.y,pv.m,k),ly=scGet(y-1,m,k);
+    let cum=0,cumP=0,okC=false,okP=true;for(let i=1;i<=m;i++){const a=scGet(y,i,k),b=scGet(y-1,i,k);if(a!=null){cum+=a;okC=true;if(b!=null)cumP+=b;else okP=false;}}
+    return {k,label:e.short,cur:cur==null?null:cur,prev:prev==null?null:prev,ly:ly==null?null:ly,mom:scSumPct(cur,prev),yoy:scSumPct(cur,ly),cum:okC?cum:null,cumYoy:okC&&okP&&cumP?cum/cumP-1:null};
+  }).filter(l=>l.cur!=null||l.prev!=null||l.ly!=null);
+  /* 자동 특이사항 후보 */
+  const auto=[];
+  const subs=lines.filter(l=>l.k!=="total"&&l.k!=="common"&&l.yoy!=null);
+  if(subs.length){const up=subs.slice().sort((a,b)=>b.yoy-a.yoy)[0],dn=subs.slice().sort((a,b)=>a.yoy-b.yoy)[0];
+    if(up&&up.yoy>0)auto.push(`${up.label} 전년 ${m}월보다 ${scSumPctTx(up.yoy)} (${fmt(up.ly)} → ${fmt(up.cur)})`);
+    if(dn&&dn.yoy<0&&dn!==up)auto.push(`${dn.label} 전년 ${m}월보다 ${scSumPctTx(dn.yoy)} (${fmt(dn.ly)} → ${fmt(dn.cur)})`);}
+  const T=lines.find(l=>l.k==="total");
+  if(T&&T.cumYoy!=null)auto.push(`꽃밥이야기 ${y}년 1~${m}월 누적 ${fmt(T.cum)}원 (전년 동기 대비 ${scSumPctTx(T.cumYoy)})`);
+  try{const A=window.__cfmApp;const mm=A&&A.MONTHS&&A.MONTHS[String(y).slice(2)+String(m).padStart(2,"0")];
+    const ex=(mm&&mm.extra||[]).filter(x=>x.amt);if(ex.length)auto.push("기타 거래처 매출: "+ex.map(x=>(x.name||"기타")+" "+fmt(x.amt)).join(", "));}catch(e){}
+  const key=y+"-"+m;const N=S.data.compareNotes||{};
+  return {y,m,pv,lines,auto,items:(N[key]||[]),key};
+}
+function scSumReportHtml(D){
+  const th="border:1px solid #c9c7bd;padding:6px 10px;background:#eef3ee;font-size:12.5px;white-space:nowrap";
+  const td="border:1px solid #c9c7bd;padding:6px 10px;text-align:right;font-size:13px;white-space:nowrap";
+  const tdl=td.replace("text-align:right","text-align:left");
+  const col=(v)=>v==null?"#333":v>0?"#b3261e":v<0?"#1d4ed8":"#333";
+  const rows=D.lines.map(l=>`<tr${l.k==="total"?' style="font-weight:700;background:#f6f5f1"':""}><td style="${tdl}">${esc(l.label)}</td><td style="${td}"><b>${l.cur==null?"—":fmt(l.cur)}</b></td><td style="${td}">${l.prev==null?"—":fmt(l.prev)}</td><td style="${td};color:${col(l.mom)}">${scSumPctTx(l.mom)}</td><td style="${td}">${l.ly==null?"—":fmt(l.ly)}</td><td style="${td};color:${col(l.yoy)}">${scSumPctTx(l.yoy)}</td><td style="${td}">${l.cum==null?"—":fmt(l.cum)}</td><td style="${td};color:${col(l.cumYoy)}">${scSumPctTx(l.cumYoy)}</td></tr>`).join("");
+  const items=D.items.filter(x=>String(x).trim());
+  return `<div id="scSumReport" style="background:#fff;color:#222;padding:18px 20px;font-family:inherit;width:max-content;max-width:900px">
+    <div style="font-size:17px;font-weight:800;margin-bottom:2px">${D.y}년 ${D.m}월 매출 요약</div>
+    <div style="font-size:12px;color:#666;margin-bottom:12px">국세청 기준 · 부가세 포함 · 단위 원</div>
+    <div style="font-weight:700;margin:4px 0 6px">1. 사업장별 매출</div>
+    <table style="border-collapse:collapse"><thead><tr><th style="${th}">사업장</th><th style="${th}">${D.m}월</th><th style="${th}">${D.pv.m}월</th><th style="${th}">지난달 대비</th><th style="${th}">${D.y-1}년 ${D.m}월</th><th style="${th}">전년 대비</th><th style="${th}">1~${D.m}월 누적</th><th style="${th}">누적 전년 대비</th></tr></thead><tbody>${rows}</tbody></table>
+    ${items.length?`<div style="font-weight:700;margin:16px 0 6px">2. 특이사항</div><ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.7">${items.map(t=>`<li>${esc(t)}</li>`).join("")}</ul>`:""}
+  </div>`;
+}
+function scSumText(D){
+  const L=[`[${D.y}년 ${D.m}월 매출 요약] (국세청 기준·부가세 포함)`,"","1. 사업장별 매출"];
+  D.lines.forEach(l=>L.push(`· ${l.label} ${l.cur==null?"—":fmt(l.cur)+"원"} (지난달 대비 ${scSumPctTx(l.mom)} / 전년 ${D.m}월 대비 ${scSumPctTx(l.yoy)} / 누적 ${l.cum==null?"—":fmt(l.cum)} ${scSumPctTx(l.cumYoy)})`));
+  const items=D.items.filter(x=>String(x).trim());
+  if(items.length){L.push("","2. 특이사항");items.forEach(t=>L.push("· "+t));}
+  return L.join("\n");
+}
+window.scSumOpen=async function(y,m){
+  await scSumLoadNotes();
+  const yrs=yearsOf("salesComparison");const lastY=yrs.length?yrs[yrs.length-1]:thisYear();
+  y=+y||window.__scSum.y||+lastY;
+  const ms=MONTHS.filter(mm=>scGet(y,mm,"total")!=null);
+  m=+m||(window.__scSum.y===y&&+window.__scSum.m)||(ms.length?+ms[ms.length-1]:1);
+  window.__scSum.y=y;window.__scSum.m=m;
+  let ov=document.getElementById("scSumOv");if(!ov){ov=document.createElement("div");ov.id="scSumOv";document.body.appendChild(ov);}
+  const keep=ov.scrollTop;
+  ov.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:flex-start;justify-content:center;padding:24px 16px;overflow:auto";
+  const D=scSumData(y,m);
+  const inpS="font:inherit;font-size:12.5px;padding:3px 6px;border:1px solid var(--line,#ddd);border-radius:6px";
+  const chip="display:inline-block;margin:3px 4px 0 0;padding:3px 9px;border:1px dashed #9bb5a2;border-radius:14px;background:#f4f8f4;cursor:pointer;font-size:12px";
+  const left=D.auto.filter(t=>!D.items.includes(t));
+  const itRows=D.items.map((t,i)=>`<div style="display:flex;gap:6px;align-items:center;margin-top:5px"><input type="text" style="${inpS};flex:1" value="${esc(t)}" oninput="scSumSet(${i},this.value)"><button class="btn btn-sm" style="padding:1px 7px" onclick="scSumDel(${i})">×</button></div>`).join("");
+  ov.innerHTML=`<div style="background:var(--card,#fff);border-radius:14px;max-width:960px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.25)">
+    <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line,#eee);flex-wrap:wrap">
+      <b style="font-size:16px">📋 매출 월 요약</b>
+      <select style="${inpS}" onchange="scSumOpen(this.value,0)">${yrs.slice().reverse().map(yy=>`<option ${yy===y?"selected":""}>${yy}</option>`).join("")}</select>
+      <select style="${inpS}" onchange="scSumOpen(${y},this.value)">${(ms.length?ms:[m]).map(mm=>`<option value="${mm}" ${+mm===m?"selected":""}>${mm}월</option>`).join("")}</select>
+      <span style="margin-left:auto"></span>
+      <button class="btn btn-primary btn-sm" onclick="scSumCopy('img')">🖼 이미지 복사</button>
+      <button class="btn btn-sm" onclick="scSumCopy('text')">📄 텍스트 복사</button>
+      <button class="btn btn-sm" onclick="scSumCopy('dl')">💾 이미지 저장</button>
+      <button class="btn btn-sm" onclick="document.getElementById('scSumOv').remove()">✕ 닫기</button>
+    </div>
+    <div style="padding:12px 16px">
+      <div id="scSumPrev" style="border:1px solid var(--line,#e5e5e5);border-radius:10px;overflow:auto">${scSumReportHtml(D)}</div>
+      <div style="margin-top:12px;padding:10px 12px;border:1px solid var(--line,#e5e5e5);border-radius:10px">
+        <b>특이사항</b> <span class="unit">고른 것·직접 쓴 것만 들어가요 · 문장도 고칠 수 있어요</span>
+        ${itRows||`<div class="footnote" style="margin-top:4px">아직 없어요 (없으면 이 항목은 요약에서 빠져요)</div>`}
+        ${left.length?`<div style="margin-top:8px;font-size:12px;color:var(--sub,#666)">자동으로 찾은 것:</div><div>${left.map(t=>`<span style="${chip}" onclick="scSumAdd(${D.auto.indexOf(t)})">＋ ${esc(t)}</span>`).join("")}</div>`:""}
+        <button class="btn btn-sm" style="margin-top:8px" onclick="scSumAdd(-1)">＋ 직접 쓰기</button>
+      </div>
+      <div class="footnote" style="margin-top:8px">숫자는 매출비교 탭 그대로예요 (매출확정에서 '📤 보고 탭에 반영'을 누르면 채워져요) · 증감은 지난달·전년 같은 달 대비, 누적 전년 대비는 두 해 모두 있는 달만 비교해요.</div>
+    </div></div>`;
+  ov.scrollTop=keep;
+};
+function scSumItems(){const N=S.data.compareNotes=S.data.compareNotes||{};const k=window.__scSum.y+"-"+window.__scSum.m;return N[k]=N[k]||[];}
+function scSumRefresh(){const el=document.getElementById("scSumPrev");if(el)el.innerHTML=scSumReportHtml(scSumData(window.__scSum.y,window.__scSum.m));scSumSaveNotes();}
+window.scSumSet=function(i,v){scSumItems()[i]=v;scSumRefresh();};
+window.scSumDel=function(i){scSumItems().splice(i,1);scSumSaveNotes();scSumOpen(window.__scSum.y,window.__scSum.m);};
+window.scSumAdd=function(ai){const L=scSumItems();if(ai>=0){const D=scSumData(window.__scSum.y,window.__scSum.m);if(D.auto[ai])L.push(D.auto[ai]);}else L.push("");scSumSaveNotes();scSumOpen(window.__scSum.y,window.__scSum.m);
+  if(ai<0){const ins=document.querySelectorAll('#scSumOv input[oninput^="scSumSet"]');if(ins.length)ins[ins.length-1].focus();}};
+window.scSumCopy=async function(mode){
+  const D=scSumData(window.__scSum.y,window.__scSum.m);
+  try{
+    if(mode==="text"){const t=scSumText(D);try{await navigator.clipboard.writeText(t);toast("요약 글을 복사했어요 — 카톡·메일에 붙여넣으세요");}catch(e){const ta=document.createElement("textarea");ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand("copy");ta.remove();toast("요약 글을 복사했어요");}return;}
+    const el=document.getElementById("scSumReport");if(!el)return;
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
+    const cv=await html2canvas(el,{backgroundColor:"#ffffff",scale:2});const blob=await new Promise(r=>cv.toBlob(r,"image/png"));
+    const dl=()=>{const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="매출요약_"+D.y+"_"+String(D.m).padStart(2,"0")+".png";document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);};
+    if(mode==="dl"||!navigator.clipboard||typeof ClipboardItem==="undefined"){dl();toast("요약 이미지를 저장했어요");return;}
+    try{await navigator.clipboard.write([new ClipboardItem({"image/png":blob})]);toast("요약 이미지를 복사했어요 — 보고 창에 Ctrl+V로 붙여넣으세요");}catch(e){dl();toast("복사가 막혀서 이미지 파일로 저장했어요");}
+  }catch(e){console.error(e);toast("복사 실패: "+(e.message||e),true);}
+};
 function renderCompare() {
   const el = document.getElementById("tab-compare");
   const ent = S.ui.compareEntity || "total";
@@ -2869,7 +2976,7 @@ function renderCompare() {
   <div class="card">
     <div class="card-head">
       <div class="card-title">${entInfo.label} — 국세청기준 월별매출 <span class="unit">부가세포함 · 단위: 원</span></div>
-      <div class="card-actions"><button class="btn btn-sm" onclick="expCompareAll()">📥 엑셀 전체 받기</button> ${canEdit ? editBtn() : ""} ${canEdit ? adminBtn(`openCompareForm(null,null,'${ent}')`) : ""}</div>
+      <div class="card-actions"><button class="btn btn-sm btn-primary" onclick="scSumOpen()">📋 월 요약</button><button class="btn btn-sm" onclick="expCompareAll()">📥 엑셀 전체 받기</button> ${canEdit ? editBtn() : ""} ${canEdit ? adminBtn(`openCompareForm(null,null,'${ent}')`) : ""}</div>
     </div>
     <div class="table-wrap">
       <table class="rpt"><thead>${head1}</thead><tbody>${rows}<tr class="total">${trT}</tr></tbody></table>
