@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v500</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v501</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -23863,6 +23863,17 @@ window.ecLedgerFile=async function(inp){const fs=[...(inp.files||[])];inp.value=
     const n=ecParseLedger(txt,CUR).length;toast(n?ymLabel(CUR)+' 전표 '+n+'건으로 검증했어요':'이 파일엔 '+ymLabel(CUR)+' 전표가 없어요',!n);
     setTimeout(()=>{const c=document.getElementById('ecVerifyCard');if(c)c.scrollIntoView({behavior:'smooth',block:'start'});},100);}
   catch(e){alert('읽기 실패: '+(e.message||e));}};
+/* v501: 이카운트에만 있는 전표 → ⑩ 기타 거래처로 바로 추가 */
+window.ecAddExtra=function(i,my){
+  const m=MONTHS[CUR];if(!m)return;const V=ecVerify(m);const r=V.left[i];if(!r)return;
+  const dp=ecDeptOf(r.dept||r.cust);const unit=dp==='보자기꽃밥'?'bojagi':dp==='꽃밥에피다'?'insadong':'market';
+  const myeon=my===1||(my==null&&/면세/.test(r.memo));const g=r.amt,v=myeon?0:Math.round(g*0.1);
+  const nm=(r.cust&&!/^(포스매출|소매매출)$/.test(r.cust)?r.cust:r.memo).replace(/^(주식회사|\(주\))\s*|\s*(주식회사|\(주\))$/g,'').trim()||r.memo;
+  if(!confirm(`⑩ 기타 거래처에 추가할까요?\n\n· 이름: ${nm}${myeon?' (면세)':''}\n· 소속: ${unit==='bojagi'?'보자기':unit==='insadong'?'인사동(피다)':'마켓'}\n· 공급가 ${fmt(g)} + 부가세 ${fmt(v)} = 계 ${fmt(g+v)}\n\n(이카운트 전표 ${r.no} · ${r.memo})`))return;
+  m.extra=m.extra||[];m.extra.push({name:nm,unit,tax:myeon?'면세':'과세',gong:g,buga:v,amt:g+v,fromEc:r.no});
+  touch();renderMonths();toast(nm+' '+fmt(g+v)+'원을 ⑩ 기타 거래처에 넣었어요 — 보고 탭에 반영을 다시 눌러주세요');
+  setTimeout(()=>{const c=document.getElementById('ecVerifyCard');if(c)c.scrollIntoView({behavior:'smooth',block:'start'});},100);
+};
 window.ecLedgerClear=function(){const m=MONTHS[CUR];if(!m||!confirm('붙여넣은 이카운트 원장을 지울까요?'))return;delete m.ecLedger;touch();renderMonths();};
 function ecVerifyHtml(m){
   const has=!!(m.ecLedger&&m.ecLedger.trim());
@@ -23879,7 +23890,13 @@ function ecVerifyHtml(m){
   const tr=depts.map(dp=>{const L=E.filter(e=>e.dept===dp);if(!L.length)return '';
     return `<tr class="gh"><td colspan="5" style="text-align:left;font-weight:700;background:#f1f5f9">${dp}</td></tr>`+L.map(e=>`<tr${e.st==='ok'?'':' style="background:#FEF2F2"'}><td style="text-align:left">${esc(e.lb.split(' · ').slice(1).join(' · ')||e.lb)}${e.myeon?' <span style="color:var(--sub);font-size:11px">면세</span>':''}</td><td>${fmt(e.amt)}</td><td style="text-align:left;font-size:12px">${e.hit?esc(e.hit.no.replace(/^\d{4}\//,''))+' · '+esc(e.hit.memo):''}</td><td>${e.hit?fmt(e.hit.amt):''}</td><td style="text-align:left">${st(e)}</td></tr>`).join('');}).join('');
   const left=V.left.length?`<div style="margin-top:10px;font-weight:700;color:#b45309">⚠ 이카운트에만 있는 전표 ${V.left.length}건 (${fmt(V.left.reduce((a,r)=>a+r.amt,0))}원) — 매출확정에 없는 매출이거나 금액이 바뀐 것</div>
-    <table class="g" style="margin-top:4px"><tr><th>전표번호</th><th>적요</th><th>거래처</th><th>부서</th><th>공급가</th></tr>${V.left.map(r=>`<tr style="background:#FFFBEB"><td>${esc(r.no)}</td><td style="text-align:left">${esc(r.memo)}</td><td style="text-align:left">${esc(r.cust)}</td><td>${esc(r.dept)}</td><td>${fmt(r.amt)}</td></tr>`).join('')}</table>`:'';
+    <table class="g" style="margin-top:4px"><tr><th>전표번호</th><th>적요</th><th>거래처</th><th>부서</th><th>공급가</th><th style="width:150px"></th></tr>${V.left.map((r,i)=>{
+      /* v501: 같은 전표번호에 +/− 짝이 있으면 부서 간 옮김(합계 영향 없음) → 넣지 않음 */
+      const pair=V.left.some(o=>o!==r&&o.no===r.no&&o.amt===-r.amt);
+      const auto9=/^(포스매출|스마트스토어|쿠팡이츠|꽃밥에피다)$/.test(r.cust)||/와드/.test(r.cust); /* 앱이 계산하는 줄 — ⑩에 넣으면 중복 */
+      const act=pair?'<span style="font-size:12px;color:var(--sub)">부서 간 옮김 — 합계 영향 없음</span>':auto9?'<span style="font-size:12px;color:#b45309">앱 계산 줄 — 매출확정 입력값 확인</span>':r.amt<0?'<span style="font-size:12px;color:var(--sub)">차감 전표 — 직접 확인</span>':`<button class="btn sm" onclick="ecAddExtra(${i},0)" title="⑩ 기타 거래처에 과세로 추가 (공급가 + 부가세 10%)">＋ ⑩ 과세로</button> <button class="btn sm line" onclick="ecAddExtra(${i},1)" title="⑩ 기타 거래처에 면세로 추가 (부가세 없음)">면세로</button>`;
+      return `<tr style="background:#FFFBEB"><td>${esc(r.no)}</td><td style="text-align:left">${esc(r.memo)}</td><td style="text-align:left">${esc(r.cust)}</td><td>${esc(r.dept)}</td><td>${fmt(r.amt)}</td><td style="text-align:center">${act}</td></tr>`;}).join('')}</table>
+    <div class="hint" style="margin-top:4px">'＋ ⑩ 과세로'는 공급가 + 부가세 10%, '면세로'는 그 금액 그대로 ⑩ 기타 거래처에 들어가요 (거래처 이름 · 소속은 부서대로). 넣은 뒤 '📤 보고 탭에 반영'을 다시 눌러주세요.</div>`:'';
   return `<div class="card" id="ecVerifyCard"><h2>🔍 이카운트 매출전표 검증 <small>상품매출(+용역매출) 원장 ↔ 앱이 계산한 공급가 · 부서와 금액이 같으면 ✓</small></h2>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
       <div class="cfm-st" style="flex:1;min-width:160px;border:1px solid var(--line);border-radius:10px;padding:8px 12px;background:${bad||V.left.length?'#FEF2F2':'#F0FDF4'}"><div style="font-size:12px;color:var(--sub)">결과</div><div style="font-size:17px;font-weight:700;color:${bad||V.left.length?'#b91c1c':'#15803d'}">${bad||V.left.length?'확인 필요 '+(bad+V.left.length)+'건':'✓ 모두 일치'}</div><div style="font-size:11.5px;color:var(--sub)">일치 ${ok} / ${E.length}건</div></div>
