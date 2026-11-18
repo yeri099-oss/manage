@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v495</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v496</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -2360,12 +2360,13 @@ async function expCompareAll(){
       const TR=[xh("합계",XF.GRAY)];
       yrs.forEach((y,yi)=>{
         const cv=colL(1+yi*2);
-        TR.push(xc("",{f:`SUM(${cv}3:${cv}14)`,fmt:"n",bold:true}));
+        TR.push(xc("",{f:`SUM(${cv}3:${cv}14)`,z:"#,##0",bold:true,align:"right"})); /* v496: 합계도 천 단위 쉼표 */
         if(yi<yrs.length-1){
           const cp=colL(1+yi*2+2);
           const B=`${cv}3:${cv}14`,D=`${cp}3:${cp}14`;
-          const sp=X=>`SUMPRODUCT((${B}>0)*(${D}>0)*${X})`;
-          TR.push(xc("",{f:`IF(${sp(D)}=0,"",(${sp(B)}-${sp(D)})/${sp(D)})`,z:PM,bold:true,align:"center"}));
+          /* v496: 빈 달("")이 섞여도 오류 안 나게 — 숫자인지 먼저 보고, 금액은 SUMPRODUCT의 따로 인수로 (글자는 0으로 봄) */
+          const sp=X=>`SUMPRODUCT(ISNUMBER(${B})*ISNUMBER(${D}),${X})`;
+          TR.push(xc("",{f:`IFERROR(IF(${sp(D)}=0,"",${sp(B)}/${sp(D)}-1),"")`,z:PM,bold:true,align:"center"}));
         }else TR.push(xc(""));
       });
       rows.push(TR);
