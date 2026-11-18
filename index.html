@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v498</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v499</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -2331,6 +2331,10 @@ async function exportSalesAll(){
 }
 window.exportSalesAll=exportSalesAll;
 /* ---- 탭별 내보내기 ---- */
+/* v499: 파일 이름용 — 매출비교(전체)에 가장 최근 입력된 달 YYMM */
+function scLatestYm(){const ys=Object.keys(S.data.salesComparison||{}).map(Number).filter(Boolean).sort((a,b)=>b-a);
+  for(const y of ys)for(let m=12;m>=1;m--){if(scGet(y,String(m),"total")!=null)return String(y).slice(2)+String(m).padStart(2,"0");}
+  const d=new Date();return String(d.getFullYear()).slice(2)+String(d.getMonth()+1).padStart(2,"0");}
 async function expCompareAll(){
   try{
     toast("엑셀 파일 만드는 중…");
@@ -2376,7 +2380,7 @@ async function expCompareAll(){
         {headerEnd:1,totalRows:[rows.length-1],vSplit,titleSz:12,titleH:25.5,headerH:24.8,dataH:25.1}));
     }
     if(!sheets.length){toast("매출비교 데이터가 없어요",true);return;}
-    await makeWorkbook(sheets,"매출비교_전체.xlsx");
+    await makeWorkbook(sheets,"매출비교_"+scLatestYm()+".xlsx");
     toast("매출비교 전체 엑셀을 내려받았어요 (증감률은 수식이라 숫자를 고치면 자동 재계산돼요)");
   }catch(e){console.error(e);toast(e.message||"엑셀 생성 실패",true);}
 }
@@ -2437,7 +2441,7 @@ async function expCompare() {
   const cw=[5.8];yrs.forEach((y,i)=>{cw.push(17.5);if(i>0)cw.push(7.1);});
   await makeWorkbook([applyFrame({ name: "매출비교", rows, widths: cw },
     { headerEnd: 1, totalRows: [rows.length - 1], vSplit: [0], titleSz: 12, titleH: 25.5, headerH: 24.8, dataH: 25.1 })],
-    `매출비교_${entInfo.short}.xlsx`);
+    `매출비교_${scLatestYm()}_${entInfo.short}.xlsx`);
 }
 async function expMonthly() {
   const year = S.ui.monthlyYear || latestYearOf("monthly");
