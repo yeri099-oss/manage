@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v505</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v506</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -21525,9 +21525,11 @@ function compute(m){
   V.B28=V.I29;V.C28=V.J29;V.D28=V.B28+V.C28;V.E28=V.L29;V.F28=V.D28+V.E28;V.N28=V.K28+V.L28;
   V.B29=V.I30;V.C29=V.J30;V.D29=V.K30;V.E29=V.L30;V.F29=V.M30;
   for(const c of["B","C","D","E","F"])V[c+"30"]=V[c+"27"]+V[c+"28"]+V[c+"29"];
-  V.B31=V.B17-V.B24-V.B27;V.C31=V.C17-V.C24-V.C27;V.D31=V.B31+V.C31;V.E31=V.E17-V.E24-V.E27;V.F31=V.D31+V.E31;
+  /* v506: 스마트스토어는 포스에 안 찍음 · 국세청 카드에도 없음 → 마켓 카드·소매에서 빼지 않고 총매출에 따로 더함 (2604까지 매출확정 엑셀 방식)
+     현영만 국세청 현영에 들어 있으니 마켓 현영에서 빼고, 그 몫은 소매에 되돌려 놓음 → 마켓 계 = 포스 마켓, 합계 = 포스 + 스마트스토어 */
+  V.B31=V.B17-V.B24;V.C31=V.C17-V.C24;V.D31=V.B31+V.C31;V.E31=V.E17-V.E24;V.F31=V.D31+V.E31;
   V.B32=V.B18-V.B28;V.C32=V.C18-V.C28;V.D32=V.B32+V.C32;V.E32=V.E18-V.E28;V.F32=V.D32+V.E32;
-  V.B33=V.B19-V.B25-V.B29;V.C33=V.C19-V.C25-V.C29;V.D33=V.B33+V.C33;V.E33=V.E19-V.E25-V.E29;V.F33=V.D33+V.E33;
+  V.B33=V.B19-V.B25+V.B28;V.C33=V.C19-V.C25+V.C28;V.D33=V.B33+V.C33;V.E33=V.E19-V.E25+V.E28;V.F33=V.D33+V.E33;
   for(const c of["B","C","D","E","F"])V[c+"34"]=V[c+"31"]+V[c+"32"]+V[c+"33"];
   for(const c of["B","C","D","E","F"])V[c+"35"]=V[c+"26"]+V[c+"30"]+V[c+"34"];
   V.D38=V.B38+V.C38;
