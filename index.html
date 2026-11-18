@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v502</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v503</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -22750,7 +22750,7 @@ function cfmGuideItems(m){
         F('마켓포스 카드승인현황','오케이포스',UP.corner||g('corner.cardTotal')>0),
         F('회원구매현황','오케이포스',UP.members||g('members.insadongGye')>0),
         F('제로페이 부가세내역','홈택스',UP.ntszp||g('nts.zeropay')>0),
-        Object.assign(F('카드단말기 매출 확인','나이스 → 임의결제 대조',!!m.nice||!!m.niceNone,m.nice?'포스에 없음 '+fmt(((m.nice.rows)||[]).filter(r=>!r.pos).reduce((a,r)=>a+(r.cancel?-1:1)*r.amt,0))+' → ⑩':m.niceNone?'이번 달 없음':''),{go:'nav:free'}),
+        Object.assign(F('단말기','나이스',!!m.nice||!!m.niceNone,m.nice?'⑩ '+fmt(((m.nice.rows)||[]).filter(r=>!r.pos).reduce((a,r)=>a+(r.cancel?-1:1)*r.amt,0)):m.niceNone?'없음':''),{go:'nav:free'}), /* v503: 짧게 */
         I('카드 — 보자기 몫','corner.cardBojagi',{where:'승인현황'}),
         I('마켓 면세','market.myeon',{where:'①'}),
         I('정육 (면세·과세)',['market.jeongyukMyeon','market.jeongyukGwase'],{where:'①'}),
