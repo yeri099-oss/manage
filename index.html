@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v501</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v502</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -22750,7 +22750,7 @@ function cfmGuideItems(m){
         F('마켓포스 카드승인현황','오케이포스',UP.corner||g('corner.cardTotal')>0),
         F('회원구매현황','오케이포스',UP.members||g('members.insadongGye')>0),
         F('제로페이 부가세내역','홈택스',UP.ntszp||g('nts.zeropay')>0),
-        Object.assign(F('카드단말기 거래상세내역','나이스 · 사용한 달만',!!m.nice,m.nice?'포스에 없음 '+fmt(((m.nice.rows)||[]).filter(r=>!r.pos).reduce((a,r)=>a+(r.cancel?-1:1)*r.amt,0)):''),{opt:true,go:'nav:free'}),
+        Object.assign(F('카드단말기 매출 확인','나이스 → 임의결제 대조',!!m.nice||!!m.niceNone,m.nice?'포스에 없음 '+fmt(((m.nice.rows)||[]).filter(r=>!r.pos).reduce((a,r)=>a+(r.cancel?-1:1)*r.amt,0))+' → ⑩':m.niceNone?'이번 달 없음':''),{go:'nav:free'}),
         I('카드 — 보자기 몫','corner.cardBojagi',{where:'승인현황'}),
         I('마켓 면세','market.myeon',{where:'①'}),
         I('정육 (면세·과세)',['market.jeongyukMyeon','market.jeongyukGwase'],{where:'①'}),
@@ -22796,7 +22796,7 @@ function cfmGuideHtml(m){
     <style>.cfmgi{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:8px;cursor:pointer;font-size:13.5px}.cfmgi:hover{background:#EEF5EE}.cfmgh{font-size:11.5px;color:var(--sub);font-weight:700;margin:8px 0 2px}.cfmflash{outline:3px solid #f59e0b!important;outline-offset:2px}</style>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${CFM_GRPS.map(([k,n])=>chip(k,n)).join('')}</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap">${show.map(([k,n])=>box(k,n)).join('')}</div>
-    ${remindHtml(m)}</div>`;
+    </div>`; /* v502: 매달 잊지 말 것은 뺌 — 카드단말기 확인은 꽃밥마켓 할 일로 */
 }
 function cfmGuideRefresh(){try{const g=document.getElementById('cfmGuide');const m=MONTHS[CUR];if(g&&m)g.outerHTML=cfmGuideHtml(m);}catch(e){console.warn(e);}}
 window.cfmGrpSet=function(k){CFM_GRP=k;try{localStorage.setItem('ssv2_cfmGrp',k);}catch(e){}
@@ -22985,12 +22985,13 @@ window.nicePick=async function(inp){const f=inp.files&&inp.files[0];inp.value=''
 window.niceSetPos=function(i,on){const m=MONTHS[CUR];if(!m||!m.nice)return;const r=m.nice.rows[i];if(!r)return;r.pos=on?true:false;r.posManual=1;niceSyncExtra(m);touch();renderInput();};
 window.niceDrop=function(){const m=MONTHS[CUR];if(!m||!m.nice)return;if(!confirm('카드단말기 내역을 지울까요? (⑩의 카드단말기 줄도 같이 지워요)'))return;delete m.nice;m.extra=(m.extra||[]).filter(x=>!x.nice);if(m.uploads)delete m.uploads.nice;touch();renderInput();};
 /* v488: 매출확정에선 합계만 — 상세 올리기·대조는 임의결제 탭 (대조 결과가 여기로 자동 반영) */
+window.niceNoneSet=function(on){const m=MONTHS[CUR];if(!m)return;if(on)m.niceNone=1;else delete m.niceNone;touch();cfmGuideRefresh();};
 window.cfmGoFree=function(){try{window.__free.ui.key=CUR;}catch(e){}switchTab('free');setTimeout(()=>{const c=document.querySelector('#tab-free .card');if(c)window.scrollTo({top:0,behavior:'smooth'});},200);};
 function niceHtml(m){
   const N=m.nice;
   const go=`<button class="btn sm" onclick="cfmGoFree()">📂 상세내역 넣기 · 대조 → 임의결제 탭</button>`;
   if(!N)return `<div class="card" id="cfmNiceCard"><h2>💳 카드단말기 (NICE) <small>마켓 무선 단말기 · 포스에 안 넣은 건만 ⑩ 기타 거래처 '${NICE_EX}'로 자동</small></h2>
-    <div class="flex">${go}<span class="hint">임의결제 탭에서 나이스 거래상세내역(비밀번호 파일 가능)을 오케이포스 승인현황과 같이 올리면, 대조한 결과가 여기로 자동 반영돼요 · 단말기를 안 쓴 달은 안 해도 돼요</span></div></div>`;
+    <div class="flex">${go}<label style="font-size:13px;cursor:pointer"><input type="checkbox" style="width:auto;margin:0 4px 0 0;vertical-align:middle" ${m.niceNone?'checked':''} onchange="niceNoneSet(this.checked)">이번 달 단말기 사용 없음</label><span class="hint">임의결제 탭에서 나이스 거래상세내역(비밀번호 파일 가능)을 오케이포스 승인현황과 같이 올리면, 대조한 결과가 여기로 자동 반영돼요 · 단말기를 안 쓴 달은 안 해도 돼요</span></div></div>`;
   const R=N.rows;let inT=0,outT=0,inN=0,outN=0,all=0;
   R.forEach(r=>{const v=(r.cancel?-1:1)*r.amt;all+=v;if(r.pos){inT+=v;if(!r.cancel)inN++;}else{outT+=v;if(!r.cancel)outN++;}});
   const box=(t,v,sub,c)=>`<div style="flex:1;min-width:170px;background:${c||'#f8fafc'};border:1px solid var(--line);border-radius:10px;padding:8px 12px"><div style="font-size:12px;color:var(--sub)">${t}</div><div style="font-size:17px;font-weight:700">${fmt(v)}원</div><div style="font-size:11.5px;color:var(--sub)">${sub}</div></div>`;
