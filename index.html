@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v499</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v500</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -21659,10 +21659,11 @@ async function apReadXlsx(file){
   let strs=[];
   const ssf=zip.file('xl/sharedStrings.xml');
   if(ssf){
-    const sdoc=new DOMParser().parseFromString(await ssf.async('string'),'application/xml');
+    const sdoc=new DOMParser().parseFromString((await ssf.async('string')).replace(/^\uFEFF/,''),'application/xml');
     strs=[...sdoc.getElementsByTagName('si')].map(si=>si.textContent);
   }
-  const doc=new DOMParser().parseFromString(await zip.file(shName).async('string'),'application/xml');
+  /* v500: 이카운트 엑셀은 XML 앞에 BOM이 붙어 있어 그대로 읽으면 빈 표가 됨 → 떼고 읽기 */
+  const doc=new DOMParser().parseFromString((await zip.file(shName).async('string')).replace(/^\uFEFF/,''),'application/xml');
   const rows=[];
   for(const r of doc.getElementsByTagName('row')){
     const arr=[];
@@ -23830,10 +23831,11 @@ function ecExpected(m){
   if(m.kkotbap&&m.kkotbap.taxInvGong)L.push({lb:'꽃밥에피다 · ⑦ 세금계산서 발행분',dept:'꽃밥에피다',amt:Math.round(m.kkotbap.taxInvGong),key:'pida.ti'});
   return L;
 }
-function ecParseLedger(txt){
-  const rows=[];const num=v=>{const t=String(v==null?'':v).replace(/[,\s원]/g,'');if(!t||t==='-')return 0;const n=Number(t);return isNaN(n)?0:n;};
+function ecParseLedger(txt,ym){
+  const rows=[];const want=ym?('20'+String(ym).slice(0,2)+'/'+String(ym).slice(2,4)):null; /* v500: 그 달 전표만 */const num=v=>{const t=String(v==null?'':v).replace(/[,\s원]/g,'');if(!t||t==='-')return 0;const n=Number(t);return isNaN(n)?0:n;};
   for(const line of String(txt||'').split(/\r?\n/)){
     const c=line.split('\t');if(!/^\s*\d{4}\/\d{2}\/\d{2}/.test(c[0]||''))continue;
+    if(want&&String(c[0]).trim().slice(0,7)!==want)continue;
     const amt=Math.round(num(c[4])-num(c[3]));if(!amt)continue;
     rows.push({no:String(c[0]).trim(),memo:String(c[1]||'').trim(),cust:String(c[2]||'').trim(),amt,dept:String(c[6]||'').trim()});
   }
@@ -23841,7 +23843,7 @@ function ecParseLedger(txt){
 }
 function ecVerify(m){
   const E=ecExpected(m).map(x=>Object.assign({},x,{st:null,hit:null}));
-  const R=ecParseLedger(m.ecLedger||'').map(x=>Object.assign({},x,{used:false}));
+  const R=ecParseLedger(m.ecLedger||'',CUR).map(x=>Object.assign({},x,{used:false}));
   const D=(x)=>ecDeptOf(x.dept||x.cust);
   /* 1) 같은 부서 · 같은 공급가 */
   for(const e of E){const r=R.find(r=>!r.used&&r.amt===e.amt&&D(r)===e.dept);if(r){r.used=true;e.st='ok';e.hit=r;}}
@@ -23855,13 +23857,19 @@ function ecVerify(m){
   return {E,R,left:R.filter(r=>!r.used)};
 }
 window.ecLedgerSet=function(){const m=MONTHS[CUR];if(!m)return;const ta=document.getElementById('ecLedgerTa');m.ecLedger=ta?ta.value:'';touch();renderMonths();setTimeout(()=>{const c=document.getElementById('ecVerifyCard');if(c)c.scrollIntoView({behavior:'smooth',block:'start'});},100);};
+window.ecLedgerFile=async function(inp){const fs=[...(inp.files||[])];inp.value='';const m=MONTHS[CUR];if(!m||!fs.length)return;
+  try{let txt='';for(const f of fs){const aoa=await apReadXlsx(f);txt+=(txt?'\n':'')+aoa.map(r=>r.map(v=>String(v==null?'':v)).join('\t')).join('\n');}
+    m.ecLedger=txt;touch();renderMonths();
+    const n=ecParseLedger(txt,CUR).length;toast(n?ymLabel(CUR)+' 전표 '+n+'건으로 검증했어요':'이 파일엔 '+ymLabel(CUR)+' 전표가 없어요',!n);
+    setTimeout(()=>{const c=document.getElementById('ecVerifyCard');if(c)c.scrollIntoView({behavior:'smooth',block:'start'});},100);}
+  catch(e){alert('읽기 실패: '+(e.message||e));}};
 window.ecLedgerClear=function(){const m=MONTHS[CUR];if(!m||!confirm('붙여넣은 이카운트 원장을 지울까요?'))return;delete m.ecLedger;touch();renderMonths();};
 function ecVerifyHtml(m){
   const has=!!(m.ecLedger&&m.ecLedger.trim());
   const box=`<details ${has?'':'open'} style="margin-top:6px"><summary style="cursor:pointer;font-size:13px;color:#2563eb;font-weight:700">📋 이카운트 원장 ${has?'다시 ':''}붙여넣기</summary>
     <div class="hint" style="margin:6px 0">이카운트 → 계정별원장 → <b>4019 상품매출</b> (그 달)에서 표를 드래그해 복사(Ctrl+C) → 아래에 붙여넣기(Ctrl+V) → 검증하기. 전표번호·적요·거래처·차변·대변·잔액·부서명 순서 그대로면 돼요. <b>4119 용역매출</b>(체험교육비 등)이 있으면 그 원장도 <b>바로 아래에 이어서</b> 붙여넣으세요 — 두 계정을 같이 맞춰봐요.</div>
     <textarea id="ecLedgerTa" style="min-height:110px;font-size:12px" placeholder="전표번호	적요	거래처	차변	대변	잔액	부서명">${esc(m.ecLedger||'')}</textarea>
-    <div class="flex" style="margin-top:6px"><button class="btn sm" onclick="ecLedgerSet()">🔍 검증하기</button>${has?'<span class="addrow" style="color:#b91c1c" onclick="ecLedgerClear()">지우기</span>':''}</div></details>`;
+    <div class="flex" style="margin-top:6px"><button class="btn sm" onclick="ecLedgerSet()">🔍 검증하기</button><label class="btn sm" style="cursor:pointer;display:inline-flex;align-items:center">📂 원장 엑셀 파일로 넣기<input type="file" accept=".xlsx,.xls" multiple onchange="ecLedgerFile(this)" style="display:none"></label><span class="hint">여러 달이 섞인 원장이어도 이 달(${ymLabel(CUR)}) 전표만 골라서 맞춰봐요 · 상품매출·용역매출 파일 두 개를 같이 골라도 돼요</span>${has?'<span class="addrow" style="color:#b91c1c" onclick="ecLedgerClear()">지우기</span>':''}</div></details>`;
   if(!has)return `<div class="card" id="ecVerifyCard"><h2>🔍 이카운트 매출전표 검증 <small>다 입력한 뒤 원장을 붙여넣으면 앱이 계산한 금액과 하나씩 맞춰봐요</small></h2>${box}</div>`;
   const V=ecVerify(m);const E=V.E;
   const ok=E.filter(e=>e.st==='ok').length,bad=E.filter(e=>e.st!=='ok').length;
