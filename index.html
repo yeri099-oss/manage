@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v492</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v493</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -23698,6 +23698,7 @@ function renderMonths(){
       <div><div class="ecttl">꽃밥에피다 · 쿠팡이츠 <small>전부 과세 (면세 없음)</small></div><table class="cf ec">${hd3}${b}</table></div>
     </div>
     <div class="hint">파란 글씨 항목을 누르면 이카운트 전표 입력 순서대로 보여줘요 (과세·면세 따로). 표 값은 입력 탭 숫자에서 자동 계산됩니다. 0은 흐리게 표시돼요.</div></div>`;
+    h2+=ecVerifyHtml(m); /* v493 */
     pg.innerHTML=h2+pg_monthsHtml(h);
     ecSlipLoadCloud();
     pg.querySelectorAll("[data-slip]").forEach(el=>el.addEventListener("click",()=>ecSlipOpen(+el.dataset.slip)));
@@ -23705,6 +23706,70 @@ function renderMonths(){
   pg.querySelectorAll("[data-goym]").forEach(el=>el.addEventListener("click",()=>{selectMonth(el.dataset.goym);showTab('months');}));
 }
 function pg_monthsHtml(h){return h;}
+/* ===== v493: 이카운트 매출 원장(상품매출 계정) 붙여넣기 → 앱이 계산한 전표(부서·공급가)와 하나씩 맞춰보기 ===== */
+function ecDeptOf(t){t=String(t||'');return /보자기|쿠팡/.test(t)?'보자기꽃밥':/온라인|스마트/.test(t)?'온라인판매':/에피다|인사동|피다/.test(t)?'꽃밥에피다':'꽃밥마켓';}
+function ecExpected(m){
+  const L=[];
+  for(const x of (EC_SLIPS||[])){const amt=Math.round(x.g||0);if(!amt)continue;L.push({lb:x.label,dept:ecDeptOf(x.label.split(' · ')[0]),amt,myeon:/\.m$/.test(x.key),key:x.key,name:x.name||''});}
+  const d=derived(m);
+  if(d.taxinvGong)L.push({lb:'꽃밥마켓 · ② 세금계산서 (과세)',dept:'꽃밥마켓',amt:Math.round(d.taxinvGong),key:'tx.g',name:'세금계산서'});
+  if(d.taxinvMyeon)L.push({lb:'꽃밥마켓 · ② 계산서 (면세)',dept:'꽃밥마켓',amt:Math.round(d.taxinvMyeon),myeon:true,key:'tx.m',name:'계산서'});
+  if(m.taxEtc&&(m.taxEtc.gong||m.taxEtc.myeon)){if(m.taxEtc.gong)L.push({lb:'꽃밥마켓 · ⑥ 기타 세금계산서',dept:'꽃밥마켓',amt:Math.round(m.taxEtc.gong),key:'te.g'});if(m.taxEtc.myeon)L.push({lb:'꽃밥마켓 · ⑥ 기타 계산서 (면세)',dept:'꽃밥마켓',amt:Math.round(m.taxEtc.myeon),myeon:true,key:'te.m'});}
+  if(m.kkotbap&&m.kkotbap.taxInvGong)L.push({lb:'꽃밥에피다 · ⑦ 세금계산서 발행분',dept:'꽃밥에피다',amt:Math.round(m.kkotbap.taxInvGong),key:'pida.ti'});
+  return L;
+}
+function ecParseLedger(txt){
+  const rows=[];const num=v=>{const t=String(v==null?'':v).replace(/[,\s원]/g,'');if(!t||t==='-')return 0;const n=Number(t);return isNaN(n)?0:n;};
+  for(const line of String(txt||'').split(/\r?\n/)){
+    const c=line.split('\t');if(!/^\s*\d{4}\/\d{2}\/\d{2}/.test(c[0]||''))continue;
+    const amt=Math.round(num(c[4])-num(c[3]));if(!amt)continue;
+    rows.push({no:String(c[0]).trim(),memo:String(c[1]||'').trim(),cust:String(c[2]||'').trim(),amt,dept:String(c[6]||'').trim()});
+  }
+  return rows;
+}
+function ecVerify(m){
+  const E=ecExpected(m).map(x=>Object.assign({},x,{st:null,hit:null}));
+  const R=ecParseLedger(m.ecLedger||'').map(x=>Object.assign({},x,{used:false}));
+  const D=(x)=>ecDeptOf(x.dept||x.cust);
+  /* 1) 같은 부서 · 같은 공급가 */
+  for(const e of E){const r=R.find(r=>!r.used&&r.amt===e.amt&&D(r)===e.dept);if(r){r.used=true;e.st='ok';e.hit=r;}}
+  /* 2) 같은 공급가 · 부서 다름 */
+  for(const e of E.filter(e=>!e.st)){const r=R.find(r=>!r.used&&r.amt===e.amt);if(r){r.used=true;e.st='dept';e.hit=r;}}
+  /* 3) 같은 부서 · 적요가 비슷한데 금액 다름 */
+  const kw=(e)=>{const k=e.key||'';const w=/card$|card\.m$/.test(k)?'카드':/hyeon/.test(k)?'현영':/somae/.test(k)?'소매':/^cp/.test(k)?'쿠팡':/catch/.test(k)?'와드|캐치':/tx\.|te\./.test(k)?null:(e.name||null);return w;};
+  for(const e of E.filter(e=>!e.st)){const w=kw(e);if(!w)continue;let re=null;try{re=new RegExp(w.replace(/[.*+?^${}()[\]\\]/g,'\\$&').replace(/\\\|/g,'|'));}catch(x){}
+    const r=R.find(r=>!r.used&&D(r)===e.dept&&re&&re.test(r.memo+' '+r.cust)&&(/면세/.test(r.memo)===!!e.myeon));if(r){r.used=true;e.st='amt';e.hit=r;}}
+  for(const e of E)if(!e.st)e.st='none';
+  return {E,R,left:R.filter(r=>!r.used)};
+}
+window.ecLedgerSet=function(){const m=MONTHS[CUR];if(!m)return;const ta=document.getElementById('ecLedgerTa');m.ecLedger=ta?ta.value:'';touch();renderMonths();setTimeout(()=>{const c=document.getElementById('ecVerifyCard');if(c)c.scrollIntoView({behavior:'smooth',block:'start'});},100);};
+window.ecLedgerClear=function(){const m=MONTHS[CUR];if(!m||!confirm('붙여넣은 이카운트 원장을 지울까요?'))return;delete m.ecLedger;touch();renderMonths();};
+function ecVerifyHtml(m){
+  const has=!!(m.ecLedger&&m.ecLedger.trim());
+  const box=`<details ${has?'':'open'} style="margin-top:6px"><summary style="cursor:pointer;font-size:13px;color:#2563eb;font-weight:700">📋 이카운트 원장 ${has?'다시 ':''}붙여넣기</summary>
+    <div class="hint" style="margin:6px 0">이카운트 → 계정별원장 → <b>4019 상품매출</b> (그 달)에서 표를 드래그해 복사(Ctrl+C) → 아래에 붙여넣기(Ctrl+V) → 검증하기. 전표번호·적요·거래처·차변·대변·잔액·부서명 순서 그대로면 돼요.</div>
+    <textarea id="ecLedgerTa" style="min-height:110px;font-size:12px" placeholder="전표번호	적요	거래처	차변	대변	잔액	부서명">${esc(m.ecLedger||'')}</textarea>
+    <div class="flex" style="margin-top:6px"><button class="btn sm" onclick="ecLedgerSet()">🔍 검증하기</button>${has?'<span class="addrow" style="color:#b91c1c" onclick="ecLedgerClear()">지우기</span>':''}</div></details>`;
+  if(!has)return `<div class="card" id="ecVerifyCard"><h2>🔍 이카운트 매출전표 검증 <small>다 입력한 뒤 원장을 붙여넣으면 앱이 계산한 금액과 하나씩 맞춰봐요</small></h2>${box}</div>`;
+  const V=ecVerify(m);const E=V.E;
+  const ok=E.filter(e=>e.st==='ok').length,bad=E.filter(e=>e.st!=='ok').length;
+  const sumE=E.reduce((a,e)=>a+e.amt,0),sumR=V.R.reduce((a,r)=>a+r.amt,0);
+  const st=(e)=>e.st==='ok'?'<span style="color:#15803d;font-weight:700">✓</span>':e.st==='dept'?'<span style="color:#b45309;font-weight:700">⚠ 부서 다름</span>':e.st==='amt'?`<span style="color:#b91c1c;font-weight:700">❌ 금액 다름 ${(e.hit.amt-e.amt>0?'+':'')+fmt(e.hit.amt-e.amt)}</span>`:'<span style="color:#b91c1c;font-weight:700">❌ 이카운트에 없음</span>';
+  const depts=['보자기꽃밥','온라인판매','꽃밥마켓','꽃밥에피다'];
+  const tr=depts.map(dp=>{const L=E.filter(e=>e.dept===dp);if(!L.length)return '';
+    return `<tr class="gh"><td colspan="5" style="text-align:left;font-weight:700;background:#f1f5f9">${dp}</td></tr>`+L.map(e=>`<tr${e.st==='ok'?'':' style="background:#FEF2F2"'}><td style="text-align:left">${esc(e.lb.split(' · ').slice(1).join(' · ')||e.lb)}${e.myeon?' <span style="color:var(--sub);font-size:11px">면세</span>':''}</td><td>${fmt(e.amt)}</td><td style="text-align:left;font-size:12px">${e.hit?esc(e.hit.no.replace(/^\d{4}\//,''))+' · '+esc(e.hit.memo):''}</td><td>${e.hit?fmt(e.hit.amt):''}</td><td style="text-align:left">${st(e)}</td></tr>`).join('');}).join('');
+  const left=V.left.length?`<div style="margin-top:10px;font-weight:700;color:#b45309">⚠ 이카운트에만 있는 전표 ${V.left.length}건 (${fmt(V.left.reduce((a,r)=>a+r.amt,0))}원) — 매출확정에 없는 매출이거나 금액이 바뀐 것</div>
+    <table class="g" style="margin-top:4px"><tr><th>전표번호</th><th>적요</th><th>거래처</th><th>부서</th><th>공급가</th></tr>${V.left.map(r=>`<tr style="background:#FFFBEB"><td>${esc(r.no)}</td><td style="text-align:left">${esc(r.memo)}</td><td style="text-align:left">${esc(r.cust)}</td><td>${esc(r.dept)}</td><td>${fmt(r.amt)}</td></tr>`).join('')}</table>`:'';
+  return `<div class="card" id="ecVerifyCard"><h2>🔍 이카운트 매출전표 검증 <small>상품매출 원장 ↔ 앱이 계산한 공급가 · 부서와 금액이 같으면 ✓</small></h2>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      <div class="cfm-st" style="flex:1;min-width:160px;border:1px solid var(--line);border-radius:10px;padding:8px 12px;background:${bad||V.left.length?'#FEF2F2':'#F0FDF4'}"><div style="font-size:12px;color:var(--sub)">결과</div><div style="font-size:17px;font-weight:700;color:${bad||V.left.length?'#b91c1c':'#15803d'}">${bad||V.left.length?'확인 필요 '+(bad+V.left.length)+'건':'✓ 모두 일치'}</div><div style="font-size:11.5px;color:var(--sub)">일치 ${ok} / ${E.length}건</div></div>
+      <div style="flex:1;min-width:160px;border:1px solid var(--line);border-radius:10px;padding:8px 12px"><div style="font-size:12px;color:var(--sub)">앱 공급가 합계</div><div style="font-size:17px;font-weight:700">${fmt(sumE)}</div></div>
+      <div style="flex:1;min-width:160px;border:1px solid var(--line);border-radius:10px;padding:8px 12px"><div style="font-size:12px;color:var(--sub)">이카운트 원장 합계</div><div style="font-size:17px;font-weight:700">${fmt(sumR)}</div><div style="font-size:11.5px;color:${sumR-sumE?'#b91c1c':'#15803d'}">${sumR-sumE?'차이 '+(sumR-sumE>0?'+':'')+fmt(sumR-sumE):'✓ 합계 같음'}</div></div>
+    </div>
+    <table class="g"><tr><th>앱 항목</th><th>앱 공급가</th><th>이카운트 전표</th><th>이카운트 금액</th><th>결과</th></tr>${tr}</table>
+    ${left}
+    ${box}</div>`;
+}
 
 /* ============ 저장 ============ */
 function touch(){
