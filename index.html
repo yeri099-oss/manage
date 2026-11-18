@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v490</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v491</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -21043,12 +21043,14 @@ document.addEventListener("DOMContentLoaded", () => {
     <span class="fbchip" id="fbChip">로컬 저장</span>
     <button class="btn sm gray" id="btnLogoutTop" style="display:none">로그아웃</button>
     <span class="savechip" id="saveChip">-</span>
+    <button type="button" class="btn sm line" onclick="__cfmShowTab('setting')" title="Firebase 연결 · 예전 엑셀에서 가져오기 · 백업/복원 · 이 달 삭제 (가끔 쓰는 것)" style="font-size:12px">⚙ 백업·가져오기</button>
   </div>
-  <div class="tabs">
-    <div class="tab on" data-pg="input">✏️ 입력</div>
-    <div class="tab" data-pg="confirm">📋 매출확정</div>
-    <div class="tab" data-pg="months">🗓 월별 요약</div>
-    <div class="tab" data-pg="setting">⚙️ 설정</div>
+  <!-- v491: 입력·매출확정·월별 요약은 왼쪽 서브탭(넓은 화면) · 설정은 위 ⚙ 버튼으로 -->
+  <div class="tabs subtabs" id="cfmTabs">
+    <button type="button" class="tab subtab on active" data-pg="input" onclick="__cfmShowTab('input')">✏️ 입력</button>
+    <button type="button" class="tab subtab" data-pg="confirm" onclick="__cfmShowTab('confirm')">📋 매출확정</button>
+    <button type="button" class="tab subtab" data-pg="months" onclick="__cfmShowTab('months')">🗓 월별 요약</button>
+    <button type="button" class="tab" data-pg="setting" style="display:none">⚙️ 설정</button>
   </div>
 
   <div class="page on" id="pg-input"></div>
@@ -24103,7 +24105,8 @@ async function restore(file){
 
 /* ============ 화면 전환/초기화 ============ */
 function showTab(pg){
-  $$("#cfm-root .tab").forEach(t=>t.classList.toggle('on',t.dataset.pg===pg));
+  $$("#cfm-root .tab").forEach(t=>{t.classList.toggle('on',t.dataset.pg===pg);t.classList.toggle('active',t.dataset.pg===pg);});
+  try{document.querySelectorAll('#sideSubs .subtab[data-pg]').forEach(t=>t.classList.toggle('active',t.dataset.pg===pg));}catch(e){}
   $$("#cfm-root .page").forEach(p=>p.classList.remove('on'));
   $("#pg-"+pg).classList.add('on');
   if(pg==='confirm')renderConfirm();
@@ -24123,12 +24126,12 @@ function selectMonth(ym){
   setChip('',MONTHS[ym].savedAt?('저장됨 '+MONTHS[ym].savedAt.slice(0,10)):'새 달');
 }
 function renderAll(){
-  const on=$$("#cfm-root .tab").find(t=>t.classList.contains('on')).dataset.pg;
+  const t0=$$("#cfm-root .tab").find(t=>t.classList.contains('on'));const on=t0?t0.dataset.pg:'input';
   if(on==='input')renderInput();
   else if(on==='confirm')renderConfirm();
   else if(on==='months')renderMonths();
 }
-$$("#cfm-root .tab").forEach(t=>t.addEventListener("click",()=>showTab(t.dataset.pg)));
+window.__cfmShowTab=function(pg){showTab(pg);try{window.scrollTo({top:0});}catch(e){}};
 $("#ymSel").addEventListener("change",e=>{if(e.target.value)selectMonth(e.target.value);});
 $("#btnLogoutTop").addEventListener("click",async()=>{
   if(!confirm('로그아웃할까요? 다시 보려면 로그인해야 합니다.'))return;
