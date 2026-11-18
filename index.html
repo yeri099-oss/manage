@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v504</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v505</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -24560,8 +24560,8 @@ function preview(raw,ym){
   const bojagi=V.F26+V.D38+d.extraBoj;
   return {
     coupangTemp: !!(m.bpos&&m.bpos.coupangTemp),
-    /* v504: 마켓포스 매출엔 스마트스토어 주문도 들어 있음(확정표 마켓 계 = 포스 − 세금계산서 − 스마트스토어) → 매출현황 마켓에선 빼고 온라인 칸에만 */
-    pos:{ insadong: kb.all, market: Math.max(0,(d.marketGye>0?d.marketGye:V.F8)-((m.ss.gwase||0)+(m.ss.myeon||0))), online: m.ss.gwase+m.ss.myeon, bojagi: V.F15+m.bpos.coupangGye },
+    /* v505: 포스에 스마트스토어는 안 찍음 → 매출현황 마켓은 포스 그대로 (v504 되돌림) */
+    pos:{ insadong: kb.all, market: (d.marketGye>0?d.marketGye:V.F8), online: m.ss.gwase+m.ss.myeon, bojagi: V.F15+m.bpos.coupangGye },
     nts: (m.nts.card>0
       ? { total: epida+market+bojagi, epida, market, bojagi }
       : { total:0, epida:0, market:0, bojagi:0, notReady:true }),
