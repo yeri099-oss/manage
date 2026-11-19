@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v518</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v519</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -20802,7 +20802,7 @@ window.pidaPick=async function(inp){
   try{if(typeof window.epidaFilesPick==="function")await window.epidaFilesPick({files:fs,value:""});}catch(e){console.warn(e);}
   if(done.length)toast("꽃밥에피다 "+(done.length>4?done[0]+" ~ "+done[done.length-1]:done.join(", "))+` (${done.length}개월) 반영했어요`);
   if(bad.length)alert("읽지 못한 것:\n"+bad.join("\n"));
-  if(done.length){window.__pida.ui.view="gap";}
+  if(done.length){window.__pida.ui.view="up";}
   renderPida();
 };
 /* ---------- 기간·집계 ---------- */
@@ -20828,20 +20828,20 @@ async function renderPida(){
   const P=window.__pida;
   if(!P.loaded){el.innerHTML='<div class="loading"><span class="spin"></span><br>꽃밥에피다 포스 자료를 불러오는 중…</div>';await pidaLoad();if(!P.loaded){el.innerHTML=`<div class="card">불러오기 실패: ${esc(P.err||"")} <button class="btn btn-sm" onclick="window.__pida.err='';renderPida()">다시 시도</button></div>`;return;}}
   const isAd=S.user&&S.user.role==="admin";const U=P.ui;
-  const views=[["dash","대시보드"],["day","일별"],["month","기간별 매출"],["item","상품판매별"],["time","판매시간별"],["cat","분류"],["gap","빠진 날 확인"]].concat(isAd?[["catset","분류 설정"],["up","파일 넣기"]]:[]);
+  const views=[["dash","대시보드"],["month","기간별 매출"],["item","상품판매별"],["time","판매시간별"],["cat","분류"]].concat(isAd?[["catset","분류 설정"],["up","파일 넣기 · 빠진 날"]]:[]);
+  if(U.view==="day"||U.view==="gap")U.view=U.view==="gap"&&isAd?"up":"month"; /* v519: 일별은 기간별 매출(일 단위)로, 빠진 날 확인은 파일 넣기로 합침 */
   if(!views.some(v=>v[0]===U.view))U.view="dash";
   const tabs=`<div class="subtabs" style="flex-wrap:wrap;margin-bottom:10px">${views.map(([k,n])=>`<button class="subtab ${U.view===k?"active":""}" onclick="pidaSet('view','${k}')">${n}</button>`).join("")}</div>`;
   const PER=pidaPeriods();if(!U.per||!PER.some(p=>p[0]===U.per))U.per=PER.length?(U.view==="dash"?"w7":PER[2]?PER[2][0]:"w7"):"";
   const upCard=`<div class="card"><div class="card-title">📂 포스 일일매출상세내역 넣기 <span class="unit">영업속보 › 일일매출상세내역 엑셀(.xlsx·.xls) · 파일 여러 개를 한꺼번에 골라도 되고, 여러 달이 든 큰 파일 하나도 OK · 같은 달은 이번에 넣은 파일로 바뀌어요</span></div>
     <input type="file" multiple accept=".xlsx,.xls,.html" onchange="pidaPick(this)">
-    <div class="footnote" style="margin-top:6px">한 번 넣으면 이 탭(대시보드·일별·품목·분류…)과 매출현황 › 피다 탭에 같이 들어가요. 2015년 12월부터 전부 다시 넣으려면 파일을 <b>한꺼번에 모두 선택</b>하세요 — 같은 날이 두 파일에 겹쳐도 두 번 더해지지 않아요(나중 파일 기준). 넣고 나면 <b>빠진 날 확인</b> 화면으로 넘어가요.</div>
+    <div class="footnote" style="margin-top:6px">한 번 넣으면 이 탭(대시보드·기간별 매출·상품판매별·판매시간별…)과 매출현황 › 피다 탭에 같이 들어가요. 2015년 12월부터 전부 다시 넣으려면 파일을 <b>한꺼번에 모두 선택</b>하세요 — 같은 날이 두 파일에 겹쳐도 두 번 더해지지 않아요(나중 파일 기준). 넣고 나면 바로 아래 <b>빠진 날 확인</b>에서 빠진 날짜를 볼 수 있어요.</div>
     ${pidaCoverHtml()}</div>`;
   if(!pidaYms().length){el.innerHTML=tabs+(isAd?upCard:'<div class="card"><div class="hint" style="padding:14px">아직 자료가 없어요.</div></div>');return;}
   const perSel=U.view!=="dash"?"":`<select class="ctl" onchange="pidaSet('per',this.value)">${PER.map(([k,n])=>`<option value="${k}" ${k===U.per?"selected":""}>${n}</option>`).join("")}</select>`;
   let body="";
-  if(U.view==="up")body=upCard;
+  if(U.view==="up")body=upCard+pidaGapHtml();
   else if(U.view==="catset")body=pidaCatSetHtml();
-  else if(U.view==="gap")body=pidaGapHtml();
   else if(U.view==="dash")body=pidaDashHtml(pidaSel(U.per));
   else{pidaRangeInit();const L=pidaRangeDays();
     body=pidaRangeBar(U.view==="item")+(!L.length?'<div class="card"><div class="hint" style="padding:14px">고른 기간에 포스 자료가 없어요. 날짜를 바꿔보세요.</div></div>':
@@ -20905,7 +20905,7 @@ function pidaGapHtml(){
     <tbody>${shown.map(r=>r.html).join("")||'<tr><td colspan="8" style="text-align:center;color:#15803d;padding:14px">확인할 달이 없어요 👍</td></tr>'}</tbody></table></div>
     <div class="footnote" style="margin-top:6px">· <b>빠진 날</b>: 포스 자료에 거래가 한 건도 없는 날이에요. 노란색=평일, 빨간색=주말. 휴무일이었다면 괜찮고, 영업한 날이면 그 달 파일을 다시 받아 넣어주세요.<br>
     · 한 달에 같은 요일이 3번 이상 빠지면 정기휴무로 보고 <b>빠진 날</b>에서 뺐어요.<br>
-    · <b>매출이 유난히 적은 날</b>: 파일이 그날 중간까지만 받아졌을 수 있어요. 일별 화면에서 확인해보세요.<br>
+    · <b>매출이 유난히 적은 날</b>: 파일이 그날 중간까지만 받아졌을 수 있어요. 기간별 매출(일 단위)에서 그 날짜를 눌러 확인해보세요.<br>
     · <b>매출현황 영업일수</b>가 빨간색이면 매출현황에 입력한 인사동 영업일수와 포스 자료 날 수가 달라요.</div></div>`;
 }
 function pidaTile(t,v,s,bg){return `<div style="flex:1;min-width:170px;background:${bg};color:#fff;border-radius:10px;padding:12px 14px"><div style="font-size:13px;font-weight:700;opacity:.95">${t}</div><div style="font-size:24px;font-weight:800;text-align:right;margin-top:6px">${v}</div><div style="font-size:11.5px;text-align:right;opacity:.9">${s||""}</div></div>`;}
@@ -21004,17 +21004,18 @@ function pidaHourTable(H){const hs=Object.keys(H).map(Number);const lo=Math.min(
     <tr class="total"><td style="text-align:center">합계</td><td>${fmt(tot)}</td><td>${fmt(cnt)}</td><td>${cnt?fmt(Math.round(tot/cnt)):0}</td><td>${fmt(tot)}</td><td></td><td></td></tr>${rows.join("")}</tbody></table>`;}
 /* 기간별 매출 — 일·주·월·연 단위로 묶어서 */
 window.pidaUnit=function(v){window.__pida.ui.unit=v;renderPida();};
-function pidaPeriodHtml(L){const U=window.__pida.ui;const un=U.unit||"m";
+function pidaPeriodHtml(L){const U=window.__pida.ui;const un=U.unit||"d";
   const key=d=>{if(un==="d")return d.date;if(un==="y")return d.date.slice(0,4)+"년";if(un==="m")return d.date.slice(0,7);
     const t=new Date(d.date+"T00:00:00");const mo=new Date(t);mo.setDate(t.getDate()-((t.getDay()+6)%7));const su=new Date(mo);su.setDate(mo.getDate()+6);return pidaYmd(mo)+" ~ "+pidaYmd(su).slice(5);};
   const G={};L.forEach(d=>{const k=key(d);const g=G[k]=G[k]||{k,n:0,v:[0,0,0,0,0,0,0]};g.n++;d.v.forEach((x,i)=>g.v[i]+=x);});
   const R=Object.values(G);const t=pidaSum(L);
-  const row=(lb,n,v,cls)=>`<tr${cls?` class="${cls}"`:""}><td class="l">${lb}</td><td>${fmt(n)}</td><td>${fmt(v[0])}</td><td>${fmt(v[1])}</td><td>${fmt(v[2])}</td><td>${fmt(v[3])}</td><td>${fmt(v[4])}</td><td>${fmt(v[6])}</td><td><b>${fmt(v[5])}</b></td><td>${fmt(Math.round(v[5]/(n||1)))}</td><td>${v[1]?fmt(Math.round(v[5]/v[1])):""}</td></tr>`;
+  const isD=un==="d";
+  const row=(lb,n,v,cls)=>`<tr${cls?` class="${cls}"`:isD?` style="cursor:pointer;${U.dsel===lb?"background:#dbeafe":""}" onclick="pidaDsel('${lb}')"`:""}><td class="l"${isD&&!cls?' style="color:#2563eb"':""}>${lb}${isD&&!cls?` <span style="color:${/[토일]/.test(pidaWd(lb))?"#b91c1c":"#64748b"}">(${pidaWd(lb)})</span>`:""}</td><td>${fmt(n)}</td><td>${fmt(v[0])}</td><td>${fmt(v[1])}</td><td>${fmt(v[2])}</td><td>${fmt(v[3])}</td><td>${fmt(v[4])}</td><td>${fmt(v[6])}</td><td><b>${fmt(v[5])}</b></td><td>${fmt(Math.round(v[5]/(n||1)))}</td><td>${v[1]?fmt(Math.round(v[5]/v[1])):""}</td></tr>`;
   const ub=(k,n)=>`<button class="subtab ${un===k?"active":""}" onclick="pidaUnit('${k}')">${n}</button>`;
   return `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
       ${pidaTile("총매출",fmt(t[5])+"원",U.from+" ~ "+U.to,"#3b6fd4")}${pidaTile("영업일",fmt(L.length)+"일","하루 평균 "+fmt(Math.round(t[5]/(L.length||1)))+"원","#16a34a")}
       ${pidaTile("건수 · 객수",fmt(t[0])+" · "+fmt(t[1]),"객단가 "+(t[1]?fmt(Math.round(t[5]/t[1])):"-")+"원","#f59e0b")}${pidaTile("현금 · 카드",fmt(t[2])+" · "+fmt(t[3]),"할인·서비스 "+fmt(t[6]),"#e0492f")}</div>
-    <div class="card"><div class="card-head"><div class="card-title">기간별 매출 <span class="unit">${U.from} ~ ${U.to}</span></div><div style="display:flex;gap:6px;align-items:center"><div class="subtabs" style="margin:0">${ub("d","일")}${ub("w","주")}${ub("m","월")}${ub("y","연")}</div>${pidaXlsBtn("꽃밥에피다_기간별매출_"+pidaRangeName())}</div></div>
+    ${isD&&U.dsel?pidaDayDetail(U.dsel):""}<div class="card"><div class="card-head"><div class="card-title">기간별 매출 <span class="unit">${U.from} ~ ${U.to}${isD?" · 날짜를 누르면 그날 상품판매·판매시간이 보여요":""}</span></div><div style="display:flex;gap:6px;align-items:center"><div class="subtabs" style="margin:0">${ub("d","일")}${ub("w","주")}${ub("m","월")}${ub("y","연")}</div>${pidaXlsBtn("꽃밥에피다_기간별매출_"+pidaRangeName())}</div></div>
     <div class="table-wrap"><table class="rpt" style="font-size:12.5px"><thead><tr><th class="l">기간</th><th>영업일</th><th>건수</th><th>객수</th><th>현금</th><th>카드</th><th>기타</th><th>할인·서비스</th><th>총매출</th><th>일평균</th><th>객단가</th></tr></thead><tbody>
     ${R.map(g=>row(g.k,g.n,g.v)).join("")}${row("합계",L.length,t,"total")}</tbody></table></div></div>
     <details class="card"><summary style="cursor:pointer;font-weight:700">📅 연도별 같은 달 비교 (전체 자료)</summary>${pidaMonthHtml()}</details>`;}
