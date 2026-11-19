@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v509</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v510</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -494,6 +494,7 @@ window.FIREBASE_CONFIG = {
     <button class="tab" data-tab="sales">매출현황</button>
     <button class="tab" data-tab="compare">매출비교</button>
     <button class="tab" data-tab="pnl">월별손익</button>
+    <button class="tab" data-tab="pida">꽃밥에피다</button>
     <button class="tab admin-only" data-tab="buy">매입</button>
     <button class="tab admin-only" data-tab="pay">급여</button>
     <button class="tab admin-only" data-tab="expense">비용정리</button>
@@ -517,6 +518,7 @@ window.FIREBASE_CONFIG = {
       <div id="tab-manage" class="hidden"></div>
     </section>
     <section id="tab-pnl" class="tab-panel hidden"></section>
+    <section id="tab-pida" class="tab-panel hidden"></section>
     <section id="tab-buy" class="tab-panel hidden"></section>
     <section id="tab-pay" class="tab-panel hidden"></section>
     <section id="tab-expense" class="tab-panel hidden"></section>
@@ -1143,9 +1145,11 @@ async function loadAllData() {
     return;
   }
   const jobs = COLS.map(async (col) => {
-    const snap = await fsCol(col).get();
+    /* v510: 꽃밥에피다 탭 자료(pos_YYMM)는 그 탭을 열 때만 — 연도 문서(숫자)만 */
+    const FPx = (firebase.firestore && firebase.firestore.FieldPath) ? firebase.firestore.FieldPath.documentId() : null;
+    const snap = (col === "epidaDetail" && FPx) ? await fsCol(col).where(FPx, "<", "a").get() : await fsCol(col).get();
     const out = {};
-    snap.forEach((doc) => { out[doc.id] = doc.data(); });
+    snap.forEach((doc) => { if (col === "epidaDetail" && /^pos_/.test(doc.id)) return; out[doc.id] = doc.data(); });
     S.data[col] = out;
   });
   jobs.push(fsCol("config").doc("bojagiMenuItems").get().then((d) => { S.data.menuItems = d.data()?.items || []; }));
@@ -20666,6 +20670,219 @@ function renderFree(){
 }
 </script>
 
+<script>
+/* === pida.js — v510: 꽃밥에피다 탭 (예전 포스 '영업속보' 대신 보기)
+   포스 '일일매출상세내역' 엑셀(.xlsx/.xls)을 달마다 올리면 영수증·메뉴를 일별로 모아 저장 → 대시보드·일별·월별·시간대·요일·품목·분류
+   저장: salesApp_epidaDetail / pos_YYMM = {ym, days:{dd:[건수,인원,현금,카드,기타,총,할인]}, hours:{h:[건수,총]}, items:[이름...], di:{dd:[i,수량,금액,...]}}
+         salesApp_epidaDetail / pos_cats = {map:{이름:분류}} — 시작할 때는 안 불러오고 이 탭을 열 때만 불러옴 === */
+"use strict";
+window.__pida=window.__pida||{loaded:false,loading:false,M:{},cats:{},ui:{view:"dash",per:"",q:"",item:""}};
+const PIDA_CATS=["코스 메뉴","식사 메뉴","일품 메뉴","추가메뉴","수제맥주·와인","음료","기타"];
+const PIDA_COL={"현금":"#4a72c8","카드":"#e05a3a","기타":"#f5a623"};
+const PIDA_PAL=["#3b6fd4","#e0492f","#f59e0b","#16a34a","#9333ea","#0ea5c6","#94a3b8"];
+function pidaGuessCat(nm){nm=String(nm||"");
+  if(/예약금|쿠폰|포인트/.test(nm))return "기타";
+  if(/코스/.test(nm))return "코스 메뉴";
+  if(/추가|사리|공기밥|토핑/.test(nm))return "추가메뉴";
+  if(/맥주|라거|에일|IPA|와인|막걸리|소주|사케|청주|약주|하이볼|스파클링|샴페인|위스키|진저|생맥/.test(nm))return "수제맥주·와인";
+  if(/쥬스|주스|에이드|차$|꽃차|커피|라떼|아메리카노|식혜|수정과|콜라|사이다|탄산|우롱|오미자|매실|음료|병$/.test(nm))return "음료";
+  if(/^세트|비빔밥|국수|정식|덮밥|밥상|솥밥|면$|냉면/.test(nm))return "식사 메뉴";
+  return "일품 메뉴";}
+function pidaCat(nm){return (window.__pida.cats||{})[nm]||pidaGuessCat(nm);}
+async function pidaLoad(){
+  const P=window.__pida;if(P.loaded||P.loading)return;P.loading=true;
+  try{
+    if(!IS_DEMO){
+      const FP=(firebase.firestore&&firebase.firestore.FieldPath)?firebase.firestore.FieldPath.documentId():null;
+      const snap=FP?await fsCol("epidaDetail").where(FP,">=","pos_").where(FP,"<","pos_~").get():await fsCol("epidaDetail").get();
+      snap.forEach(d=>{const v=d.data();if(d.id==="pos_cats")P.cats=(v&&v.map)||{};else if(v&&v.ym)P.M[v.ym]=v;});
+    }
+    P.loaded=true;
+  }catch(e){console.error(e);P.err=e.message||String(e);}
+  P.loading=false;
+}
+/* ---------- 파일 읽기 ---------- */
+async function pidaAoa(f){
+  const buf=await f.arrayBuffer();const h=new Uint8Array(buf.slice(0,4));
+  if((h[0]===0x50&&h[1]===0x4B)||(h[0]===0xD0&&h[1]===0xCF)){
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");
+    const wb=XLSX.read(new Uint8Array(buf),{type:"array"});
+    return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:"",raw:true});
+  }
+  let t="";try{t=new TextDecoder("euc-kr").decode(buf);}catch(e){}
+  if(t.indexOf("거래일시")<0)t=new TextDecoder("utf-8").decode(buf);
+  const doc=new DOMParser().parseFromString(t,"text/html");
+  return [...doc.querySelectorAll("tr")].map(tr=>[...tr.children].map(td=>td.textContent.trim()));
+}
+function pidaParse(aoa,fname){
+  let hi=-1;for(let i=0;i<Math.min(aoa.length,30);i++){if((aoa[i]||[]).some(x=>String(x).trim()==="거래일시")){hi=i;break;}}
+  if(hi<0)throw new Error(fname+": '거래일시' 머리글이 없어요 — 포스 영업속보 › 일일매출상세내역 엑셀인지 확인해주세요.");
+  const H=aoa[hi].map(x=>String(x).replace(/\s/g,""));const C=(n)=>H.indexOf(n);
+  const cD=C("거래일시"),cG=C("인원수"),cN=C("품명"),cQ=C("수량"),cA=C("금액"),cCash=C("정산(현금)"),cCard=C("정산(카드)"),cTot=C("정산총금액"),cDisc=C("할인금액"),cSvc=C("봉사금액"),cSale=C("매출금액");
+  if(cD<0||cN<0||cTot<0)throw new Error(fname+": 거래일시·품명·정산총금액 열을 찾지 못했어요.");
+  const num=v=>{if(typeof v==="number")return v;const t=String(v==null?"":v).replace(/[,\s원]/g,"");if(!t||t==="-")return 0;const n=Number(t);return isNaN(n)?0:n;};
+  const toDate=v=>{if(typeof v==="number"&&v>20000){const d=new Date(Math.round((v-25569)*86400000));return d.toISOString().slice(0,19).replace("T"," ");}return String(v||"").trim();};
+  const out={};let cur=null;
+  const dayOf=(ym,dd)=>{const M=out[ym]=out[ym]||{ym,days:{},hours:{},items:[],di:{},_ix:{}};return M;};
+  const addItem=(nm,q,a)=>{if(!cur)return;nm=String(nm||"").trim();if(!nm||nm==="품명"||nm[0]==="["||nm==="합계")return;
+    const M=out[cur.ym];let i=M._ix[nm];if(i==null){i=M.items.length;M.items.push(nm);M._ix[nm]=i;}
+    const L=M.di[cur.dd]=M.di[cur.dd]||{};const x=L[i]=L[i]||[0,0];x[0]+=q;x[1]+=a;};
+  for(let r=hi+1;r<aoa.length;r++){const row=aoa[r]||[];const dt=toDate(row[cD]);
+    if(/^\d{4}-\d{2}-\d{2}/.test(dt)){
+      const ym=dt.slice(2,4)+dt.slice(5,7),dd=dt.slice(8,10);const M=dayOf(ym,dd);cur={ym,dd};
+      const tot=num(row[cTot]),cash=cCash>=0?num(row[cCash]):0,card=cCard>=0?num(row[cCard]):0;
+      const D=M.days[dd]=M.days[dd]||[0,0,0,0,0,0,0];
+      D[0]+=1;D[1]+=cG>=0?num(row[cG]):0;D[2]+=cash;D[3]+=card;D[4]+=tot-cash-card;D[5]+=tot;D[6]+=(cDisc>=0?num(row[cDisc]):0)+(cSvc>=0?num(row[cSvc]):0);
+      const hh=(dt.match(/\s(\d{1,2}):/)||[])[1];if(hh!=null){const k=String(+hh);const Hh=M.hours[k]=M.hours[k]||[0,0];Hh[0]+=1;Hh[1]+=tot;}
+      addItem(row[cN],num(row[cQ]),num(row[cA]));
+    }else if(String(row[cN]||"").trim()){addItem(row[cN],num(row[cQ]),num(row[cA]));}
+    else if(row.length>=5&&row[0]&&typeof row[0]==="string"&&!/^\d+$/.test(row[0].trim())&&row[0].trim()!=="합계"&&!/^RUNDATE/.test(row[0])){addItem(row[0],num(row[2]),num(row[4]));}
+  }
+  for(const ym in out){const M=out[ym];const di={};for(const dd in M.di){const a=[];for(const i in M.di[dd]){const x=M.di[dd][i];a.push(+i,Math.round(x[0]*100)/100,Math.round(x[1]));}di[dd]=a;}M.di=di;delete M._ix;
+    for(const dd in M.days)M.days[dd]=M.days[dd].map(v=>Math.round(v));for(const h in M.hours)M.hours[h]=M.hours[h].map(v=>Math.round(v));}
+  if(!Object.keys(out).length)throw new Error(fname+": 거래 줄을 찾지 못했어요.");
+  return out;
+}
+window.pidaPick=async function(inp){
+  const fs=[...(inp.files||[])];inp.value="";if(!fs.length)return;
+  const P=window.__pida;const done=[];
+  for(const f of fs){
+    try{toast(f.name+" 읽는 중…");const R=pidaParse(await pidaAoa(f),f.name);
+      for(const ym in R){P.M[ym]=R[ym];if(!IS_DEMO)await fsCol("epidaDetail").doc("pos_"+ym).set(R[ym]);done.push("20"+ym.slice(0,2)+"."+(+ym.slice(2)));}
+    }catch(e){console.error(e);alert(f.name+" 읽기 실패: "+(e.message||e));}
+  }
+  /* 매출현황 › 피다 탭(월 합계·메뉴별)에도 같이 */
+  try{if(typeof window.epidaFilesPick==="function")await window.epidaFilesPick({files:fs,value:""});}catch(e){console.warn(e);}
+  if(done.length)toast("꽃밥에피다 "+done.join(", ")+" 반영했어요");
+  renderPida();
+};
+/* ---------- 기간·집계 ---------- */
+function pidaYms(){return Object.keys(window.__pida.M).sort();}
+function pidaDays(){const out=[];for(const ym of pidaYms()){const M=window.__pida.M[ym];for(const dd of Object.keys(M.days).sort())out.push({ym,dd,date:"20"+ym.slice(0,2)+"-"+ym.slice(2)+"-"+dd,v:M.days[dd]});}return out;}
+function pidaPeriods(){const ys=pidaYms();const L=[["w7","최근 7일"],["w28","최근 4주"]];
+  ys.slice().reverse().forEach(ym=>L.push(["m"+ym,"20"+ym.slice(0,2)+"년 "+(+ym.slice(2))+"월"]));
+  [...new Set(ys.map(x=>x.slice(0,2)))].reverse().forEach(y=>L.push(["y"+y,"20"+y+"년 전체"]));
+  if(ys.length)L.push(["all","전체 기간"]);return L;}
+function pidaSel(per){const D=pidaDays();if(!D.length)return [];
+  if(per==="w7")return D.slice(-7);if(per==="w28")return D.slice(-28);
+  if(per[0]==="m")return D.filter(d=>d.ym===per.slice(1));
+  if(per[0]==="y")return D.filter(d=>d.ym.slice(0,2)===per.slice(1));return D;}
+function pidaSum(L){const t=[0,0,0,0,0,0,0];L.forEach(d=>d.v.forEach((x,i)=>t[i]+=x));return t;}
+function pidaItems(L){const P=window.__pida;const R={};
+  L.forEach(d=>{const M=P.M[d.ym];const a=M.di[d.dd]||[];for(let k=0;k<a.length;k+=3){const nm=M.items[a[k]];const x=R[nm]=R[nm]||{n:nm,q:0,a:0};x.q+=a[k+1];x.a+=a[k+2];}});
+  return Object.values(R).sort((a,b)=>b.a-a.a||b.q-a.q);}
+const pidaWd=(date)=>"일월화수목금토"[new Date(date+"T00:00:00").getDay()];
+/* ---------- 화면 ---------- */
+window.pidaSet=function(k,v){window.__pida.ui[k]=v;if(k==="per")window.__pida.ui.item="";renderPida();};
+async function renderPida(){
+  const el=document.getElementById("tab-pida");if(!el)return;
+  const P=window.__pida;
+  if(!P.loaded){el.innerHTML='<div class="loading"><span class="spin"></span><br>꽃밥에피다 포스 자료를 불러오는 중…</div>';await pidaLoad();if(!P.loaded){el.innerHTML=`<div class="card">불러오기 실패: ${esc(P.err||"")} <button class="btn btn-sm" onclick="window.__pida.err='';renderPida()">다시 시도</button></div>`;return;}}
+  const isAd=S.user&&S.user.role==="admin";const U=P.ui;
+  const views=[["dash","대시보드"],["day","일별"],["month","월별"],["time","시간대·요일"],["item","품목"],["cat","분류"]].concat(isAd?[["catset","분류 설정"],["up","파일 넣기"]]:[]);
+  if(!views.some(v=>v[0]===U.view))U.view="dash";
+  const tabs=`<div class="subtabs" style="flex-wrap:wrap;margin-bottom:10px">${views.map(([k,n])=>`<button class="subtab ${U.view===k?"active":""}" onclick="pidaSet('view','${k}')">${n}</button>`).join("")}</div>`;
+  const PER=pidaPeriods();if(!U.per||!PER.some(p=>p[0]===U.per))U.per=PER.length?(U.view==="dash"?"w7":PER[2]?PER[2][0]:"w7"):"";
+  const upCard=`<div class="card"><div class="card-title">📂 포스 일일매출상세내역 넣기 <span class="unit">영업속보 › 일일매출상세내역 엑셀(.xlsx·.xls) · 여러 달 한꺼번에 · 같은 달은 새 파일로 바뀌어요</span></div>
+    <input type="file" multiple accept=".xlsx,.xls,.html" onchange="pidaPick(this)">
+    <div class="footnote" style="margin-top:6px">한 번 넣으면 이 탭(대시보드·일별·품목·분류…)과 매출현황 › 피다 탭에 같이 들어가요. 2020년 8월(개업)부터 달마다 받아서 넣어주세요.</div>
+    ${pidaCoverHtml()}</div>`;
+  if(!pidaYms().length){el.innerHTML=tabs+(isAd?upCard:'<div class="card"><div class="hint" style="padding:14px">아직 자료가 없어요.</div></div>');return;}
+  const perSel=U.view==="month"||U.view==="catset"||U.view==="up"?"":`<select class="ctl" onchange="pidaSet('per',this.value)">${PER.map(([k,n])=>`<option value="${k}" ${k===U.per?"selected":""}>${n}</option>`).join("")}</select>`;
+  let body="";
+  if(U.view==="up")body=upCard;
+  else if(U.view==="catset")body=pidaCatSetHtml();
+  else if(U.view==="month")body=pidaMonthHtml();
+  else{const L=pidaSel(U.per);
+    body=U.view==="dash"?pidaDashHtml(L):U.view==="day"?pidaDayHtml(L):U.view==="time"?pidaTimeHtml(L):U.view==="item"?pidaItemHtml(L):pidaCatHtml(L);}
+  el.innerHTML=tabs+`<div class="card" style="padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b style="font-size:16px">🍽 꽃밥에피다 (인사동)</b><span class="unit">포스 일일매출상세내역 기준 · 부가세 포함</span><span style="margin-left:auto"></span>${perSel}</div>`+body;
+  if(U.view==="dash")pidaDashCharts(pidaSel(U.per));
+}
+RENDERERS.pida=renderPida;
+function pidaCoverHtml(){const ys=[...new Set(pidaYms().map(x=>x.slice(0,2)))];if(!ys.length)return "";
+  return `<div class="table-wrap" style="margin-top:8px"><table class="rpt" style="font-size:12px"><thead><tr><th class="l">연도</th>${MONTHS.map(m=>`<th>${m}월</th>`).join("")}</tr></thead><tbody>${ys.map(y=>`<tr><td class="l">20${y}</td>${MONTHS.map(m=>{const k=y+String(m).padStart(2,"0");return `<td style="text-align:center">${window.__pida.M[k]?'<span style="color:#15803d;font-weight:700">✓</span>':'<span style="color:#ccc">–</span>'}</td>`;}).join("")}</tr>`).join("")}</tbody></table></div>`;}
+function pidaTile(t,v,s,bg){return `<div style="flex:1;min-width:170px;background:${bg};color:#fff;border-radius:10px;padding:12px 14px"><div style="font-size:13px;font-weight:700;opacity:.95">${t}</div><div style="font-size:24px;font-weight:800;text-align:right;margin-top:6px">${v}</div><div style="font-size:11.5px;text-align:right;opacity:.9">${s||""}</div></div>`;}
+function pidaDashHtml(L){
+  const t=pidaSum(L),n=L.length||1,last=L[L.length-1];
+  const tiles=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+    ${pidaTile("기간 매출",fmt(t[5]),L.length+"일 · "+fmt(t[0])+"건","#4a86c8")}
+    ${pidaTile("일 평균 매출",fmt(Math.round(t[5]/n)),"객수 "+fmt(Math.round(t[1]/n))+"명/일","#8cc63f")}
+    ${pidaTile("마지막 날 매출",last?fmt(last.v[5]):"—",last?last.date+" ("+pidaWd(last.date)+")":"","#f5a623")}
+    ${pidaTile("객단가",t[1]?fmt(Math.round(t[5]/t[1])):"—","영수증당 "+(t[0]?fmt(Math.round(t[5]/t[0])):"—"),"#e8483b")}</div>`;
+  const byMonth=L.length>62;
+  const rowsSrc=byMonth?pidaGroupMonth(L):L.map(d=>({lb:d.date.slice(5).replace("-","/")+" ("+pidaWd(d.date)+")",v:d.v}));
+  const tbl=`<div class="table-wrap"><table class="rpt" style="font-size:12.5px"><thead><tr><th class="l">${byMonth?"월":"날짜"}</th><th>매출건수</th><th>객수</th><th>현금매출</th><th>카드매출</th><th>기타매출</th><th>총매출액</th></tr></thead><tbody>
+    ${rowsSrc.slice().reverse().map(r=>`<tr><td class="l">${r.lb}</td><td>${fmt(r.v[0])}</td><td>${fmt(r.v[1])}</td><td>${fmt(r.v[2])}</td><td>${fmt(r.v[3])}</td><td>${fmt(r.v[4])}</td><td><b>${fmt(r.v[5])}</b></td></tr>`).join("")}
+    <tr class="total"><td class="l">합계</td><td>${fmt(t[0])}</td><td>${fmt(t[1])}</td><td>${fmt(t[2])}</td><td>${fmt(t[3])}</td><td>${fmt(t[4])}</td><td>${fmt(t[5])}</td></tr></tbody></table></div>`;
+  const it=pidaItems(L),tot=it.reduce((a,x)=>a+x.a,0)||1;
+  const ct={};it.forEach(x=>{const c=pidaCat(x.n);const o=ct[c]=ct[c]||{n:c,q:0,a:0};o.q+=x.q;o.a+=x.a;});const cl=Object.values(ct).sort((a,b)=>b.a-a.a);
+  const rank=(list,lab)=>`<table class="rpt" style="font-size:12.5px"><thead><tr><th style="width:28px"></th><th class="l">${lab}</th><th>수량</th><th>금액</th><th>점유율</th></tr></thead><tbody>${list.slice(0,10).map((x,i)=>`<tr><td>${i+1}</td><td class="l">${esc(x.n)}</td><td>${fmt(x.q)}</td><td>${fmt(x.a)}</td><td>${(x.a/tot*100).toFixed(1)}</td></tr>`).join("")}</tbody></table>`;
+  return tiles+`<div class="card"><div class="card-title">매장 매출 변동 추이 <span class="unit">${byMonth?"월별":"일별"} · 현금/카드/기타</span></div><div class="chart-box"><canvas id="ch-pida-trend"></canvas></div></div>
+    <div class="card"><div class="card-title">${byMonth?"월별":"일별"} 매출 상세내역</div>${tbl}</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      <div class="card" style="flex:1 1 100%"><div class="card-title">품목별 매출 순위</div><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start">${pidaPie(it)}<div style="flex:1;min-width:260px">${rank(it,"품목명")}</div></div></div>
+      <div class="card" style="flex:1 1 100%"><div class="card-title">분류 매출 순위 <span class="unit">분류는 '분류 설정'에서 고칠 수 있어요</span></div><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start">${pidaPie(cl)}<div style="flex:1;min-width:260px">${rank(cl,"분류명")}</div></div></div>
+    </div>`;
+}
+function pidaGroupMonth(L){const G={};L.forEach(d=>{const g=G[d.ym]=G[d.ym]||{lb:"20"+d.ym.slice(0,2)+"."+d.ym.slice(2),v:[0,0,0,0,0,0,0]};d.v.forEach((x,i)=>g.v[i]+=x);});return Object.keys(G).sort().map(k=>G[k]);}
+function pidaDashCharts(L){
+  const byMonth=L.length>62;const R=byMonth?pidaGroupMonth(L):L.map(d=>({lb:d.date.slice(5),v:d.v}));
+  makeChart("ch-pida-trend",{type:"bar",data:{labels:R.map(r=>r.lb),datasets:[
+    {label:"현금",data:R.map(r=>r.v[2]),backgroundColor:PIDA_COL["현금"],stack:"s",order:1},
+    {label:"카드",data:R.map(r=>r.v[3]),backgroundColor:PIDA_COL["카드"],stack:"s",order:1},
+    {label:"기타",data:R.map(r=>r.v[4]),backgroundColor:PIDA_COL["기타"],stack:"s",order:1}]},
+    options:{maintainAspectRatio:false,interaction:{mode:"index",intersect:false},plugins:{tooltip:{callbacks:{label:c=>c.dataset.label+" "+fmt(c.parsed.y)+"원"}}},scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,ticks:{callback:v=>axisMoney(v)}}}}});
+}
+/* 원그래프 (CSS conic-gradient) — 상위 5개 + 나머지 */
+function pidaPie(list){const pos=list.filter(x=>x.a>0);const top=pos.slice(0,5),rest=pos.slice(5).reduce((a,x)=>a+x.a,0);
+  const L=top.map(x=>({n:x.n,a:x.a})).concat(rest?[{n:"나머지",a:rest}]:[]);const T=L.reduce((a,x)=>a+x.a,0)||1;let acc=0;
+  const seg=L.map((x,i)=>{const a0=acc/T*360;acc+=x.a;return `${PIDA_PAL[i%PIDA_PAL.length]} ${a0}deg ${acc/T*360}deg`;}).join(",");
+  return `<div style="display:flex;flex-direction:column;align-items:center;gap:8px;width:220px"><div style="width:180px;height:180px;border-radius:50%;background:conic-gradient(${seg});box-shadow:0 2px 6px rgba(0,0,0,.15)"></div>
+    <div style="font-size:11.5px;line-height:1.6;width:100%">${L.map((x,i)=>`<div style="display:flex;gap:6px;align-items:center"><span style="width:10px;height:10px;border-radius:50%;background:${PIDA_PAL[i%PIDA_PAL.length]};flex:none"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.n)}</span><b>${(x.a/T*100).toFixed(1)}%</b></div>`).join("")}</div></div>`;}
+function pidaDayHtml(L){const t=pidaSum(L);
+  return `<div class="card"><div class="card-title">일별 매출 <span class="unit">영수증 기준</span></div><div class="table-wrap"><table class="rpt" style="font-size:12.5px"><thead><tr><th class="l">날짜</th><th>요일</th><th>건수</th><th>객수</th><th>현금</th><th>카드</th><th>기타</th><th>할인·서비스</th><th>총매출</th><th>객단가</th></tr></thead><tbody>
+    ${L.map(d=>`<tr><td class="l">${d.date}</td><td style="text-align:center;color:${/[토일]/.test(pidaWd(d.date))?"#b91c1c":"inherit"}">${pidaWd(d.date)}</td><td>${fmt(d.v[0])}</td><td>${fmt(d.v[1])}</td><td>${fmt(d.v[2])}</td><td>${fmt(d.v[3])}</td><td>${fmt(d.v[4])}</td><td>${fmt(d.v[6])}</td><td><b>${fmt(d.v[5])}</b></td><td>${d.v[1]?fmt(Math.round(d.v[5]/d.v[1])):""}</td></tr>`).join("")}
+    <tr class="total"><td class="l">합계</td><td></td><td>${fmt(t[0])}</td><td>${fmt(t[1])}</td><td>${fmt(t[2])}</td><td>${fmt(t[3])}</td><td>${fmt(t[4])}</td><td>${fmt(t[6])}</td><td>${fmt(t[5])}</td><td>${t[1]?fmt(Math.round(t[5]/t[1])):""}</td></tr></tbody></table></div></div>`;}
+function pidaMonthHtml(){const P=window.__pida;const ys=[...new Set(pidaYms().map(x=>x.slice(0,2)))].sort().reverse();
+  const tot=(ym)=>{const M=P.M[ym];if(!M)return null;const t=[0,0,0,0,0,0,0];Object.values(M.days).forEach(v=>v.forEach((x,i)=>t[i]+=x));return t;};
+  const head=`<tr><th class="l">월</th>${ys.map(y=>`<th>20${y}</th><th>증감</th>`).join("")}</tr>`;
+  const rows=MONTHS.map(m=>`<tr><td class="l">${m}월</td>${ys.map(y=>{const a=tot(y+String(m).padStart(2,"0")),b=tot(String(+y-1).padStart(2,"0")+String(m).padStart(2,"0"));const r=a&&b&&b[5]?a[5]/b[5]-1:null;return `<td>${a?fmt(a[5]):""}</td><td style="color:${r==null?"inherit":r>=0?"#15803d":"#b91c1c"}">${r==null?"":(r>0?"+":"")+(r*100).toFixed(1)+"%"}</td>`;}).join("")}</tr>`).join("");
+  const yt=ys.map(y=>{let s=0;MONTHS.forEach(m=>{const a=tot(y+String(m).padStart(2,"0"));if(a)s+=a[5];});return s;});
+  const det=ys.map(y=>{const L=MONTHS.map(m=>({m,t:tot(y+String(m).padStart(2,"0"))})).filter(x=>x.t);if(!L.length)return "";
+    return `<div class="card"><div class="card-title">20${y}년 월별 상세</div><div class="table-wrap"><table class="rpt" style="font-size:12.5px"><thead><tr><th class="l">월</th><th>영업일</th><th>건수</th><th>객수</th><th>현금</th><th>카드</th><th>기타</th><th>총매출</th><th>일평균</th><th>객단가</th></tr></thead><tbody>${L.map(x=>{const nd=Object.keys(P.M[y+String(x.m).padStart(2,"0")].days).length;return `<tr><td class="l">${x.m}월</td><td>${nd}</td><td>${fmt(x.t[0])}</td><td>${fmt(x.t[1])}</td><td>${fmt(x.t[2])}</td><td>${fmt(x.t[3])}</td><td>${fmt(x.t[4])}</td><td><b>${fmt(x.t[5])}</b></td><td>${fmt(Math.round(x.t[5]/(nd||1)))}</td><td>${x.t[1]?fmt(Math.round(x.t[5]/x.t[1])):""}</td></tr>`;}).join("")}</tbody></table></div></div>`;}).join("");
+  return `<div class="card"><div class="card-title">연도별 월 매출 <span class="unit">전년 같은 달 대비</span></div><div class="table-wrap"><table class="rpt" style="font-size:12.5px"><thead>${head}</thead><tbody>${rows}<tr class="total"><td class="l">합계</td>${yt.map(v=>`<td>${fmt(v)}</td><td></td>`).join("")}</tr></tbody></table></div></div>`+det;}
+function pidaTimeHtml(L){const P=window.__pida;
+  const H={};const yms=[...new Set(L.map(d=>d.ym))];const full=yms.every(ym=>L.filter(d=>d.ym===ym).length===Object.keys(P.M[ym].days).length);
+  if(full)yms.forEach(ym=>{for(const h in P.M[ym].hours){const x=H[h]=H[h]||[0,0];x[0]+=P.M[ym].hours[h][0];x[1]+=P.M[ym].hours[h][1];}});
+  const ht=Object.values(H).reduce((a,x)=>a+x[1],0)||1;
+  const hT=full?`<table class="rpt" style="font-size:12.5px"><thead><tr><th class="l">시간</th><th>건수</th><th>매출</th><th>비중</th><th class="l" style="width:200px"></th></tr></thead><tbody>${Object.keys(H).map(Number).sort((a,b)=>a-b).map(h=>{const x=H[h];const p=x[1]/ht*100;return `<tr><td class="l">${h}시</td><td>${fmt(x[0])}</td><td>${fmt(x[1])}</td><td>${p.toFixed(1)}%</td><td class="l"><div style="height:10px;width:${Math.max(2,p*2)}px;background:#e05a3a;border-radius:3px"></div></td></tr>`;}).join("")}</tbody></table>`
+    :'<div class="hint">시간대는 한 달 단위로 모아 둬서 월·연·전체 기간을 고르면 보여요.</div>';
+  const W={};L.forEach(d=>{const w=pidaWd(d.date);const x=W[w]=W[w]||{n:0,t:0,c:0,g:0};x.n++;x.t+=d.v[5];x.c+=d.v[0];x.g+=d.v[1];});
+  const wT=`<table class="rpt" style="font-size:12.5px"><thead><tr><th class="l">요일</th><th>영업일</th><th>하루 평균 매출</th><th>하루 평균 건수</th><th>하루 평균 객수</th></tr></thead><tbody>${"월화수목금토일".split("").filter(w=>W[w]).map(w=>{const x=W[w];return `<tr><td class="l">${w}</td><td>${x.n}</td><td><b>${fmt(Math.round(x.t/x.n))}</b></td><td>${(x.c/x.n).toFixed(1)}</td><td>${(x.g/x.n).toFixed(1)}</td></tr>`;}).join("")}</tbody></table>`;
+  return `<div style="display:flex;gap:12px;flex-wrap:wrap"><div class="card" style="flex:1;min-width:360px"><div class="card-title">시간대별 매출</div>${hT}</div><div class="card" style="flex:1;min-width:360px"><div class="card-title">요일별 평균</div>${wT}</div></div>`;}
+function pidaItemHtml(L){const U=window.__pida.ui;const q=(U.q||"").trim();
+  let it=pidaItems(L);const tot=it.reduce((a,x)=>a+x.a,0)||1;if(q)it=it.filter(x=>x.n.indexOf(q)>=0||pidaCat(x.n).indexOf(q)>=0);
+  const trend=U.item?pidaItemTrend(U.item):"";
+  return `<div class="card"><div class="card-head"><div class="card-title">품목별 판매 <span class="unit">${it.length}개 · 품목을 누르면 달마다 얼마나 팔렸는지 보여요</span></div>
+    <input type="search" class="ctl" placeholder="🔍 품목·분류 찾기" value="${esc(q)}" oninput="window.__pida.ui.q=this.value;clearTimeout(window.__pida.qt);window.__pida.qt=setTimeout(()=>{renderPida();const i=document.querySelector('#tab-pida input[type=search]');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length);}},350)" style="min-width:220px"></div>
+    ${trend}
+    <div class="table-wrap"><table class="rpt" style="font-size:12.5px"><thead><tr><th style="width:34px"></th><th class="l">품목명</th><th class="l">분류</th><th>수량</th><th>금액</th><th>점유율</th></tr></thead><tbody>
+    ${it.map((x,i)=>`<tr style="cursor:pointer" onclick="pidaSet('item',this.dataset.n)" data-n="${esc(x.n)}"><td>${i+1}</td><td class="l" style="color:#2563eb">${esc(x.n)}</td><td class="l">${esc(pidaCat(x.n))}</td><td>${fmt(x.q)}</td><td>${fmt(x.a)}</td><td>${(x.a/tot*100).toFixed(1)}%</td></tr>`).join("")}</tbody></table></div></div>`;}
+function pidaItemTrend(nm){const P=window.__pida;const R=[];
+  for(const ym of pidaYms()){const M=P.M[ym];const i=M.items.indexOf(nm);if(i<0)continue;let q=0,a=0;for(const dd in M.di){const v=M.di[dd];for(let k=0;k<v.length;k+=3)if(v[k]===i){q+=v[k+1];a+=v[k+2];}}R.push({ym,q,a});}
+  return `<div style="margin:8px 0 12px;padding:10px 12px;border:1px solid #c7d2fe;background:#f8faff;border-radius:10px"><b>${esc(nm)}</b> <span class="unit">${esc(pidaCat(nm))} · 달마다</span> <span class="addrow" onclick="pidaSet('item','')" style="margin-left:8px">닫기</span>
+    <div class="table-wrap" style="margin-top:6px"><table class="rpt" style="font-size:12px"><thead><tr><th class="l">월</th>${R.map(r=>`<th>${r.ym.slice(0,2)}.${r.ym.slice(2)}</th>`).join("")}</tr></thead><tbody><tr><td class="l">수량</td>${R.map(r=>`<td>${fmt(r.q)}</td>`).join("")}</tr><tr><td class="l">금액</td>${R.map(r=>`<td>${fmt(r.a)}</td>`).join("")}</tr></tbody></table></div></div>`;}
+function pidaCatHtml(L){const it=pidaItems(L);const tot=it.reduce((a,x)=>a+x.a,0)||1;const C={};it.forEach(x=>{const c=pidaCat(x.n);(C[c]=C[c]||{n:c,q:0,a:0,L:[]}).L.push(x);C[c].q+=x.q;C[c].a+=x.a;});
+  return Object.values(C).sort((a,b)=>b.a-a.a).map(c=>`<div class="card"><div class="card-head"><div class="card-title">${esc(c.n)} <span class="unit">${c.L.length}개 품목</span></div><div style="font-weight:800">${fmt(c.a)}원 · ${(c.a/tot*100).toFixed(1)}%</div></div>
+    <details><summary style="cursor:pointer;font-size:12.5px;color:#2563eb">품목 보기</summary><div class="table-wrap"><table class="rpt" style="font-size:12.5px"><thead><tr><th class="l">품목명</th><th>수량</th><th>금액</th></tr></thead><tbody>${c.L.map(x=>`<tr><td class="l">${esc(x.n)}</td><td>${fmt(x.q)}</td><td>${fmt(x.a)}</td></tr>`).join("")}</tbody></table></div></details></div>`).join("");}
+function pidaCatSetHtml(){const P=window.__pida;const names=new Set();for(const ym in P.M)P.M[ym].items.forEach(n=>names.add(n));
+  const L=[...names].sort((a,b)=>a.localeCompare(b,"ko"));const q=(P.ui.cq||"").trim();const F=q?L.filter(n=>n.indexOf(q)>=0||pidaCat(n).indexOf(q)>=0):L;
+  return `<div class="card"><div class="card-head"><div class="card-title">분류 설정 <span class="unit">${L.length}개 품목 · 처음엔 이름으로 짐작해서 넣어 뒀어요 · 고르면 바로 저장</span></div>
+    <input type="search" class="ctl" placeholder="🔍 품목 찾기" value="${esc(q)}" oninput="window.__pida.ui.cq=this.value;clearTimeout(window.__pida.qt);window.__pida.qt=setTimeout(()=>{renderPida();const i=document.querySelector('#tab-pida input[type=search]');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length);}},350)"></div>
+    <div class="table-wrap"><table class="rpt" style="font-size:12.5px"><thead><tr><th class="l">품목명</th><th class="l">분류</th></tr></thead><tbody>${F.map(n=>`<tr><td class="l">${esc(n)}${P.cats[n]?"":' <span class="unit">(짐작)</span>'}</td><td class="l"><select class="ctl" data-n="${esc(n)}" onchange="pidaCatPut(this.dataset.n,this.value)">${PIDA_CATS.map(c=>`<option ${pidaCat(n)===c?"selected":""}>${c}</option>`).join("")}</select></td></tr>`).join("")}</tbody></table></div></div>`;}
+window.pidaCatPut=function(n,c){const P=window.__pida;P.cats[n]=c;clearTimeout(P.ct);P.ct=setTimeout(async()=>{try{if(!IS_DEMO)await fsCol("epidaDetail").doc("pos_cats").set({map:P.cats});toast("분류를 저장했어요");}catch(e){toast("분류 저장 실패: "+(e.message||e),true);}},700);};
+</script>
+
 <style>
 #tab-pnl .pi-card table.pi{border-collapse:collapse;font-size:12.5px;width:auto;min-width:min(100%,620px)}
 #tab-pnl .pi-card table.pi th{background:#F3F5F1;border:1px solid #dde2da;padding:6px 10px;white-space:nowrap}
@@ -20895,6 +21112,7 @@ async function showApp() {
       <div id="tab-manage" class="hidden"></div>
     </section>
     <section id="tab-pnl" class="tab-panel hidden"></section>
+    <section id="tab-pida" class="tab-panel hidden"></section>
     <section id="tab-buy" class="tab-panel hidden"></section>
     <section id="tab-pay" class="tab-panel hidden"></section>
     <section id="tab-expense" class="tab-panel hidden"></section>
@@ -20920,7 +21138,7 @@ function deepLinkTab(){
     if(!h)return null;
     const KO={"출금기록부":"withdraw","출금":"withdraw","요약":"home","자금일보":"jagum","자금":"jagum","매출비교":"compare","매출현황":"sales","매출":"sales","월별손익":"pnl","손익":"pnl","매입":"buy","급여":"pay","비용정리":"expense","부가세":"vat","비용":"expense","임의결제":"free","설정":"settings","매출확정":"confirmapp"};
     if(KO[h])h=KO[h];
-    const OK=["home","withdraw","jagum","compare","sales","pnl","buy","pay","expense","free","vat","settings","confirmapp","monthly","daily","market","bojagi","agency"];
+    const OK=["home","withdraw","jagum","compare","sales","pnl","pida","buy","pay","expense","free","vat","settings","confirmapp","monthly","daily","market","bojagi","agency"];
     if(OK.indexOf(h)<0)return null;
     const ADMIN=["buy","pay","expense","free","vat","settings","confirmapp"];
     if(ADMIN.indexOf(h)>=0&&(!S.user||S.user.role!=="admin"))return null;
