@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v527</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v528</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -20980,20 +20980,78 @@ window.pidaQuick=function(k){const U=window.__pida.ui;const t=new Date();let a=n
   else if(k==="m1"){a.setMonth(a.getMonth()-1);a.setDate(a.getDate()+1);}
   else if(k==="tm")a.setDate(1);
   else if(k==="pm"){a=new Date(t.getFullYear(),t.getMonth()-1,1);b=new Date(t.getFullYear(),t.getMonth(),0);}
-  else if(k==="all"){const D=pidaDays();U.from=D[0].date;U.to=D[D.length-1].date;U.dsel="";renderPida();return;}
-  U.from=pidaYmd(a);U.to=pidaYmd(b);U.dsel="";renderPida();};
+  else if(k==="all"){const D=pidaDays();U.from=D[0].date;U.to=D[D.length-1].date;pidaSnap();U.dsel="";renderPida();return;}
+  else if(k==="tw"){a=new Date(pidaWk(pidaYmd(t))+"T00:00:00");b=new Date(a);b.setDate(b.getDate()+6);}
+  else if(k==="lw"){a=new Date(pidaWk(pidaYmd(t))+"T00:00:00");a.setDate(a.getDate()-7);b=new Date(a);b.setDate(b.getDate()+6);}
+  else if(k==="w4"){b=new Date(pidaWk(pidaYmd(t))+"T00:00:00");b.setDate(b.getDate()+6);a=new Date(b);a.setDate(a.getDate()-27);}
+  else if(k==="m3"){a=new Date(t.getFullYear(),t.getMonth()-2,1);b=new Date(t.getFullYear(),t.getMonth()+1,0);}
+  else if(k==="ty"){a=new Date(t.getFullYear(),0,1);b=new Date(t.getFullYear(),11,31);}
+  else if(k==="ly"){a=new Date(t.getFullYear()-1,0,1);b=new Date(t.getFullYear()-1,11,31);}
+  U.from=pidaYmd(a);U.to=pidaYmd(b);if(k==="tm"&&U.view==="month"&&(U.unit==="m"))U.to=pidaMEnd(U.to);U.dsel="";renderPida();};
+/* ===== v528: 기간별 매출 — 묶는 단위(일·주·월·연)에 맞춰 기간도 주·월·연으로 고르기 ===== */
+const pidaWk=ymd=>{const t=new Date(ymd+"T00:00:00");t.setDate(t.getDate()-((t.getDay()+6)%7));return pidaYmd(t);};
+const pidaMEnd=ymd=>{const t=new Date(ymd+"T00:00:00");return pidaYmd(new Date(t.getFullYear(),t.getMonth()+1,0));};
+const pidaAdd=(ymd,d)=>{const t=new Date(ymd+"T00:00:00");t.setDate(t.getDate()+d);return pidaYmd(t);};
+function pidaSnap(){const U=window.__pida.ui;if(U.view!=="month")return;const un=U.unit||"d";if(!U.from||!U.to)return;
+  if(un==="w"){U.from=pidaWk(U.from);U.to=pidaAdd(pidaWk(U.to),6);}
+  else if(un==="m"){U.from=U.from.slice(0,7)+"-01";U.to=pidaMEnd(U.to);}
+  else if(un==="y"){U.from=U.from.slice(0,4)+"-01-01";U.to=U.to.slice(0,4)+"-12-31";}}
+function pidaPkLabel(ymd,un,k){if(!ymd)return "";
+  if(un==="w"){const a=pidaWk(ymd),b=pidaAdd(a,6);return `${a.slice(2).replace(/-/g,".")}~${b.slice(5).replace(/-/g,".")}`;}
+  if(un==="m")return `${ymd.slice(0,4)}년 ${+ymd.slice(5,7)}월`;
+  if(un==="y")return `${ymd.slice(0,4)}년`;return ymd;}
+/* ◀ ▶ — 고른 기간 길이만큼 단위째로 옮김 (일 단위는 예전처럼 한 달) */
+window.pidaStep=function(n,un){const U=window.__pida.ui;
+  if(un==="d"){pidaShiftM(n);return;}
+  if(un==="w"){const len=Math.round((new Date(U.to)-new Date(U.from))/864e5)+1;const k=Math.max(1,Math.round(len/7));U.from=pidaAdd(U.from,7*k*n);U.to=pidaAdd(U.to,7*k*n);}
+  else if(un==="m"){const f=new Date(U.from+"T00:00:00"),t=new Date(U.to+"T00:00:00");const k=(t.getFullYear()-f.getFullYear())*12+t.getMonth()-f.getMonth()+1;
+    U.from=pidaYmd(new Date(f.getFullYear(),f.getMonth()+k*n,1));U.to=pidaYmd(new Date(t.getFullYear(),t.getMonth()+k*n+1,0));}
+  else{const k=(+U.to.slice(0,4))-(+U.from.slice(0,4))+1;U.from=(+U.from.slice(0,4)+k*n)+"-01-01";U.to=(+U.to.slice(0,4)+k*n)+"-12-31";}
+  U.dsel="";renderPida();};
+/* 고르는 창 — 월: 연도 ◀▶ + 1~12월, 연: 20년씩, 주: 달력에서 아무 날이나 누르면 그 주(월~일) */
+window.pidaPkOpen=function(btn,which){const U=window.__pida.ui;const un=U.unit||"d";const cur=which==="from"?U.from:U.to;
+  window.__pidaPk={which,un,y:+cur.slice(0,4),m:+cur.slice(5,7)-1,base:2000+Math.floor((+cur.slice(0,4)-2000)/20)*20};
+  let el=document.getElementById("pida-pk");if(!el){el=document.createElement("div");el.id="pida-pk";document.body.appendChild(el);
+    document.addEventListener("mousedown",e=>{const p=document.getElementById("pida-pk");if(p&&p.style.display!=="none"&&!p.contains(e.target)&&!(e.target.closest&&e.target.closest("[onclick^='pidaPkOpen']")))p.style.display="none";});}
+  const r=btn.getBoundingClientRect();el.style.cssText=`position:fixed;z-index:200;top:${Math.min(r.bottom+4,innerHeight-330)}px;left:${Math.max(8,Math.min(r.left,innerWidth-300))}px;width:290px;background:#fff;border-radius:6px;box-shadow:0 6px 24px rgba(0,0,0,.25);overflow:hidden;font-family:inherit`;
+  pidaPkDraw();};
+window.pidaPkNav=function(n){const K=window.__pidaPk;if(K.un==="m")K.y+=n;else if(K.un==="y")K.base+=20*n;else{K.m+=n;if(K.m<0){K.m=11;K.y--;}if(K.m>11){K.m=0;K.y++;}}pidaPkDraw();};
+window.pidaPkPick=function(v){const K=window.__pidaPk,U=window.__pida.ui;let a,b;
+  if(K.un==="m"){a=v+"-01";b=pidaMEnd(a);}else if(K.un==="y"){a=v+"-01-01";b=v+"-12-31";}else{a=pidaWk(v);b=pidaAdd(a,6);}
+  if(K.which==="from"){U.from=a;if(U.to<a)U.to=b;}else{U.to=b;if(U.from>b)U.from=a;}
+  document.getElementById("pida-pk").style.display="none";U.dsel="";renderPida();};
+window.pidaPkToday=function(){const K=window.__pidaPk;const t=pidaYmd(new Date());pidaPkPick(K.un==="m"?t.slice(0,7):K.un==="y"?t.slice(0,4):t);};
+function pidaPkDraw(){const K=window.__pidaPk,U=window.__pida.ui;const el=document.getElementById("pida-pk");if(!el)return;
+  const sel=K.which==="from"?U.from:U.to;
+  const head=t=>`<div style="background:#0b84c6;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:10px 12px"><span style="cursor:pointer;font-size:18px;padding:0 6px" onclick="pidaPkNav(-1)">◀</span><b style="font-size:${K.un==="y"?20:26}px">${t}</b><span style="cursor:pointer;font-size:18px;padding:0 6px" onclick="pidaPkNav(1)">▶</span></div>`;
+  const cellS=on=>`cursor:pointer;text-align:center;padding:${K.un==="w"?"6px 0":"12px 0"};border-radius:6px;font-size:14px;${on?"background:#4a72f5;color:#fff;font-weight:700":"color:#333"}`;
+  let body="";
+  if(K.un==="m"){body=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:12px">${[...Array(12)].map((_,i)=>{const v=K.y+"-"+pidaP2(i+1);return `<div style="${cellS(sel.slice(0,7)===v)}" onmouseover="this.style.outline='1px solid #93c5fd'" onmouseout="this.style.outline=''" onclick="pidaPkPick('${v}')">${i+1}월</div>`;}).join("")}</div>`;el.innerHTML=head(K.y)+body;}
+  else if(K.un==="y"){body=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:12px">${[...Array(20)].map((_,i)=>{const v=String(K.base+i);return `<div style="${cellS(sel.slice(0,4)===v)}" onmouseover="this.style.outline='1px solid #93c5fd'" onmouseout="this.style.outline=''" onclick="pidaPkPick('${v}')">${v}년</div>`;}).join("")}</div>`;el.innerHTML=head(`${K.base} ~ ${K.base+19}`)+body;}
+  else{const first=new Date(K.y,K.m,1);const st=new Date(first);st.setDate(1-((first.getDay()+6)%7));const sw=pidaWk(sel);let rows="";
+    for(let w=0;w<6;w++){const ws=pidaYmd(new Date(st.getFullYear(),st.getMonth(),st.getDate()+7*w));if(w>3&&+ws.slice(5,7)!==K.m+1&&ws>pidaYmd(first))break;const on=ws===sw;
+      rows+=`<div style="display:grid;grid-template-columns:repeat(7,1fr);cursor:pointer;border-radius:6px;${on?"background:#4a72f5;color:#fff;font-weight:700":""}" onmouseover="if(!${on})this.style.background='#e0e7ff'" onmouseout="if(!${on})this.style.background=''" onclick="pidaPkPick('${ws}')">${[...Array(7)].map((_,d)=>{const x=new Date(ws+"T00:00:00");x.setDate(x.getDate()+d);const out=x.getMonth()!==K.m;return `<div style="text-align:center;padding:7px 0;font-size:13px;${out&&!on?"color:#cbd5e1":""}${d===6&&!on&&!out?"color:#dc2626":""}">${x.getDate()}</div>`;}).join("")}</div>`;}
+    el.innerHTML=head(`${K.y}년 ${K.m+1}월`)+`<div style="padding:8px 10px"><div style="display:grid;grid-template-columns:repeat(7,1fr);font-size:12px;color:#64748b;text-align:center;margin-bottom:4px">${"월화수목금토일".split("").map(x=>`<div>${x}</div>`).join("")}</div>${rows}<div style="font-size:11px;color:#64748b;margin-top:6px">아무 날이나 누르면 그 주(월~일)가 골라져요</div></div>`;}
+  el.innerHTML+=`<div style="display:flex;justify-content:flex-end;padding:0 10px 10px"><button onclick="pidaPkToday()" style="background:#0b84c6;color:#fff;border:0;border-radius:3px;padding:3px 8px;font-size:12px;cursor:pointer">금일</button></div>`;
+  el.style.display="block";}
 window.pidaShiftM=function(n){const U=window.__pida.ui;const f=new Date(U.from+"T00:00:00");const a=new Date(f.getFullYear(),f.getMonth()+n,1),b=new Date(f.getFullYear(),f.getMonth()+n+1,0);U.from=pidaYmd(a);U.to=pidaYmd(b);U.dsel="";renderPida();};
 window.pidaItemSearch=function(){const i=document.getElementById("pida-iq");window.__pida.ui.q=i?i.value:"";renderPida();};
 /* v525: 화면 안 토글 — .subtabs는 넓은 화면에서 왼쪽 메뉴로 옮겨져서 따로 만듦 */
 function pidaSeg(list,cur,fn){return `<span style="display:inline-flex;border:1px solid #cbd5e1;border-radius:8px;overflow:hidden;background:#fff">${list.map(([k,n],i)=>`<button onclick="${fn}('${k}')" style="border:0;${i?"border-left:1px solid #cbd5e1;":""}padding:5px 12px;font-size:13px;font-weight:700;cursor:pointer;${cur===k?"background:#15803d;color:#fff":"background:#fff;color:#334155"}">${n}</button>`).join("")}</span>`;}
 function pidaRangeBar(withSearch,withUnit){const U=window.__pida.ui;const D=pidaDays();const mn=D[0].date,mx=D[D.length-1].date;
   const qb=(k,n)=>`<button class="btn btn-sm" style="background:#2563eb;color:#fff;border-color:#2563eb" onclick="pidaQuick('${k}')">${n}</button>`;
+  const un=withUnit?(U.unit||"d"):"d";
+  const QK={d:[["td","오늘"],["yd","전일"],["tm","이달"],["pm","전달"]],w:[["tw","이번주"],["lw","지난주"],["w4","최근4주"]],m:[["tm","이달"],["pm","전달"],["m3","최근3개월"],["ty","올해"]],y:[["ty","올해"],["ly","작년"],["all","전체"]]}[un];
+  const CAL='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M7 14h2M11 14h2M15 14h2M7 18h2M11 18h2" stroke-width="2.4"/></svg>';
+  const pb=(k)=>`<button onclick="pidaPkOpen(this,'${k}')" style="display:inline-flex;align-items:stretch;padding:0;border:1px solid #cbd5e1;border-radius:4px;background:#fff;cursor:pointer;overflow:hidden;font:inherit"><span style="padding:6px 10px;min-width:${un==="w"?130:84}px;text-align:left;font-size:13.5px;color:#111">${pidaPkLabel(k==="from"?U.from:U.to,un,k)}</span><span style="display:flex;align-items:center;padding:0 8px;background:#f1f5f9;border-left:1px solid #cbd5e1">${CAL}</span></button>`;
+  const inputs=un==="d"?`<input type="date" class="ctl" value="${U.from}" min="${mn}" max="${mx}" onchange="pidaRangeSet('from',this.value)"> ~
+    <input type="date" class="ctl" value="${U.to}" min="${mn}" max="${mx}" onchange="pidaRangeSet('to',this.value)">`:`${pb("from")} ~ ${pb("to")}`;
+  const stepN={d:"달",w:"주",m:"달",y:"해"}[un];
   return `<div class="card" style="padding:10px 14px;background:#eef4fd"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-    <div style="display:flex;gap:3px;flex-wrap:wrap">${qb("td","오늘")}${qb("yd","전일")}${qb("tm","이달")}${qb("pm","전달")}</div>
-    <span style="display:flex;align-items:center;gap:4px"><button class="btn btn-sm" title="앞 달" onclick="pidaShiftM(-1)">◀</button>
-    <input type="date" class="ctl" value="${U.from}" min="${mn}" max="${mx}" onchange="pidaRangeSet('from',this.value)"> ~
-    <input type="date" class="ctl" value="${U.to}" min="${mn}" max="${mx}" onchange="pidaRangeSet('to',this.value)">
-    <button class="btn btn-sm" title="다음 달" onclick="pidaShiftM(1)">▶</button></span>
+    <div style="display:flex;gap:3px;flex-wrap:wrap">${QK.map(([k,n])=>qb(k,n)).join("")}</div>
+    <span style="display:flex;align-items:center;gap:4px"><button class="btn btn-sm" title="앞 ${stepN}" onclick="pidaStep(-1,'${un}')">◀</button>
+    ${inputs}
+    <button class="btn btn-sm" title="다음 ${stepN}" onclick="pidaStep(1,'${un}')">▶</button></span>
     ${withSearch?`<span style="display:flex;align-items:center;gap:4px;margin-left:6px">품목명 <input id="pida-iq" type="search" class="ctl" placeholder="비우면 전체" value="${esc(U.q||"")}" onkeydown="if(event.key==='Enter')pidaItemSearch()" style="width:180px"><button class="btn btn-sm" style="background:#111;color:#fff;border-color:#111" onclick="pidaItemSearch()">🔍 검색</button></span>
     <span style="margin-left:6px">${pidaSeg([["item","🏆 상품 순위"],["cat","📂 분류 순위"]],U.imode||"item","pidaIMode")}</span>`:""}
     ${withUnit?`<span style="margin-left:6px;display:flex;align-items:center;gap:6px">묶기 ${pidaSeg([["d","일"],["w","주"],["m","월"],["y","연"]],U.unit||"d","pidaUnit")}</span>`:""}
@@ -21058,7 +21116,7 @@ function pidaHourTable(H){const hs=Object.keys(H).map(Number);const lo=Math.min(
   return `<table class="rpt" style="font-size:12.5px"><thead><tr><th>시간</th><th>총매출액</th><th>건수</th><th>건단가</th><th>매출누계</th><th>비중</th><th class="l"></th></tr></thead><tbody>
     <tr class="total"><td style="text-align:center">합계</td><td>${fmt(tot)}</td><td>${fmt(cnt)}</td><td>${cnt?fmt(Math.round(tot/cnt)):0}</td><td>${fmt(tot)}</td><td></td><td></td></tr>${rows.join("")}</tbody></table>`;}
 /* 기간별 매출 — 일·주·월·연 단위로 묶어서 */
-window.pidaUnit=function(v){window.__pida.ui.unit=v;renderPida();};
+window.pidaUnit=function(v){window.__pida.ui.unit=v;pidaSnap();window.__pida.ui.dsel="";renderPida();};
 function pidaPeriodHtml(L){const U=window.__pida.ui;const un=U.unit||"d";
   const key=d=>{if(un==="d")return d.date;if(un==="y")return d.date.slice(0,4)+"년";if(un==="m")return d.date.slice(0,7);
     const t=new Date(d.date+"T00:00:00");const mo=new Date(t);mo.setDate(t.getDate()-((t.getDay()+6)%7));const su=new Date(mo);su.setDate(mo.getDate()+6);return pidaYmd(mo)+" ~ "+pidaYmd(su).slice(5);};
