@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v553</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v554</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -20874,7 +20874,7 @@ async function renderPida(){
   else{pidaRangeInit();const L=pidaRangeDays();
     body=pidaRangeBar(U.view==="item",U.view==="month"||U.view==="trend",U.view==="time")+(!L.length?'<div class="card"><div class="hint" style="padding:14px">고른 기간에 포스 자료가 없어요. 날짜를 바꿔보세요.</div></div>':
       U.view==="day"?pidaDayHtml(L):U.view==="month"?pidaPeriodHtml(L):U.view==="trend"?pidaTrendHtml(L):U.view==="time"?pidaTimeHtml(L):U.view==="item"?pidaItemHtml(L):pidaCatHtml(L));}
-  el.innerHTML=tabs+`<div class="card" style="padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b style="font-size:16px">🍽 꽃밥에피다 (인사동)</b><span class="unit">포스 일일매출상세내역 기준 · 부가세 포함</span><span style="margin-left:auto"></span>${perSel}</div>`+body;
+  el.innerHTML=tabs+`<div class="card" style="padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b style="font-size:16px">🍽 꽃밥에피다 (인사동)</b><span class="unit">포스 일일매출상세내역 기준 · 부가세 포함</span>${perSel}</div>`+body;
   pidaApplySorts();
   if(U.view==="dash")pidaDashCharts(pidaSel(U.per));
 }
