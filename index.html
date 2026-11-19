@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v520</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v521</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -4037,7 +4037,7 @@ function epidaParse(text,fname){
   return D;
 }
 window.epidaFilesPick=async function(inp){
-  const files=[...(inp.files||[])];inp.value="";
+  const files=[...(inp.files||[])];inp.value="";const skip=inp.skip||[];
   if(!files.length)return;
   toast(`파일 ${files.length}개 읽는 중…`);
   const all={},bad=[];
@@ -4068,9 +4068,9 @@ window.epidaFilesPick=async function(inp){
   for(const y of Object.keys(MM).sort()){
     const ydoc=(S.data.epidaDetail[y]=S.data.epidaDetail[y]||{months:{}});
     ydoc.months=ydoc.months||{};
-    for(const m of Object.keys(MM[y]).sort((a,b)=>a-b)){const t=MM[y][m];
+    for(const m of Object.keys(MM[y]).sort((a,b)=>a-b)){const t=MM[y][m];if(skip.includes(`${y}.${m}`))continue;
       for(const k in t.items){t.items[k].q=Math.round(t.items[k].q*100)/100;t.items[k].a=Math.round(t.items[k].a);}
-      ydoc.months[m]={total:Math.round(t.total),disc:Math.round(t.disc),net:Math.round(t.net),days:t.days,items:t.items};
+      ydoc.months[m]={total:Math.round(t.total),disc:Math.round(t.disc),net:Math.round(t.net),days:t.days,items:t.items,upAt:(()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");})()};
       done.push(`${y}.${m}`);}
     queueSave("epidaDetail",y);
   }
@@ -20792,14 +20792,21 @@ window.pidaPick=async function(inp){
     try{toast(`${f.name} 읽는 중… (${i+1}/${fs.length})`);Object.assign(all,pidaParseRaw(await pidaAoa(f),f.name));}
     catch(e){console.error(e);bad.push(f.name+" — "+(e.message||e));}
   }
-  const B=pidaBuild(all);const yms=Object.keys(B).sort();const done=[];
+  const B=pidaBuild(all);let yms=Object.keys(B).sort();const done=[];
+  /* v521: 넣은 날 기록(진행 중인 달 구분용) + 이미 있던 날짜가 새 파일에 없으면 지워지기 전에 물어봄 */
+  const upAt=pidaYmd(new Date());yms.forEach(ym=>B[ym].upAt=upAt);
+  const lost=yms.map(ym=>{const O=P.M[ym];if(!O)return null;const L=Object.keys(O.days).filter(dd=>!B[ym].days[dd]).sort();return L.length?{ym,L}:null;}).filter(Boolean);
+  const skip=[];
+  if(lost.length){const msg=lost.map(x=>`· 20${x.ym.slice(0,2)}년 ${+x.ym.slice(2)}월: ${x.L.length}일 (${+x.L[0]}일${x.L.length>1?" ~ "+(+x.L[x.L.length-1])+"일":""})`).join("\n");
+    if(!confirm("이미 넣어 둔 날짜 중 이번 파일에 없는 날이 있어요. 새 파일로 바꾸면 이 날짜들은 지워져요.\n\n"+msg+"\n\n[확인] 새 파일로 바꾸기\n[취소] 이 달은 그대로 두기 (그 달은 1일부터 받은 파일로 다시 넣어주세요)")){
+      lost.forEach(x=>skip.push(x.ym));yms=yms.filter(ym=>!skip.includes(ym));}}
   for(let i=0;i<yms.length;i++){const ym=yms[i];
     if(yms.length>3)toast(`저장하는 중… ${i+1}/${yms.length}개월`);
     try{P.M[ym]=B[ym];if(!IS_DEMO)await fsCol("epidaDetail").doc("pos_"+ym).set(B[ym]);done.push("20"+ym.slice(0,2)+"."+(+ym.slice(2)));}
     catch(e){console.error(e);bad.push("20"+ym.slice(0,2)+"."+(+ym.slice(2))+" 저장 실패 — "+(e.message||e));}
   }
   /* 매출현황 › 피다 탭(월 합계·메뉴별)에도 같이 */
-  try{if(typeof window.epidaFilesPick==="function")await window.epidaFilesPick({files:fs,value:""});}catch(e){console.warn(e);}
+  try{if(typeof window.epidaFilesPick==="function")await window.epidaFilesPick({files:fs,value:"",skip:skip.map(ym=>"20"+ym.slice(0,2)+"."+(+ym.slice(2)))});}catch(e){console.warn(e);}
   if(done.length)toast("꽃밥에피다 "+(done.length>4?done[0]+" ~ "+done[done.length-1]:done.join(", "))+` (${done.length}개월) 반영했어요`);
   if(bad.length)alert("읽지 못한 것:\n"+bad.join("\n"));
   if(done.length){window.__pida.ui.view="up";}
@@ -20837,7 +20844,7 @@ async function renderPida(){
   const upCard=`<div class="card"><div class="card-title">📂 포스 일일매출상세내역 넣기 <span class="unit">영업속보 › 일일매출상세내역 엑셀(.xlsx·.xls) · 파일 여러 개를 한꺼번에 골라도 되고, 여러 달이 든 큰 파일 하나도 OK · 같은 달은 이번에 넣은 파일로 바뀌어요</span></div>
     <input type="file" multiple accept=".xlsx,.xls,.html" onchange="pidaPick(this)">
     <div class="footnote" style="margin-top:6px">한 번 넣으면 이 탭(대시보드·기간별 매출·상품판매별·판매시간별…)과 매출현황 › 피다 탭에 같이 들어가요. 2015년 12월부터 전부 다시 넣으려면 파일을 <b>한꺼번에 모두 선택</b>하세요 — 같은 날이 두 파일에 겹쳐도 두 번 더해지지 않아요(나중 파일 기준). 넣고 나면 바로 아래 <b>빠진 날 확인</b>에서 빠진 날짜를 볼 수 있어요.</div>
-    ${pidaCoverHtml()}</div>`;
+    ${pidaCoverHtml()}${pidaYms().some(k=>(pidaMonthState(k)||{}).part)?'<div class="footnote" style="margin-top:4px"><span style="color:#c2410c;font-weight:700">~N일</span> = 그 날짜까지만 들어간 달(진행 중이던 달). 달이 끝나면 <b>1일~말일</b>로 다시 받아 넣으면 ✓로 바뀌어요.</div>':""}</div>`;
   if(!pidaYms().length){el.innerHTML=tabs+(isAd?upCard:'<div class="card"><div class="hint" style="padding:14px">아직 자료가 없어요.</div></div>');return;}
   const perSel=U.view!=="dash"?"":`<select class="ctl" onchange="pidaSet('per',this.value)">${PER.map(([k,n])=>`<option value="${k}" ${k===U.per?"selected":""}>${n}</option>`).join("")}</select>`;
   let body="";
@@ -20851,8 +20858,15 @@ async function renderPida(){
   if(U.view==="dash")pidaDashCharts(pidaSel(U.per));
 }
 RENDERERS.pida=renderPida;
+/* v521: 달 상태 — 넣은 날(upAt)이 그 달 말일 이전이면 아직 진행 중이던 달(일부만 들어감) */
+function pidaMonthState(ym){const M=window.__pida.M[ym];if(!M)return null;
+  const y=2000+(+ym.slice(0,2)),m=+ym.slice(2);const nd=new Date(y,m,0).getDate();const end=`${y}-${String(m).padStart(2,"0")}-${String(nd).padStart(2,"0")}`;
+  const last=Math.max(...Object.keys(M.days).map(Number));let part="";
+  if(M.upAt){if(M.upAt<=end)part=`${M.upAt}에 넣은 자료 — 그 뒤 날짜는 아직 없어요. 달이 끝나면 1일~말일 파일로 다시 넣어주세요.`;}
+  else if(ym===pidaYms().slice(-1)[0]&&last<nd)part=`${last}일까지만 있어요. 달이 끝나면 1일~말일 파일로 다시 넣어주세요.`;
+  return {last,part};}
 function pidaCoverHtml(){const ys=[...new Set(pidaYms().map(x=>x.slice(0,2)))];if(!ys.length)return "";
-  return `<div class="table-wrap" style="margin-top:8px"><table class="rpt" style="font-size:12px"><thead><tr><th class="l">연도</th>${MONTHS.map(m=>`<th>${m}월</th>`).join("")}</tr></thead><tbody>${ys.map(y=>`<tr><td class="l">20${y}</td>${MONTHS.map(m=>{const k=y+String(m).padStart(2,"0");return `<td style="text-align:center">${window.__pida.M[k]?'<span style="color:#15803d;font-weight:700">✓</span>':'<span style="color:#ccc">–</span>'}</td>`;}).join("")}</tr>`).join("")}</tbody></table></div>`;}
+  return `<div class="table-wrap" style="margin-top:8px"><table class="rpt" style="font-size:12px"><thead><tr><th class="l">연도</th>${MONTHS.map(m=>`<th>${m}월</th>`).join("")}</tr></thead><tbody>${ys.map(y=>`<tr><td class="l">20${y}</td>${MONTHS.map(m=>{const k=y+String(m).padStart(2,"0");const st=pidaMonthState(k);return `<td style="text-align:center">${!st?'<span style="color:#ccc">–</span>':st.part?`<span title="${st.part}" style="color:#c2410c;font-weight:700;font-size:11px">~${st.last}일</span>`:'<span style="color:#15803d;font-weight:700">✓</span>'}</td>`;}).join("")}</tr>`).join("")}</tbody></table></div>`;}
 /* v517: 빠진 날 확인 — 첫 자료 날 ~ 마지막 자료 날 사이에서 매출이 없는 날, 매출이 유난히 적은 날, 매출현황 영업일수와 다른 달 */
 window.pidaGapAll=function(v){window.__pida.ui.gapAll=!!v;renderPida();};
 function pidaGapHtml(){
@@ -20881,8 +20895,8 @@ function pidaGapHtml(){
     const dayMis=ent!=null&&ent!==""&&+ent!==have.length;
     const empty=!have.length;if(empty)emptyMonths.push(`${y}.${m}`);
     totHave+=have.length;if(!empty)totMiss+=odd.length;totLow+=low.length;
-    const bad=empty||odd.length||low.length||dayMis;
-    return {bad,html:`<tr style="${empty?"background:#fef2f2":""}"><td class="l">${y}.${String(m).padStart(2,"0")}</td>
+    const bad=empty||odd.length||low.length||dayMis||!!(pidaMonthState(ym)||{}).part;
+    return {bad,html:`<tr style="${empty?"background:#fef2f2":""}"><td class="l">${y}.${String(m).padStart(2,"0")}${(pidaMonthState(ym)||{}).part?' <span style="color:#c2410c;font-size:11px;font-weight:700">진행 중</span>':""}</td>
       <td>${have.length}</td>
       <td style="${dayMis?"color:#b91c1c;font-weight:700":""}">${ent!=null&&ent!==""?ent:'<span style="color:#ccc">–</span>'}</td>
       <td class="l" style="white-space:normal;max-width:360px">${empty?'<b style="color:#b91c1c">한 달 통째로 없음</b>':odd.length?odd.map(x=>`<span style="display:inline-block;margin:1px 4px 1px 0;padding:0 5px;border-radius:4px;background:${x.w===0||x.w===6?"#fee2e2":"#fef3c7"}">${x.d}일(${wdN[x.w]})</span>`).join(""):'<span style="color:#15803d">없음</span>'}</td>
@@ -20924,14 +20938,19 @@ function pidaDashHtml(L){
     <tr class="total"><td class="l">합계</td><td>${fmt(t[0])}</td><td>${fmt(t[1])}</td><td>${fmt(t[2])}</td><td>${fmt(t[3])}</td><td>${fmt(t[4])}</td><td>${fmt(t[5])}</td></tr></tbody></table></div>`;
   const it=pidaItems(L),tot=it.reduce((a,x)=>a+x.a,0)||1;
   const ct={};it.forEach(x=>{const c=pidaCat(x.n);const o=ct[c]=ct[c]||{n:c,q:0,a:0};o.q+=x.q;o.a+=x.a;});const cl=Object.values(ct).sort((a,b)=>b.a-a.a);
-  const rank=(list,lab)=>`<table class="rpt" style="font-size:12.5px"><thead><tr><th style="width:28px"></th><th class="l">${lab}</th><th>수량</th><th>금액</th><th>점유율</th></tr></thead><tbody>${list.slice(0,10).map((x,i)=>`<tr><td>${i+1}</td><td class="l">${esc(x.n)}</td><td>${fmt(x.q)}</td><td>${fmt(x.a)}</td><td>${(x.a/tot*100).toFixed(1)}</td></tr>`).join("")}</tbody></table>`;
-  return tiles+`<div class="card"><div class="card-title">매장 매출 변동 추이 <span class="unit">${byMonth?"월별":"일별"} · 현금/카드/기타</span></div><div class="chart-box"><canvas id="ch-pida-trend"></canvas></div></div>
-    <div class="card"><div class="card-title">${byMonth?"월별":"일별"} 매출 상세내역</div>${tbl}</div>
-    <div style="display:flex;gap:12px;flex-wrap:wrap">
-      <div class="card" style="flex:1 1 100%"><div class="card-title">품목별 매출 순위</div><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start">${pidaPie(it)}<div style="flex:1;min-width:260px">${rank(it,"품목명")}</div></div></div>
-      <div class="card" style="flex:1 1 100%"><div class="card-title">분류 매출 순위 <span class="unit">분류는 '분류 설정'에서 고칠 수 있어요</span></div><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start">${pidaPie(cl)}<div style="flex:1;min-width:260px">${rank(cl,"분류명")}</div></div></div>
-    </div>`;
+  const rank=(list,lab)=>`<table class="rpt" style="font-size:12px;width:100%"><thead><tr><th style="width:24px"></th><th class="l">${lab}</th><th>수량</th><th>금액</th><th>점유율</th></tr></thead><tbody>${list.slice(0,6).map((x,i)=>`<tr><td>${i+1}</td><td class="l">${esc(x.n)}</td><td>${fmt(x.q)}</td><td>${fmt(x.a)}</td><td>${(x.a/tot*100).toFixed(1)}</td></tr>`).join("")}</tbody></table>`;
+  /* v521: 포스처럼 한 줄에 2개씩 — 추이·상세내역 / 품목 순위·분류 순위, 각 카드에 +자세히보기 */
+  const more=v=>`<button class="btn btn-sm" style="background:#15803d;color:#fff;border-color:#15803d;padding:2px 8px;font-size:11.5px" onclick="pidaDashMore('${v}','${L.length?L[0].date:""}','${last?last.date:""}')">+자세히보기</button>`;
+  const head=(t,u,v)=>`<div class="card-head" style="margin-bottom:6px"><div class="card-title">${t}${u?` <span class="unit">${u}</span>`:""}</div>${more(v)}</div>`;
+  const box='class="card" style="margin:0;min-width:0;border-top:3px solid #4a86c8"';
+  return tiles+`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,520px),1fr));gap:12px">
+    <div ${box}>${head("📈 매장 매출 변동 추이",(byMonth?"월별":"일별")+" · 현금/카드/기타","month")}<div class="chart-box" style="height:260px"><canvas id="ch-pida-trend"></canvas></div></div>
+    <div ${box}>${head("📋 "+(byMonth?"월별":"일별")+" 매출 상세내역","","month")}<div style="max-height:270px;overflow:auto">${tbl}</div></div>
+    <div ${box}>${head("🍽 품목별 매출 순위","","item")}<div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap">${pidaPie(it,150)}<div style="flex:1;min-width:240px">${rank(it,"품목명")}</div></div></div>
+    <div ${box}>${head("🗂 분류 매출 순위","","item")}<div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap">${pidaPie(cl,150)}<div style="flex:1;min-width:240px">${rank(cl,"분류명")}</div></div></div>
+  </div>`;
 }
+window.pidaDashMore=function(v,f,t){const U=window.__pida.ui;if(f&&t){U.from=f;U.to=t;}U.dsel="";U.q="";U.view=v;renderPida();};
 function pidaGroupMonth(L){const G={};L.forEach(d=>{const g=G[d.ym]=G[d.ym]||{lb:"20"+d.ym.slice(0,2)+"."+d.ym.slice(2),v:[0,0,0,0,0,0,0]};d.v.forEach((x,i)=>g.v[i]+=x);});return Object.keys(G).sort().map(k=>G[k]);}
 function pidaDashCharts(L){
   const byMonth=L.length>62;const R=byMonth?pidaGroupMonth(L):L.map(d=>({lb:d.date.slice(5),v:d.v}));
@@ -20942,10 +20961,10 @@ function pidaDashCharts(L){
     options:{maintainAspectRatio:false,interaction:{mode:"index",intersect:false},plugins:{tooltip:{callbacks:{label:c=>c.dataset.label+" "+fmt(c.parsed.y)+"원"}}},scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,ticks:{callback:v=>axisMoney(v)}}}}});
 }
 /* 원그래프 (CSS conic-gradient) — 상위 5개 + 나머지 */
-function pidaPie(list){const pos=list.filter(x=>x.a>0);const top=pos.slice(0,5),rest=pos.slice(5).reduce((a,x)=>a+x.a,0);
+function pidaPie(list,sz){sz=sz||180;const pos=list.filter(x=>x.a>0);const top=pos.slice(0,5),rest=pos.slice(5).reduce((a,x)=>a+x.a,0);
   const L=top.map(x=>({n:x.n,a:x.a})).concat(rest?[{n:"나머지",a:rest}]:[]);const T=L.reduce((a,x)=>a+x.a,0)||1;let acc=0;
   const seg=L.map((x,i)=>{const a0=acc/T*360;acc+=x.a;return `${PIDA_PAL[i%PIDA_PAL.length]} ${a0}deg ${acc/T*360}deg`;}).join(",");
-  return `<div style="display:flex;flex-direction:column;align-items:center;gap:8px;width:220px"><div style="width:180px;height:180px;border-radius:50%;background:conic-gradient(${seg});box-shadow:0 2px 6px rgba(0,0,0,.15)"></div>
+  return `<div style="display:flex;flex-direction:column;align-items:center;gap:8px;width:${sz+30}px"><div style="width:${sz}px;height:${sz}px;border-radius:50%;background:conic-gradient(${seg});box-shadow:0 2px 6px rgba(0,0,0,.15)"></div>
     <div style="font-size:11.5px;line-height:1.6;width:100%">${L.map((x,i)=>`<div style="display:flex;gap:6px;align-items:center"><span style="width:10px;height:10px;border-radius:50%;background:${PIDA_PAL[i%PIDA_PAL.length]};flex:none"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.n)}</span><b>${(x.a/T*100).toFixed(1)}%</b></div>`).join("")}</div></div>`;}
 /* ===== v518: 날짜를 달력으로 고르는 기간 (포스처럼 오늘·전일·최근1주·최근한달·이달·전달) ===== */
 const pidaP2=n=>String(n).padStart(2,"0");
