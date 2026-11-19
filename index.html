@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v552</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v553</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -21005,10 +21005,10 @@ function pidaDashHtml(L){
   const head=(t,u,v,im)=>`<div class="card-head" style="margin-bottom:6px"><div class="card-title">${t}${u?` <span class="unit">${u}</span>`:""}</div>${more(v,im)}</div>`;
   const box='class="card" style="margin:0;min-width:0;border-top:3px solid #4a86c8"';
   return tiles+`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,520px),1fr));gap:12px">
-    <div ${box}>${head("📈 매장 매출 변동 추이",(byMonth?"월별":"일별")+" · 현금/카드/기타","trend")}<div class="chart-box" style="height:260px"><canvas id="ch-pida-trend"></canvas></div></div>
+    ${(()=>{window.__pidaDR=L.length?`${L[0].date.slice(2).replace(/-/g,".")} ~ ${L[L.length-1].date.slice(2).replace(/-/g,".")} (${L.length}일)`:"";return "";})()}<div ${box}>${head("📈 매장 매출 변동 추이",window.__pidaDR+" · "+(byMonth?"월별":"일별"),"trend")}<div class="chart-box" style="height:260px"><canvas id="ch-pida-trend"></canvas></div></div>
     <div ${box}>${head("📋 "+(byMonth?"월별":"일별")+" 매출 상세내역","","month")}${tbl}${rowsSrc.length>7?`<div class="unit" style="margin-top:4px;text-align:right">최근 7${byMonth?"개월":"일"}만 보여요 · 전체는 +자세히보기</div>`:""}</div>
-    <div ${box}>${head("🍽 품목별 매출 순위","","item","item")}<div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap">${pidaPie(it,150)}<div style="flex:1;min-width:240px">${rank(it,"품목명")}</div></div></div>
-    <div ${box}>${head("🗂 분류 매출 순위","","item","cat")}<div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap">${pidaPie(cl,150)}<div style="flex:1;min-width:240px">${rank(cl,"분류명")}</div></div></div>
+    <div ${box}>${head("🍽 품목별 매출 순위",window.__pidaDR,"item","item")}<div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap">${pidaPie(it,150)}<div style="flex:1;min-width:240px">${rank(it,"품목명")}</div></div></div>
+    <div ${box}>${head("🗂 분류 매출 순위",window.__pidaDR,"item","cat")}<div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap">${pidaPie(cl,150)}<div style="flex:1;min-width:240px">${rank(cl,"분류명")}</div></div></div>
   </div>`;
 }
 window.pidaDashMore=function(v,f,t,im){const U=window.__pida.ui;if(f&&t){U.from=f;U.to=t;}if(im)U.imode=im; /* v527: 분류 순위 카드 → 분류 순위로 */U.dsel="";U.q="";U.view=v;renderPida();};
