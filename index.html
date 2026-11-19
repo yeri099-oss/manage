@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v521</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v522</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -20934,8 +20934,8 @@ function pidaDashHtml(L){
   const byMonth=L.length>62;
   const rowsSrc=byMonth?pidaGroupMonth(L):L.map(d=>({lb:d.date.slice(5).replace("-","/")+" ("+pidaWd(d.date)+")",v:d.v}));
   const tbl=`<div class="table-wrap"><table class="rpt" style="font-size:12.5px"><thead><tr><th class="l">${byMonth?"월":"날짜"}</th><th>매출건수</th><th>객수</th><th>현금매출</th><th>카드매출</th><th>기타매출</th><th>총매출액</th></tr></thead><tbody>
-    ${rowsSrc.slice().reverse().map(r=>`<tr><td class="l">${r.lb}</td><td>${fmt(r.v[0])}</td><td>${fmt(r.v[1])}</td><td>${fmt(r.v[2])}</td><td>${fmt(r.v[3])}</td><td>${fmt(r.v[4])}</td><td><b>${fmt(r.v[5])}</b></td></tr>`).join("")}
-    <tr class="total"><td class="l">합계</td><td>${fmt(t[0])}</td><td>${fmt(t[1])}</td><td>${fmt(t[2])}</td><td>${fmt(t[3])}</td><td>${fmt(t[4])}</td><td>${fmt(t[5])}</td></tr></tbody></table></div>`;
+    ${rowsSrc.slice(-7).reverse().map(r=>`<tr><td class="l">${r.lb}</td><td>${fmt(r.v[0])}</td><td>${fmt(r.v[1])}</td><td>${fmt(r.v[2])}</td><td>${fmt(r.v[3])}</td><td>${fmt(r.v[4])}</td><td><b>${fmt(r.v[5])}</b></td></tr>`).join("")}
+    </tbody></table></div>`; /* v522: 대시보드는 최근 7줄만, 스크롤·합계 없이 (합계는 위 타일, 전체는 +자세히보기) */
   const it=pidaItems(L),tot=it.reduce((a,x)=>a+x.a,0)||1;
   const ct={};it.forEach(x=>{const c=pidaCat(x.n);const o=ct[c]=ct[c]||{n:c,q:0,a:0};o.q+=x.q;o.a+=x.a;});const cl=Object.values(ct).sort((a,b)=>b.a-a.a);
   const rank=(list,lab)=>`<table class="rpt" style="font-size:12px;width:100%"><thead><tr><th style="width:24px"></th><th class="l">${lab}</th><th>수량</th><th>금액</th><th>점유율</th></tr></thead><tbody>${list.slice(0,6).map((x,i)=>`<tr><td>${i+1}</td><td class="l">${esc(x.n)}</td><td>${fmt(x.q)}</td><td>${fmt(x.a)}</td><td>${(x.a/tot*100).toFixed(1)}</td></tr>`).join("")}</tbody></table>`;
@@ -20945,7 +20945,7 @@ function pidaDashHtml(L){
   const box='class="card" style="margin:0;min-width:0;border-top:3px solid #4a86c8"';
   return tiles+`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,520px),1fr));gap:12px">
     <div ${box}>${head("📈 매장 매출 변동 추이",(byMonth?"월별":"일별")+" · 현금/카드/기타","month")}<div class="chart-box" style="height:260px"><canvas id="ch-pida-trend"></canvas></div></div>
-    <div ${box}>${head("📋 "+(byMonth?"월별":"일별")+" 매출 상세내역","","month")}<div style="max-height:270px;overflow:auto">${tbl}</div></div>
+    <div ${box}>${head("📋 "+(byMonth?"월별":"일별")+" 매출 상세내역","","month")}${tbl}${rowsSrc.length>7?`<div class="unit" style="margin-top:4px;text-align:right">최근 7${byMonth?"개월":"일"}만 보여요 · 전체는 +자세히보기</div>`:""}</div>
     <div ${box}>${head("🍽 품목별 매출 순위","","item")}<div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap">${pidaPie(it,150)}<div style="flex:1;min-width:240px">${rank(it,"품목명")}</div></div></div>
     <div ${box}>${head("🗂 분류 매출 순위","","item")}<div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap">${pidaPie(cl,150)}<div style="flex:1;min-width:240px">${rank(cl,"분류명")}</div></div></div>
   </div>`;
