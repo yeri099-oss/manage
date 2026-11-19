@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v555</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v556</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -21087,7 +21087,10 @@ window.pidaPkOpen=function(btn,which,un,tgt){window.__pidaPk={tgt:tgt||""};const
     document.addEventListener("mousedown",e=>{const p=document.getElementById("pida-pk");if(p&&p.style.display!=="none"&&!p.contains(e.target)&&!(e.target.closest&&e.target.closest("[onclick^='pidaPkOpen']")))p.style.display="none";});}
   const r=btn.getBoundingClientRect();el.style.cssText=`position:fixed;z-index:200;top:${Math.min(r.bottom+4,innerHeight-330)}px;left:${Math.max(8,Math.min(r.left,innerWidth-300))}px;width:290px;background:#fff;border-radius:6px;box-shadow:0 6px 24px rgba(0,0,0,.25);overflow:hidden;font-family:inherit`;
   pidaPkDraw();};
-window.pidaPkNav=function(n){const K=window.__pidaPk;if(K.un==="m")K.y+=n;else if(K.un==="y")K.base+=20*n;else{K.m+=n;if(K.m<0){K.m=11;K.y--;}if(K.m>11){K.m=0;K.y++;}}pidaPkDraw();};
+function pidaPkMin(){const D=pidaDays();return D.length?D[0].date:"";}
+/* ◀/▶로 넘긴 화면의 마지막 날 */
+function pidaPkNavEnd(n){const K=window.__pidaPk;if(K.un==="m")return (K.y+n)+"-12-31";if(K.un==="y")return (K.base+20*n+19)+"-12-31";const d=new Date(K.y,K.m+n+1,0);return pidaYmd(d);}
+window.pidaPkNav=function(n){const K=window.__pidaPk;if(n<0&&pidaPkNavEnd(n)<pidaPkMin())return;if(K.un==="m")K.y+=n;else if(K.un==="y")K.base+=20*n;else{K.m+=n;if(K.m<0){K.m=11;K.y--;}if(K.m>11){K.m=0;K.y++;}}pidaPkDraw();};
 window.pidaPkPick=function(v){const K=window.__pidaPk,U=pidaPkObj();let a,b;
   if(K.un==="m"){a=v+"-01";b=pidaMEnd(a);}else if(K.un==="y"){a=v+"-01-01";b=v+"-12-31";}else if(K.un==="d"){a=b=v;}else{a=pidaWk(v);b=pidaAdd(a,6);}
   if(K.which==="from"){U.from=a;if(U.to<a)U.to=b;}else{U.to=b;if(U.from>b)U.from=a;}
@@ -21111,6 +21114,10 @@ function pidaPkDraw(){const K=window.__pidaPk,U=pidaPkObj();const el=document.ge
     for(let w=0;w<6;w++){const ws=pidaYmd(new Date(st.getFullYear(),st.getMonth(),st.getDate()+7*w));if(w>3&&+ws.slice(5,7)!==K.m+1&&ws>pidaYmd(first))break;const on=ws===sw;
       rows+=`<div style="display:grid;grid-template-columns:repeat(7,1fr);cursor:pointer;border-radius:6px;${on?"background:#4a72f5;color:#fff;font-weight:700":""}" onmouseover="if(!${on})this.style.background='#e0e7ff'" onmouseout="if(!${on})this.style.background=''" onclick="pidaPkPick('${ws}')">${[...Array(7)].map((_,d)=>{const x=new Date(ws+"T00:00:00");x.setDate(x.getDate()+d);const out=x.getMonth()!==K.m;return `<div style="text-align:center;padding:7px 0;font-size:13px;${out&&!on?"color:#cbd5e1":""}${d===6&&!on&&!out?"color:#dc2626":""}">${x.getDate()}</div>`;}).join("")}</div>`;}
     el.innerHTML=head(`${K.y}년 ${K.m+1}월`)+`<div style="padding:8px 10px"><div style="display:grid;grid-template-columns:repeat(7,1fr);font-size:12px;color:#64748b;text-align:center;margin-bottom:4px">${"월화수목금토일".split("").map(x=>`<div>${x}</div>`).join("")}</div>${rows}<div style="font-size:11px;color:#64748b;margin-top:6px">아무 날이나 누르면 그 주(월~일)가 골라져요</div></div>`;}
+  /* v556: 자료 첫날보다 앞은 회색·못 누름 (◀도) */
+  {const mn=pidaPkMin();if(mn){el.querySelectorAll("[onclick^=\"pidaPkPick('\"]").forEach(c=>{const v=(c.getAttribute("onclick").match(/'([^']+)'/)||[])[1]||"";
+      const end=v.length===4?v+"-12-31":v.length===7?pidaMEnd(v+"-01"):v;if(end<mn){c.removeAttribute("onclick");c.removeAttribute("onmouseover");c.style.color="#d1d5db";c.style.background="transparent";c.style.cursor="not-allowed";c.style.fontWeight="400";c.title="자료 없음 ("+mn+"부터)";}});
+    if(pidaPkNavEnd(-1)<mn){const a=el.querySelector("[onclick='pidaPkNav(-1)']");if(a){a.removeAttribute("onclick");a.style.opacity=".35";a.style.cursor="not-allowed";}}}}
   el.innerHTML+=`<div style="display:flex;justify-content:flex-end;padding:0 10px 10px"><button onclick="pidaPkToday()" style="background:#0b84c6;color:#fff;border:0;border-radius:3px;padding:3px 8px;font-size:12px;cursor:pointer">금일</button></div>`;
   el.style.display="block";}
 window.pidaShiftM=function(n){const U=window.__pida.ui;const f=new Date(U.from+"T00:00:00");const a=new Date(f.getFullYear(),f.getMonth()+n,1),b=new Date(f.getFullYear(),f.getMonth()+n+1,0);U.from=pidaYmd(a);U.to=pidaYmd(b);U.dsel="";renderPida();};
