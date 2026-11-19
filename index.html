@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v526</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v527</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -20941,17 +20941,17 @@ function pidaDashHtml(L){
   const ct={};it.forEach(x=>{const c=pidaCat(x.n);const o=ct[c]=ct[c]||{n:c,q:0,a:0};o.q+=x.q;o.a+=x.a;});const cl=Object.values(ct).sort((a,b)=>b.a-a.a);
   const rank=(list,lab)=>`<table class="rpt" style="font-size:12px;width:100%"><thead><tr><th style="width:24px"></th><th class="l">${lab}</th><th>수량</th><th>금액</th><th>점유율</th></tr></thead><tbody>${list.slice(0,6).map((x,i)=>`<tr><td>${i+1}</td><td class="l">${esc(x.n)}</td><td>${fmt(x.q)}</td><td>${fmt(x.a)}</td><td>${(x.a/tot*100).toFixed(1)}</td></tr>`).join("")}</tbody></table>`;
   /* v521: 포스처럼 한 줄에 2개씩 — 추이·상세내역 / 품목 순위·분류 순위, 각 카드에 +자세히보기 */
-  const more=v=>`<button class="btn btn-sm" style="background:#15803d;color:#fff;border-color:#15803d;padding:2px 8px;font-size:11.5px" onclick="pidaDashMore('${v}','${L.length?L[0].date:""}','${last?last.date:""}')">+자세히보기</button>`;
-  const head=(t,u,v)=>`<div class="card-head" style="margin-bottom:6px"><div class="card-title">${t}${u?` <span class="unit">${u}</span>`:""}</div>${more(v)}</div>`;
+  const more=(v,im)=>`<button class="btn btn-sm" style="background:#15803d;color:#fff;border-color:#15803d;padding:2px 8px;font-size:11.5px" onclick="pidaDashMore('${v}','${L.length?L[0].date:""}','${last?last.date:""}','${im||""}')">+자세히보기</button>`;
+  const head=(t,u,v,im)=>`<div class="card-head" style="margin-bottom:6px"><div class="card-title">${t}${u?` <span class="unit">${u}</span>`:""}</div>${more(v,im)}</div>`;
   const box='class="card" style="margin:0;min-width:0;border-top:3px solid #4a86c8"';
   return tiles+`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,520px),1fr));gap:12px">
     <div ${box}>${head("📈 매장 매출 변동 추이",(byMonth?"월별":"일별")+" · 현금/카드/기타","month")}<div class="chart-box" style="height:260px"><canvas id="ch-pida-trend"></canvas></div></div>
     <div ${box}>${head("📋 "+(byMonth?"월별":"일별")+" 매출 상세내역","","month")}${tbl}${rowsSrc.length>7?`<div class="unit" style="margin-top:4px;text-align:right">최근 7${byMonth?"개월":"일"}만 보여요 · 전체는 +자세히보기</div>`:""}</div>
-    <div ${box}>${head("🍽 품목별 매출 순위","","item")}<div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap">${pidaPie(it,150)}<div style="flex:1;min-width:240px">${rank(it,"품목명")}</div></div></div>
-    <div ${box}>${head("🗂 분류 매출 순위","","item")}<div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap">${pidaPie(cl,150)}<div style="flex:1;min-width:240px">${rank(cl,"분류명")}</div></div></div>
+    <div ${box}>${head("🍽 품목별 매출 순위","","item","item")}<div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap">${pidaPie(it,150)}<div style="flex:1;min-width:240px">${rank(it,"품목명")}</div></div></div>
+    <div ${box}>${head("🗂 분류 매출 순위","","item","cat")}<div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap">${pidaPie(cl,150)}<div style="flex:1;min-width:240px">${rank(cl,"분류명")}</div></div></div>
   </div>`;
 }
-window.pidaDashMore=function(v,f,t){const U=window.__pida.ui;if(f&&t){U.from=f;U.to=t;}U.dsel="";U.q="";U.view=v;renderPida();};
+window.pidaDashMore=function(v,f,t,im){const U=window.__pida.ui;if(f&&t){U.from=f;U.to=t;}if(im)U.imode=im; /* v527: 분류 순위 카드 → 분류 순위로 */U.dsel="";U.q="";U.view=v;renderPida();};
 function pidaGroupMonth(L){const G={};L.forEach(d=>{const g=G[d.ym]=G[d.ym]||{lb:"20"+d.ym.slice(0,2)+"."+d.ym.slice(2),v:[0,0,0,0,0,0,0]};d.v.forEach((x,i)=>g.v[i]+=x);});return Object.keys(G).sort().map(k=>G[k]);}
 function pidaDashCharts(L){
   const byMonth=L.length>62;const R=byMonth?pidaGroupMonth(L):L.map(d=>({lb:d.date.slice(5),v:d.v}));
