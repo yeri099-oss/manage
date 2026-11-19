@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v523</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v524</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -21034,7 +21034,7 @@ window.pidaItemPop=function(nm,kind){const P=window.__pida;window.__pida.popNm=n
   const ys=Object.keys(Y).sort().reverse();const U=P.ui;
   const sel=pidaRangeDays?pidaItems(pidaRangeDays()).find(x=>x.n===nm):null;
   const cell=v=>{if(!v)return '<td style="color:#cbd5e1;text-align:center">–</td>';const x=kind==="q"?v.q:v.a;const al=mx?0.08+0.5*x/mx:0;
-    return `<td style="background:rgba(37,99,235,${al.toFixed(2)});text-align:right;${al>0.4?"color:#fff;font-weight:700":""}">${fmt(Math.round(x))}</td>`;};
+    return `<td style="background:rgba(250,204,21,${(al*1.6).toFixed(2)});text-align:right;${al>0.35?"font-weight:800;color:#422006":""}">${fmt(Math.round(x))}</td>`;}; /* v524: 노란색 */
   const kb=(k,n)=>`<button class="btn btn-sm" style="${kind===k?"background:#111;color:#fff;border-color:#111":""}" onclick="pidaItemPop(window.__pida.popNm,'${k}')">${n}</button>`;
   const body=`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
       <span style="font-size:13px;color:#64748b">${esc(pidaCat(nm))}</span>
