@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v542</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v543</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -14254,7 +14254,7 @@ function relocateSubtabs(){
 "use strict";
 /* ---------- 모달/토스트 ---------- */
 function openModal(title, bodyHtml, footHtml) {
-  { const md = document.getElementById("modal"); if (md) md.style.maxWidth = ""; } /* v523: 꽃밥에피다 품목 창이 넓혀 둔 폭 되돌림 */
+  { const md = document.getElementById("modal"); if (md) md.style.maxWidth = ""; const mt = document.getElementById("modal-title"); if (mt) { mt.style.fontSize = ""; mt.style.fontWeight = ""; } } /* v523·v543: 꽃밥에피다 품목 창이 바꿔 둔 폭·제목 크기 되돌림 */
   document.getElementById("modal-title").textContent = title;
   document.getElementById("modal-body").innerHTML = bodyHtml;
   document.getElementById("modal-foot").innerHTML = footHtml || "";
@@ -21175,7 +21175,8 @@ window.pidaItemPop=function(nm,sc,yr,keep){const P=window.__pida;const U=P.ui;if
       <b style="font-size:13px">${note} · ${title}</b>
       <span style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:12px;color:#64748b">그래프 ${seg([["bar","막대"],["line","꺾은선"]],ct,"pidaPopCt")}</span></div>
     ${pidaPopChart(S2,ct)}`;
-  openModal("📦 "+nm+" — 판매 추이",body);
+  openModal(nm,body); /* v543: 제목은 상품명만, 크게 */
+  {const mt=document.getElementById("modal-title");if(mt){mt.style.fontSize="21px";mt.style.fontWeight="800";}}
   const md=document.getElementById("modal");if(md)md.style.maxWidth="980px";
   const bx=document.getElementById("pida-pop-chart");if(bx)bx.scrollLeft=bx.scrollWidth;};
 /* v537: 품목 창 차트 — 막대 = 수량(왼쪽 눈금), 선 = 매출액(오른쪽 눈금), 눈금선·범례, 마우스 올리면 수량·매출액 */
