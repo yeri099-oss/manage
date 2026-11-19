@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v516</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v517</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -4000,6 +4000,7 @@ window.agToggleVerified = function (year, m, on) {
 };
 const EP_DRINK_RE=/막걸리|맥주|소주|와인|하이볼|사케|청주|약주|스파클링|샴페인|음료|식혜|수정과|에이드|주스|쥬스|콜라|사이다|커피|아메리카노|라떼|우롱|둥굴레|매실|오미자|온차|냉차|티\b/;
 function epidaSan(n){return String(n).replace(/[.$#\[\]\/]/g,"·");}
+/* v517: 날짜별로 모아 돌려줌 — 한 파일에 여러 달이 있어도 OK, 여러 파일에 같은 날이 겹치면 나중 파일이 그날을 대신함 */
 function epidaParse(text,fname){
   const doc=new DOMParser().parseFromString(text,"text/html");
   const trs=[...doc.querySelectorAll("tr")].map(tr=>[...tr.children].map(td=>td.textContent.trim()));
@@ -4011,36 +4012,37 @@ function epidaParse(text,fname){
     if(C[need]==null)throw new Error((fname||"파일")+`: '${need}' 열이 없어요.`);
   const num=v=>{const t=String(v==null?"":v).replace(/[,\s]/g,"");if(!t||t==="-")return 0;const n=Number(t);return isNaN(n)?0:n;};
   const dre=/^\d{4}-\d{2}-\d{2}/;
-  let sale=0,disc=0,net=0;const days=new Set(),items={};let ym=null;
+  const D={};let cur=null;
   const addItem=(nm,q,a)=>{
+    if(!cur)return;
     nm=String(nm||"").trim();
     if(!nm||nm==="품명"||nm[0]==="[")return;
     const k=epidaSan(nm);
-    const it=items[k]=items[k]||{n:nm,q:0,a:0};
+    const it=cur.items[k]=cur.items[k]||{n:nm,q:0,a:0};
     it.q+=q;it.a+=a;
   };
   for(const r of trs){
     if(r.length&&dre.test(r[0])&&r.length>=hdr.length-4){
-      sale+=num(r[C["매출금액"]])+num(r[C["할인금액"]])+num(r[C["봉사금액"]]);
-      disc+=num(r[C["할인금액"]])+num(r[C["봉사금액"]]);
-      net+=num(r[C["정산총금액"]]);
-      days.add(r[0].slice(0,10));
-      if(!ym)ym={y:r[0].slice(0,4),m:String(Number(r[0].slice(5,7)))};
+      const dk=r[0].slice(0,10);
+      cur=D[dk]=D[dk]||{sale:0,disc:0,net:0,items:{}};
+      cur.sale+=num(r[C["매출금액"]])+num(r[C["할인금액"]])+num(r[C["봉사금액"]]);
+      cur.disc+=num(r[C["할인금액"]])+num(r[C["봉사금액"]]);
+      cur.net+=num(r[C["정산총금액"]]);
       addItem(r[C["품명"]],num(r[C["수량"]]),num(r[C["금액"]]));
     }else if(r.length>=5&&r[0]&&!dre.test(r[0])&&!/^\d+$/.test(r[0])&&!r.includes("거래일시")){
       addItem(r[0],num(r[2]),num(r[4]));
     }
   }
-  if(!ym)throw new Error((fname||"파일")+": 거래 내역을 찾지 못했어요.");
-  return {y:ym.y,m:ym.m,data:{total:Math.round(sale),disc:Math.round(disc),net:Math.round(net),days:days.size,items}};
+  if(!Object.keys(D).length)throw new Error((fname||"파일")+": 거래 내역을 찾지 못했어요.");
+  return D;
 }
 window.epidaFilesPick=async function(inp){
   const files=[...(inp.files||[])];inp.value="";
   if(!files.length)return;
-  try{
-    toast(`파일 ${files.length}개 읽는 중…`);
-    const done=[];
-    for(const f of files){
+  toast(`파일 ${files.length}개 읽는 중…`);
+  const all={},bad=[];
+  for(const f of files){
+    try{
       const buf=await f.arrayBuffer();
       let text;
       const h4=new Uint8Array(buf.slice(0,4));
@@ -4051,17 +4053,31 @@ window.epidaFilesPick=async function(inp){
       try{text=new TextDecoder("euc-kr").decode(buf);}catch(e){text=new TextDecoder("utf-8").decode(buf);}
       if(text.indexOf("거래일시")<0)text=new TextDecoder("utf-8").decode(buf);
       }
-      const r=epidaParse(text,f.name);
-      const ydoc=(S.data.epidaDetail[r.y]=S.data.epidaDetail[r.y]||{months:{}});
-      ydoc.months=ydoc.months||{};
-      ydoc.months[r.m]=r.data;
-      queueSave("epidaDetail",r.y);
-      done.push(`${r.y}.${r.m}`);
-    }
-    S.ui.epidaYear=null;
-    toast(`반영했어요: ${done.join(", ")} (${done.length}개월)`);
-    renderEpida();
-  }catch(e){console.error(e);toast(e.message||"파일을 읽지 못했어요",true);renderEpida();}
+      Object.assign(all,epidaParse(text,f.name));
+    }catch(e){console.error(e);bad.push(e.message||f.name);}
+  }
+  /* 날짜 → 달별 합계 */
+  const MM={};
+  for(const dk of Object.keys(all).sort()){
+    const y=dk.slice(0,4),m=String(Number(dk.slice(5,7))),d=all[dk];
+    const t=(MM[y]=MM[y]||{})[m]=MM[y][m]||{total:0,disc:0,net:0,days:0,items:{}};
+    t.total+=d.sale;t.disc+=d.disc;t.net+=d.net;t.days+=1;
+    for(const k in d.items){const a=d.items[k];const it=t.items[k]=t.items[k]||{n:a.n,q:0,a:0};it.q+=a.q;it.a+=a.a;}
+  }
+  const done=[];
+  for(const y of Object.keys(MM).sort()){
+    const ydoc=(S.data.epidaDetail[y]=S.data.epidaDetail[y]||{months:{}});
+    ydoc.months=ydoc.months||{};
+    for(const m of Object.keys(MM[y]).sort((a,b)=>a-b)){const t=MM[y][m];
+      for(const k in t.items){t.items[k].q=Math.round(t.items[k].q*100)/100;t.items[k].a=Math.round(t.items[k].a);}
+      ydoc.months[m]={total:Math.round(t.total),disc:Math.round(t.disc),net:Math.round(t.net),days:t.days,items:t.items};
+      done.push(`${y}.${m}`);}
+    queueSave("epidaDetail",y);
+  }
+  S.ui.epidaYear=null;
+  if(done.length)toast(`반영했어요: ${done.length>4?done[0]+" ~ "+done[done.length-1]:done.join(", ")} (${done.length}개월)`);
+  if(bad.length)toast("읽지 못한 파일: "+bad.join(" / "),true);
+  renderEpida();
 };
 function setEpidaYear(y){S.ui.epidaYear=String(y);renderEpida();}
 function setEpidaSub(k){S.ui.epidaSub=k;renderEpida();}
@@ -20728,46 +20744,64 @@ async function pidaAoa(f){
   const doc=new DOMParser().parseFromString(t,"text/html");
   return [...doc.querySelectorAll("tr")].map(tr=>[...tr.children].map(td=>td.textContent.trim()));
 }
-function pidaParse(aoa,fname){
+/* v517: 날짜별(YYMMDD)로 읽음 — 한 파일에 여러 달 OK. 여러 파일을 한꺼번에 넣으면 같은 날은 나중 파일 기준(겹쳐도 두 번 안 더해짐) */
+function pidaParseRaw(aoa,fname){
   let hi=-1;for(let i=0;i<Math.min(aoa.length,30);i++){if((aoa[i]||[]).some(x=>String(x).trim()==="거래일시")){hi=i;break;}}
   if(hi<0)throw new Error(fname+": '거래일시' 머리글이 없어요 — 포스 영업속보 › 일일매출상세내역 엑셀인지 확인해주세요.");
   const H=aoa[hi].map(x=>String(x).replace(/\s/g,""));const C=(n)=>H.indexOf(n);
-  const cD=C("거래일시"),cG=C("인원수"),cN=C("품명"),cQ=C("수량"),cA=C("금액"),cCash=C("정산(현금)"),cCard=C("정산(카드)"),cTot=C("정산총금액"),cDisc=C("할인금액"),cSvc=C("봉사금액"),cSale=C("매출금액");
+  const cD=C("거래일시"),cG=C("인원수"),cN=C("품명"),cQ=C("수량"),cA=C("금액"),cCash=C("정산(현금)"),cCard=C("정산(카드)"),cTot=C("정산총금액"),cDisc=C("할인금액"),cSvc=C("봉사금액");
   if(cD<0||cN<0||cTot<0)throw new Error(fname+": 거래일시·품명·정산총금액 열을 찾지 못했어요.");
   const num=v=>{if(typeof v==="number")return v;const t=String(v==null?"":v).replace(/[,\s원]/g,"");if(!t||t==="-")return 0;const n=Number(t);return isNaN(n)?0:n;};
   const toDate=v=>{if(typeof v==="number"&&v>20000){const d=new Date(Math.round((v-25569)*86400000));return d.toISOString().slice(0,19).replace("T"," ");}return String(v||"").trim();};
-  const out={};let cur=null;
-  const dayOf=(ym,dd)=>{const M=out[ym]=out[ym]||{ym,days:{},hours:{},items:[],di:{},_ix:{}};return M;};
+  const R={};let cur=null;
   const addItem=(nm,q,a)=>{if(!cur)return;nm=String(nm||"").trim();if(!nm||nm==="품명"||nm[0]==="["||nm==="합계")return;
-    const M=out[cur.ym];let i=M._ix[nm];if(i==null){i=M.items.length;M.items.push(nm);M._ix[nm]=i;}
-    const L=M.di[cur.dd]=M.di[cur.dd]||{};const x=L[i]=L[i]||[0,0];x[0]+=q;x[1]+=a;};
+    const x=cur.it[nm]=cur.it[nm]||[0,0];x[0]+=q;x[1]+=a;};
   for(let r=hi+1;r<aoa.length;r++){const row=aoa[r]||[];const dt=toDate(row[cD]);
     if(/^\d{4}-\d{2}-\d{2}/.test(dt)){
-      const ym=dt.slice(2,4)+dt.slice(5,7),dd=dt.slice(8,10);const M=dayOf(ym,dd);cur={ym,dd};
+      const k=dt.slice(2,4)+dt.slice(5,7)+dt.slice(8,10);cur=R[k]=R[k]||{v:[0,0,0,0,0,0,0],h:{},it:{}};
       const tot=num(row[cTot]),cash=cCash>=0?num(row[cCash]):0,card=cCard>=0?num(row[cCard]):0;
-      const D=M.days[dd]=M.days[dd]||[0,0,0,0,0,0,0];
+      const D=cur.v;
       D[0]+=1;D[1]+=cG>=0?num(row[cG]):0;D[2]+=cash;D[3]+=card;D[4]+=tot-cash-card;D[5]+=tot;D[6]+=(cDisc>=0?num(row[cDisc]):0)+(cSvc>=0?num(row[cSvc]):0);
-      const hh=(dt.match(/\s(\d{1,2}):/)||[])[1];if(hh!=null){const k=String(+hh);const Hh=M.hours[k]=M.hours[k]||[0,0];Hh[0]+=1;Hh[1]+=tot;}
+      const hh=(dt.match(/\s(\d{1,2}):/)||[])[1];if(hh!=null){const hk=String(+hh);const Hh=cur.h[hk]=cur.h[hk]||[0,0];Hh[0]+=1;Hh[1]+=tot;}
       addItem(row[cN],num(row[cQ]),num(row[cA]));
     }else if(String(row[cN]||"").trim()){addItem(row[cN],num(row[cQ]),num(row[cA]));}
     else if(row.length>=5&&row[0]&&typeof row[0]==="string"&&!/^\d+$/.test(row[0].trim())&&row[0].trim()!=="합계"&&!/^RUNDATE/.test(row[0])){addItem(row[0],num(row[2]),num(row[4]));}
   }
-  for(const ym in out){const M=out[ym];const di={};for(const dd in M.di){const a=[];for(const i in M.di[dd]){const x=M.di[dd][i];a.push(+i,Math.round(x[0]*100)/100,Math.round(x[1]));}di[dd]=a;}M.di=di;delete M._ix;
-    for(const dd in M.days)M.days[dd]=M.days[dd].map(v=>Math.round(v));for(const h in M.hours)M.hours[h]=M.hours[h].map(v=>Math.round(v));}
-  if(!Object.keys(out).length)throw new Error(fname+": 거래 줄을 찾지 못했어요.");
+  if(!Object.keys(R).length)throw new Error(fname+": 거래 줄을 찾지 못했어요.");
+  return R;
+}
+/* 날짜별 → 달 문서 {ym, days, hours, items, di} */
+function pidaBuild(R){
+  const out={};
+  for(const k of Object.keys(R).sort()){const ym=k.slice(0,4),dd=k.slice(4),X=R[k];
+    const M=out[ym]=out[ym]||{ym,days:{},hours:{},items:[],di:{},_ix:{}};
+    M.days[dd]=X.v.map(v=>Math.round(v));
+    for(const h in X.h){const Hh=M.hours[h]=M.hours[h]||[0,0];Hh[0]+=X.h[h][0];Hh[1]+=X.h[h][1];}
+    const a=[];for(const nm in X.it){let i=M._ix[nm];if(i==null){i=M.items.length;M.items.push(nm);M._ix[nm]=i;}a.push(i,Math.round(X.it[nm][0]*100)/100,Math.round(X.it[nm][1]));}
+    if(a.length)M.di[dd]=a;
+  }
+  for(const ym in out){const M=out[ym];delete M._ix;for(const h in M.hours)M.hours[h]=M.hours[h].map(v=>Math.round(v));}
   return out;
 }
+function pidaParse(aoa,fname){return pidaBuild(pidaParseRaw(aoa,fname));}
 window.pidaPick=async function(inp){
   const fs=[...(inp.files||[])];inp.value="";if(!fs.length)return;
-  const P=window.__pida;const done=[];
-  for(const f of fs){
-    try{toast(f.name+" 읽는 중…");const R=pidaParse(await pidaAoa(f),f.name);
-      for(const ym in R){P.M[ym]=R[ym];if(!IS_DEMO)await fsCol("epidaDetail").doc("pos_"+ym).set(R[ym]);done.push("20"+ym.slice(0,2)+"."+(+ym.slice(2)));}
-    }catch(e){console.error(e);alert(f.name+" 읽기 실패: "+(e.message||e));}
+  const P=window.__pida;const all={},bad=[];
+  for(let i=0;i<fs.length;i++){const f=fs[i];
+    try{toast(`${f.name} 읽는 중… (${i+1}/${fs.length})`);Object.assign(all,pidaParseRaw(await pidaAoa(f),f.name));}
+    catch(e){console.error(e);bad.push(f.name+" — "+(e.message||e));}
+  }
+  const B=pidaBuild(all);const yms=Object.keys(B).sort();const done=[];
+  for(let i=0;i<yms.length;i++){const ym=yms[i];
+    if(yms.length>3)toast(`저장하는 중… ${i+1}/${yms.length}개월`);
+    try{P.M[ym]=B[ym];if(!IS_DEMO)await fsCol("epidaDetail").doc("pos_"+ym).set(B[ym]);done.push("20"+ym.slice(0,2)+"."+(+ym.slice(2)));}
+    catch(e){console.error(e);bad.push("20"+ym.slice(0,2)+"."+(+ym.slice(2))+" 저장 실패 — "+(e.message||e));}
   }
   /* 매출현황 › 피다 탭(월 합계·메뉴별)에도 같이 */
   try{if(typeof window.epidaFilesPick==="function")await window.epidaFilesPick({files:fs,value:""});}catch(e){console.warn(e);}
-  if(done.length)toast("꽃밥에피다 "+done.join(", ")+" 반영했어요");
+  if(done.length)toast("꽃밥에피다 "+(done.length>4?done[0]+" ~ "+done[done.length-1]:done.join(", "))+` (${done.length}개월) 반영했어요`);
+  if(bad.length)alert("읽지 못한 것:\n"+bad.join("\n"));
+  if(done.length){window.__pida.ui.view="gap";}
   renderPida();
 };
 /* ---------- 기간·집계 ---------- */
@@ -20793,20 +20827,21 @@ async function renderPida(){
   const P=window.__pida;
   if(!P.loaded){el.innerHTML='<div class="loading"><span class="spin"></span><br>꽃밥에피다 포스 자료를 불러오는 중…</div>';await pidaLoad();if(!P.loaded){el.innerHTML=`<div class="card">불러오기 실패: ${esc(P.err||"")} <button class="btn btn-sm" onclick="window.__pida.err='';renderPida()">다시 시도</button></div>`;return;}}
   const isAd=S.user&&S.user.role==="admin";const U=P.ui;
-  const views=[["dash","대시보드"],["day","일별"],["month","월별"],["time","시간대·요일"],["item","품목"],["cat","분류"]].concat(isAd?[["catset","분류 설정"],["up","파일 넣기"]]:[]);
+  const views=[["dash","대시보드"],["day","일별"],["month","월별"],["time","시간대·요일"],["item","품목"],["cat","분류"],["gap","빠진 날 확인"]].concat(isAd?[["catset","분류 설정"],["up","파일 넣기"]]:[]);
   if(!views.some(v=>v[0]===U.view))U.view="dash";
   const tabs=`<div class="subtabs" style="flex-wrap:wrap;margin-bottom:10px">${views.map(([k,n])=>`<button class="subtab ${U.view===k?"active":""}" onclick="pidaSet('view','${k}')">${n}</button>`).join("")}</div>`;
   const PER=pidaPeriods();if(!U.per||!PER.some(p=>p[0]===U.per))U.per=PER.length?(U.view==="dash"?"w7":PER[2]?PER[2][0]:"w7"):"";
-  const upCard=`<div class="card"><div class="card-title">📂 포스 일일매출상세내역 넣기 <span class="unit">영업속보 › 일일매출상세내역 엑셀(.xlsx·.xls) · 여러 달 한꺼번에 · 같은 달은 새 파일로 바뀌어요</span></div>
+  const upCard=`<div class="card"><div class="card-title">📂 포스 일일매출상세내역 넣기 <span class="unit">영업속보 › 일일매출상세내역 엑셀(.xlsx·.xls) · 파일 여러 개를 한꺼번에 골라도 되고, 여러 달이 든 큰 파일 하나도 OK · 같은 달은 이번에 넣은 파일로 바뀌어요</span></div>
     <input type="file" multiple accept=".xlsx,.xls,.html" onchange="pidaPick(this)">
-    <div class="footnote" style="margin-top:6px">한 번 넣으면 이 탭(대시보드·일별·품목·분류…)과 매출현황 › 피다 탭에 같이 들어가요. 2020년 8월(개업)부터 달마다 받아서 넣어주세요.</div>
+    <div class="footnote" style="margin-top:6px">한 번 넣으면 이 탭(대시보드·일별·품목·분류…)과 매출현황 › 피다 탭에 같이 들어가요. 2015년 12월부터 전부 다시 넣으려면 파일을 <b>한꺼번에 모두 선택</b>하세요 — 같은 날이 두 파일에 겹쳐도 두 번 더해지지 않아요(나중 파일 기준). 넣고 나면 <b>빠진 날 확인</b> 화면으로 넘어가요.</div>
     ${pidaCoverHtml()}</div>`;
   if(!pidaYms().length){el.innerHTML=tabs+(isAd?upCard:'<div class="card"><div class="hint" style="padding:14px">아직 자료가 없어요.</div></div>');return;}
-  const perSel=U.view==="month"||U.view==="catset"||U.view==="up"?"":`<select class="ctl" onchange="pidaSet('per',this.value)">${PER.map(([k,n])=>`<option value="${k}" ${k===U.per?"selected":""}>${n}</option>`).join("")}</select>`;
+  const perSel=U.view==="month"||U.view==="catset"||U.view==="up"||U.view==="gap"?"":`<select class="ctl" onchange="pidaSet('per',this.value)">${PER.map(([k,n])=>`<option value="${k}" ${k===U.per?"selected":""}>${n}</option>`).join("")}</select>`;
   let body="";
   if(U.view==="up")body=upCard;
   else if(U.view==="catset")body=pidaCatSetHtml();
   else if(U.view==="month")body=pidaMonthHtml();
+  else if(U.view==="gap")body=pidaGapHtml();
   else{const L=pidaSel(U.per);
     body=U.view==="dash"?pidaDashHtml(L):U.view==="day"?pidaDayHtml(L):U.view==="time"?pidaTimeHtml(L):U.view==="item"?pidaItemHtml(L):pidaCatHtml(L);}
   el.innerHTML=tabs+`<div class="card" style="padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b style="font-size:16px">🍽 꽃밥에피다 (인사동)</b><span class="unit">포스 일일매출상세내역 기준 · 부가세 포함</span><span style="margin-left:auto"></span>${perSel}</div>`+body;
@@ -20815,6 +20850,62 @@ async function renderPida(){
 RENDERERS.pida=renderPida;
 function pidaCoverHtml(){const ys=[...new Set(pidaYms().map(x=>x.slice(0,2)))];if(!ys.length)return "";
   return `<div class="table-wrap" style="margin-top:8px"><table class="rpt" style="font-size:12px"><thead><tr><th class="l">연도</th>${MONTHS.map(m=>`<th>${m}월</th>`).join("")}</tr></thead><tbody>${ys.map(y=>`<tr><td class="l">20${y}</td>${MONTHS.map(m=>{const k=y+String(m).padStart(2,"0");return `<td style="text-align:center">${window.__pida.M[k]?'<span style="color:#15803d;font-weight:700">✓</span>':'<span style="color:#ccc">–</span>'}</td>`;}).join("")}</tr>`).join("")}</tbody></table></div>`;}
+/* v517: 빠진 날 확인 — 첫 자료 날 ~ 마지막 자료 날 사이에서 매출이 없는 날, 매출이 유난히 적은 날, 매출현황 영업일수와 다른 달 */
+window.pidaGapAll=function(v){window.__pida.ui.gapAll=!!v;renderPida();};
+function pidaGapHtml(){
+  const P=window.__pida,U=P.ui;const yms=pidaYms();if(!yms.length)return "";
+  const wdN="일월화수목금토";
+  const first=pidaDays()[0].date,last=pidaDays().slice(-1)[0].date;
+  /* 첫 달 ~ 마지막 달 사이 모든 달 */
+  const L=[];let y=+("20"+yms[0].slice(0,2)),m=+yms[0].slice(2);const ly=+("20"+yms[yms.length-1].slice(0,2)),lm=+yms[yms.length-1].slice(2);
+  while(y<ly||(y===ly&&m<=lm)){L.push([y,m]);m++;if(m>12){m=1;y++;}}
+  let totHave=0,totMiss=0,totLow=0;const emptyMonths=[];
+  const rows=L.map(([y,m])=>{
+    const ym=String(y).slice(2)+String(m).padStart(2,"0");const M=P.M[ym];const nd=new Date(y,m,0).getDate();
+    const ds=k=>`${y}-${String(m).padStart(2,"0")}-${String(k).padStart(2,"0")}`;
+    const miss=[];const have=[];
+    for(let d=1;d<=nd;d++){const date=ds(d);if(date<first||date>last)continue;const v=M&&M.days[String(d).padStart(2,"0")];if(v&&v[0])have.push({d,date,t:v[5]});else miss.push({d,date,w:new Date(y,m-1,d).getDay()});}
+    /* 같은 요일이 3번 이상 빠졌으면 정기휴무로 봄 */
+    const wc={};miss.forEach(x=>wc[x.w]=(wc[x.w]||0)+1);
+    const reg=Object.keys(wc).filter(w=>wc[w]>=3&&have.length).map(Number);
+    const odd=miss.filter(x=>!reg.includes(x.w));
+    /* 그 달 중간값의 25% 미만인 날 = 자료가 덜 들어갔을 수 있음 */
+    const ts=have.map(x=>x.t).sort((a,b)=>a-b);const med=ts.length?ts[Math.floor(ts.length/2)]:0;
+    const low=have.filter(x=>med>0&&x.t<med*0.25);
+    const ent=(S.data.dailyAvg[y]||S.data.dailyAvg[String(y)]||{}).days?.[m]?.insadong;
+    const md=((S.data.monthly[y]||S.data.monthly[String(y)]||{}).months||{})[m]||{};
+    const posT=have.reduce((a,x)=>a+x.t,0);
+    const dayMis=ent!=null&&ent!==""&&+ent!==have.length;
+    const empty=!have.length;if(empty)emptyMonths.push(`${y}.${m}`);
+    totHave+=have.length;if(!empty)totMiss+=odd.length;totLow+=low.length;
+    const bad=empty||odd.length||low.length||dayMis;
+    return {bad,html:`<tr style="${empty?"background:#fef2f2":""}"><td class="l">${y}.${String(m).padStart(2,"0")}</td>
+      <td>${have.length}</td>
+      <td style="${dayMis?"color:#b91c1c;font-weight:700":""}">${ent!=null&&ent!==""?ent:'<span style="color:#ccc">–</span>'}</td>
+      <td class="l" style="white-space:normal;max-width:360px">${empty?'<b style="color:#b91c1c">한 달 통째로 없음</b>':odd.length?odd.map(x=>`<span style="display:inline-block;margin:1px 4px 1px 0;padding:0 5px;border-radius:4px;background:${x.w===0||x.w===6?"#fee2e2":"#fef3c7"}">${x.d}일(${wdN[x.w]})</span>`).join(""):'<span style="color:#15803d">없음</span>'}</td>
+      <td class="l" style="color:#64748b">${reg.length?reg.map(w=>wdN[w]).join("·")+"요일 ("+reg.reduce((a,w)=>a+wc[w],0)+"일)":""}</td>
+      <td class="l" style="white-space:normal;max-width:220px">${low.map(x=>`<span style="display:inline-block;margin:1px 4px 1px 0;padding:0 5px;border-radius:4px;background:#e0e7ff">${x.d}일 ${fmt(x.t)}</span>`).join("")}</td>
+      <td>${have.length?fmt(posT):""}</td><td>${md.insadong!=null?fmt(md.insadong):""}</td></tr>`};
+  });
+  const shown=U.gapAll?rows:rows.filter(r=>r.bad);
+  const nBad=rows.filter(r=>r.bad).length;
+  return `<div class="card"><div class="card-title">🔎 빠진 날 확인 <span class="unit">${first} ~ ${last} · 포스 자료 기준</span></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+      ${pidaTile("자료 있는 날",fmt(totHave)+"일",L.length+"개월","#3b6fd4")}
+      ${pidaTile("빠진 날",fmt(totMiss)+"일","정기휴무 요일·통째로 없는 달은 뺐어요","#e0492f")}
+      ${pidaTile("통째로 없는 달",emptyMonths.length+"개월",emptyMonths.slice(0,6).join(", ")+(emptyMonths.length>6?" …":""),"#9333ea")}
+      ${pidaTile("매출이 유난히 적은 날",fmt(totLow)+"일","그 달 보통 매출의 25% 미만","#f59e0b")}
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" ${U.gapAll?"checked":""} onchange="pidaGapAll(this.checked)"> 모든 달 보기</label>
+      <span class="unit">${U.gapAll?"전체 "+rows.length+"개월":"확인할 달 "+nBad+"개월만 보여요"}</span></div>
+    <div class="table-wrap"><table class="rpt" style="font-size:12.5px"><thead><tr><th class="l">월</th><th>자료 있는 날</th><th>매출현황<br>영업일수</th><th class="l">빠진 날</th><th class="l">정기휴무로 보임</th><th class="l">매출이 유난히 적은 날</th><th>포스 총매출</th><th>매출현황<br>입력 매출</th></tr></thead>
+    <tbody>${shown.map(r=>r.html).join("")||'<tr><td colspan="8" style="text-align:center;color:#15803d;padding:14px">확인할 달이 없어요 👍</td></tr>'}</tbody></table></div>
+    <div class="footnote" style="margin-top:6px">· <b>빠진 날</b>: 포스 자료에 거래가 한 건도 없는 날이에요. 노란색=평일, 빨간색=주말. 휴무일이었다면 괜찮고, 영업한 날이면 그 달 파일을 다시 받아 넣어주세요.<br>
+    · 한 달에 같은 요일이 3번 이상 빠지면 정기휴무로 보고 <b>빠진 날</b>에서 뺐어요.<br>
+    · <b>매출이 유난히 적은 날</b>: 파일이 그날 중간까지만 받아졌을 수 있어요. 일별 화면에서 확인해보세요.<br>
+    · <b>매출현황 영업일수</b>가 빨간색이면 매출현황에 입력한 인사동 영업일수와 포스 자료 날 수가 달라요.</div></div>`;
+}
 function pidaTile(t,v,s,bg){return `<div style="flex:1;min-width:170px;background:${bg};color:#fff;border-radius:10px;padding:12px 14px"><div style="font-size:13px;font-weight:700;opacity:.95">${t}</div><div style="font-size:24px;font-weight:800;text-align:right;margin-top:6px">${v}</div><div style="font-size:11.5px;text-align:right;opacity:.9">${s||""}</div></div>`;}
 function pidaDashHtml(L){
   const t=pidaSum(L),n=L.length||1,last=L[L.length-1];
