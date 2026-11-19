@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v511</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v512</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -18732,9 +18732,9 @@ const CARD_DEF_CODES={
   "교육훈련비":["8289","교육훈련비(판)"],"복리후생비":["8109","복리후생비(판)"],"상품":["1469","상품"],
   "소모품비":["8159","소모품비(판)"],"소모품(비품)":["8160","소모품(비품)"],"여비교통비":["8119","여비교통비(판)"],
   "접대비":["8128","접대비-카드(판)"],"지급수수료":["8319","지급수수료(판)"],"차량유지비":["8279","차량유지비(판)"],
-  "운반비":["8379","운반비(판)"],"미지급금":["2539","미지급금"],"광고선전비":["","광고선전비(판)"]
+  "운반비":["8379","운반비(판)"],"미지급금":["2539","미지급금"],"광고선전비":["","광고선전비(판)"],"미수금":["","미수금"]
 };
-const CARD_ACC_LIST=["교육훈련비","복리후생비","상품","소모품비","소모품(비품)","여비교통비","접대비","지급수수료","차량유지비","운반비","광고선전비","미지급금"];
+const CARD_ACC_LIST=["교육훈련비","복리후생비","상품","소모품비","소모품(비품)","여비교통비","접대비","지급수수료","차량유지비","운반비","광고선전비","미지급금","미수금"]; /* v512: 미수금 (개인 비용을 법인카드로 결제 → 나중에 받을 돈) */
 function cardStore(){S.data.buy=S.data.buy||{files:{},close:{},stat:{},vendorMap:{}};S.data.buy.card=S.data.buy.card||{};return S.data.buy.card;}
 function cardCfg(){S.data.buy=S.data.buy||{};const c=S.data.buy.cardCfg=S.data.buy.cardCfg||{};c.holderBiz=c.holderBiz||{};c.codes=c.codes||{};return c;}
 function cardCodeOf(a){const c=cardCfg().codes[a];const d=CARD_DEF_CODES[a];return [(c&&c[0]!=null?c[0]:(d?d[0]:"")),(c&&c[1]?c[1]:(d?d[1]:a))];}
@@ -18792,8 +18792,10 @@ function cardParseSheet(nm,aoa){
   let holder="";
   const rows=body.map(r=>{
     const h=String(r[cH]==null?"":r[cH]).trim();if(!holder&&h)holder=h;
-    const acRaw=cAc>=0?String(r[cAc]==null?"":r[cAc]).trim():"";
-    const x=cX>=0?String(r[cX]==null?"":r[cX]).trim():"";
+    let acRaw=cAc>=0?String(r[cAc]==null?"":r[cAc]).trim():"";
+    let x=cX>=0?String(r[cX]==null?"":r[cX]).trim():"";
+    /* v512: 비고(계정) 칸에 계정 대신 메모를 적은 경우 → 메모는 세부내역 뒤에, 개인 비용이면 미수금 */
+    if(acRaw&&!cardIsAcct(acRaw)){const note=acRaw;acRaw=/개인/.test(note)?"미수금":"";if(x.indexOf(note)<0)x=x?x+" ("+note+")":note;}
     const fit=/체력/.test(acRaw+" "+x)||/개인주문/.test(x)||r.some((v,ci)=>ci!==cA&&typeof v==="string"&&/체력/.test(v));
     return {h,d:String(r[cD]==null?"":r[cD]).trim(),m:String(r[cM]==null?"":r[cM]).trim(),a:Math.round(cardNum(r[cA])),x,ac:cardNormAcct(acRaw),fit};
   });
@@ -18952,6 +18954,7 @@ function cardFillBack(key,upSheets){
       if(!r){R.miss.push(cardApDate(u)+" "+u.m+" "+fmt(u.a));return;}
       used[k]=i+1;R.matched++;
       let ch=false;
+      if(r.ov&&!cardIsAcct(r.ov)){delete r.ov;ch=true;} /* v512 */
       const x=String(u.x||"").trim();
       if(x&&x!==String(r.x||"")){r.x=x;r.xE=1;ch=true;}
       const ac=u.ac;
