@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v554</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v555</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -20859,7 +20859,9 @@ async function renderPida(){
   if(U.view==="day"||U.view==="gap")U.view=U.view==="gap"&&isAd?"up":"month"; /* v519: 일별은 기간별 매출(일 단위)로, 빠진 날 확인은 파일 넣기로 합침 */
   if(!views.some(v=>v[0]===U.view))U.view="dash";
   const tabs=`<div class="subtabs" style="flex-wrap:wrap;margin-bottom:10px">${views.map(([k,n])=>`<button class="subtab ${U.view===k?"active":""}" onclick="pidaSet('view','${k}')">${n}</button>`).join("")}</div>`;
-  const PER=pidaPeriods();if(!U.per||!PER.some(p=>p[0]===U.per))U.per=PER.length?(U.view==="dash"?"w7":PER[2]?PER[2][0]:"w7"):"";
+  const PER=pidaPeriods();if(!U.per||!PER.some(p=>p[0]===U.per)){ /* v555: 처음엔 이번 달 (자료가 없으면 자료 있는 마지막 달) */
+    const t=new Date(),cm="m"+String(t.getFullYear()).slice(2)+String(t.getMonth()+1).padStart(2,"0");const ys=pidaYms();
+    U.per=PER.some(p=>p[0]===cm)?cm:ys.length?"m"+ys[ys.length-1]:(PER[0]?PER[0][0]:"");}
   const upCard=`<div class="card"><div class="card-title">📂 포스 일일매출상세내역 넣기 <span class="unit">영업속보 › 일일매출상세내역 엑셀(.xlsx·.xls) · 파일 여러 개를 한꺼번에 골라도 되고, 여러 달이 든 큰 파일 하나도 OK · 같은 달은 이번에 넣은 파일로 바뀌어요</span></div>
     <input type="file" multiple accept=".xlsx,.xls,.html" onchange="pidaPick(this)">
     <div class="footnote" style="margin-top:6px">한 번 넣으면 이 탭(대시보드·매출 추이·일별 매출·상품판매별…)과 매출현황 › 피다 탭에 같이 들어가요. 2015년 12월부터 전부 다시 넣으려면 파일을 <b>한꺼번에 모두 선택</b>하세요 — 같은 날이 두 파일에 겹쳐도 두 번 더해지지 않아요(나중 파일 기준). 넣고 나면 바로 아래 <b>빠진 날 확인</b>에서 빠진 날짜를 볼 수 있어요.</div>
