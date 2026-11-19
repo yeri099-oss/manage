@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v529</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v530</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -20992,7 +20992,7 @@ window.pidaQuick=function(k){const U=window.__pida.ui;const t=new Date();let a=n
 const pidaWk=ymd=>{const t=new Date(ymd+"T00:00:00");t.setDate(t.getDate()-((t.getDay()+6)%7));return pidaYmd(t);};
 const pidaMEnd=ymd=>{const t=new Date(ymd+"T00:00:00");return pidaYmd(new Date(t.getFullYear(),t.getMonth()+1,0));};
 const pidaAdd=(ymd,d)=>{const t=new Date(ymd+"T00:00:00");t.setDate(t.getDate()+d);return pidaYmd(t);};
-function pidaSnap(){const U=window.__pida.ui;if(U.view!=="month")return;const un=U.unit||"d";if(!U.from||!U.to)return;
+function pidaSnap(){const U=window.__pida.ui;if(U.view!=="month")return;if(U.unit==="w")U.unit="d";const un=U.unit||"d";if(!U.from||!U.to)return;
   if(un==="w"){U.from=pidaWk(U.from);U.to=pidaAdd(pidaWk(U.to),6);}
   else if(un==="m"){U.from=U.from.slice(0,7)+"-01";U.to=pidaMEnd(U.to);}
   else if(un==="y"){U.from=U.from.slice(0,4)+"-01-01";U.to=U.to.slice(0,4)+"-12-31";}}
@@ -21009,7 +21009,7 @@ window.pidaStep=function(n,un){const U=window.__pida.ui;
   else{const k=(+U.to.slice(0,4))-(+U.from.slice(0,4))+1;U.from=(+U.from.slice(0,4)+k*n)+"-01-01";U.to=(+U.to.slice(0,4)+k*n)+"-12-31";}
   U.dsel="";renderPida();};
 /* 고르는 창 — 월: 연도 ◀▶ + 1~12월, 연: 20년씩, 주: 달력에서 아무 날이나 누르면 그 주(월~일) */
-window.pidaPkOpen=function(btn,which){const U=window.__pida.ui;const un=U.unit||"d";const cur=which==="from"?U.from:U.to;
+window.pidaPkOpen=function(btn,which,un){const U=window.__pida.ui;un=un||"d";const cur=which==="from"?U.from:U.to;
   window.__pidaPk={which,un,y:+cur.slice(0,4),m:+cur.slice(5,7)-1,base:2000+Math.floor((+cur.slice(0,4)-2000)/20)*20};
   let el=document.getElementById("pida-pk");if(!el){el=document.createElement("div");el.id="pida-pk";document.body.appendChild(el);
     document.addEventListener("mousedown",e=>{const p=document.getElementById("pida-pk");if(p&&p.style.display!=="none"&&!p.contains(e.target)&&!(e.target.closest&&e.target.closest("[onclick^='pidaPkOpen']")))p.style.display="none";});}
@@ -21017,7 +21017,7 @@ window.pidaPkOpen=function(btn,which){const U=window.__pida.ui;const un=U.unit||
   pidaPkDraw();};
 window.pidaPkNav=function(n){const K=window.__pidaPk;if(K.un==="m")K.y+=n;else if(K.un==="y")K.base+=20*n;else{K.m+=n;if(K.m<0){K.m=11;K.y--;}if(K.m>11){K.m=0;K.y++;}}pidaPkDraw();};
 window.pidaPkPick=function(v){const K=window.__pidaPk,U=window.__pida.ui;let a,b;
-  if(K.un==="m"){a=v+"-01";b=pidaMEnd(a);}else if(K.un==="y"){a=v+"-01-01";b=v+"-12-31";}else{a=pidaWk(v);b=pidaAdd(a,6);}
+  if(K.un==="m"){a=v+"-01";b=pidaMEnd(a);}else if(K.un==="y"){a=v+"-01-01";b=v+"-12-31";}else if(K.un==="d"){a=b=v;}else{a=pidaWk(v);b=pidaAdd(a,6);}
   if(K.which==="from"){U.from=a;if(U.to<a)U.to=b;}else{U.to=b;if(U.from>b)U.from=a;}
   document.getElementById("pida-pk").style.display="none";U.dsel="";renderPida();};
 window.pidaPkToday=function(){const K=window.__pidaPk;const t=pidaYmd(new Date());pidaPkPick(K.un==="m"?t.slice(0,7):K.un==="y"?t.slice(0,4):t);};
@@ -21028,6 +21028,10 @@ function pidaPkDraw(){const K=window.__pidaPk,U=window.__pida.ui;const el=docume
   let body="";
   if(K.un==="m"){body=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:12px">${[...Array(12)].map((_,i)=>{const v=K.y+"-"+pidaP2(i+1);return `<div style="${cellS(sel.slice(0,7)===v)}" onmouseover="this.style.outline='1px solid #93c5fd'" onmouseout="this.style.outline=''" onclick="pidaPkPick('${v}')">${i+1}월</div>`;}).join("")}</div>`;el.innerHTML=head(K.y)+body;}
   else if(K.un==="y"){body=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:12px">${[...Array(20)].map((_,i)=>{const v=String(K.base+i);return `<div style="${cellS(sel.slice(0,4)===v)}" onmouseover="this.style.outline='1px solid #93c5fd'" onmouseout="this.style.outline=''" onclick="pidaPkPick('${v}')">${v}년</div>`;}).join("")}</div>`;el.innerHTML=head(`${K.base} ~ ${K.base+19}`)+body;}
+  else if(K.un==="d"){const first=new Date(K.y,K.m,1);const st=new Date(first);st.setDate(1-((first.getDay()+6)%7));const td=pidaYmd(new Date());let cells="";
+    for(let i=0;i<42;i++){const x=new Date(st.getFullYear(),st.getMonth(),st.getDate()+i);if(i>=35&&x.getMonth()!==K.m)break;const v=pidaYmd(x);const out=x.getMonth()!==K.m;const on=v===sel;const inR=v>=U.from&&v<=U.to;
+      cells+=`<div onclick="pidaPkPick('${v}')" style="cursor:pointer;text-align:center;padding:7px 0;font-size:13px;border-radius:6px;${on?"background:#4a72f5;color:#fff;font-weight:700":inR?"background:#e0e7ff":""}${!on&&out?";color:#cbd5e1":""}${!on&&!out&&i%7===6?";color:#dc2626":""}${v===td&&!on?";outline:1px solid #4a72f5":""}" onmouseover="if(!${on})this.style.boxShadow='inset 0 0 0 1px #93c5fd'" onmouseout="this.style.boxShadow=''">${x.getDate()}</div>`;}
+    el.innerHTML=head(`${K.y}년 ${K.m+1}월`)+`<div style="padding:8px 10px"><div style="display:grid;grid-template-columns:repeat(7,1fr);font-size:12px;color:#64748b;text-align:center;margin-bottom:4px">${"월화수목금토일".split("").map(x=>`<div>${x}</div>`).join("")}</div><div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">${cells}</div><div style="font-size:11px;color:#64748b;margin-top:6px">${K.which==="from"?"시작":"끝"} 날짜를 골라주세요</div></div>`;}
   else{const first=new Date(K.y,K.m,1);const st=new Date(first);st.setDate(1-((first.getDay()+6)%7));const sw=pidaWk(sel);let rows="";
     for(let w=0;w<6;w++){const ws=pidaYmd(new Date(st.getFullYear(),st.getMonth(),st.getDate()+7*w));if(w>3&&+ws.slice(5,7)!==K.m+1&&ws>pidaYmd(first))break;const on=ws===sw;
       rows+=`<div style="display:grid;grid-template-columns:repeat(7,1fr);cursor:pointer;border-radius:6px;${on?"background:#4a72f5;color:#fff;font-weight:700":""}" onmouseover="if(!${on})this.style.background='#e0e7ff'" onmouseout="if(!${on})this.style.background=''" onclick="pidaPkPick('${ws}')">${[...Array(7)].map((_,d)=>{const x=new Date(ws+"T00:00:00");x.setDate(x.getDate()+d);const out=x.getMonth()!==K.m;return `<div style="text-align:center;padding:7px 0;font-size:13px;${out&&!on?"color:#cbd5e1":""}${d===6&&!on&&!out?"color:#dc2626":""}">${x.getDate()}</div>`;}).join("")}</div>`;}
@@ -21040,12 +21044,12 @@ window.pidaItemSearch=function(){const i=document.getElementById("pida-iq");wind
 function pidaSeg(list,cur,fn){return `<span style="display:inline-flex;border:1px solid #cbd5e1;border-radius:8px;overflow:hidden;background:#fff">${list.map(([k,n],i)=>`<button onclick="${fn}('${k}')" style="border:0;${i?"border-left:1px solid #cbd5e1;":""}padding:5px 12px;font-size:13px;font-weight:700;cursor:pointer;${cur===k?"background:#15803d;color:#fff":"background:#fff;color:#334155"}">${n}</button>`).join("")}</span>`;}
 function pidaRangeBar(withSearch,withUnit){const U=window.__pida.ui;const D=pidaDays();const mn=D[0].date,mx=D[D.length-1].date;
   const qb=(k,n)=>`<button class="btn btn-sm" style="background:#2563eb;color:#fff;border-color:#2563eb" onclick="pidaQuick('${k}')">${n}</button>`;
+  if(U.unit==="w")U.unit="d"; /* v530: 주 단위 없앰 */
   const un=withUnit?(U.unit||"d"):"d";
   const QK={d:[["td","오늘"],["yd","전일"],["tm","이달"],["pm","전달"]],w:[["tw","이번주"],["lw","지난주"],["w4","최근4주"]],m:[["tm","이달"],["pm","전달"],["m3","최근3개월"],["ty","올해"]],y:[["ty","올해"],["ly","작년"],["all","전체"]]}[un];
   const CAL='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M7 14h2M11 14h2M15 14h2M7 18h2M11 18h2" stroke-width="2.4"/></svg>';
-  const pb=(k)=>`<button onclick="pidaPkOpen(this,'${k}')" style="display:inline-flex;align-items:stretch;padding:0;border:1px solid #cbd5e1;border-radius:4px;background:#fff;cursor:pointer;overflow:hidden;font:inherit"><span style="padding:6px 10px;min-width:${un==="w"?130:84}px;text-align:left;font-size:13.5px;color:#111">${pidaPkLabel(k==="from"?U.from:U.to,un,k)}</span><span style="display:flex;align-items:center;padding:0 8px;background:#f1f5f9;border-left:1px solid #cbd5e1">${CAL}</span></button>`;
-  const inputs=un==="d"?`<input type="date" class="ctl" value="${U.from}" min="${mn}" max="${mx}" onchange="pidaRangeSet('from',this.value)"> ~
-    <input type="date" class="ctl" value="${U.to}" min="${mn}" max="${mx}" onchange="pidaRangeSet('to',this.value)">`:`${pb("from")} ~ ${pb("to")}`;
+  const pb=(k)=>`<button onclick="pidaPkOpen(this,'${k}','${un}')" style="display:inline-flex;align-items:stretch;padding:0;border:1px solid #cbd5e1;border-radius:4px;background:#fff;cursor:pointer;overflow:hidden;font:inherit"><span style="padding:6px 10px;min-width:${un==="d"?96:84}px;text-align:left;font-size:13.5px;color:#111">${pidaPkLabel(k==="from"?U.from:U.to,un,k)}</span><span style="display:flex;align-items:center;padding:0 8px;background:#f1f5f9;border-left:1px solid #cbd5e1">${CAL}</span></button>`;
+  const inputs=`${pb("from")} ~ ${pb("to")}`;
   const stepN={d:"달",w:"주",m:"달",y:"해"}[un];
   return `<div class="card" style="padding:10px 14px;background:#eef4fd"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
     <div style="display:flex;gap:3px;flex-wrap:wrap">${QK.map(([k,n])=>qb(k,n)).join("")}</div>
@@ -21054,7 +21058,7 @@ function pidaRangeBar(withSearch,withUnit){const U=window.__pida.ui;const D=pida
     <button class="btn btn-sm" title="다음 ${stepN}" onclick="pidaStep(1,'${un}')">▶</button></span>
     ${withSearch?`<span style="display:flex;align-items:center;gap:4px;margin-left:6px">품목명 <input id="pida-iq" type="search" class="ctl" placeholder="비우면 전체" value="${esc(U.q||"")}" onkeydown="if(event.key==='Enter')pidaItemSearch()" style="width:180px"><button class="btn btn-sm" style="background:#111;color:#fff;border-color:#111" onclick="pidaItemSearch()">🔍 검색</button></span>
     <span style="margin-left:6px">${pidaSeg([["item","🏆 상품 순위"],["cat","📂 분류 순위"]],U.imode||"item","pidaIMode")}</span>`:""}
-    ${withUnit?`<span style="margin-left:6px;display:flex;align-items:center;gap:6px">묶기 ${pidaSeg([["d","일"],["w","주"],["m","월"],["y","연"]],U.unit||"d","pidaUnit")}</span>`:""}
+    ${withUnit?`<span style="margin-left:6px;display:flex;align-items:center;gap:6px">묶기 ${pidaSeg([["d","일"],["m","월"],["y","연"]],U.unit||"d","pidaUnit")}</span>`:""}
     <span class="unit" style="margin-left:auto">자료: ${mn} ~ ${mx}</span></div></div>`;}
 window.pidaXls=async function(btn,name){const card=btn.closest(".card");const tb=card&&card.querySelector("table");if(!tb)return;
   await loadScript("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");
@@ -21117,7 +21121,7 @@ function pidaHourTable(H){const hs=Object.keys(H).map(Number);const lo=Math.min(
     <tr class="total"><td style="text-align:center">합계</td><td>${fmt(tot)}</td><td>${fmt(cnt)}</td><td>${cnt?fmt(Math.round(tot/cnt)):0}</td><td>${fmt(tot)}</td><td></td><td></td></tr>${rows.join("")}</tbody></table>`;}
 /* 기간별 매출 — 일·주·월·연 단위로 묶어서 */
 window.pidaUnit=function(v){window.__pida.ui.unit=v;pidaSnap();window.__pida.ui.dsel="";renderPida();};
-function pidaPeriodHtml(L){const U=window.__pida.ui;const un=U.unit||"d";
+function pidaPeriodHtml(L){const U=window.__pida.ui;if(U.unit==="w")U.unit="d";const un=U.unit||"d";
   const key=d=>{if(un==="d")return d.date;if(un==="y")return d.date.slice(0,4)+"년";if(un==="m")return d.date.slice(0,7);
     const t=new Date(d.date+"T00:00:00");const mo=new Date(t);mo.setDate(t.getDate()-((t.getDay()+6)%7));const su=new Date(mo);su.setDate(mo.getDate()+6);return pidaYmd(mo)+" ~ "+pidaYmd(su).slice(5);};
   const G={};L.forEach(d=>{const k=key(d);const g=G[k]=G[k]||{k,n:0,v:[0,0,0,0,0,0,0]};g.n++;d.v.forEach((x,i)=>g.v[i]+=x);});
