@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v543</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v544</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -21226,60 +21226,97 @@ function pidaPeriodHtml(L){const U=window.__pida.ui;if(U.unit==="w")U.unit="d";c
     <div class="table-wrap"><table class="rpt" style="font-size:12.5px"><thead><tr><th class="l">기간</th><th>영업일</th><th>건수</th><th>객수</th><th>현금</th><th>카드</th><th>기타</th><th>할인·서비스</th><th>총매출</th><th>일평균</th><th>객단가</th></tr></thead><tbody>
     ${R.map(g=>row(g.k,g.n,g.v)).join("")}${row("합계",L.length,t,"total")}</tbody></table></div></div>
     <details class="card"><summary style="cursor:pointer;font-weight:700">📅 연도별 같은 달 비교 (전체 자료)</summary>${pidaMonthHtml()}</details>`;}
-/* ===== v542: 매출 추이 — 현금·카드·기타 쌓은 막대 + 합계, 전년 같은 기간(회색 점선) 비교, 일·월·연 / 막대+꺾은선·막대·꺾은선 ===== */
+/* ===== v544: 매출 추이 — 매출/객수/객단가, 전년 비교(일=같은 요일 364일 전, 월·연=같은 날짜), 평균선(일 7일·월 3개월), 최고·최저, 아래 표+엑셀 ===== */
 window.pidaTrCt=function(k){window.__pida.ui.trCt=k;renderPida();};
 window.pidaTrPrev=function(v){window.__pida.ui.trPrev=v;renderPida();};
-const pidaY1=ymd=>(+ymd.slice(0,4)-1)+ymd.slice(4)==(+ymd.slice(0,4)-1)+"-02-29"?(+ymd.slice(0,4)-1)+"-02-28":(+ymd.slice(0,4)-1)+ymd.slice(4);
-function pidaTrendHtml(L){const U=window.__pida.ui;const un=U.unit||"d";let ct=U.trCt||"bar";if(ct==="combo")ct="bar";const showPrev=U.trPrev!==false;
-  const ALL=pidaDays();const sumR=(a,b)=>{let t=0,c=0;for(const d of ALL){if(d.date<a)continue;if(d.date>b)break;t+=d.v[5];c++;}return c?t:null;}; /* 그 기간 자료가 없으면 null(선 끊음) */
-  const G={};L.forEach(d=>{let k,lb,sub,tip;
-    if(un==="d"){k=d.date;lb=+d.dd;sub="";tip=`${d.date} (${pidaWd(d.date)})`;}
-    else if(un==="m"){k=d.date.slice(0,7);lb=+d.date.slice(5,7)+"월";sub="";tip=`${d.date.slice(0,4)}년 ${+d.date.slice(5,7)}월`;}
-    else{k=d.date.slice(0,4);lb=k+"년";sub="";tip=k+"년";}
-    const g=G[k]=G[k]||{k,lb,sub,tip,gs:d.date,ge:d.date,v:[0,0,0,0,0,0,0],n:0};g.ge=d.date;g.n++;d.v.forEach((x,i)=>g.v[i]+=x);});
+window.pidaTrAvg=function(v){window.__pida.ui.trAvg=v;renderPida();};
+window.pidaTrMet=function(k){window.__pida.ui.trMet=k;renderPida();};
+const pidaY1=ymd=>{const y=+ymd.slice(0,4)-1;const r=y+ymd.slice(4);return r.slice(5)==="02-29"?y+"-02-28":r;};
+const PIDA_MET={sales:{n:"매출",u:"원",c:"#3b6fd4"},guest:{n:"객수",u:"명",c:"#16a34a"},aov:{n:"객단가",u:"원",c:"#9333ea"}};
+function pidaTrendHtml(L){const U=window.__pida.ui;const un=U.unit||"d";let ct=U.trCt||"bar";if(ct==="combo")ct="bar";
+  const met=PIDA_MET[U.trMet]?U.trMet:"sales";const MT=PIDA_MET[met];const showPrev=U.trPrev!==false;const showAvg=U.trAvg!==false&&un!=="y";
+  const ALL=pidaDays();const byDate={};ALL.forEach(d=>byDate[d.date]=d.v);
+  const sumR=(a,b)=>{let t=0,g=0,c=0;for(const d of ALL){if(d.date<a)continue;if(d.date>b)break;t+=d.v[5];g+=d.v[1];c++;}return c?{t,g}:null;};
+  const G={};L.forEach(d=>{let k,lb,tip;
+    if(un==="d"){k=d.date;lb=+d.dd;tip=`${d.date} (${pidaWd(d.date)})`;}
+    else if(un==="m"){k=d.date.slice(0,7);lb=+d.date.slice(5,7)+"월";tip=`${d.date.slice(0,4)}년 ${+d.date.slice(5,7)}월`;}
+    else{k=d.date.slice(0,4);lb=k+"년";tip=k+"년";}
+    const g=G[k]=G[k]||{k,lb,sub:"",tip,gs:d.date,ge:d.date,v:[0,0,0,0,0,0,0],n:0};g.ge=d.date;g.n++;d.v.forEach((x,i)=>g.v[i]+=x);});
   const R=Object.values(G);
-  /* 날짜·달 이름 둘째 줄: 달이 바뀌는 곳(일 단위), 해가 바뀌는 곳(월 단위) */
   R.forEach((g,i)=>{const p=R[i-1];if(un==="d"&&(!p||p.k.slice(0,7)!==g.k.slice(0,7)))g.sub=(+g.k.slice(5,7))+"월";if(un==="m"&&(!p||p.k.slice(0,4)!==g.k.slice(0,4)))g.sub=g.k.slice(2,4)+"년";});
-  /* 전년 같은 기간: 그 묶음의 실제 첫날~마지막 날을 1년 앞으로 */
-  R.forEach(g=>{const a=un==="d"?pidaY1(g.k):un==="m"?pidaY1(g.k+"-01"):pidaY1(g.k+"-01-01");const b=un==="d"?a:pidaY1(g.ge);g.prev=sumR(a,b);});
-  const tot=R.reduce((t,g)=>t+g.v[5],0);const M=R.filter(g=>g.prev!=null);const ptot=M.reduce((t,g)=>t+g.prev,0),mtot=M.reduce((t,g)=>t+g.v[5],0);
-  const hasPrev=M.length>0;const diff=hasPrev&&ptot?(mtot/ptot-1)*100:null;const partial=hasPrev&&M.length<R.length; /* 전년 자료가 있는 묶음끼리만 비교 */
+  /* 전년: 일 = 364일 전(같은 요일), 월·연 = 1년 전 같은 날짜까지 */
+  R.forEach(g=>{if(un==="d"){g.pd=pidaAdd(g.k,-364);const v=byDate[g.pd];g.pv=v?{t:v[5],g:v[1]}:null;}
+    else{const a=un==="m"?pidaY1(g.k+"-01"):pidaY1(g.k+"-01-01");g.pv=sumR(a,pidaY1(g.ge));}});
+  const val=(t,gs)=>met==="sales"?t:met==="guest"?gs:(gs?t/gs:null);
+  R.forEach(g=>{g.val=val(g.v[5],g.v[1]);g.pval=g.pv?val(g.pv.t,g.pv.g):null;});
+  /* 평균선: 일 = 직전 7영업일, 월 = 직전 3개월 (앞쪽은 고른 기간 밖 자료도 써서 처음부터 그림) */
+  if(showAvg){const W=un==="d"?7:3;
+    if(un==="d"){const idx={};ALL.forEach((d,i)=>idx[d.date]=i);R.forEach(g=>{const i=idx[g.k];const S=ALL.slice(Math.max(0,i-W+1),i+1);const t=S.reduce((a,d)=>a+d.v[5],0),gs=S.reduce((a,d)=>a+d.v[1],0);g.avg=met==="aov"?(gs?t/gs:null):(met==="sales"?t:gs)/S.length;});}
+    else{const MM={};ALL.forEach(d=>{const k=d.date.slice(0,7);const m=MM[k]=MM[k]||{t:0,g:0};m.t+=d.v[5];m.g+=d.v[1];});const ks=Object.keys(MM).sort();
+      R.forEach(g=>{const i=ks.indexOf(g.k);const S=ks.slice(Math.max(0,i-W+1),i+1).map(k=>MM[k]);const t=S.reduce((a,m)=>a+m.t,0),gs=S.reduce((a,m)=>a+m.g,0);g.avg=met==="aov"?(gs?t/gs:null):(met==="sales"?t:gs)/S.length;});}}
+  /* 요약 */
+  const tot=R.reduce((t,g)=>t+g.v[5],0),gsum=R.reduce((t,g)=>t+g.v[1],0);const cur=val(tot,gsum);
+  const M=R.filter(g=>g.pv);const hasPrev=M.length>0;const mt=M.reduce((t,g)=>t+g.v[5],0),mg=M.reduce((t,g)=>t+g.v[1],0),pt=M.reduce((t,g)=>t+g.pv.t,0),pg=M.reduce((t,g)=>t+g.pv.g,0);
+  const mc=val(mt,mg),pc=val(pt,pg);const diff=hasPrev&&pc?(mc/pc-1)*100:null;const partial=hasPrev&&M.length<R.length;
+  const V=R.filter(g=>g.val!=null);const best=V.reduce((a,g)=>!a||g.val>a.val?g:a,null),worst=V.reduce((a,g)=>!a||g.val<a.val?g:a,null);
+  const fv=v=>v==null?"—":met==="sales"?fmt(Math.round(v))+"원":met==="guest"?fmt(Math.round(v))+"명":fmt(Math.round(v))+"원";
+  const man=v=>met!=="sales"?fmt(Math.round(v)):v>=1e8?(v/1e8).toFixed(1).replace(/\.0$/,"")+"억":v>=1e4?fmt(Math.round(v/1e4))+"만":fmt(Math.round(v));
+  const shortLb=g=>un==="d"?(+g.k.slice(5,7))+"/"+(+g.k.slice(8)):g.tip;
+  const unitN={d:"일",m:"개월",y:"년"}[un];
+  const tiles=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+      ${pidaTileCalm(met==="sales"?"고른 기간 총매출":met==="guest"?"고른 기간 총 객수":"고른 기간 객단가",fv(cur),U.from+" ~ "+U.to,"#3b6fd4")}
+      ${pidaTileCalm("전년 같은 기간",hasPrev?fv(pc):"자료 없음",(un==="d"?"같은 요일로 맞춤":pidaY1(U.from)+" ~ "+pidaY1(U.to))+(partial?` · 자료 있는 ${M.length}${unitN}만`:""),"#16a34a")}
+      ${pidaTileCalm("전년 대비",diff==null?"—":(diff>0?"+":"")+diff.toFixed(1)+"%",diff==null?"":(diff>=0?"▲ ":"▼ ")+fv(Math.abs(mc-pc))+" "+(diff>=0?"늘었어요":"줄었어요")+(partial?" (같이 있는 기간끼리)":""),diff==null||diff>=0?"#e0492f":"#3b6fd4")}
+      ${pidaTileCalm("최고 · 최저",best?`<span style="color:#b91c1c">▲</span> ${shortLb(best)} ${met==="sales"?man(best.val)+"원":fv(best.val)}`:"—",worst?`최저 ▼ ${shortLb(worst)} ${met==="sales"?man(worst.val)+"원":fv(worst.val)}`:"","#f59e0b")}</div>`;
   /* 차트 */
-  const avail=Math.max(700,((document.getElementById("tab-pida")||{}).clientWidth||1200)-70);const n=R.length,bw=n<=40?28:16,Lp=74,Rp=20,T=14,B=46,H=320,W=Math.max(avail,Lp+Rp+n*bw);const ph=H-T-B,pw=W-Lp-Rp;
-  const mx=pidaNice(Math.max(1,...R.map(g=>Math.max(g.v[5],showPrev?(g.prev||0):0)))*1.08);
-  const xq=i=>Lp+pw*(i+0.5)/n,yv=v=>T+ph-ph*Math.max(0,v)/mx,slot=pw/n,bwid=Math.min(26,slot*0.62);
-  const man=v=>v>=1e8?(v/1e8).toFixed(1).replace(/\.0$/,"")+"억":v>=1e4?fmt(Math.round(v/1e4))+"만":fmt(Math.round(v));
-  let g0="";for(let k=0;k<=5;k++){const y=T+ph-ph*k/5;g0+=`<line x1="${Lp}" x2="${W-Rp}" y1="${y}" y2="${y}" stroke="#e5e7eb"/><text x="${Lp-6}" y="${y+4}" text-anchor="end" font-size="11" fill="#64748b">${man(mx*k/5)}</text>`;}
+  const avail=Math.max(700,((document.getElementById("tab-pida")||{}).clientWidth||1200)-70);const n=R.length,bw=n<=40?28:16,Lp=74,Rp=20,T=22,B=46,H=320,W=Math.max(avail,Lp+Rp+n*bw);const ph=H-T-B,pw=W-Lp-Rp;
+  /* 꺾은선이면 눈금을 0이 아닌 가장 작은 값 근처부터 (객단가처럼 변화가 작은 것도 보이게), 막대는 0부터 */
+  const allV=R.flatMap(g=>[g.val,showPrev?g.pval:null,showAvg?g.avg:null]).filter(v=>v!=null&&v>0);
+  let lo=0,mx;if(ct==="line"&&allV.length){const mn=Math.min(...allV),mxx=Math.max(...allV);const span=pidaNice((mxx-mn)*1.25||mxx*0.1);const st=span/5;lo=Math.max(0,Math.floor((mn-(span-(mxx-mn))/2)/st)*st);mx=lo+span;if(mx<mxx){mx=lo+span*2;}}
+  else mx=pidaNice(Math.max(1,...R.map(g=>Math.max(g.val||0,showPrev?(g.pval||0):0,showAvg?(g.avg||0):0)))*1.1);
+  const xq=i=>Lp+pw*(i+0.5)/n,yv=v=>T+ph-ph*(Math.max(lo,v)-lo)/(mx-lo),slot=pw/n,bwid=Math.min(26,slot*0.62);
+  let g0="";for(let k=0;k<=5;k++){const y=T+ph-ph*k/5;g0+=`<line x1="${Lp}" x2="${W-Rp}" y1="${y}" y2="${y}" stroke="#e5e7eb"/><text x="${Lp-6}" y="${y+4}" text-anchor="end" font-size="11" fill="#64748b">${man(lo+(mx-lo)*k/5)}</text>`;}
   const COL=[["현금",2,"#3b6fd4"],["카드",3,"#e0492f"],["기타",4,"#f59e0b"]];
-  const stack=R.map((g,i)=>{let acc=0;return COL.map(([,ix,c])=>{const v=Math.max(0,g.v[ix]);if(!v)return "";const y0=yv(acc),y1=yv(acc+v);acc+=v;return `<rect x="${xq(i)-bwid/2}" y="${y1}" width="${bwid}" height="${Math.max(0,y0-y1)}" fill="${c}"/>`;}).join("");}).join("");
+  const bars=R.map((g,i)=>{if(met==="sales"){let acc=0;return COL.map(([,ix,c])=>{const v=Math.max(0,g.v[ix]);if(!v)return "";const y0=yv(acc),y1=yv(acc+v);acc+=v;return `<rect x="${xq(i)-bwid/2}" y="${y1}" width="${bwid}" height="${Math.max(0,y0-y1)}" fill="${c}"/>`;}).join("");}
+    if(g.val==null)return "";const y=yv(g.val);return `<rect x="${xq(i)-bwid/2}" y="${y}" width="${bwid}" height="${T+ph-y}" fill="${MT.c}" rx="2"/>`;}).join("");
   const pl=(arr,col,w,dash,r)=>{const sg=[[]];arr.forEach((v,i)=>{if(v==null){if(sg[sg.length-1].length)sg.push([]);}else sg[sg.length-1].push(xq(i)+","+yv(v));});
     return sg.filter(q=>q.length).map(q=>`<polyline fill="none" stroke="${col}" stroke-width="${w}" ${dash?`stroke-dasharray="${dash}"`:""} stroke-linejoin="round" points="${q.join(" ")}"/>`).join("")+(r?arr.map((v,i)=>v==null?"":`<circle cx="${xq(i)}" cy="${yv(v)}" r="${r}" fill="${col}"/>`).join(""):"");};
-  let marks="";
-  if(ct==="bar")marks+=stack;else marks+=pl(R.map(g=>g.v[5]),"#15803d",2.4,"",n<=62?3:0);
-  if(showPrev&&hasPrev)marks+=pl(R.map(g=>g.prev),"#94a3b8",2,"5 4",n<=62?2.5:0);
+  let marks=ct==="bar"?bars:pl(R.map(g=>g.val),met==="sales"?"#15803d":MT.c,2.4,"",n<=62?3:0);
+  if(showPrev&&hasPrev)marks+=pl(R.map(g=>g.pval),"#94a3b8",2,"5 4",n<=62?2.5:0);
+  if(showAvg)marks+=pl(R.map(g=>g.avg),"#0f172a",1.8,"",0);
+  /* 최고·최저 표시 */
+  const bi=R.indexOf(best),wi=R.indexOf(worst);
+  if(best&&n>1)marks+=`<text x="${xq(bi)}" y="${yv(best.val)-6}" text-anchor="middle" font-size="11" font-weight="800" fill="#dc2626">▲최고</text>`;
+  if(worst&&n>1&&wi!==bi)marks+=`<text x="${xq(wi)}" y="${yv(worst.val)-6}" text-anchor="middle" font-size="11" font-weight="800" fill="#2563eb">▼최저</text>`;
   const step=n>62?Math.ceil(n/40):1;
   const xl=R.map((g,i)=>`${i%step===0||g.sub?`<text x="${xq(i)}" y="${T+ph+15}" text-anchor="middle" font-size="11" fill="#475569">${g.lb}</text>`:""}${g.sub?`<text x="${xq(i)}" y="${T+ph+31}" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">${g.sub}</text>`:""}`).join("");
-  const hit=R.map((g,i)=>{const dp=g.prev?((g.v[5]/g.prev-1)*100).toFixed(1):null;
-    return `<rect x="${xq(i)-slot/2}" y="${T}" width="${slot}" height="${ph}" fill="transparent" onmousemove="pidaTrTip(event,${i})" onmouseleave="pidaTrTip()"/>`;}).join("");
-  window.__pida.trRows=R;
+  const hit=R.map((g,i)=>`<rect x="${xq(i)-slot/2}" y="${T}" width="${slot}" height="${ph}" fill="transparent" onmousemove="pidaTrTip(event,${i})" onmouseleave="pidaTrTip()"/>`).join("");
+  window.__pida.trRows=R;window.__pida.trMetNow=met;window.__pida.trUn=un;
   const sg=(list,cur,fn)=>`<span style="display:inline-flex;border:1px solid #cbd5e1;border-radius:8px;overflow:hidden">${list.map(([k,nm],i)=>`<button onclick="${fn}('${k}')" style="border:0;${i?"border-left:1px solid #cbd5e1;":""}padding:5px 12px;font-size:13px;font-weight:700;cursor:pointer;${cur===k?"background:#15803d;color:#fff":"background:#fff;color:#334155"}">${nm}</button>`).join("")}</span>`;
   const lg=(c,t,line,dash)=>`<span style="display:inline-flex;align-items:center;gap:4px">${line?`<span style="display:inline-block;width:18px;height:0;border-top:2.5px ${dash?"dashed":"solid"} ${c}"></span>`:`<span style="display:inline-block;width:12px;height:12px;background:${c};border-radius:2px"></span>`}${t}</span>`;
-  return `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
-      ${pidaTileCalm("고른 기간 총매출",fmt(tot)+"원",U.from+" ~ "+U.to,"#3b6fd4")}
-      ${pidaTileCalm("전년 같은 기간",hasPrev?fmt(ptot)+"원":"자료 없음",pidaY1(U.from)+" ~ "+pidaY1(U.to)+(partial?` · 자료 있는 ${M.length}${{d:"일",m:"개월",y:"년"}[un]}만`:""),"#16a34a")}
-      ${pidaTileCalm("전년 대비",diff==null?"—":(diff>0?"+":"")+diff.toFixed(1)+"%",diff==null?"":(diff>=0?"▲ ":"▼ ")+fmt(Math.abs(mtot-ptot))+"원 "+(diff>=0?"늘었어요":"줄었어요")+(partial?" (같이 있는 기간끼리)":""),diff==null||diff>=0?"#e0492f":"#3b6fd4")}</div>
-    <div class="card"><div class="card-head" style="flex-wrap:wrap;gap:8px"><div class="card-title">📈 매출 추이 <span class="unit">${U.from} ~ ${U.to} · ${{d:"하루씩",m:"달별",y:"해마다"}[un]} · 마우스를 올리면 자세히</span></div>
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><label style="display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer"><input type="checkbox" ${showPrev?"checked":""} onchange="pidaTrPrev(this.checked)"> 전년 같은 기간</label>
+  const legend=(ct==="bar"?(met==="sales"?lg("#3b6fd4","현금")+lg("#e0492f","카드")+lg("#f59e0b","기타"):lg(MT.c,MT.n)):lg(met==="sales"?"#15803d":MT.c,MT.n,1))+(showPrev&&hasPrev?lg("#94a3b8",un==="d"?"전년 같은 요일":"전년 같은 기간",1,1):"")+(showAvg?lg("#0f172a",un==="d"?"7일 평균":"3개월 평균",1):"");
+  /* 아래 표 */
+  const pct=(a,b)=>a!=null&&b?((a/b-1)*100):null;
+  const rows=R.map(g=>{const d=pct(g.v[5],g.pv&&g.pv.t),dg=pct(g.v[1],g.pv&&g.pv.g);const aov=g.v[1]?g.v[5]/g.v[1]:null;const paov=g.pv&&g.pv.g?g.pv.t/g.pv.g:null;const da=pct(aov,paov);
+    const pc2=v=>v==null?'<td style="color:#cbd5e1">—</td>':`<td style="font-weight:700;color:${v<0?"#dc2626":"#15803d"}">${v>0?"+":""}${v.toFixed(1)}%</td>`;
+    const mark=g===best?' <span style="color:#dc2626;font-size:11px">▲최고</span>':g===worst?' <span style="color:#2563eb;font-size:11px">▼최저</span>':"";
+    return `<tr><td class="l">${g.tip}${mark}</td>${un!=="d"?`<td>${g.n}</td>`:""}<td>${fmt(g.v[2])}</td><td>${fmt(g.v[3])}</td><td><b>${fmt(g.v[5])}</b></td><td>${g.pv?fmt(g.pv.t):""}</td>${pc2(d)}<td>${fmt(g.v[1])}</td>${pc2(dg)}<td>${aov!=null?fmt(Math.round(aov)):""}</td>${pc2(da)}</tr>`;}).join("");
+  const table=`<div class="card"><div class="card-head"><div class="card-title">숫자로 보기 <span class="unit">증감: 늘면 초록 · 줄면 빨강 · 칸 이름을 누르면 정렬</span></div>${pidaXlsBtn("꽃밥에피다_매출추이_"+pidaRangeName())}</div>
+    <div class="table-wrap"><table class="rpt" style="font-size:12.5px"><thead><tr><th class="l">${{d:"날짜",m:"월",y:"연도"}[un]}</th>${un!=="d"?"<th>영업일</th>":""}<th>현금</th><th>카드</th><th>매출</th><th>전년 매출</th><th>매출 증감</th><th>객수</th><th>객수 증감</th><th>객단가</th><th>객단가 증감</th></tr></thead>
+    <tbody>${rows}<tr class="total"><td class="l">합계</td>${un!=="d"?`<td>${R.reduce((t,g)=>t+g.n,0)}</td>`:""}<td>${fmt(R.reduce((t,g)=>t+g.v[2],0))}</td><td>${fmt(R.reduce((t,g)=>t+g.v[3],0))}</td><td>${fmt(tot)}</td><td>${hasPrev?fmt(pt):""}</td><td>${hasPrev&&pt?((mt/pt-1)*100>0?"+":"")+((mt/pt-1)*100).toFixed(1)+"%":""}</td><td>${fmt(gsum)}</td><td>${hasPrev&&pg?((mg/pg-1)*100>0?"+":"")+((mg/pg-1)*100).toFixed(1)+"%":""}</td><td>${gsum?fmt(Math.round(tot/gsum)):""}</td><td>${hasPrev&&pg&&mg&&pt?(((mt/mg)/(pt/pg)-1)*100>0?"+":"")+(((mt/mg)/(pt/pg)-1)*100).toFixed(1)+"%":""}</td></tr></tbody></table></div>
+    <div class="footnote" style="margin-top:6px">${un==="d"?"일 단위 전년 = 364일 전(작년 같은 주 같은 요일)":"월·연 단위 전년 = 1년 전 같은 날짜까지 (끝나지 않은 달·해는 같은 날까지만)"} · 증감은 전년 자료가 있는 줄끼리만</div></div>`;
+  return tiles+`<div class="card"><div class="card-head" style="flex-wrap:wrap;gap:8px"><div class="card-title" style="display:flex;align-items:center;gap:10px">📈 매출 추이 ${sg([["sales","매출"],["guest","객수"],["aov","객단가"]],met,"pidaTrMet")}</div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><label style="display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer"><input type="checkbox" ${showPrev?"checked":""} onchange="pidaTrPrev(this.checked)"> 전년 비교</label>
+      ${un!=="y"?`<label style="display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer"><input type="checkbox" ${U.trAvg!==false?"checked":""} onchange="pidaTrAvg(this.checked)"> 평균선</label>`:""}
       <span style="font-size:12px;color:#64748b">그래프</span>${sg([["bar","막대"],["line","꺾은선"]],ct,"pidaTrCt")}</div></div>
-      <div style="display:flex;gap:14px;justify-content:flex-end;font-size:12px;color:#334155;margin-bottom:4px;flex-wrap:wrap">${ct==="bar"?lg("#3b6fd4","현금")+lg("#e0492f","카드")+lg("#f59e0b","기타"):lg("#15803d","합계",1)}${showPrev&&hasPrev?lg("#94a3b8","전년 같은 기간",1,1):""}</div>
+      <div style="display:flex;gap:14px;justify-content:space-between;font-size:12px;color:#334155;margin-bottom:4px;flex-wrap:wrap"><span class="unit">${U.from} ~ ${U.to} · ${{d:"하루씩",m:"달별",y:"해마다"}[un]} · 마우스를 올리면 자세히</span><span style="display:flex;gap:14px;flex-wrap:wrap">${legend}</span></div>
       <div id="pida-tr-chart" style="overflow-x:auto;overflow-y:hidden;border:1px solid #e5e7eb;border-radius:8px"><svg width="${W}" height="${H}" style="display:block">${g0}<line x1="${Lp}" x2="${W-Rp}" y1="${T+ph}" y2="${T+ph}" stroke="#94a3b8"/>${marks}${xl}${hit}</svg></div>
-      ${showPrev&&!hasPrev?'<div class="footnote" style="margin-top:6px">전년 같은 기간 자료가 없어서 비교선은 안 보여요.</div>':""}
-      <div class="footnote" style="margin-top:6px">전년 같은 기간 = 그 날짜(달·해)에서 1년 전, 같은 날짜까지 (올해처럼 끝나지 않은 달·해는 같은 날까지만 비교) · 일 단위에서 요일이 달라 들쭉날쭉할 수 있어요. 전체 흐름은 「월」로 보세요.</div></div>`;}
+      ${showPrev&&!hasPrev?'<div class="footnote" style="margin-top:6px">전년 자료가 없어서 비교선은 안 보여요.</div>':""}</div>`+table;}
 window.pidaTrTip=function(e,i){let tp=document.getElementById("pida-pop-tip");if(e==null){if(tp)tp.style.display="none";return;}
-  const g=window.__pida.trRows[i];if(!g)return;
+  const g=window.__pida.trRows[i];if(!g)return;const un=window.__pida.trUn;
   if(!tp){tp=document.createElement("div");tp.id="pida-pop-tip";tp.style.cssText="position:fixed;z-index:300;pointer-events:none;background:rgba(11,11,11,.88);color:#fff;font-size:12.5px;padding:7px 10px;border-radius:8px;line-height:1.6;white-space:nowrap";document.body.appendChild(tp);}
-  const dp=g.prev?(g.v[5]/g.prev-1)*100:null;
-  tp.innerHTML=`<b>${g.tip}</b>${g.n>1?` <span style="opacity:.7">(영업 ${g.n}일)</span>`:""}<br><span style="color:#93c5fd">■</span> 현금 ${fmt(g.v[2])}원<br><span style="color:#fca5a5">■</span> 카드 ${fmt(g.v[3])}원${g.v[4]?`<br><span style="color:#fcd34d">■</span> 기타 ${fmt(g.v[4])}원`:""}<br><b>합계 ${fmt(g.v[5])}원</b>${g.prev?`<br><span style="opacity:.75">전년 ${fmt(g.prev)}원 · ${dp>=0?"+":""}${dp.toFixed(1)}%</span>`:`<br><span style="opacity:.6">전년 자료 없음</span>`}`;
+  const dp=g.pv&&g.pv.t?(g.v[5]/g.pv.t-1)*100:null;const aov=g.v[1]?Math.round(g.v[5]/g.v[1]):0;
+  tp.innerHTML=`<b>${g.tip}</b>${g.n>1?` <span style="opacity:.7">(영업 ${g.n}일)</span>`:""}<br><span style="color:#93c5fd">■</span> 현금 ${fmt(g.v[2])}원<br><span style="color:#fca5a5">■</span> 카드 ${fmt(g.v[3])}원${g.v[4]?`<br><span style="color:#fcd34d">■</span> 기타 ${fmt(g.v[4])}원`:""}<br><b>매출 ${fmt(g.v[5])}원</b> · 객수 ${fmt(g.v[1])}명 · 객단가 ${fmt(aov)}원${g.avg!=null?`<br><span style="opacity:.75">${un==="d"?"7일":"3개월"} 평균 ${fmt(Math.round(g.avg))}</span>`:""}${g.pv?`<br><span style="opacity:.75">전년${un==="d"?" "+g.pd+" ("+pidaWd(g.pd)+")":""} ${fmt(g.pv.t)}원 · ${dp>=0?"+":""}${dp.toFixed(1)}%</span>`:`<br><span style="opacity:.6">전년 자료 없음</span>`}`;
   tp.style.display="block";const w=tp.offsetWidth;tp.style.left=(e.clientX+14+w>innerWidth?e.clientX-w-14:e.clientX+14)+"px";tp.style.top=Math.max(4,e.clientY-tp.offsetHeight-10)+"px";};
 /* 일별 — 날짜를 누르면 그날 상품판매·판매시간 */
 window.pidaDsel=function(d){const U=window.__pida.ui;U.dsel=U.dsel===d?"":d;renderPida();};
