@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v510</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v511</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -18785,8 +18785,10 @@ function cardParseSheet(nm,aoa){
   }
   cand.sort((a,b)=>(b.k/b.n)-(a.k/a.n)||b.n-a.n);
   const cAc=cand.length&&cand[0].k/cand[0].n>=0.6?cand[0].c:-1;
-  const det=cand.filter(x=>x.c!==cAc).sort((a,b)=>b.n-a.n)[0];
-  const cX=det?det.c:-1;
+  /* v511: '세부내역' 칸은 머리글 이름으로 먼저 찾음 (승인번호·카드번호처럼 글자가 더 많이 찬 칸을 잘못 고르던 것) */
+  const cXh=H.findIndex((h,c)=>c!==cAc&&[cH,cD,cM,cA].indexOf(c)<0&&/세부|사용내역|^내역|내용|적요|용도|메모/.test(h));
+  const det=cand.filter(x=>x.c!==cAc&&!/승인번호|카드번호|번호|업종|코드|구분|할부|상태|사업자/.test(H[x.c]||"")).sort((a,b)=>b.n-a.n)[0];
+  const cX=cXh>=0?cXh:det?det.c:-1;
   let holder="";
   const rows=body.map(r=>{
     const h=String(r[cH]==null?"":r[cH]).trim();if(!holder&&h)holder=h;
