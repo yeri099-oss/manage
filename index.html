@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v528</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v529</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -21126,8 +21126,12 @@ function pidaPeriodHtml(L){const U=window.__pida.ui;const un=U.unit||"d";
   const row=(lb,n,v,cls)=>`<tr${cls?` class="${cls}"`:isD?` style="cursor:pointer;${U.dsel===lb?"background:#dbeafe":""}" onclick="pidaDsel('${lb}')"`:""}><td class="l"${isD&&!cls?' style="color:#2563eb"':""}>${lb}${isD&&!cls?` <span style="color:${/[토일]/.test(pidaWd(lb))?"#b91c1c":"#64748b"}">(${pidaWd(lb)})</span>`:""}</td><td>${fmt(n)}</td><td>${fmt(v[0])}</td><td>${fmt(v[1])}</td><td>${fmt(v[2])}</td><td>${fmt(v[3])}</td><td>${fmt(v[4])}</td><td>${fmt(v[6])}</td><td><b>${fmt(v[5])}</b></td><td>${fmt(Math.round(v[5]/(n||1)))}</td><td>${v[1]?fmt(Math.round(v[5]/v[1])):""}</td></tr>`;
   const ub=(k,n)=>`<button class="subtab ${un===k?"active":""}" onclick="pidaUnit('${k}')">${n}</button>`;
   return `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
-      ${pidaTile("총매출",fmt(t[5])+"원",U.from+" ~ "+U.to,"#3b6fd4")}${pidaTile("영업일",fmt(L.length)+"일","하루 평균 "+fmt(Math.round(t[5]/(L.length||1)))+"원","#16a34a")}
-      ${pidaTile("건수 · 객수",fmt(t[0])+" · "+fmt(t[1]),"객단가 "+(t[1]?fmt(Math.round(t[5]/t[1])):"-")+"원","#f59e0b")}${pidaTile("현금 · 카드",fmt(t[2])+" · "+fmt(t[3]),"할인·서비스 "+fmt(t[6]),"#e0492f")}</div>
+      ${pidaTile("총매출",fmt(t[5])+"원","할인·서비스 "+fmt(t[6])+"원","#3b6fd4")}
+      ${pidaTile("영업일",fmt(L.length)+"일","하루 평균 "+fmt(Math.round(t[5]/(L.length||1)))+"원","#16a34a")}
+      ${pidaTile("건수",fmt(t[0])+"건","건단가 "+(t[0]?fmt(Math.round(t[5]/t[0])):"-")+"원","#f59e0b")}
+      ${pidaTile("객수",fmt(t[1])+"명","객단가 "+(t[1]?fmt(Math.round(t[5]/t[1])):"-")+"원","#d97706")}
+      ${pidaTile("현금",fmt(t[2])+"원",(t[5]?(t[2]/t[5]*100).toFixed(1):"0")+"%","#0ea5c6")}
+      ${pidaTile("카드",fmt(t[3])+"원",(t[5]?(t[3]/t[5]*100).toFixed(1):"0")+"%"+(t[4]?" · 기타 "+fmt(t[4])+"원":""),"#e0492f")}</div> <!-- v529: 6칸으로 나눔 -->
     ${isD&&U.dsel?pidaDayDetail(U.dsel):""}<div class="card"><div class="card-head"><div class="card-title">기간별 매출 <span class="unit">${U.from} ~ ${U.to}${isD?" · 날짜를 누르면 그날 상품판매·판매시간이 보여요":""}</span></div><div style="display:flex;gap:6px;align-items:center">${pidaXlsBtn("꽃밥에피다_기간별매출_"+pidaRangeName())}</div></div>
     <div class="table-wrap"><table class="rpt" style="font-size:12.5px"><thead><tr><th class="l">기간</th><th>영업일</th><th>건수</th><th>객수</th><th>현금</th><th>카드</th><th>기타</th><th>할인·서비스</th><th>총매출</th><th>일평균</th><th>객단가</th></tr></thead><tbody>
     ${R.map(g=>row(g.k,g.n,g.v)).join("")}${row("합계",L.length,t,"total")}</tbody></table></div></div>
