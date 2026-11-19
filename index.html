@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v519</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v520</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -20828,7 +20828,8 @@ async function renderPida(){
   const P=window.__pida;
   if(!P.loaded){el.innerHTML='<div class="loading"><span class="spin"></span><br>꽃밥에피다 포스 자료를 불러오는 중…</div>';await pidaLoad();if(!P.loaded){el.innerHTML=`<div class="card">불러오기 실패: ${esc(P.err||"")} <button class="btn btn-sm" onclick="window.__pida.err='';renderPida()">다시 시도</button></div>`;return;}}
   const isAd=S.user&&S.user.role==="admin";const U=P.ui;
-  const views=[["dash","대시보드"],["month","기간별 매출"],["item","상품판매별"],["time","판매시간별"],["cat","분류"]].concat(isAd?[["catset","분류 설정"],["up","파일 넣기 · 빠진 날"]]:[]);
+  const views=[["dash","대시보드"],["month","기간별 매출"],["item","상품판매별"],["time","판매시간별"]].concat(isAd?[["catset","분류 설정"],["up","파일 넣기 · 빠진 날"]]:[]);
+  if(U.view==="cat")U.view="item"; /* v520: 분류 탭은 상품판매별(분류별 소계)과 겹쳐서 뺌 */
   if(U.view==="day"||U.view==="gap")U.view=U.view==="gap"&&isAd?"up":"month"; /* v519: 일별은 기간별 매출(일 단위)로, 빠진 날 확인은 파일 넣기로 합침 */
   if(!views.some(v=>v[0]===U.view))U.view="dash";
   const tabs=`<div class="subtabs" style="flex-wrap:wrap;margin-bottom:10px">${views.map(([k,n])=>`<button class="subtab ${U.view===k?"active":""}" onclick="pidaSet('view','${k}')">${n}</button>`).join("")}</div>`;
