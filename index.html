@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v513</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v514</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -19181,8 +19181,8 @@ function renderExpCard(){
     <details style="margin-top:12px" ${noCode.length?"open":""}><summary style="cursor:pointer;font-weight:700">계정 코드표와 계정과목 추가 <span class="unit">엑셀 계정 → 이카운트 코드와 계정명 (한 번 고치면 기억)</span></summary><div style="margin-top:6px">${codeTbl}</div></details>
   </div>
   <div class="card"><div class="card-head"><div class="card-title">엑셀 내역 <span class="unit">탭을 눌러 사용자별로 보기 · 계정 칸을 바꾸면 집계·전표에 바로 반영돼요(노란색=바꾼 칸)</span></div>
-    <div class="card-actions"><label class="btn btn-sm btn-primary" style="cursor:pointer" title="송정은·오신일 등이 세부내역·비고를 채워 보낸 엑셀 — 여러 개 한꺼번에 가능, 그 사람 탭만 채워요">📤 채운 엑셀 올리기<input type="file" accept=".xlsx" multiple style="display:none" onchange="cardFillPick(this)"></label><button class="btn btn-sm" onclick="cardHolderDl('${ym.key}')">📥 소지자별 엑셀 (세부내역·비고 칸)</button><button class="btn btn-sm btn-primary" onclick="cardTaxDl('${ym.key}')">📥 세무사무소용 엑셀 받기</button>${window.showDirectoryPicker?`<button class="btn btn-sm" onclick="cardChangeDir()" title="엑셀을 저장할 폴더">📁 ${window.__exp.ui.cardDirName?esc(window.__exp.ui.cardDirName)+" 폴더":"저장 폴더 정하기"}</button>`:""}</div></div>
-    <div class="footnote" style="margin:-4px 0 4px">소지자별 엑셀: 송정은·임해경·오신일·공용 탭(카드소지자, 접수일자(승인일자), 가맹점명, 승인금액, 세부내역, 비고=계정) + 원본 탭 · 각 탭 위 '탭만 받기'로 한 사람 것만 받을 수 있어요<br>세무사무소용 엑셀: 사용자별 탭(날짜순, 세부 내역 빼고 계정은 비고 칸) + 합 계 + 원본 ${esc(doc.raw?doc.raw.name:"승인내역")} 탭</div>
+    <div class="card-actions"><label class="btn btn-sm btn-primary" style="cursor:pointer" title="송정은·오신일 등이 세부내역·비고를 채워 보낸 엑셀 — 여러 개 한꺼번에 가능, 그 사람 탭만 채워요">📤 채운 엑셀 올리기<input type="file" accept=".xlsx" multiple style="display:none" onchange="cardFillPick(this)"></label><button class="btn btn-sm" onclick="cardHolderDl('${ym.key}')">📥 소지자별 엑셀 (세부내역·비고 칸)</button><button class="btn btn-sm" onclick="cardRepDl('${ym.key}')" title="세무사무소용과 같은 양식 · 오신일·공용 탭만 세부내역 칸 포함 · 원본 탭 없음">📥 보고용 엑셀 받기</button><button class="btn btn-sm btn-primary" onclick="cardTaxDl('${ym.key}')">📥 세무사무소용 엑셀 받기</button>${window.showDirectoryPicker?`<button class="btn btn-sm" onclick="cardChangeDir()" title="엑셀을 저장할 폴더">📁 ${window.__exp.ui.cardDirName?esc(window.__exp.ui.cardDirName)+" 폴더":"저장 폴더 정하기"}</button>`:""}</div></div>
+    <div class="footnote" style="margin:-4px 0 4px">소지자별 엑셀: 송정은·임해경·오신일·공용 탭(카드소지자, 접수일자(승인일자), 가맹점명, 승인금액, 세부내역, 비고=계정) + 원본 탭 · 각 탭 위 '탭만 받기'로 한 사람 것만 받을 수 있어요<br>보고용 엑셀: 세무사무소용과 같은데 오신일·공용 탭만 세부내역 칸이 있고 원본 탭은 없어요<br>세무사무소용 엑셀: 사용자별 탭(날짜순, 세부 내역 빼고 계정은 비고 칸) + 합 계 + 원본 ${esc(doc.raw?doc.raw.name:"승인내역")} 탭</div>
     ${hasRaw?"":`<div style="margin:6px 0 8px;padding:8px 12px;background:#FDF6EC;border:1px solid #E8C88A;border-radius:10px"><b>⚠ 이 달 자료엔 원본(승인내역) 탭이 저장돼 있지 않아요</b> — 원본 저장 기능이 생기기 전에 올린 자료라서 그래요. 위 "📂 법인카드 엑셀 다시 올리기"로 같은 파일을 한 번만 다시 올려주세요 (바꿔둔 계정은 그대로 유지돼요)</div>`}
     ${sheetTabs}${rawSel?rawHtml:detail}</div>`;
 }
@@ -19290,29 +19290,32 @@ async function cardSaveToDir(blob,fname,slot,hint){
     console.error(e);toast("폴더 저장이 안 돼서 일반 다운로드로 받을게요",true);return false;
   }
 }
-window.cardTaxDl=async function(key){
+/* v514: 보고용 엑셀 — 세무사무소용과 같은 양식, 오신일·공용 탭만 세부내역 칸이 보임, 원본 탭 없음 */
+window.cardRepDl=function(key){return window.cardTaxDl(key,true);};
+window.cardTaxDl=async function(key,rep){
   const doc=cardStore()[key];if(!doc)return;
-  if(!(doc.raw&&doc.raw.rows&&doc.raw.rows.length)&&!confirm("이 달 자료엔 원본(승인내역) 탭이 없어요.\n엑셀을 한 번 다시 올리면 원본 탭까지 같이 받을 수 있어요.\n\n원본 탭 없이 그냥 받을까요?"))return;
+  if(!rep&&!(doc.raw&&doc.raw.rows&&doc.raw.rows.length)&&!confirm("이 달 자료엔 원본(승인내역) 탭이 없어요.\n엑셀을 한 번 다시 올리면 원본 탭까지 같이 받을 수 있어요.\n\n원본 탭 없이 그냥 받을까요?"))return;
   try{
     const out=[];
     doc.sheets.forEach(sh=>{
       const L=sh.labels||{};
-      const rows=[[{v:L.h||"카드소지자",s:1},{v:L.d||"승인일자",s:1},{v:L.m||"가맹점명",s:1},{v:L.a||"승인금액",s:1},{v:"비고",s:1}]];
+      const wx=rep&&/오신일|공용/.test(String(sh.name||"")+" "+String(sh.holder||"")); /* v514: 보고용은 오신일·공용만 세부내역 */
+      const rows=[[{v:L.h||"카드소지자",s:1},{v:L.d||"승인일자",s:1},{v:L.m||"가맹점명",s:1},{v:L.a||"승인금액",s:1}].concat(wx?[{v:"세부내역",s:1}]:[],[{v:"비고",s:1}])];
       let sum=0;
       cardDateOrder(sh).forEach(i=>{const r=sh.rows[i];sum+=r.a;
         const h=String(r.h||sh.holder||"").replace(/^\(지\)/,"").trim()||sh.name;
-        rows.push([{v:h,s:2},{v:r.d,s:3},{v:r.m,s:4},{v:r.a,s:5},{v:cardTaxAcct(r),s:6}]);});
+        rows.push([{v:h,s:2},{v:r.d,s:3},{v:r.m,s:4},{v:r.a,s:5}].concat(wx?[{v:String(r.x||""),s:4}]:[],[{v:cardTaxAcct(r),s:6}]));});
       const last=rows.length;
-      rows.push([{v:"합 계",s:7},{v:"",s:8},{v:"",s:8},{f:`SUM(D2:D${last})`,v:sum,s:9},{v:"",s:8}]);
-      out.push({name:sh.name,cols:[9.625,Math.max(12,(L.d||"").length>6?21:12),34.875,11,17.75],rows});
+      rows.push([{v:"합 계",s:7},{v:"",s:8},{v:"",s:8},{f:`SUM(D2:D${last})`,v:sum,s:9}].concat(wx?[{v:"",s:8}]:[],[{v:"",s:8}]));
+      out.push({name:sh.name,cols:[9.625,Math.max(12,(L.d||"").length>6?21:12),34.875,11].concat(wx?[40]:[],[17.75]),rows});
     });
-    if(doc.raw&&doc.raw.rows&&doc.raw.rows.length){
+    if(!rep&&doc.raw&&doc.raw.rows&&doc.raw.rows.length){
       const rr=doc.raw.rows.map((o,ri)=>(o.v||[]).map(v=>ri===0?{v,s:1}:(typeof v==="number"?{v,s:11}:{v,s:10})));
       out.push({name:doc.raw.name||"승인내역",cols:[],rows:rr});
     }
     const blob=await cardBuildXlsx(out);
-    const fname=key+"_법인카드.xlsx";
-    if(await cardSaveToDir(blob,fname))return;
+    const fname=key+"_법인카드"+(rep?"_보고용":"")+".xlsx";
+    if(!rep&&await cardSaveToDir(blob,fname))return;
     const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=fname;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},800);
     toast(fname+" 를 받았어요");
   }catch(e){console.error(e);toast("엑셀 만들기 실패: "+(e.message||e),true);}
