@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v532</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v533</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -20925,16 +20925,16 @@ function pidaGapHtml(){
     · <b>매출현황 영업일수</b>가 빨간색이면 매출현황에 입력한 인사동 영업일수와 포스 자료 날 수가 달라요.</div></div>`;
 }
 /* v532: 요약 칸 — 연하게 채우기 (파스텔 바탕 + 같은 계열 진한 숫자) */
-const PIDA_SOFT={"#3b6fd4":["#e8effc","#1e40af"],"#16a34a":["#e6f6ec","#166534"],"#0ea5c6":["#e2f5fa","#0e7490"],"#e0492f":["#fdebe7","#b91c1c"]};
+const PIDA_SOFT={"#3b6fd4":["#e8effc","#1e40af"],"#16a34a":["#e6f6ec","#166534"],"#0ea5c6":["#e2f5fa","#0e7490"],"#e0492f":["#fdebe7","#b91c1c"],"#f59e0b":["#fef3e2","#b45309"]};
 function pidaTileCalm(t,v,s,c){const [bg,dk]=PIDA_SOFT[c]||["#f1f5f9","#111827"];return `<div style="flex:1;min-width:200px;background:${bg};border:1px solid ${c}33;border-radius:10px;padding:12px 16px"><div style="font-size:13px;font-weight:700;color:${dk}">${t}</div><div style="font-size:24px;font-weight:800;text-align:right;margin-top:4px;color:${dk}">${v}</div><div style="font-size:12px;text-align:right;color:#475569">${s||""}</div></div>`;}
 function pidaTile(t,v,s,bg){return `<div style="flex:1;min-width:170px;background:${bg};color:#fff;border-radius:10px;padding:12px 14px"><div style="font-size:13px;font-weight:700;opacity:.95">${t}</div><div style="font-size:24px;font-weight:800;text-align:right;margin-top:6px">${v}</div><div style="font-size:11.5px;text-align:right;opacity:.9">${s||""}</div></div>`;}
 function pidaDashHtml(L){
   const t=pidaSum(L),n=L.length||1,last=L[L.length-1];
   const tiles=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
-    ${pidaTile("기간 매출",fmt(t[5]),L.length+"일 · "+fmt(t[0])+"건","#4a86c8")}
-    ${pidaTile("일 평균 매출",fmt(Math.round(t[5]/n)),"객수 "+fmt(Math.round(t[1]/n))+"명/일","#8cc63f")}
-    ${pidaTile("마지막 날 매출",last?fmt(last.v[5]):"—",last?last.date+" ("+pidaWd(last.date)+")":"","#f5a623")}
-    ${pidaTile("객단가",t[1]?fmt(Math.round(t[5]/t[1])):"—","영수증당 "+(t[0]?fmt(Math.round(t[5]/t[0])):"—"),"#e8483b")}</div>`;
+    ${pidaTileCalm("기간 매출",fmt(t[5])+"원",L.length+"일 · "+fmt(t[0])+"건","#3b6fd4")}
+    ${pidaTileCalm("일 평균 매출",fmt(Math.round(t[5]/n))+"원","객수 "+fmt(Math.round(t[1]/n))+"명/일","#16a34a")}
+    ${pidaTileCalm("마지막 날 매출",last?fmt(last.v[5])+"원":"—",last?last.date+" ("+pidaWd(last.date)+")":"","#f59e0b")}
+    ${pidaTileCalm("객단가",t[1]?fmt(Math.round(t[5]/t[1]))+"원":"—","영수증당 "+(t[0]?fmt(Math.round(t[5]/t[0])):"—")+"원","#e0492f")}</div>`; /* v533: 대시보드도 연하게 채우기 */
   const byMonth=L.length>62;
   const rowsSrc=byMonth?pidaGroupMonth(L):L.map(d=>({lb:d.date.slice(5).replace("-","/")+" ("+pidaWd(d.date)+")",v:d.v}));
   const tbl=`<div class="table-wrap"><table class="rpt" style="font-size:12.5px"><thead><tr><th class="l">${byMonth?"월":"날짜"}</th><th>매출건수</th><th>객수</th><th>현금매출</th><th>카드매출</th><th>기타매출</th><th>총매출액</th></tr></thead><tbody>
