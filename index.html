@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v507</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v508</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -18495,8 +18495,7 @@ window.payPasteApply=function(){
 "use strict";
 const EXP_ITEMS=[
   {k:"sales",  n:"매출전표",   sub:[],                                            go:"confirmapp",goN:"매출확정"},
-  {k:"labor",  n:"인건비",     sub:[["pnl","손익"],["ins","4대보험"],["yong","용역"]],go:"pay",goN:"급여"},
-  {k:"welfare",n:"복리후생비", sub:[["emp","4대보험 사용자정산"]],                 go:"pay",goN:"급여 › 이카운트 입력"},
+  {k:"labor",  n:"인건비",     sub:[["pnl","손익"],["ins","4대보험 사용자부담"],["yong","용역비"]],go:"pay",goN:"급여 › 이카운트 입력"}, /* v508: 복리후생비(4대보험 사용자정산)와 겹쳐서 하나로 */
   {k:"card",   n:"법인카드",   sub:[],                                            go:"expense",goN:"법인카드 정리",expSub:"card"},
   {k:"debit",  n:"체크카드",   sub:[],                                            go:"expense",goN:"체크카드 정리",expSub:"debit"},
   {k:"buy",    n:"매입정산",   sub:[["bojagi","보자기"]],                          go:"buy",goN:"매입 › 매입정산",goSub:"js"},
