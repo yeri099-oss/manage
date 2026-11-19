@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v537</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v538</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -21130,41 +21130,42 @@ function pidaItemTable(it,showNo,fullTot,mode){const tot=fullTot||it.reduce((a,x
   </tbody></table>`;}
 /* 품목 달별 판매량 — 창(모달)으로, 연도 × 1~12월 */
 /* v535: 품목 창 — 달별 판매 수량 막대그래프 + 연도×월 표(수량·금액 같이) */
-window.pidaItemPop=function(nm){const P=window.__pida;const U=P.ui;
-  const Y={},seq=[];let mxQ=0;
-  for(const ym of pidaYms()){const M=P.M[ym];const i=M.items.indexOf(nm);let q=0,a=0;
-    if(i>=0)for(const dd in M.di){const v=M.di[dd];for(let k=0;k<v.length;k+=3)if(v[k]===i){q+=v[k+1];a+=v[k+2];}}
-    const y="20"+ym.slice(0,2),m=+ym.slice(2);if(i>=0)(Y[y]=Y[y]||{})[m]={q,a};seq.push({y,m,q,a});mxQ=Math.max(mxQ,q);}
-  /* 처음 판 달부터 */
-  const f0=seq.findIndex(x=>x.q>0);const S2=f0<0?[]:seq.slice(f0);
+/* v538: 품목 창 — 「고른 기간」(두 달 이하 하루씩, 길면 달별) / 「연도별」(전체 기간을 해마다) */
+window.pidaItemPop=function(nm,sc){const P=window.__pida;const U=P.ui;P.popNm=nm;sc=sc||"sel";
+  const per=(L)=>{const R={};L.forEach(d=>{const M=P.M[d.ym];const i=M.items.indexOf(nm);let q=0,a=0;if(i>=0){const v=M.di[d.dd]||[];for(let k=0;k<v.length;k+=3)if(v[k]===i){q+=v[k+1];a+=v[k+2];}}R[d.date]={q,a};});return R;};
   const sel=pidaItems(pidaRangeDays()).find(x=>x.n===nm);
-  const chart=pidaPopChart(S2);
-  const ys=Object.keys(Y).sort().reverse();
-  const cell=v=>v?`<td style="text-align:right"><b>${fmt(Math.round(v.q))}</b></td>`:'<td style="color:#cbd5e1;text-align:center">–</td>';
+  let S2=[],title="",note="";
+  if(sc==="sel"){const D=pidaRangeDays();const R=per(D);
+    if(D.length<=62){S2=D.map((d,i)=>({lb:+d.dd,sub:(i===0||d.dd==="01")?(+d.ym.slice(2))+"월":"",tip:`${d.date} (${pidaWd(d.date)})`,q:R[d.date].q,a:R[d.date].a}));title="하루씩";}
+    else{const G={};D.forEach(d=>{const g=G[d.ym]=G[d.ym]||{ym:d.ym,q:0,a:0};g.q+=R[d.date].q;g.a+=R[d.date].a;});
+      S2=Object.values(G).map((g,i)=>{const m=+g.ym.slice(2);return {lb:m,sub:(m===1||i===0)?g.ym.slice(0,2)+"년":"",tip:`20${g.ym.slice(0,2)}년 ${m}월`,q:g.q,a:g.a};});title="달별";}
+    note=`${U.from} ~ ${U.to}`;}
+  else{const Yr={};for(const ym of pidaYms()){const M=P.M[ym];const i=M.items.indexOf(nm);if(i<0)continue;const y="20"+ym.slice(0,2);const t=Yr[y]=Yr[y]||{q:0,a:0,last:""};
+      for(const dd in M.di){const v=M.di[dd];for(let k=0;k<v.length;k+=3)if(v[k]===i){t.q+=v[k+1];t.a+=v[k+2];}}}
+    const lastD=pidaDays().slice(-1)[0];
+    S2=Object.keys(Yr).sort().map(y=>({lb:y+"년",sub:lastD&&lastD.date.slice(0,4)===y&&lastD.date.slice(5)!=="12-31"?`~${+lastD.date.slice(5,7)}/${+lastD.date.slice(8)}`:"",tip:y+"년",q:Yr[y].q,a:Yr[y].a}));title="해마다";note="전체 기간";}
+  const sb=(k,n)=>`<button onclick="pidaItemPop(window.__pida.popNm,'${k}')" style="border:0;padding:5px 14px;font-size:13px;font-weight:700;cursor:pointer;${sc===k?"background:#15803d;color:#fff":"background:#fff;color:#334155"}${k==="year"?";border-left:1px solid #cbd5e1":""}">${n}</button>`;
   const body=`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
       <span style="font-size:13px;color:#64748b">${esc(pidaCat(nm))}</span>
-      ${sel?`<span style="font-size:13px">· 고른 기간(${U.from} ~ ${U.to}) <b>${fmt(sel.q)}개</b> · ${fmt(sel.a)}원</span>`:""}</div>
-    <div style="font-weight:700;font-size:13px;margin-bottom:4px">달별 판매 <span style="font-weight:400;color:#64748b;font-size:12px">막대·점에 마우스를 올리면 수량과 매출액이 보여요</span></div>
-    ${chart}
-    <div class="table-wrap"><table class="rpt" style="font-size:12.5px;width:100%"><thead><tr><th class="l">연도</th>${MONTHS.map(m=>`<th>${m}월</th>`).join("")}<th>합계</th></tr></thead><tbody>
-    ${ys.map(y=>{let tq=0,ta=0;MONTHS.forEach(m=>{const v=Y[y][+m];if(v){tq+=v.q;ta+=v.a;}});return `<tr><td class="l"><b>${y}</b></td>${MONTHS.map(m=>cell(Y[y][+m])).join("")}<td style="text-align:right;background:#fef3e2"><b>${fmt(Math.round(tq))}</b></td></tr>`;}).join("")}
-    </tbody></table></div>
-    <div class="footnote" style="margin-top:6px">판매 수량(개)</div>`;
-  openModal("📦 "+nm+" — 달별 판매",body);
+      ${sel?`<span style="font-size:13px">· 고른 기간(${U.from} ~ ${U.to}) <b>${fmt(sel.q)}개</b> · ${fmt(sel.a)}원</span>`:""}
+      <span style="margin-left:auto;display:inline-flex;border:1px solid #cbd5e1;border-radius:8px;overflow:hidden">${sb("sel","📅 고른 기간")}${sb("year","📊 연도별")}</span></div>
+    <div style="font-weight:700;font-size:13px;margin-bottom:4px">${note} · ${title} <span style="font-weight:400;color:#64748b;font-size:12px">막대·점에 마우스를 올리면 수량과 매출액이 보여요</span></div>
+    ${pidaPopChart(S2)}`;
+  openModal("📦 "+nm+" — 판매 추이",body);
   const md=document.getElementById("modal");if(md)md.style.maxWidth="980px";
   const bx=document.getElementById("pida-pop-chart");if(bx)bx.scrollLeft=bx.scrollWidth;};
 /* v537: 품목 창 차트 — 막대 = 수량(왼쪽 눈금), 선 = 매출액(오른쪽 눈금), 눈금선·범례, 마우스 올리면 수량·매출액 */
 function pidaNice(m){if(m<=0)return 1;const e=Math.pow(10,Math.floor(Math.log10(m)));const f=m/e;return (f<=1?1:f<=2?2:f<=2.5?2.5:f<=5?5:10)*e;}
-function pidaPopChart(S2){if(!S2.length)return '<div class="hint" style="padding:12px">판매 기록이 없어요.</div>';
-  const n=S2.length,bw=34,L=56,R=70,T=14,B=44,H=250,W=Math.max(900,L+R+n*bw);const ph=H-T-B,pw=W-L-R;
+function pidaPopChart(S2){if(!S2.length||!S2.some(x=>x.q))return '<div class="hint" style="padding:12px">고른 기간에 판매 기록이 없어요.</div>';
+  const n=S2.length,bw=n<=8?90:34,L=56,R=70,T=14,B=44,H=250,W=Math.max(900,L+R+n*bw);const ph=H-T-B,pw=W-L-R;
   const mq=pidaNice(Math.max(...S2.map(x=>x.q))*1.1),ma=pidaNice(Math.max(...S2.map(x=>x.a))*1.1);
   const xq=i=>L+pw*(i+0.5)/n,yq=v=>T+ph-ph*v/mq,ya=v=>T+ph-ph*v/ma;
   const man=v=>v>=1e8?(v/1e8).toFixed(v%1e8?1:0)+"억":v>=1e4?Math.round(v/1e4)+"만":String(v);
   let g="";for(let k=0;k<=5;k++){const y=T+ph-ph*k/5;g+=`<line x1="${L}" x2="${W-R}" y1="${y}" y2="${y}" stroke="#e5e7eb"/><text x="${L-6}" y="${y+4}" text-anchor="end" font-size="11" fill="#64748b">${fmt(Math.round(mq*k/5))}</text><text x="${W-R+6}" y="${y+4}" font-size="11" fill="#15803d">${man(Math.round(ma*k/5))}</text>`;}
-  const bars=S2.map((x,i)=>{const y=yq(x.q);return `<rect x="${xq(i)-11}" y="${y}" width="22" height="${T+ph-y}" fill="#f59e0b" rx="2"/>`;}).join("");
+  const hw=Math.min(22,pw/n*0.6)/2;const bars=S2.map((x,i)=>{const y=yq(x.q);return `<rect x="${xq(i)-hw}" y="${y}" width="${hw*2}" height="${T+ph-y}" fill="#f59e0b" rx="2"/>`;}).join("");
   const line=`<polyline fill="none" stroke="#16a34a" stroke-width="2" points="${S2.map((x,i)=>xq(i)+","+ya(x.a)).join(" ")}"/>`+S2.map((x,i)=>`<circle cx="${xq(i)}" cy="${ya(x.a)}" r="3" fill="#16a34a"/>`).join("");
-  const xl=S2.map((x,i)=>`<text x="${xq(i)}" y="${T+ph+15}" text-anchor="middle" font-size="11" fill="#475569">${x.m}</text>${x.m===1||i===0?`<text x="${xq(i)}" y="${T+ph+30}" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">${String(x.y).slice(2)}년</text>`:""}`).join("");
-  const hit=S2.map((x,i)=>`<rect x="${xq(i)-bw/2}" y="${T}" width="${bw}" height="${ph}" fill="transparent" onmousemove="pidaPopTip(event,'${x.y}년 ${x.m}월','${fmt(Math.round(x.q))}','${fmt(Math.round(x.a))}')" onmouseleave="pidaPopTip()"/>`).join("");
+  const xl=S2.map((x,i)=>`<text x="${xq(i)}" y="${T+ph+15}" text-anchor="middle" font-size="11" fill="#475569">${x.lb}</text>${x.sub?`<text x="${xq(i)}" y="${T+ph+30}" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">${x.sub}</text>`:""}`).join("");
+  const hit=S2.map((x,i)=>`<rect x="${xq(i)-pw/n/2}" y="${T}" width="${pw/n}" height="${ph}" fill="transparent" onmousemove="pidaPopTip(event,'${x.tip}','${fmt(Math.round(x.q))}','${fmt(Math.round(x.a))}')" onmouseleave="pidaPopTip()"/>`).join("");
   return `<div style="display:flex;gap:14px;justify-content:flex-end;font-size:12px;color:#334155;margin-bottom:2px"><span><span style="display:inline-block;width:12px;height:12px;background:#f59e0b;border-radius:2px;vertical-align:-2px"></span> 수량 (왼쪽)</span><span><span style="display:inline-block;width:14px;height:2px;background:#16a34a;vertical-align:3px"></span> 매출액 (오른쪽)</span></div>
     <div id="pida-pop-chart" style="position:relative;overflow-x:auto;overflow-y:hidden;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:12px"><svg width="${W}" height="${H}" style="display:block">${g}<line x1="${L}" x2="${W-R}" y1="${T+ph}" y2="${T+ph}" stroke="#94a3b8"/>${bars}${line}${xl}${hit}</svg></div>`;}
 window.pidaPopTip=function(e,t,q,a){let tp=document.getElementById("pida-pop-tip");
@@ -21235,7 +21236,7 @@ window.pidaTMode=function(v){window.__pida.ui.tmode=v;renderPida();};
 window.pidaIMode=function(v){window.__pida.ui.imode=v;renderPida();};
 function pidaItemHtml(L){const U=window.__pida.ui;const q=(U.q||"").trim();const md=U.imode||"item";
   let it=pidaItems(L);const allT=it.reduce((a,x)=>a+x.a,0);if(q)it=it.filter(x=>x.n.indexOf(q)>=0);
-  return `<div class="card"><div class="card-head"><div class="card-title">상품판매별 <span class="unit">${U.from} ~ ${U.to}${q?` · "${esc(q)}" ${it.length}개`:` · 전체 ${it.length}개`} · 품목을 누르면 달별 판매량 창이 떠요</span></div>
+  return `<div class="card"><div class="card-head"><div class="card-title">상품판매별 <span class="unit">${U.from} ~ ${U.to}${q?` · "${esc(q)}" ${it.length}개`:` · 전체 ${it.length}개`} · 품목을 누르면 판매 추이 창이 떠요</span></div>
     ${pidaXlsBtn("꽃밥에피다_상품판매별_"+pidaRangeName())}</div>
     <div class="table-wrap">${it.length?pidaItemTable(it,true,allT,md):'<div class="hint" style="padding:12px">찾는 품목이 없어요.</div>'}</div>
     <div class="footnote" style="margin-top:6px">상품 순위 = 매출액 많은 순 · 분류 순위 = 분류를 매출액 순으로, 그 안에서 품목을 매출액 순으로 · 분류는 「분류 설정」에서 바꿀 수 있어요 · 단가 = 매출액 ÷ 수량</div></div>`;}
