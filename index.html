@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v548</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v549</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -21121,7 +21121,8 @@ function pidaRangeBar(withSearch,withUnit,withTime){const U=window.__pida.ui;con
     ${inputs}
     <button class="btn btn-sm" title="다음 ${stepN}" onclick="pidaStep(1,'${un}')">▶</button></span>
     ${withSearch?`<span style="display:flex;align-items:center;gap:4px;margin-left:6px">품목명 <input id="pida-iq" type="search" class="ctl" placeholder="비우면 전체" value="${esc(U.q||"")}" onkeydown="if(event.key==='Enter')pidaItemSearch()" style="width:180px"><button class="btn btn-sm" style="background:#111;color:#fff;border-color:#111" onclick="pidaItemSearch()">🔍 검색</button></span>
-    <span style="margin-left:6px">${pidaSeg([["item","🏆 상품 순위"],["cat","📂 분류 순위"]],U.imode||"item","pidaIMode")}</span>`:""}
+    <span style="margin-left:6px">${pidaSeg([["item","🏆 상품 순위"],["cat","📂 분류 순위"]],U.imode||"item","pidaIMode")}</span>
+    <span style="margin-left:6px">${pidaSeg([["all","전체"],["food","🍽 식사"],["drink","🍶 주류"],["etc","🥤 음료·기타"]],U.igrp||"all","pidaIGrp")}</span>`:""}
     ${withTime?`<span style="margin-left:6px">${pidaSeg([["hour","🕒 판매시간별"],["wd","📆 요일별"]],U.tmode||"hour","pidaTMode")}</span>`:""}
     ${withUnit?`<span style="margin-left:6px;display:flex;align-items:center;gap:6px">묶기 ${pidaSeg([["d","일"],["m","월"],["y","연"]],U.unit||"d","pidaUnit")}</span>`:""}
     <span class="unit" style="margin-left:auto">자료: ${mn} ~ ${mx}</span></div></div>`;}
@@ -21505,10 +21506,10 @@ function pidaRpHtml(){const P=window.__pida,U=P.ui;const yms=pidaYms();if(!yms.l
       <div style="flex:1;min-width:300px">${H2("시간대별 매출")}<table class="rpt" data-sheet="시간대" style="font-size:13px;width:100%"><tbody>${hs.length?hs.map(x=>`<tr><td class="l" style="width:44px"><b>${x.h}시</b></td><td class="l" style="width:55%">${bar(x.v,mxH,x===bh?"#16a34a":"#fcd34d")}</td><td>${(x.v/htot*100).toFixed(0)}%</td></tr>`).join(""):'<tr><td class="l">시간대 자료 없음</td></tr>'}</tbody></table></div></div>
     ${H2("분류별 매출 — 식사 · 주류 · 음료/기타 따로")}
     ${pidaRpGroups(it,ip,itot,man,ps,pcol,pc)}
-    ${up.length||dn.length||newM.length?H2("눈여겨볼 메뉴")+`<div style="font-size:13.5px;line-height:2">
+    ${up.length||dn.length?H2("눈여겨볼 메뉴")+`<div style="font-size:13.5px;line-height:2">
       ${up.length?`<div><b style="color:#15803d">▲ 많이 늘어난 메뉴</b> ${up.map(x=>`${esc(x.n)} <span style="color:#15803d">+${man(x.d)}원</span>`).join(" · ")}</div>`:""}
       ${dn.length?`<div><b style="color:#dc2626">▼ 많이 줄어든 메뉴</b> ${dn.map(x=>`${esc(x.n)} <span style="color:#dc2626">${man(x.d)}원</span>`).join(" · ")}</div>`:""}
-      ${newM.length?`<div><b style="color:#16a34a">🆕 이달 처음 판매</b> ${newM.map(x=>`${esc(x.n)} (${fmt(x.q)}개)`).join(" · ")}</div>`:""}</div>`:""}
+      </div>`:""}
     <div style="font-size:11px;color:#94a3b8;margin-top:14px">늘어난·줄어든 메뉴는 전월 매출 10만원 이상 메뉴끼리 비교 · 예약금은 매출·메뉴에서 뺐어요</div>
   </div>`;
   const opts=yms.slice().reverse().map(k=>`<option value="${k}" ${k===ym?"selected":""}>20${k.slice(0,2)}년 ${+k.slice(2)}월${(pidaMonthState(k)||{}).part?" (진행 중)":""}</option>`).join("");
@@ -21558,11 +21559,19 @@ function pidaTimeHtml(L){const U=window.__pida.ui;const {H,miss}=pidaHours(L);
     <div class="table-wrap">${pidaHourTable(H)}</div></div>`;}
 window.pidaTMode=function(v){window.__pida.ui.tmode=v;renderPida();};
 window.pidaIMode=function(v){window.__pida.ui.imode=v;renderPida();};
-function pidaItemHtml(L){const U=window.__pida.ui;const q=(U.q||"").trim();const md=U.imode||"item";
-  let it=pidaItems(L);const allT=it.reduce((a,x)=>a+x.a,0);if(q)it=it.filter(x=>x.n.indexOf(q)>=0);
-  return pidaNewStopHtml()+`<div class="card"><div class="card-head"><div class="card-title">상품판매별 <span class="unit">${U.from} ~ ${U.to}${q?` · "${esc(q)}" ${it.length}개`:` · 전체 ${it.length}개`} · 품목을 누르면 판매 추이 창이 떠요 · 칸 이름(⇅)을 누르면 정렬, 한 번 더 누르면 반대로</span></div>
+window.pidaIGrp=function(k){window.__pida.ui.igrp=k;renderPida();};
+function pidaItemHtml(L){const U=window.__pida.ui;const q=(U.q||"").trim();const md=U.imode||"item";const gr=U.igrp||"all";
+  let it=pidaItems(L);const allT=it.reduce((a,x)=>a+x.a,0);
+  /* v549: 식사·주류·음료/기타 묶음 */
+  const GS={};it.forEach(x=>{const g=pidaGrpOf(pidaCat(x.n));const o=GS[g]=GS[g]||{a:0,q:0,n:0};o.a+=x.a;o.q+=x.q;o.n++;});
+  if(gr!=="all")it=it.filter(x=>pidaGrpOf(pidaCat(x.n))===gr);
+  if(q)it=it.filter(x=>x.n.indexOf(q)>=0);
+  const gt=([k,nm,c1])=>{const o=GS[k]||{a:0,q:0,n:0};const on=gr===k;return `<div onclick="pidaIGrp('${on?"all":k}')" title="${on?"다시 누르면 전체":"이 묶음만 보기"}" style="flex:1;min-width:190px;cursor:pointer;border-radius:10px;padding:10px 14px;border:2px solid ${on?c1:"#e5e7eb"};background:${on?"#fff":"#f8fafc"}"><div style="font-size:13.5px;font-weight:800;color:${c1}">${nm}</div><div style="font-size:21px;font-weight:800;margin:2px 0">${fmt(o.a)}원</div><div style="font-size:12px;color:#64748b">${o.n}개 메뉴 · 수량 ${fmt(o.q)} · 전체의 ${(o.a/(allT||1)*100).toFixed(1)}%</div></div>`;};
+  const grpBox=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">${PIDA_GRP.map(gt).join("")}</div>`;
+  const grN=gr==="all"?"":(PIDA_GRP.find(x=>x[0]===gr)||[])[1];const gT=gr==="all"?allT:(GS[gr]||{a:0}).a;
+  return pidaNewStopHtml()+grpBox+`<div class="card"><div class="card-head"><div class="card-title">상품판매별${grN?` · <span style="color:#0f172a">${grN}</span> <button class="btn btn-sm" onclick="pidaIGrp('all')">전체 보기</button>`:""} <span class="unit">${U.from} ~ ${U.to}${q?` · "${esc(q)}" ${it.length}개`:` · 전체 ${it.length}개`} · 품목을 누르면 판매 추이 창이 떠요 · 칸 이름(⇅)을 누르면 정렬, 한 번 더 누르면 반대로</span></div>
     ${pidaXlsBtn("꽃밥에피다_상품판매별_"+pidaRangeName())}</div>
-    <div class="table-wrap">${it.length?pidaItemTable(it,true,allT,md):'<div class="hint" style="padding:12px">찾는 품목이 없어요.</div>'}</div>
+    <div class="table-wrap">${it.length?pidaItemTable(it,true,gT,md).replace(/매장점유율/g,gr==="all"?"매장점유율":"묶음 안 비중"):'<div class="hint" style="padding:12px">찾는 품목이 없어요.</div>'}</div>
     <div class="footnote" style="margin-top:6px">상품 순위 = 매출액 많은 순 · 분류 순위 = 분류를 매출액 순으로, 그 안에서 품목을 매출액 순으로 · 분류는 포스 품목현황 기준(「분류 설정」에서 바꿀 수 있어요) · 단가 = 매출액 ÷ 수량 · <span style="color:#fff;background:#16a34a;border-radius:4px;padding:0 4px;font-weight:800">NEW</span> 최근 3개월 안에 처음 팔림 · <span style="color:#64748b;background:#e2e8f0;border-radius:4px;padding:0 4px">단종</span> 단종 메뉴(분류 설정에서 바꿔요) · 예약금은 아래에 따로</div></div>`+pidaDepHtml(L);}
 function pidaItemTrend(nm){const P=window.__pida;const R=[];
   for(const ym of pidaYms()){const M=P.M[ym];const i=M.items.indexOf(nm);if(i<0)continue;let q=0,a=0;for(const dd in M.di){const v=M.di[dd];for(let k=0;k<v.length;k+=3)if(v[k]===i){q+=v[k+1];a+=v[k+2];}}R.push({ym,q,a});}
