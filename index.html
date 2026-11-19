@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v550</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v551</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -20907,7 +20907,7 @@ function pidaApplySorts(){const U=window.__pida.ui;U.sort=U.sort||{};const el=do
       const on=st&&st.col===ci;th.innerHTML=th.innerHTML+(on?`<span style="color:${st.dir==="asc"?"#2563eb":"#dc2626"};margin-left:3px;font-size:11px">${st.dir==="asc"?"▲":"▼"}</span>`:`<span style="color:#b6bec9;margin-left:3px;font-size:11px">⇅</span>`);
       if(on)th.style.background=st.dir==="asc"?"#eff6ff":"#fef2f2";});
     if(U.sort[key])pidaSortTable(tb,st.col,st.dir);});
-  if(!document.getElementById("pida-sth-css")){const c=document.createElement("style");c.id="pida-sth-css";c.textContent="#tab-pida th.pida-sth{cursor:pointer;user-select:none;transition:background .12s}#tab-pida th.pida-sth:hover{background:#e0e7ff!important;color:#1e3a8a}";document.head.appendChild(c);}}
+  if(!document.getElementById("pida-sth-css")){const c=document.createElement("style");c.id="pida-sth-css";c.textContent="#tab-pida th.pida-sth{cursor:pointer;user-select:none;transition:background .12s}#tab-pida th.pida-sth:hover{background:#e0e7ff!important;color:#1e3a8a}@media (max-width:640px){#tab-pida .subtabs{flex-wrap:nowrap!important;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px}#tab-pida .subtab{flex:0 0 auto}#tab-pida .pida-tile{min-width:calc(50% - 6px)!important;flex:1 1 calc(50% - 6px)!important;padding:8px 10px!important}#tab-pida .pida-tv{font-size:18px!important}#tab-pida table.rpt{display:block;max-width:100%;overflow-x:auto}#pida-rp{padding:14px 12px!important}#pida-rp h2{font-size:17px!important}#tab-pida .card{padding-left:10px;padding-right:10px}}";document.head.appendChild(c);}}
 /* 처음 순서: 순위 표는 매출액 높은순이라 그 칸에 ▼ 표시 */
 function pidaSortDef(tb){const H=[...tb.tHead.rows[0].cells];if(!/^(순위|No\.)$/.test((H[0]||{}).textContent||""))return null;const i=H.findIndex(th=>th.textContent.trim()==="매출액");return i>=0?{col:i,dir:"desc"}:null;}
 document.addEventListener("click",e=>{const th=e.target.closest&&e.target.closest("#tab-pida table.rpt thead th");if(!th)return;
@@ -20982,7 +20982,7 @@ function pidaGapHtml(){
 }
 /* v532: 요약 칸 — 연하게 채우기 (파스텔 바탕 + 같은 계열 진한 숫자) */
 const PIDA_SOFT={"#3b6fd4":["#e8effc","#1e40af"],"#16a34a":["#e6f6ec","#166534"],"#0ea5c6":["#e2f5fa","#0e7490"],"#e0492f":["#fdebe7","#b91c1c"],"#f59e0b":["#fef3e2","#b45309"],"#9333ea":["#f3e8ff","#7e22ce"]};
-function pidaTileCalm(t,v,s,c){const [bg,dk]=PIDA_SOFT[c]||["#f1f5f9","#111827"];return `<div style="flex:1;min-width:200px;background:${bg};border:1px solid ${c}33;border-radius:10px;padding:12px 16px"><div style="font-size:13px;font-weight:700;color:${dk}">${t}</div><div style="font-size:24px;font-weight:800;text-align:right;margin-top:4px;color:${dk}">${v}</div><div style="font-size:12px;text-align:right;color:#475569">${s||""}</div></div>`;}
+function pidaTileCalm(t,v,s,c){const [bg,dk]=PIDA_SOFT[c]||["#f1f5f9","#111827"];return `<div class="pida-tile" style="flex:1;min-width:200px;background:${bg};border:1px solid ${c}33;border-radius:10px;padding:12px 16px"><div style="font-size:13px;font-weight:700;color:${dk}">${t}</div><div class="pida-tv" style="font-size:24px;font-weight:800;text-align:right;margin-top:4px;color:${dk}">${v}</div><div style="font-size:12px;text-align:right;color:#475569">${s||""}</div></div>`;}
 function pidaTile(t,v,s,bg){if(PIDA_SOFT[bg])return pidaTileCalm(t,v,s,bg); /* v535: 모든 요약 칸 연하게 */
   return `<div style="flex:1;min-width:170px;background:${bg};color:#fff;border-radius:10px;padding:12px 14px"><div style="font-size:13px;font-weight:700;opacity:.95">${t}</div><div style="font-size:24px;font-weight:800;text-align:right;margin-top:6px">${v}</div><div style="font-size:11.5px;text-align:right;opacity:.9">${s||""}</div></div>`;}
 function pidaDashHtml(L){
@@ -21288,8 +21288,8 @@ function pidaTrendHtml(L){const U=window.__pida.ui;const un=U.unit||"d";let ct=U
       ${pidaTileCalm(met==="sales"?"고른 기간 총매출":met==="guest"?"고른 기간 총 객수":"고른 기간 객단가",fv(cur),U.from+" ~ "+U.to,"#3b6fd4")}
       ${pidaTileCalm("전년 같은 기간",hasPrev?fv(pc):"자료 없음",(un==="d"?"같은 요일로 맞춤":pidaY1(U.from)+" ~ "+pidaY1(U.to))+(partial?` · 자료 있는 ${M.length}${unitN}만`:""),"#16a34a")}
       ${pidaTileCalm("전년 대비",diff==null?"—":(diff>0?"+":"")+diff.toFixed(1)+"%",diff==null?"":(diff>=0?"▲ ":"▼ ")+fv(Math.abs(mc-pc))+" "+(diff>=0?"늘었어요":"줄었어요")+(partial?" (같이 있는 기간끼리)":""),"#f59e0b")}
-      ${(()=>{const sv=g=>met==="sales"?man(g.val)+"원":fv(g.val);const half=(lb,g,c,ar,bd)=>`<div style="flex:1;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 16px;${bd?"border-top:1px dashed #f5b4a8;":""}"><span style="font-size:13px;font-weight:700;color:${c}">${ar} ${lb}</span><span style="text-align:right"><b style="font-size:19px;color:${c}">${g?sv(g):"—"}</b><span style="font-size:12px;color:#475569;margin-left:6px">${g?shortLb(g):""}</span></span></div>`;
-        return `<div style="flex:1;min-width:200px;background:#fdebe7;border:1px solid #e0492f33;border-radius:10px;display:flex;flex-direction:column;overflow:hidden">${half("최고",best,"#b91c1c","▲",0)}${half("최저",worst,"#1d4ed8","▼",1)}</div>`;})()}</div>`;
+      ${(()=>{const sv=g=>met==="sales"?man(g.val)+"원":fv(g.val);const half=(lb,g,c,ar,bd)=>`<div style="flex:1;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 16px;${bd?"border-top:1px dashed #f5b4a8;":""}"><span style="font-size:13px;font-weight:700;color:${c};white-space:nowrap">${ar} ${lb}</span><span style="text-align:right"><b style="font-size:19px;color:${c}">${g?sv(g):"—"}</b><span style="font-size:12px;color:#475569;margin-left:6px">${g?shortLb(g):""}</span></span></div>`;
+        return `<div class="pida-tile" style="flex:1;min-width:200px;background:#fdebe7;border:1px solid #e0492f33;border-radius:10px;display:flex;flex-direction:column;overflow:hidden">${half("최고",best,"#b91c1c","▲",0)}${half("최저",worst,"#1d4ed8","▼",1)}</div>`;})()}</div>`;
   /* 차트 */
   const avail=Math.max(700,((document.getElementById("tab-pida")||{}).clientWidth||1200)-70);const n=R.length,bw=n<=40?28:16,Lp=74,Rp=20,T=22,B=un==="d"?60:46,H=un==="d"?334:320,W=Math.max(avail,Lp+Rp+n*bw);const ph=H-T-B,pw=W-Lp-Rp;
   /* 꺾은선이면 눈금을 0이 아닌 가장 작은 값 근처부터 (객단가처럼 변화가 작은 것도 보이게), 막대는 0부터 */
@@ -21488,7 +21488,7 @@ function pidaRpHtml(){const P=window.__pida,U=P.ui;const yms=pidaYms();if(!yms.l
     dep.inQ||dep.outQ?`예약금 받음 ${fmt(dep.inA)}원 · 결제에서 뺌 ${fmt(Math.abs(dep.outA))}원 (매출·메뉴에는 안 넣었어요)`:""].filter(Boolean);
   const bar=(v,mx,c)=>`<div style="height:12px;width:${Math.max(2,Math.round(v/(mx||1)*100))}%;background:${c};border-radius:3px"></div>`;
   const sub=(lab,v)=>`<div style="font-size:11.5px;color:#64748b;margin-top:2px">${lab} <b style="color:${pcol(v)}">${ps(v)}</b></div>`;
-  const tile=(lb,val,a,b,c,bg)=>`<div style="flex:1;min-width:160px;background:${bg};border-radius:10px;padding:10px 14px"><div style="font-size:12.5px;font-weight:700;color:${c}">${lb}</div><div style="font-size:21px;font-weight:800;color:${c};margin:2px 0">${val}</div>${sub("전월",a)}${sub("작년",b)}</div>`;
+  const tile=(lb,val,a,b,c,bg)=>`<div class="pida-tile" style="flex:1;min-width:160px;background:${bg};border-radius:10px;padding:10px 14px"><div style="font-size:12.5px;font-weight:700;color:${c}">${lb}</div><div style="font-size:21px;font-weight:800;color:${c};margin:2px 0">${val}</div>${sub("전월",a)}${sub("작년",b)}</div>`;
   const H2=t=>`<div style="font-weight:800;font-size:14px;margin:18px 0 8px;color:#0f172a">${t}</div>`;
   const mxW=Math.max(...wdL.map(x=>x.v),1),mxH=Math.max(...hs.map(x=>x.v),1),mxC=Math.max(...cl.map(c=>C[c]),1);
   const body=`<div id="pida-rp" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:22px 26px;max-width:980px;margin:0 auto">
