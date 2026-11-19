@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v535</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v536</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -20856,9 +20856,41 @@ async function renderPida(){
     body=pidaRangeBar(U.view==="item",U.view==="month",U.view==="time")+(!L.length?'<div class="card"><div class="hint" style="padding:14px">고른 기간에 포스 자료가 없어요. 날짜를 바꿔보세요.</div></div>':
       U.view==="day"?pidaDayHtml(L):U.view==="month"?pidaPeriodHtml(L):U.view==="time"?pidaTimeHtml(L):U.view==="item"?pidaItemHtml(L):pidaCatHtml(L));}
   el.innerHTML=tabs+`<div class="card" style="padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b style="font-size:16px">🍽 꽃밥에피다 (인사동)</b><span class="unit">포스 일일매출상세내역 기준 · 부가세 포함</span><span style="margin-left:auto"></span>${perSel}</div>`+body;
+  pidaApplySorts();
   if(U.view==="dash")pidaDashCharts(pidaSel(U.per));
 }
 RENDERERS.pida=renderPida;
+/* ===== v536: 엑셀처럼 표 머리글을 눌러 정렬 (한 번 더 누르면 반대로) — 꽃밥에피다 탭의 모든 표
+   · 합계 줄(total)은 제자리 · 분류 순위 표는 분류끼리, 분류 안의 품목끼리 정렬 · 「순위」 칸은 정렬한 순서대로 다시 번호 ===== */
+function pidaCellVal(td){if(!td)return null;const t=td.textContent.replace(/\s+/g," ").trim();
+  const m=t.replace(/[,원개명건%위]/g,"").match(/^-?\d+(\.\d+)?$/);if(m)return +m[0];
+  if(/^\d{4}-\d{2}-\d{2}/.test(t))return t;return t||null;}
+function pidaCmp(a,b,dir){if(a==null&&b==null)return 0;if(a==null)return 1;if(b==null)return -1;
+  const r=(typeof a==="number"&&typeof b==="number")?a-b:String(a).localeCompare(String(b),"ko",{numeric:true});return dir==="asc"?r:-r;}
+function pidaSortTable(tb,col,dir){const tbody=tb.tBodies[0];if(!tbody)return;const rows=[...tbody.rows];
+  const top=[],bottom=[],body=[];let seenBody=false;
+  rows.forEach(r=>{if(r.classList.contains("total")){(seenBody?bottom:top).push(r);}else{seenBody=true;body.push(r);}});
+  const v=r=>pidaCellVal(r.cells[col]);
+  const isRank=tb.tHead&&/^(순위|No\.)$/.test((tb.tHead.rows[0].cells[0]||{}).textContent||"");
+  let out=[];
+  if(body.some(r=>r.dataset.grp)){const G=[];body.forEach(r=>{if(r.dataset.grp)G.push({h:r,L:[]});else if(G.length)G[G.length-1].L.push(r);});
+    G.sort((a,b)=>pidaCmp(v(a.h),v(b.h),dir));
+    G.forEach((g,gi)=>{g.L.sort((a,b)=>pidaCmp(v(a),v(b),dir));
+      if(isRank){g.h.cells[0].textContent=(gi+1)+"위";g.L.forEach((r,i)=>{r.cells[0].innerHTML=`<span style="font-size:11px">${gi+1}-${i+1}</span>`;});}
+      out.push(g.h,...g.L);});}
+  else{out=body.slice().sort((a,b)=>pidaCmp(v(a),v(b),dir));if(isRank)out.forEach((r,i)=>r.cells[0].textContent=i+1);}
+  [...top,...out,...bottom].forEach(r=>tbody.appendChild(r));}
+function pidaApplySorts(){const U=window.__pida.ui;U.sort=U.sort||{};const el=document.getElementById("tab-pida");if(!el)return;
+  [...el.querySelectorAll("table.rpt")].forEach((tb,i)=>{const key=U.view+":"+(U.view==="item"?(U.imode||"item"):U.view==="time"?(U.tmode||"hour"):"")+":"+i;tb.dataset.sk=key;
+    const st=U.sort[key];if(!tb.tHead)return;
+    [...tb.tHead.rows[0].cells].forEach((th,ci)=>{const lb=th.textContent.replace(/[▲▼]/g,"").trim();if(!lb)return;th.style.cursor="pointer";th.style.userSelect="none";th.title="눌러서 정렬 (한 번 더 누르면 반대로)";
+      if(st&&st.col===ci)th.innerHTML=th.innerHTML+`<span style="color:#2563eb;margin-left:2px">${st.dir==="asc"?"▲":"▼"}</span>`;});
+    if(st)pidaSortTable(tb,st.col,st.dir);});}
+document.addEventListener("click",e=>{const th=e.target.closest&&e.target.closest("#tab-pida table.rpt thead th");if(!th)return;
+  const tb=th.closest("table");const key=tb.dataset.sk;if(!key||!th.textContent.replace(/[▲▼]/g,"").trim())return;
+  const U=window.__pida.ui;U.sort=U.sort||{};const col=th.cellIndex;const cur=U.sort[key];
+  let dir;if(cur&&cur.col===col)dir=cur.dir==="asc"?"desc":"asc";else{const sample=[...tb.tBodies[0].rows].filter(r=>!r.classList.contains("total")).map(r=>pidaCellVal(r.cells[col])).find(x=>x!=null);dir=typeof sample==="number"?"desc":"asc";}
+  U.sort[key]={col,dir};renderPida();});
 /* v521: 달 상태 — 넣은 날(upAt)이 그 달 말일 이전이면 아직 진행 중이던 달(일부만 들어감) */
 function pidaMonthState(ym){const M=window.__pida.M[ym];if(!M)return null;
   const y=2000+(+ym.slice(0,2)),m=+ym.slice(2);const nd=new Date(y,m,0).getDate();const end=`${y}-${String(m).padStart(2,"0")}-${String(nd).padStart(2,"0")}`;
@@ -21093,7 +21125,7 @@ function pidaItemTable(it,showNo,fullTot,mode){const tot=fullTot||it.reduce((a,x
   const order=Object.values(C).sort(S2);
   return `<table class="rpt" style="font-size:12.5px"><thead><tr>${showNo?'<th style="width:44px">순위</th>':""}<th class="l">품목명</th><th class="l">분류명</th><th>단가</th><th>수량</th><th>매출액</th><th>분류점유율</th><th>매장점유율</th></tr></thead><tbody>
     <tr class="total">${showNo?"<td></td>":""}<td class="l">합계 (${it.length}개)</td><td></td><td></td><td>${fmt(tq)}</td><td>${fmt(ta)}</td><td></td><td>${pct(ta,tot)}</td></tr>
-    ${order.map((c,ci)=>`<tr style="background:#e8eefb;font-weight:800">${showNo?`<td style="text-align:center">${ci+1}위</td>`:""}<td class="l" colspan="2">📂 ${esc(c.n)} <span style="font-weight:400;color:#64748b;font-size:11.5px">${c.L.length}개 품목</span></td><td></td><td>${fmt(c.q)}</td><td>${fmt(c.a)}</td><td>100%</td><td>${pct(c.a,tot)}</td></tr>`
+    ${order.map((c,ci)=>`<tr data-grp="1" style="background:#e8eefb;font-weight:800">${showNo?`<td style="text-align:center">${ci+1}위</td>`:""}<td class="l" style="white-space:nowrap">📂 ${esc(c.n)} <span style="font-weight:400;color:#64748b;font-size:11.5px">${c.L.length}개 품목</span></td><td class="l" style="color:#64748b;font-weight:400">${esc(c.n)}</td><td></td><td>${fmt(c.q)}</td><td>${fmt(c.a)}</td><td>100%</td><td>${pct(c.a,tot)}</td></tr>`
       +c.L.slice().sort(S2).map((x,i)=>tr(x,`<span style="font-size:11px">${ci+1}-${i+1}</span>`,c.n,c.a)).join("")).join("")}
   </tbody></table>`;}
 /* 품목 달별 판매량 — 창(모달)으로, 연도 × 1~12월 */
