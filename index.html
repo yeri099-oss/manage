@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v534</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v535</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -20925,9 +20925,10 @@ function pidaGapHtml(){
     · <b>매출현황 영업일수</b>가 빨간색이면 매출현황에 입력한 인사동 영업일수와 포스 자료 날 수가 달라요.</div></div>`;
 }
 /* v532: 요약 칸 — 연하게 채우기 (파스텔 바탕 + 같은 계열 진한 숫자) */
-const PIDA_SOFT={"#3b6fd4":["#e8effc","#1e40af"],"#16a34a":["#e6f6ec","#166534"],"#0ea5c6":["#e2f5fa","#0e7490"],"#e0492f":["#fdebe7","#b91c1c"],"#f59e0b":["#fef3e2","#b45309"]};
+const PIDA_SOFT={"#3b6fd4":["#e8effc","#1e40af"],"#16a34a":["#e6f6ec","#166534"],"#0ea5c6":["#e2f5fa","#0e7490"],"#e0492f":["#fdebe7","#b91c1c"],"#f59e0b":["#fef3e2","#b45309"],"#9333ea":["#f3e8ff","#7e22ce"]};
 function pidaTileCalm(t,v,s,c){const [bg,dk]=PIDA_SOFT[c]||["#f1f5f9","#111827"];return `<div style="flex:1;min-width:200px;background:${bg};border:1px solid ${c}33;border-radius:10px;padding:12px 16px"><div style="font-size:13px;font-weight:700;color:${dk}">${t}</div><div style="font-size:24px;font-weight:800;text-align:right;margin-top:4px;color:${dk}">${v}</div><div style="font-size:12px;text-align:right;color:#475569">${s||""}</div></div>`;}
-function pidaTile(t,v,s,bg){return `<div style="flex:1;min-width:170px;background:${bg};color:#fff;border-radius:10px;padding:12px 14px"><div style="font-size:13px;font-weight:700;opacity:.95">${t}</div><div style="font-size:24px;font-weight:800;text-align:right;margin-top:6px">${v}</div><div style="font-size:11.5px;text-align:right;opacity:.9">${s||""}</div></div>`;}
+function pidaTile(t,v,s,bg){if(PIDA_SOFT[bg])return pidaTileCalm(t,v,s,bg); /* v535: 모든 요약 칸 연하게 */
+  return `<div style="flex:1;min-width:170px;background:${bg};color:#fff;border-radius:10px;padding:12px 14px"><div style="font-size:13px;font-weight:700;opacity:.95">${t}</div><div style="font-size:24px;font-weight:800;text-align:right;margin-top:6px">${v}</div><div style="font-size:11.5px;text-align:right;opacity:.9">${s||""}</div></div>`;}
 function pidaDashHtml(L){
   const t=pidaSum(L),n=L.length||1,last=L[L.length-1];
   const tiles=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
@@ -21096,26 +21097,35 @@ function pidaItemTable(it,showNo,fullTot,mode){const tot=fullTot||it.reduce((a,x
       +c.L.slice().sort(S2).map((x,i)=>tr(x,`<span style="font-size:11px">${ci+1}-${i+1}</span>`,c.n,c.a)).join("")).join("")}
   </tbody></table>`;}
 /* 품목 달별 판매량 — 창(모달)으로, 연도 × 1~12월 */
-window.pidaItemPop=function(nm,kind){const P=window.__pida;window.__pida.popNm=nm;kind=kind||P.popKind||"q";P.popKind=kind;
-  const Y={};let mx=0;
-  for(const ym of pidaYms()){const M=P.M[ym];const i=M.items.indexOf(nm);if(i<0)continue;let q=0,a=0;
-    for(const dd in M.di){const v=M.di[dd];for(let k=0;k<v.length;k+=3)if(v[k]===i){q+=v[k+1];a+=v[k+2];}}
-    const y="20"+ym.slice(0,2),m=+ym.slice(2);(Y[y]=Y[y]||{})[m]={q,a};mx=Math.max(mx,kind==="q"?q:a);}
-  const ys=Object.keys(Y).sort().reverse();const U=P.ui;
-  const sel=pidaRangeDays?pidaItems(pidaRangeDays()).find(x=>x.n===nm):null;
-  const cell=v=>{if(!v)return '<td style="color:#cbd5e1;text-align:center">–</td>';const x=kind==="q"?v.q:v.a;const al=mx?0.08+0.5*x/mx:0;
-    return `<td style="background:rgba(250,204,21,${(al*1.6).toFixed(2)});text-align:right;${al>0.35?"font-weight:800;color:#422006":""}">${fmt(Math.round(x))}</td>`;}; /* v524: 노란색 */
-  const kb=(k,n)=>`<button class="btn btn-sm" style="${kind===k?"background:#111;color:#fff;border-color:#111":""}" onclick="pidaItemPop(window.__pida.popNm,'${k}')">${n}</button>`;
-  const body=`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+/* v535: 품목 창 — 달별 판매 수량 막대그래프 + 연도×월 표(수량·금액 같이) */
+window.pidaItemPop=function(nm){const P=window.__pida;const U=P.ui;
+  const Y={},seq=[];let mxQ=0;
+  for(const ym of pidaYms()){const M=P.M[ym];const i=M.items.indexOf(nm);let q=0,a=0;
+    if(i>=0)for(const dd in M.di){const v=M.di[dd];for(let k=0;k<v.length;k+=3)if(v[k]===i){q+=v[k+1];a+=v[k+2];}}
+    const y="20"+ym.slice(0,2),m=+ym.slice(2);if(i>=0)(Y[y]=Y[y]||{})[m]={q,a};seq.push({y,m,q,a});mxQ=Math.max(mxQ,q);}
+  /* 처음 판 달부터 */
+  const f0=seq.findIndex(x=>x.q>0);const S2=f0<0?[]:seq.slice(f0);
+  const sel=pidaItems(pidaRangeDays()).find(x=>x.n===nm);
+  const bars=S2.map(x=>{const h=mxQ?Math.round(x.q/mxQ*150):0;
+    return `<div title="${x.y}년 ${x.m}월 · ${fmt(Math.round(x.q))}개 · ${fmt(Math.round(x.a))}원" style="flex:0 0 30px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end">
+      <div style="font-size:9.5px;color:#334155;font-weight:700;margin-bottom:2px;white-space:nowrap">${x.q?fmt(Math.round(x.q)):""}</div>
+      <div style="width:20px;height:${Math.max(x.q?2:0,h)}px;background:#f59e0b;border-radius:3px 3px 0 0"></div>
+      <div style="font-size:10px;color:#64748b;border-top:1px solid #cbd5e1;width:100%;text-align:center;padding-top:2px">${x.m}</div>
+      <div style="font-size:10px;font-weight:700;color:#0f172a;height:13px">${x.m===1||x===S2[0]?String(x.y).slice(2)+"년":""}</div></div>`;}).join("");
+  const ys=Object.keys(Y).sort().reverse();
+  const cell=v=>v?`<td style="text-align:right;line-height:1.25"><b>${fmt(Math.round(v.q))}</b><div style="font-size:10.5px;color:#94a3b8">${fmt(Math.round(v.a))}</div></td>`:'<td style="color:#cbd5e1;text-align:center">–</td>';
+  const body=`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
       <span style="font-size:13px;color:#64748b">${esc(pidaCat(nm))}</span>
-      ${sel?`<span style="font-size:13px">· 고른 기간(${U.from} ~ ${U.to}) <b>${fmt(sel.q)}개</b> · ${fmt(sel.a)}원</span>`:""}
-      <span style="margin-left:auto;display:flex;gap:4px">${kb("q","수량")}${kb("a","금액")}</span></div>
+      ${sel?`<span style="font-size:13px">· 고른 기간(${U.from} ~ ${U.to}) <b>${fmt(sel.q)}개</b> · ${fmt(sel.a)}원</span>`:""}</div>
+    <div style="font-weight:700;font-size:13px;margin-bottom:4px">달별 판매 수량 <span style="font-weight:400;color:#64748b;font-size:12px">막대에 마우스를 올리면 금액도 보여요</span></div>
+    <div id="pida-pop-bars" style="overflow-x:auto;border:1px solid #e5e7eb;border-radius:8px;padding:8px 6px 2px;margin-bottom:12px"><div style="display:flex;gap:2px;align-items:flex-end;height:200px;min-width:max-content">${bars||'<div class="hint">판매 기록이 없어요.</div>'}</div></div>
     <div class="table-wrap"><table class="rpt" style="font-size:12.5px;width:100%"><thead><tr><th class="l">연도</th>${MONTHS.map(m=>`<th>${m}월</th>`).join("")}<th>합계</th></tr></thead><tbody>
-    ${ys.map(y=>{let t=0;MONTHS.forEach(m=>{const v=Y[y][+m];if(v)t+=kind==="q"?v.q:v.a;});return `<tr><td class="l"><b>${y}</b></td>${MONTHS.map(m=>cell(Y[y][+m])).join("")}<td><b>${fmt(Math.round(t))}</b></td></tr>`;}).join("")}
+    ${ys.map(y=>{let tq=0,ta=0;MONTHS.forEach(m=>{const v=Y[y][+m];if(v){tq+=v.q;ta+=v.a;}});return `<tr><td class="l"><b>${y}</b></td>${MONTHS.map(m=>cell(Y[y][+m])).join("")}<td style="text-align:right;line-height:1.25;background:#fef3e2"><b>${fmt(Math.round(tq))}</b><div style="font-size:10.5px;color:#94a3b8">${fmt(Math.round(ta))}</div></td></tr>`;}).join("")}
     </tbody></table></div>
-    <div class="footnote" style="margin-top:6px">${kind==="q"?"수량(개)":"금액(원)"} · 색이 진할수록 많이 팔린 달이에요</div>`;
-  openModal("📦 "+nm+" — 달별 "+(kind==="q"?"판매 수량":"판매 금액"),body);
-  const md=document.getElementById("modal");if(md)md.style.maxWidth="980px";};
+    <div class="footnote" style="margin-top:6px">칸마다 위 = 수량(개), 아래 회색 = 금액(원)</div>`;
+  openModal("📦 "+nm+" — 달별 판매",body);
+  const md=document.getElementById("modal");if(md)md.style.maxWidth="980px";
+  const bx=document.getElementById("pida-pop-bars");if(bx)bx.scrollLeft=bx.scrollWidth;};
 /* 판매시간별 표 (포스 모양) */
 function pidaHourTable(H){const hs=Object.keys(H).map(Number);const lo=Math.min(6,...hs),hi=Math.max(23,...hs);
   const tot=Object.values(H).reduce((a,x)=>a+x[1],0),cnt=Object.values(H).reduce((a,x)=>a+x[0],0);let cum=0;const rows=[];
@@ -21136,7 +21146,7 @@ function pidaPeriodHtml(L){const U=window.__pida.ui;if(U.unit==="w")U.unit="d";c
   return `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
       ${pidaTileCalm("총매출",fmt(t[5])+"원","영업일 "+fmt(L.length)+"일 · 하루 평균 "+fmt(Math.round(t[5]/(L.length||1)))+"원","#3b6fd4")}
       ${pidaTileCalm("객수",fmt(t[1])+"명","객단가 "+(t[1]?fmt(Math.round(t[5]/t[1])):"-")+"원","#16a34a")}
-      ${pidaTileCalm("현금",fmt(t[2])+"원","매출의 "+(t[5]?(t[2]/t[5]*100).toFixed(1):"0")+"%","#0ea5c6")}
+      ${pidaTileCalm("현금",fmt(t[2])+"원","매출의 "+(t[5]?(t[2]/t[5]*100).toFixed(1):"0")+"%","#f59e0b")}
       ${pidaTileCalm("카드",fmt(t[3])+"원","매출의 "+(t[5]?(t[3]/t[5]*100).toFixed(1):"0")+"%"+(t[4]?" · 기타 "+fmt(t[4])+"원":""),"#e0492f")}</div> <!-- v531: 4칸 · 차분한 색 -->
     ${isD&&U.dsel?pidaDayDetail(U.dsel):""}<div class="card"><div class="card-head"><div class="card-title">기간별 매출 <span class="unit">${U.from} ~ ${U.to}${isD?" · 날짜를 누르면 그날 상품판매·판매시간이 보여요":""}</span></div><div style="display:flex;gap:6px;align-items:center">${pidaXlsBtn("꽃밥에피다_기간별매출_"+pidaRangeName())}</div></div>
     <div class="table-wrap"><table class="rpt" style="font-size:12.5px"><thead><tr><th class="l">기간</th><th>영업일</th><th>건수</th><th>객수</th><th>현금</th><th>카드</th><th>기타</th><th>할인·서비스</th><th>총매출</th><th>일평균</th><th>객단가</th></tr></thead><tbody>
