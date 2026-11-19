@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v551</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v552</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -21022,11 +21022,20 @@ function pidaDashCharts(L){
     options:{maintainAspectRatio:false,interaction:{mode:"index",intersect:false},plugins:{tooltip:{callbacks:{label:c=>c.dataset.label+" "+fmt(c.parsed.y)+"원"}}},scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,ticks:{callback:v=>axisMoney(v)}}}}});
 }
 /* 원그래프 (CSS conic-gradient) — 상위 5개 + 나머지 */
-function pidaPie(list,sz){sz=sz||180;const pos=list.filter(x=>x.a>0);const top=pos.slice(0,5),rest=pos.slice(5).reduce((a,x)=>a+x.a,0);
-  const L=top.map(x=>({n:x.n,a:x.a})).concat(rest?[{n:"나머지",a:rest}]:[]);const T=L.reduce((a,x)=>a+x.a,0)||1;let acc=0;
-  const seg=L.map((x,i)=>{const a0=acc/T*360;acc+=x.a;return `${PIDA_PAL[i%PIDA_PAL.length]} ${a0}deg ${acc/T*360}deg`;}).join(",");
-  return `<div style="display:flex;flex-direction:column;align-items:center;gap:8px;width:${sz+30}px"><div style="width:${sz}px;height:${sz}px;border-radius:50%;background:conic-gradient(${seg});box-shadow:0 2px 6px rgba(0,0,0,.15)"></div>
-    <div style="font-size:11.5px;line-height:1.6;width:100%">${L.map((x,i)=>`<div style="display:flex;gap:6px;align-items:center"><span style="width:10px;height:10px;border-radius:50%;background:${PIDA_PAL[i%PIDA_PAL.length]};flex:none"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.n)}</span><b>${(x.a/T*100).toFixed(1)}%</b></div>`).join("")}</div></div>`;}
+/* v552: 원그래프 — 조각·범례에 마우스를 올리면 품목명·비중·금액 (나머지는 품목 수와 상위 몇 개) */
+function pidaPie(list,sz){sz=sz||180;const pos=list.filter(x=>x.a>0);const top=pos.slice(0,5),restL=pos.slice(5),rest=restL.reduce((a,x)=>a+x.a,0);
+  const L=top.map(x=>({n:x.n,a:x.a,q:x.q})).concat(rest?[{n:"나머지",a:rest,r:restL.length,sub:restL.slice(0,5).map(x=>x.n)}]:[]);const T=L.reduce((a,x)=>a+x.a,0)||1;let acc=0;
+  const segs=L.map((x,i)=>{const a0=acc/T*360;acc+=x.a;return {n:x.n,a:x.a,q:x.q,r:x.r,sub:x.sub,p:x.a/T*100,f:a0,t:acc/T*360,c:PIDA_PAL[i%PIDA_PAL.length]};});
+  const id="pie"+Math.random().toString(36).slice(2,8);(window.__pidaPies=window.__pidaPies||{})[id]=segs;
+  const seg=segs.map(x=>`${x.c} ${x.f}deg ${x.t}deg`).join(",");
+  return `<div style="display:flex;flex-direction:column;align-items:center;gap:8px;width:${sz+30}px"><div onmousemove="pidaPieTip(event,this,'${id}')" onmouseleave="pidaPopTip()" style="cursor:pointer;width:${sz}px;height:${sz}px;border-radius:50%;background:conic-gradient(${seg});box-shadow:0 2px 6px rgba(0,0,0,.15)"></div>
+    <div style="font-size:11.5px;line-height:1.6;width:100%">${segs.map((x,i)=>`<div onmousemove="pidaPieTip(event,null,'${id}',${i})" onmouseleave="pidaPopTip()" style="display:flex;gap:6px;align-items:center;cursor:default"><span style="width:10px;height:10px;border-radius:50%;background:${x.c};flex:none"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.n)}</span><b>${x.p.toFixed(1)}%</b></div>`).join("")}</div></div>`;}
+window.pidaPieTip=function(e,el,id,idx){const S=(window.__pidaPies||{})[id];if(!S)return;let x=null;
+  if(idx!=null)x=S[idx];else{const r=el.getBoundingClientRect();const dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2);let ang=Math.atan2(dx,-dy)*180/Math.PI;if(ang<0)ang+=360;x=S.find(s=>ang>=s.f&&ang<s.t)||S[S.length-1];}
+  if(!x)return;let tp=document.getElementById("pida-pop-tip");
+  if(!tp){tp=document.createElement("div");tp.id="pida-pop-tip";tp.style.cssText="position:fixed;z-index:300;pointer-events:none;background:rgba(11,11,11,.88);color:#fff;font-size:12.5px;padding:7px 10px;border-radius:8px;line-height:1.6;white-space:nowrap";document.body.appendChild(tp);}
+  tp.innerHTML=`<span style="color:${x.c}">●</span> <b>${esc(x.n)}</b>${x.r?` <span style="opacity:.75">(${x.r}개 품목)</span>`:""}<br>${x.p.toFixed(1)}% · ${fmt(Math.round(x.a))}원${x.q!=null?` · ${fmt(Math.round(x.q))}개`:""}${x.sub&&x.sub.length?`<br><span style="opacity:.7;font-size:11.5px">${x.sub.map(esc).join(", ")}${x.r>x.sub.length?" 외":""}</span>`:""}`;
+  tp.style.display="block";const w=tp.offsetWidth;tp.style.left=(e.clientX+14+w>innerWidth?e.clientX-w-14:e.clientX+14)+"px";tp.style.top=Math.max(4,e.clientY-tp.offsetHeight-10)+"px";};
 /* ===== v518: 날짜를 달력으로 고르는 기간 (포스처럼 오늘·전일·최근1주·최근한달·이달·전달) ===== */
 const pidaP2=n=>String(n).padStart(2,"0");
 const pidaYmd=d=>d.getFullYear()+"-"+pidaP2(d.getMonth()+1)+"-"+pidaP2(d.getDate());
