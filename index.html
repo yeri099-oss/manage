@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v549</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v550</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -21121,7 +21121,7 @@ function pidaRangeBar(withSearch,withUnit,withTime){const U=window.__pida.ui;con
     ${inputs}
     <button class="btn btn-sm" title="다음 ${stepN}" onclick="pidaStep(1,'${un}')">▶</button></span>
     ${withSearch?`<span style="display:flex;align-items:center;gap:4px;margin-left:6px">품목명 <input id="pida-iq" type="search" class="ctl" placeholder="비우면 전체" value="${esc(U.q||"")}" onkeydown="if(event.key==='Enter')pidaItemSearch()" style="width:180px"><button class="btn btn-sm" style="background:#111;color:#fff;border-color:#111" onclick="pidaItemSearch()">🔍 검색</button></span>
-    <span style="margin-left:6px">${pidaSeg([["item","🏆 상품 순위"],["cat","📂 분류 순위"]],U.imode||"item","pidaIMode")}</span>
+    <span style="margin-left:6px">${pidaSeg([["item","🏆 상품별"],["cat","📂 분류별"]],U.imode||"item","pidaIMode")}</span>
     <span style="margin-left:6px">${pidaSeg([["all","전체"],["food","🍽 식사"],["drink","🍶 주류"],["etc","🥤 음료·기타"]],U.igrp||"all","pidaIGrp")}</span>`:""}
     ${withTime?`<span style="margin-left:6px">${pidaSeg([["hour","🕒 판매시간별"],["wd","📆 요일별"]],U.tmode||"hour","pidaTMode")}</span>`:""}
     ${withUnit?`<span style="margin-left:6px;display:flex;align-items:center;gap:6px">묶기 ${pidaSeg([["d","일"],["m","월"],["y","연"]],U.unit||"d","pidaUnit")}</span>`:""}
@@ -21572,7 +21572,7 @@ function pidaItemHtml(L){const U=window.__pida.ui;const q=(U.q||"").trim();const
   return pidaNewStopHtml()+grpBox+`<div class="card"><div class="card-head"><div class="card-title">상품판매별${grN?` · <span style="color:#0f172a">${grN}</span> <button class="btn btn-sm" onclick="pidaIGrp('all')">전체 보기</button>`:""} <span class="unit">${U.from} ~ ${U.to}${q?` · "${esc(q)}" ${it.length}개`:` · 전체 ${it.length}개`} · 품목을 누르면 판매 추이 창이 떠요 · 칸 이름(⇅)을 누르면 정렬, 한 번 더 누르면 반대로</span></div>
     ${pidaXlsBtn("꽃밥에피다_상품판매별_"+pidaRangeName())}</div>
     <div class="table-wrap">${it.length?pidaItemTable(it,true,gT,md).replace(/매장점유율/g,gr==="all"?"매장점유율":"묶음 안 비중"):'<div class="hint" style="padding:12px">찾는 품목이 없어요.</div>'}</div>
-    <div class="footnote" style="margin-top:6px">상품 순위 = 매출액 많은 순 · 분류 순위 = 분류를 매출액 순으로, 그 안에서 품목을 매출액 순으로 · 분류는 포스 품목현황 기준(「분류 설정」에서 바꿀 수 있어요) · 단가 = 매출액 ÷ 수량 · <span style="color:#fff;background:#16a34a;border-radius:4px;padding:0 4px;font-weight:800">NEW</span> 최근 3개월 안에 처음 팔림 · <span style="color:#64748b;background:#e2e8f0;border-radius:4px;padding:0 4px">단종</span> 단종 메뉴(분류 설정에서 바꿔요) · 예약금은 아래에 따로</div></div>`+pidaDepHtml(L);}
+    <div class="footnote" style="margin-top:6px">상품별 = 매출액 많은 순 · 분류별 = 분류를 매출액 순으로, 그 안에서 품목을 매출액 순으로 · 분류는 포스 품목현황 기준(「분류 설정」에서 바꿀 수 있어요) · 단가 = 매출액 ÷ 수량 · <span style="color:#fff;background:#16a34a;border-radius:4px;padding:0 4px;font-weight:800">NEW</span> 최근 3개월 안에 처음 팔림 · <span style="color:#64748b;background:#e2e8f0;border-radius:4px;padding:0 4px">단종</span> 단종 메뉴(분류 설정에서 바꿔요) · 예약금은 아래에 따로</div></div>`+pidaDepHtml(L);}
 function pidaItemTrend(nm){const P=window.__pida;const R=[];
   for(const ym of pidaYms()){const M=P.M[ym];const i=M.items.indexOf(nm);if(i<0)continue;let q=0,a=0;for(const dd in M.di){const v=M.di[dd];for(let k=0;k<v.length;k+=3)if(v[k]===i){q+=v[k+1];a+=v[k+2];}}R.push({ym,q,a});}
   return `<div style="margin:8px 0 12px;padding:10px 12px;border:1px solid #c7d2fe;background:#f8faff;border-radius:10px"><b>${esc(nm)}</b> <span class="unit">${esc(pidaCat(nm))} · 달마다</span> <span class="addrow" onclick="pidaSet('item','')" style="margin-left:8px">닫기</span>
