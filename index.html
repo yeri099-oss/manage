@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v557</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v558</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -20318,7 +20318,8 @@ function ptxCrossHtml(){
 const PL_DEPT=[["all","전체"],["insadong","꽃밥에피다"],["bukchon","북촌 (마켓+보자기)"],["market","꽃밥마켓"],["bojagi","보자기꽃밥"],["common","꽃밥이야기(공통)"]];
 function plDeptKey(d){const t=String(d||"").replace(/\s/g,"");if(/피다|인사동/.test(t))return "insadong";if(/마켓/.test(t))return "market";if(/보자기/.test(t))return "bojagi";return "common";}
 function plIn(dk,f){if(f==="all")return true;if(f==="bukchon")return dk==="market"||dk==="bojagi";return dk===f;}
-function plIsRev(name){return /매출|수익|이익/.test(String(name).replace(/\s/g,""))&&!/원가|손실/.test(name);}
+function plIsRev(name){const t=String(name).replace(/\s/g,"");if(/타계정대체|타계정으로대체/.test(t))return true; /* v558: 타계정대체액은 대변(상품 대변)이 + — 손익표와 부호를 맞춤 */
+  return /매출|수익|이익/.test(t)&&!/원가|손실/.test(name);}
 function plDoc(key){return (S.data.pnl||{})[key];}
 function plLed(key,name,create){const d=plDoc(key);if(!d)return null;if(!d.ledger){if(!create)return null;d.ledger={};}if(!d.ledger[name]){if(!create)return null;d.ledger[name]={rows:[],note:""};}return d.ledger[name];}
 function plHas(key,name){const L=plLed(key,name,false);return !!(L&&((L.rows&&L.rows.length)||L.note));}
