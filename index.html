@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v559</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v560</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -19021,9 +19021,16 @@ function cardCalc(doc){
   const apTot=doc.appr?doc.appr.reduce((a,x)=>a+x.sum,0):null;
   return {per,total,cnt,allOrder,apTot};
 }
+/* v560: 미지급금(구글·네이버 광고처럼 세금계산서가 따로 오는 것)은 거래처별로 나눠서 — 거래처 코드는 설정에 기억 */
+function cardVendKey(m){const t=String(m||"");if(/구글|google/i.test(t))return "구글코리아";if(/네이버|naver/i.test(t))return "네이버";if(/카카오|kakao/i.test(t))return "카카오";if(/메타|페이스북|facebook|instagram|인스타/i.test(t))return "메타";return t.split(/[-(]/)[0].trim()||t;}
+function cardVendOf(k){const c=cardCfg();const v=(c.vend||{})[k]||["",""];return [v[0]||"",v[1]||k];}
+window.cardSetVend=function(k,i,v){const c=cardCfg();c.vend=c.vend||{};const cur=cardVendOf(k);cur[i]=String(v).trim();c.vend[k]=cur;cardSaveCfg();renderExpense();};
+function cardVendGroups(p){const g={},o=[];p.sh.rows.forEach(r=>{if(cardEff(r)!=="미지급금")return;const k=cardVendKey(r.m);if(!(k in g)){g[k]=0;o.push(k);}g[k]+=r.a;});return o.map(k=>({k,v:g[k]}));}
 function cardRows(C){
   const rows=[];
-  C.per.forEach(p=>p.order.forEach(a=>{const v=p.acc[a];if(!v)return;const [code,label]=cardCodeOf(a);rows.push({grp:"3차",code,acct:label,sub:"95201 기업비씨카드",dr:v,cr:0,memo:"법인카드 "+p.name,biz:CARD_BIZ_N[p.biz],blk:p.name});}));
+  C.per.forEach(p=>p.order.forEach(a=>{const v=p.acc[a];if(!v)return;const [code,label]=cardCodeOf(a);
+    if(a==="미지급금"){cardVendGroups(p).forEach(({k,v:vv})=>{if(!vv)return;const [vc,vl]=cardVendOf(k);rows.push({grp:"3차",code,acct:label,sub:(vc?vc+" ":"")+vl,dr:vv,cr:0,memo:"법인카드 "+p.name,biz:CARD_BIZ_N[p.biz],blk:p.name,vendNo:!vc});});return;}
+    rows.push({grp:"3차",code,acct:label,sub:"95201 기업비씨카드",dr:v,cr:0,memo:"법인카드 "+p.name,biz:CARD_BIZ_N[p.biz],blk:p.name});}));
   if(C.total)rows.push({grp:"4대",code:"2629",acct:"미지급비용",sub:"95201 기업비씨카드",dr:0,cr:C.total,memo:"법인카드 공용",biz:"꽃밥이야기",blk:"cr"});
   return rows;
 }
@@ -19147,6 +19154,10 @@ function renderExpCard(){
   const C=cardCalc(doc);const rows=cardRows(C);
   const noCode=[...new Set(rows.filter(r=>!r.code).map(r=>r.acct))].filter(a=>a!==CARD_CHK&&a!=="(미분류)");
   const chkN=C.per.reduce((a,p)=>a+p.sh.rows.filter(cardIsChk).length,0); /* v516 */
+  const vendKs=[...new Set(C.per.flatMap(p=>cardVendGroups(p).map(x=>x.k)))]; /* v560 */
+  const vendNo=vendKs.filter(k=>!cardVendOf(k)[0]);
+  const vendTbl=vendKs.length?`<div style="margin:8px 0 4px;padding:8px 12px;background:#F4F8FF;border:1px solid #BFD3F2;border-radius:10px"><b style="font-size:13px">미지급금 거래처</b> <span class="unit">구글·네이버 광고처럼 세금계산서가 따로 오는 건 기업비씨카드 대신 그 거래처로 나눠요 · 이카운트 거래처 코드를 한 번 적어두면 기억해요</span>
+    <table class="rpt" style="font-size:12.5px;margin:6px 0 0;max-width:520px"><thead><tr><th class="l">가맹점 묶음</th><th>거래처 코드</th><th class="l">거래처명</th></tr></thead><tbody>${vendKs.map(k=>{const [vc,vl]=cardVendOf(k);return `<tr${vc?"":' style="background:#FDF6EC"'}><td class="l">${esc(k)}</td><td><input type="text" value="${esc(vc)}" onchange="cardSetVend('${esc(k)}',0,this.value)" style="width:70px;text-align:center;font:inherit;padding:2px 4px;border:1px solid var(--line,#ddd);border-radius:6px"></td><td><input type="text" value="${esc(vl)}" onchange="cardSetVend('${esc(k)}',1,this.value)" style="width:170px;font:inherit;padding:2px 4px;border:1px solid var(--line,#ddd);border-radius:6px"></td></tr>`;}).join("")}</tbody></table></div>`:"";
   /* 사용자 → 사업장 */
   const bizRow=C.per.map(p=>`<span style="margin-right:14px;white-space:nowrap"><b>${esc(p.name)}</b> → <select onchange="cardSetBiz('${esc(p.name)}',this.value)" style="font:inherit;font-size:12.5px;padding:2px 6px;border:1px solid var(--line,#ddd);border-radius:6px">${CARD_BIZ.map(([k,n])=>`<option value="${k}" ${p.biz===k?"selected":""}>${n}</option>`).join("")}</select></span>`).join("");
   /* 원본 내역 (사용자 탭별, 계정 묶음) */
@@ -19200,6 +19211,7 @@ function renderExpCard(){
     <div style="display:flex;gap:8px;align-items:center;margin-top:18px;flex-wrap:wrap"><b>🧾 이카운트 전표 — 법인카드</b><button class="btn btn-sm" onclick="cardCopy('${ym.key}')">📄 표 복사</button><span class="unit">사용자별 계정 차변 + 2629 미지급비용 대변 한 줄, 거래처 95201 기업비씨카드</span></div>
     ${chkN?`<div style="margin:6px 0;padding:8px 12px;background:#FDECEC;border:1px solid #D9534F;border-radius:10px;color:#B3261E"><b>⚠ 계정 확인이 필요한 건 ${chkN}건</b> — 아래 '엑셀 내역'에서 빨간 줄의 계정을 골라주세요 (탭 옆 빨간 숫자 = 그 사람 건수)</div>`:""}
     ${noCode.length?`<div style="margin:6px 0;padding:8px 12px;background:#FDF6EC;border:1px solid #E8C88A;border-radius:10px"><b>⚠ 이카운트 코드가 없는 계정:</b> ${noCode.map(esc).join(", ")} — 아래 '계정 코드표'에 코드를 한 번 적어두면 계속 기억해요</div>`:""}
+    ${vendTbl}${vendNo.length?`<div style="margin:6px 0;padding:8px 12px;background:#FDF6EC;border:1px solid #E8C88A;border-radius:10px"><b>⚠ 거래처 코드가 없는 미지급금 거래처:</b> ${vendNo.map(esc).join(", ")} — 위 '미지급금 거래처' 표에 이카운트 거래처 코드를 적어주세요</div>`:""}
     ${typeof pecTable==="function"?pecTable(rows,"법인카드 전표"):""}
     <details style="margin-top:12px" ${noCode.length?"open":""}><summary style="cursor:pointer;font-weight:700">계정 코드표와 계정과목 추가 <span class="unit">엑셀 계정 → 이카운트 코드와 계정명 (한 번 고치면 기억)</span></summary><div style="margin-top:6px">${codeTbl}</div></details>
   </div>
