@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v558</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v559</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -4742,7 +4742,10 @@ window.pnlExportXlsx=async function(){
     const blob=await zip.generateAsync({type:"blob",compression:"DEFLATE",mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
     const a=document.createElement("a");
     a.href=URL.createObjectURL(blob);
-    a.download=`월별손익현황 ${year}${window.__pnlXName||""}.xlsx`;
+    /* v559: 파일 이름 = 월별손익 + 입력된 가장 최근 달(YYMM) + _포함가 등 (예: 월별손익 2610_포함가.xlsx) */
+    const lastK=yKeys[yKeys.length-1]||keys[keys.length-1];const yymm=lastK.split("-")[0].slice(2)+String(Number(lastK.split("-")[1])).padStart(2,"0");
+    const xsuf=(String(window.__pnlXName||"").match(/\(([^)]*)\)/g)||[]).map(t=>"_"+t.replace(/[()\s]/g,"")).join("");
+    a.download=`월별손익 ${yymm}${xsuf}.xlsx`;
     document.body.appendChild(a);a.click();
     setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},2000);
     toast("월별손익 엑셀을 내려받았어요 ("+sheets.length+"개 시트)");
