@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v556</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v557</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -20350,8 +20350,16 @@ function plApplyParsed(key,name,P,src){
   let warn=[];
   if(P.acct&&P.acct.replace(/\s/g,"").replace(/\(판\)|\(제\)/,"").indexOf(nm)<0)warn.push("파일 계정이 '"+P.acct+"'이에요");
   if(other)warn.push(other+"줄은 다른 달 날짜예요");
-  if(L.rows.length&&!confirm((warn.length?warn.join(" / ")+"\n\n":"")+"이미 입력된 "+L.rows.length+"줄을 새 내용 "+P.rows.length+"줄로 바꿀까요?"))return;
-  if(!L.rows.length&&warn.length&&!confirm(warn.join(" / ")+"\n그래도 넣을까요?"))return;
+  /* v557: 이미 내역이 있으면 '더하기'(접대비 + 카드접대비처럼 따로 복사한 계정) 또는 '바꾸기' — 같은 줄은 한 번만 */
+  const sig=r=>[r.d,r.no,r.memo,r.v,r.dr,r.cr,r.dept].join("|");
+  if(L.rows.length){
+    const have=new Set(L.rows.map(sig));const fresh=P.rows.filter(r=>!have.has(sig(r)));
+    if(!fresh.length){toast("붙여넣은 "+P.rows.length+"줄은 이미 모두 들어 있어요");return;}
+    const multi=/접대비/.test(nm);
+    const add=confirm((warn.length?warn.join(" / ")+"\n\n":"")+"이미 입력된 내역 "+L.rows.length+"줄이 있어요.\n\n[확인] 기존 내역에 더하기 → 새 줄 "+fresh.length+"줄 추가"+(P.rows.length-fresh.length?" (같은 줄 "+(P.rows.length-fresh.length)+"줄은 빼고)":"")+(multi?"\n     예) 카드접대비를 넣은 뒤 접대비를 넣을 때":"")+"\n[취소] 바꿀지 다음에 물어봐요");
+    if(add){L.rows=L.rows.concat(fresh);L.src=(L.src?L.src+" + ":"")+src;L.up=Date.now();plSave(key);plRender();toast(fresh.length+"줄을 더했어요");return;}
+    if(!confirm("기존 "+L.rows.length+"줄을 지우고 새 내용 "+P.rows.length+"줄로 바꿀까요?"))return;
+  }else if(warn.length&&!confirm(warn.join(" / ")+"\n그래도 넣을까요?"))return;
   L.rows=P.rows;L.src=src;L.up=Date.now();
   plSave(key);plRender();toast(P.rows.length+"줄을 넣었어요");
 }
@@ -20407,7 +20415,9 @@ function plRender(){
   const o=document.getElementById("plOv");if(!o||!window.__pl)return;
   const U=window.__pl;const isAd=S.user&&S.user.role==="admin";
   const d=plDoc(U.key);const L=plLed(U.key,U.name,false)||{rows:[],note:""};
-  const pr=d&&d.rows.find(r=>r.n===U.name);
+  /* v557: 손익표는 접대비(카드접대비 등)를 한 줄로 합쳐 보여주므로 대조도 합친 값으로 */
+  const dm=d&&typeof pnlMergeDoc==="function"?pnlMergeDoc(d):d;
+  const pr=dm&&dm.rows.find(r=>r.n===U.name);
   const rev=plIsRev(U.name);
   const [yy,mm]=U.key.split("-");
   const rowsAll=(L.rows||[]).map((r,i)=>({r,i,dk:plDeptKey(r.dept)}));
@@ -20428,7 +20438,7 @@ function plRender(){
     <td class="n">${isAd?cell(i,"dr",r.dr?fmt(r.dr):"","right",90):(r.dr?fmt(r.dr):"")}</td><td class="n">${isAd?cell(i,"cr",r.cr?fmt(r.cr):"","right",90):(r.cr?fmt(r.cr):"")}</td>
     <td>${cell(i,"dept",r.dept,"left",80)}</td>${isAd?`<td style="text-align:center"><button class="btn btn-sm" style="padding:0 7px" onclick="plDel(${i})">×</button></td>`:""}</tr>`).join("");
   const pvLine=pr?PNL_ENTS.filter(([k])=>pr.v&&pr.v[k]!=null).map(([k,n])=>`${n} <b>${fmt(pr.v[k])}</b>`).join(" <span style='color:#bbb'>|</span> "):"";
-  const inBox=isAd?`<textarea id="plTa" rows="2" style="width:100%;box-sizing:border-box;font:inherit;font-size:13px;padding:10px 12px;border:1.5px dashed #9db3e8;border-radius:8px;background:#F7F9FE;resize:vertical" placeholder="이카운트 계정별원장 표를 머리글(전표번호~부서명)까지 복사해서 여기에 붙여넣으세요 (Ctrl+V)${L.rows&&L.rows.length?" — 다시 붙여넣으면 바꿔요":""}"></textarea>`:"";
+  const inBox=isAd?`<textarea id="plTa" rows="2" style="width:100%;box-sizing:border-box;font:inherit;font-size:13px;padding:10px 12px;border:1.5px dashed #9db3e8;border-radius:8px;background:#F7F9FE;resize:vertical" placeholder="이카운트 계정별원장 표를 머리글(전표번호~부서명)까지 복사해서 여기에 붙여넣으세요 (Ctrl+V)${L.rows&&L.rows.length?" — 또 붙여넣으면 더하기·바꾸기를 골라요":""}${/접대비/.test(U.name)?" · 접대비·카드접대비는 하나씩 붙여넣으면 합쳐져요":""}"></textarea>`:"";
   const noteBox=!isAd&&L.note?`<div style="margin-bottom:10px;padding:9px 12px;background:#FFFBEA;border:1px solid #EFD98A;border-radius:8px;white-space:pre-wrap;font-size:13.5px">${esc(L.note)}</div>`:"";
   o.innerHTML=`<div class="pl-win"><div class="pl-head">📒 <b>계정별 내역</b> ${(()=>{const ks=Object.keys(S.data.pnl||{}).sort((a,b)=>{const[ay,am]=a.split("-").map(Number),[by,bm]=b.split("-").map(Number);return by-ay||bm-am;});
       return `<select onchange="plMonth(this.value)" style="font:inherit;font-size:13px;border:none;border-radius:6px;padding:3px 6px;background:rgba(255,255,255,.18);color:#fff;cursor:pointer">${ks.map(k=>`<option style="color:#222" value="${k}" ${k===U.key?"selected":""}>${k.split("-")[0]}년 ${Number(k.split("-")[1])}월${plHas(k,U.name)?" 📄":""}</option>`).join("")}</select>`;})()} <span style="opacity:.9">${esc(U.name.trim())}</span><button class="pl-x" onclick="plClose()" title="닫기 (Esc)">×</button></div>
