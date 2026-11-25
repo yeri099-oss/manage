@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v598</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v599</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -21047,7 +21047,7 @@ function renderSettle(){
   const kpi=(lb,v,sub,col)=>`<div style="flex:1 1 0;min-width:200px;border:1px solid var(--line,#e3e3e3);border-radius:12px;padding:10px 16px;background:#fff"><div class="unit">${lb}</div><div style="font-size:20px;font-weight:800;color:${col||"inherit"}">${v}</div><div class="unit" style="font-size:11.5px">${sub||""}</div></div>`;
   const eok=(n)=>n==null?"-":(n/1e8).toFixed(2)+"억";
   const kpis=`<div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin:4px 0 2px">
-    ${kpi("최근 12개월 당기순이익 (예상)",eok(RR.ni),stYm(R.from)+" ~ "+stYm(R.to)+" = "+Y+"년 1년치로 봐요"+(R.miss.length?` · <span style="color:#B3261E">${R.miss.length}개월 미입력</span>`:""),"#2F6B3F")}
+    ${kpi("최근 12개월 당기순이익 (예상)",eok(RR.ni),stYm(R.from)+" ~ "+stYm(R.to)+" = "+Y+"년 1년치"+(R.miss.length?` · <span style="color:#B3261E">${R.miss.length}개월 미입력</span>`:""),"#2F6B3F")}
     ${kpi(Y+"년 말 예상 이익잉여금",eok(reEnd),reBeg!=null?(Y-1)+"년 말 "+eok(reBeg)+" + 최근 12개월 순이익":"")}
     ${histYs.length?kpi("설립 후 연평균 당기순이익",eok(avgAll),histYs[0]+"~"+histYs[histYs.length-1]+"년 "+histYs.length+"년 평균 (2020년은 8~12월)"):""}
   </div>`;
@@ -21059,7 +21059,7 @@ function renderSettle(){
   let tbl=`<div class="table-wrap"><table class="rpt" style="font-size:13px;margin:0"><thead><tr><th class="l">과목</th>${cols.map(c=>`<th colspan="2" style="min-width:150px${c.hl?";background:#EAF1FB":""}">${c.t}<div style="font-weight:400;font-size:11px;color:var(--sub)">${c.s}</div></th>`).join("")}</tr></thead><tbody>
     ${rowsDef.map(([k,n,b])=>`<tr${b===2?' style="background:#F8CBAD"':b?' style="background:#F4F7F2"':""}><td class="l">${b?"<b>"+n+"</b>":n}</td>${cols.map(c=>{const v=c.v[k];const t=k==="adj"&&v==null?"":W(v);const p=(k==="op"||k==="ni"||k==="cogs"||k==="sga")&&c.v.rev?`<span class="stp" title="매출액 대비 비율 = 이 금액 ÷ 같은 칸 매출액 × 100">${pct(c.v[k],c.v.rev)}</span>`:"";return `<td class="stpc">${p}</td><td style="text-align:right">${b?"<b>"+t+"</b>":t}</td>`;}).join("")}</tr>${k==="sga"?"<!--SGA-->":k==="cogs"?"<!--COGS-->":""}`).join("")}
   </tbody></table></div>
-  <div class="footnote" style="margin-top:6px">· <span class="stp" style="margin-left:0">%</span> = 매출액 대비 비율 = 그 줄 금액 ÷ 같은 칸 매출액 × 100 (예: 원가율 = 매출원가 ÷ 매출액 × 100, 영업이익률 = 영업이익 ÷ 매출액 × 100)<br>${histYs.filter(y=>SETTLE_HIST[y].memo).map(y=>"· "+y+"년: "+esc(SETTLE_HIST[y].memo)+"<br>").join("")}· 법인세(예상) = 법인세차감전이익(조정 후) × ${(rate*100).toFixed(1)}%${C.rate!=null?" (직접 입력)":H?" ("+(Y-1)+"년 실제 부담률)":""} · 실제 세액은 세무사무실 계산과 달라요</div>`;
+  <div class="footnote" style="margin-top:6px">*비율 = 매출액 대비 = 해당금액 ÷ 같은 해 매출액 × 100 (원가율 = 매출원가 ÷ 매출액, 영업이익률 = 영업이익 ÷ 매출액)<br>*법인세(최근 12개월) = 법인세차감전이익(조정 후) × ${(rate*100).toFixed(1)}%</div>`;
   /* v564: 판관비 세부 (인건비·판매비·관리비·상각비) */
   const sgaCols=cols.map(c=>({t:c.t,s:c.s,hl:c.hl,d:c.v.sgaD||{},tot:c.v.sga,rev:c.v.rev}));
   const accAll=[];sgaCols.forEach(c=>{for(const k in c.d)if(accAll.indexOf(k)<0)accAll.push(k);});
@@ -21110,35 +21110,35 @@ function renderSettle(){
   const cellV=(v,k)=>k==="opr"?(v&&v.rev?(v.op/v.rev*100).toFixed(1)+"%":""):W(v[k]);
   const monTbl=`<div style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 8px">${chips}</div><div class="table-wrap"><table class="rpt" style="font-size:12px;margin:0;white-space:nowrap"><thead><tr><th class="l">${esc(entN)}</th>${mons.map((p,i)=>`<th${mT[i]?"":' style="background:#FDECEC;color:#B3261E"'}>${stYm(p)}</th>`).join("")}<th>합계</th></tr></thead><tbody>
     ${monRows.map(([k,n,b])=>`<tr${b?' style="font-weight:700"':""}><td class="l">${n}</td>${mv.map((v,i)=>!mT[i]?'<td style="text-align:center;color:#B3261E;background:#FDECEC">미입력</td>':!v?'<td style="text-align:center;color:#bbb">-</td>':`<td style="text-align:right${k!=="opr"&&v[k]<0?";color:#C00000":""}">${cellV(v,k)}</td>`).join("")}<td style="text-align:right"><b>${cellV(RS,k)}</b></td></tr>`).join("")}
-  </tbody></table></div>${R.miss.length?`<div class="footnote" style="color:#B3261E">빨간 달은 월별손익에 아직 없어요 — 월별손익 탭에 이카운트 월별손익분석 파일을 넣으면 자동으로 채워져요 (그 전까지 최근 12개월 합계는 ${R.have.length}개월치만이에요)</div>`:""}`;
+  </tbody></table></div>${R.miss.length?`<div class="footnote" style="color:#B3261E">*빨간 칸 = 월별손익 미입력 달 (최근 12개월 합계는 ${R.have.length}개월치)</div>`:""}`;
   /* 예상 달 설명 */
   const estTxt=E.estM.length?E.estM.map(x=>x.m+"월="+x.how).join(", "):"없음";
   /* 결산 조정 입력 */
   const depIn=(R.sum.dep||0);
   const inp=(k,ph,w)=>isAd?`<input value="${C[k]?fmt(C[k]):""}" placeholder="${ph||"0"}" onchange="stSet('${k}',this.value)" style="width:${w||120}px;text-align:right;font:inherit;padding:3px 6px;border:1px solid var(--line,#ddd);border-radius:6px">`:`<b>${C[k]?fmt(C[k]):"0"}</b>`;
-  const setCard=`<div class="card"><div class="card-title">⚙ 예상 방법과 결산 조정 <span class="unit">결산 때 세무사무실이 넣는 것 중 월별손익에 없는 것을 미리 넣어 보세요 (연간 금액)</span></div>
+  const setCard=`<div class="card"><div class="card-title">⚙ 예상 방법과 결산 조정 <span class="unit">월별손익에 없는 결산 항목 미리 반영 (연간 금액)</span></div>
     <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 14px;align-items:center;font-size:13px;max-width:860px">
       <div>감가상각비·무형자산상각비</div><div>${inp("dep","0",140)}${isAd&&H?` <button class="btn btn-sm" onclick="stSet('dep','123925431')">${Y-1}년 금액 넣기 (123,925,431)</button>${C.dep?` <button class="btn btn-sm" onclick="stSet('dep','')">비우기</button>`:""}`:""}
-        ${!depIn&&!C.dep?`<div style="margin-top:4px;padding:6px 10px;background:#FDECEC;border:1px solid #D9534F;border-radius:8px;color:#B3261E;font-size:12.5px"><b>⚠ 월별손익에 상각비가 0원이에요</b> — 결산 때 들어갈 상각비가 빠져 있어서 예상 이익이 크게 나와요. '${Y-1}년 금액 넣기'를 누르거나 세무사무실에 물어본 금액을 넣어주세요.</div>`:""}
-        <div class="unit">월별손익에 이미 들어 있는 상각비: 최근 12개월 ${fmt(depIn)}원 · ${Y-1}년 결산은 감가상각 33,161,237 + 무형자산상각 90,764,194 = 123,925,431원 · 넣은 금액은 손익 비교표의 판매비와관리비(상각비)에 더해져서 영업이익부터 줄어요 (이미 들어 있으면 비워두세요)</div></div>
-      <div>4대보험 회사부담<br><span class="unit">(최근 12개월)</span></div><div>${isAd?`<input value="${C.ins!=null?fmt(C.ins):""}" placeholder="${fmt(insR)}" onchange="stSet('ins',this.value)" style="width:140px;text-align:right;font:inherit;padding:3px 6px;border:1px solid var(--line,#ddd);border-radius:6px">`:`<b>${fmt(insR)}</b>`} <span class="unit">결산서처럼 이 금액을 복리후생비 → 보험료로 옮겨서 보여줘요 (합계는 그대로) · ${C.ins!=null?"직접 입력한 금액":`비우면 추정: ${Y-1}년 결산 비율(보험료 ÷ 직원급여 ${(insRate*100).toFixed(1)}%) × 최근 12개월 직원급여 − 이카운트 보험료(화재보험) = <b>${fmt(insR)}원</b>`} · 정확한 금액은 이카운트 복리후생비 계정별원장의 '4대보험' 합계</span></div>
+        ${!depIn&&!C.dep?`<div style="margin-top:4px;padding:6px 10px;background:#FDECEC;border:1px solid #D9534F;border-radius:8px;color:#B3261E;font-size:12.5px"><b>⚠ 월별손익 상각비 0원</b> — 예상 이익 과대 가능 · '${Y-1}년 금액 넣기' 또는 세무사무실 확인 금액 입력</div>`:""}
+        <div class="unit">월별손익에 이미 들어 있는 상각비: 최근 12개월 ${fmt(depIn)}원 · ${Y-1}년 결산은 감가상각 33,161,237 + 무형자산상각 90,764,194 = 123,925,431원 · 입력 금액은 판매비와관리비(상각비)에 더함 (이미 반영된 경우 빈칸)</div></div>
+      <div>4대보험 회사부담<br><span class="unit">(최근 12개월)</span></div><div>${isAd?`<input value="${C.ins!=null?fmt(C.ins):""}" placeholder="${fmt(insR)}" onchange="stSet('ins',this.value)" style="width:140px;text-align:right;font:inherit;padding:3px 6px;border:1px solid var(--line,#ddd);border-radius:6px">`:`<b>${fmt(insR)}</b>`} <span class="unit">결산서 기준으로 복리후생비 → 보험료 이동 (합계 동일) · ${C.ins!=null?"직접 입력한 금액":`비우면 추정: ${Y-1}년 결산 비율(보험료 ÷ 직원급여 ${(insRate*100).toFixed(1)}%) × 최근 12개월 직원급여 − 이카운트 보험료(화재보험) = <b>${fmt(insR)}원</b>`} · 정확한 금액은 이카운트 복리후생비 계정별원장의 '4대보험' 합계</span></div>
       <div>재고 차이</div><div>${inp("inv","0")} <span class="unit">연말 재고 실사로 이익이 늘면 +, 줄면 − (예: 재고가 장부보다 많으면 +)</span></div>
       <div>기타 조정</div><div>${inp("etc","0")} <span class="unit">연말 상여·퇴직급여, 빠진 비용(−) / 빠진 수익(+)</span></div>
       <div>법인세 부담률</div><div>${isAd?`<input value="${C.rate!=null?C.rate:""}" placeholder="${H?(H.tax/H.pre*100).toFixed(1):"10"}" onchange="stSet('rate',this.value)" style="width:70px;text-align:right;font:inherit;padding:3px 6px;border:1px solid var(--line,#ddd);border-radius:6px">%`:(rate*100).toFixed(1)+"%"} <span class="unit">비우면 ${Y-1}년 실제 부담률(법인세 ÷ 법인세차감전이익)로 계산 · 정확한 세율은 세무사무실 확인</span></div>
-      <div>배당 (예정)</div><div>${inp("div","0")} <span class="unit">올해 배당을 하면 이익잉여금에서 빠져요</span></div>
+      <div>배당 (예정)</div><div>${inp("div","0")} <span class="unit">배당 시 이익잉여금에서 차감</span></div>
     </div></div>`;
   const note=`<div class="card"><div class="card-title">📝 알아두기</div><div style="font-size:13px;line-height:1.8">
     · <b>이익잉여금</b> = 회사가 낸 당기순이익(세금 낸 뒤)이 해마다 쌓인 것 − 배당. ${Y-1}년 말 ${H?fmt(H.reEnd):"-"}원, 설립 후 ${histYs.length}년 당기순이익 평균 ${eok(avgAll)} (2020년은 8~12월 5개월).<br>
-    · <b>최근 12개월</b>(예: 25.11~26.10)을 ${Y}년 1년치 예상으로 봐요 — 남은 달을 작년 같은 달로 채운 것과 같아요. 12월 월별손익까지 넣으면 ${Y}년 1~12월 실제가 돼요.<br>
-    · 월별손익은 이카운트 장부 기준이라 결산 때 감가상각·재고 실사·법인세 등이 들어가면 달라져요 → 위 '결산 조정'에 넣어 보세요.<br>
-    · ${Y-1}년 순이익에는 국고보조금 1.17억(일회성)이 들어 있어서, 그걸 빼면 영업으로 번 이익은 더 적었어요.<br>
-    · 지점(꽃밥에피다)은 같은 법인이라 재무상태표·이익잉여금은 회사 전체 하나로 봐요. 사업장별로는 위 '사업장별 영업이익'처럼 손익만 나눠 보면 돼요.</div></div>`;
+    · <b>최근 12개월</b>(예: 25.11~26.10) = ${Y}년 1년치 예상 (남은 달을 작년 같은 달로 채운 것과 동일) · 12월까지 입력 시 ${Y}년 1~12월 실적<br>
+    · 월별손익 = 이카운트 장부 기준 · 결산 때 감가상각·재고 실사·법인세 등으로 차이 발생 → 위 '결산 조정'에 입력<br>
+    · ${Y-1}년 순이익 = 국고보조금 1.17억(일회성) 포함 · 제외 시 영업으로 번 이익은 더 적음<br>
+    · 지점(꽃밥에피다) = 같은 법인 · 재무상태표·이익잉여금은 회사 전체 하나, 사업장별로는 손익만 구분</div></div>`;
   window.__st.M={Y,L,R,RR,reBeg,reEnd,avgAll,histYs,cols,rowsDef,sgaCols,accAll,gOrder,gNote,sgaMiss,reRows,ents,mons,rate,C,H,insR,dep}; /* v591: 엑셀용 */
   el.innerHTML=head+`<div id="stReport" style="background:#fff">
     <div class="card"><div class="st-fit" id="stKpiWrap"><div class="card-title">📘 ${Y}년 가결산 요약 <span class="unit">${L.y}년 ${L.m}월까지 입력 · 단위: 원</span></div>${kpis}</div></div>
     <div class="card"><div class="st-fit"><div class="card-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">손익 비교 <span class="unit">결산서(확정) vs 최근 12개월 (= ${Y}년 예상)</span>
       <label onclick="stDetTog()" style="margin-left:auto;display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600" title="판매비와관리비를 인건비·판매비·관리비·상각비와 계정별로 펼쳐 보기"><span>세부 항목 보기</span><span style="position:relative;width:42px;height:24px;border-radius:12px;background:${window.__st.det?"#2F6B3F":"#c9cec6"};transition:background .15s;display:inline-block"><span style="position:absolute;top:3px;left:${window.__st.det?21:3}px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3);transition:left .15s"></span></span></label></div>${tbl}
-      ${window.__st.det?`<div class="footnote">% = 매출액 대비 · 묶음은 계정 이름으로 자동 (보험료는 인건비에 넣었어요 — 결산서 보험료에 4대보험이 들어 있어서)</div>`:""}</div></div>
+      </div></div>
     <div class="st-row"><div class="card"><div class="st-fit"><div class="card-title">이익잉여금</div>${reTbl}</div></div>
     <div class="card"><div class="st-fit"><div class="card-title">사업장별 영업이익</div>${bizTbl}</div></div></div>
     <div class="card"><div class="st-fit"><div class="card-title">최근 12개월 월별</div>${monTbl}</div></div>
