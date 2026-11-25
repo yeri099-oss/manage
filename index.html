@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v568</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v569</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -21064,12 +21064,12 @@ function renderSettle(){
     ${reRows.map((r,i)=>`<tr${i===reRows.length-1&&r[0].indexOf("예상")>=0?' style="background:#EAF1FB"':""}><td class="l">${r[0]}</td><td style="text-align:right">${W(r[1])}</td><td style="text-align:right"><b>${W(r[2])}</b></td><td style="text-align:right">${W(r[3])}</td><td style="text-align:right"><b>${W(r[4])}</b></td></tr>`).join("")}
   </tbody></table></div>`;
   /* v568: 사업장별 — 월별손익처럼 꽃밥이야기 / 꽃밥에피다 / 북촌 / 마켓 / 보자기 */
-  const ents=[["total","꽃밥이야기 (전체)",0],["insadong","꽃밥에피다",0],["bukchon","북촌 (마켓+보자기)",0],["market","꽃밥마켓",1],["bojagi","보자기꽃밥",1]];
+  const ents=[["total","꽃밥이야기 (전체)",0],["insadong","꽃밥에피다",0],["market","꽃밥마켓",0],["bojagi","보자기꽃밥",0]]; /* v569: 북촌 줄은 뺌 */
   const bizTbl=`<div class="table-wrap"><table class="rpt" style="font-size:13px;margin:0"><thead><tr><th class="l">사업장 (최근 12개월)</th><th>매출액</th><th>매출총이익</th><th>판매비와관리비</th><th>영업이익</th><th>법인세차감전</th></tr></thead><tbody>
     ${ents.map(([e,n,sub])=>{const r=stRolling(L,e).sum;return `<tr${e==="total"?' style="background:#F4F7F2;font-weight:700"':""}><td class="l"${sub?' style="padding-left:24px;color:#555"':""}>${sub?"└ ":""}${n}</td><td style="text-align:right">${W(r.rev)}</td><td style="text-align:right">${W(r.gp)}</td><td style="text-align:right">${W(r.sga)}</td><td style="text-align:right"><b>${W(r.op)}</b> <span class="unit" style="font-size:11px">${pct(r.op,r.rev)}</span></td><td style="text-align:right">${W(r.pre)}</td></tr>`;}).join("")}
-  </tbody></table></div><div class="footnote">꽃밥이야기 (전체)에는 공통(본사) 비용·영업외도 들어 있어서 꽃밥에피다 + 북촌 합과 달라요.</div>`;
+  </tbody></table></div><div class="footnote">꽃밥이야기 (전체)에는 공통(본사) 비용·영업외도 들어 있어서 꽃밥에피다 + 마켓 + 보자기 합과 달라요.</div>`;
   /* 월별 — 사업장 고르기 */
-  const ent=window.__st.ent||"total";const entN=(ents.find(x=>x[0]===ent)||ents[0])[1];
+  const ent=ents.some(x=>x[0]===window.__st.ent)?window.__st.ent:"total";const entN=(ents.find(x=>x[0]===ent)||ents[0])[1];
   const chips=ents.map(([e,n])=>`<button class="btn btn-sm${e===ent?" btn-primary":""}" onclick="stEnt('${e}')">${n.replace(" (전체)","")}</button>`).join(" ");
   const mons=[];for(let i=11;i>=0;i--)mons.push(stShift(L.y,L.m,-i));
   const mT=mons.map(p=>stMonth(p.y,p.m,"total"));
