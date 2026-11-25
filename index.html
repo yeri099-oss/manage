@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v562</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v563</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -21052,7 +21052,9 @@ function renderSettle(){
   const setCard=`<div class="card"><div class="card-title">⚙ 예상 방법과 결산 조정 <span class="unit">결산 때 세무사무실이 넣는 것 중 월별손익에 없는 것을 미리 넣어 보세요 (연간 금액)</span></div>
     <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 14px;align-items:center;font-size:13px;max-width:860px">
       <div>남은 달 예상</div><div>${isAd?`<select class="ctl" onchange="stSet('method',this.value)"><option value="ly" ${(C.method||"ly")==="ly"?"selected":""}>작년 같은 달 (없으면 최근 3개월 평균)</option><option value="avg3" ${C.method==="avg3"?"selected":""}>최근 3개월 평균</option></select>`:(C.method==="avg3"?"최근 3개월 평균":"작년 같은 달")} <span class="unit">${Y}년 예상에 쓴 달: ${estTxt}</span></div>
-      <div>감가상각비·무형자산상각비</div><div>${inp("dep",H?fmt(33161237+90764194):"0",140)} <span class="unit">월별손익에 이미 들어 있는 상각비: 올해 ${fmt(depIn)}원 · ${Y-1}년 결산은 감가상각 33,161,237 + 무형자산상각 90,764,194 = 123,925,431원 — 월별손익에 없으면 비슷한 금액을 넣으세요 (빼는 금액)</span></div>
+      <div>감가상각비·무형자산상각비</div><div>${inp("dep","0",140)}${isAd&&H?` <button class="btn btn-sm" onclick="stSet('dep','123925431')">${Y-1}년 금액 넣기 (123,925,431)</button>${C.dep?` <button class="btn btn-sm" onclick="stSet('dep','')">비우기</button>`:""}`:""}
+        ${!depIn&&!C.dep?`<div style="margin-top:4px;padding:6px 10px;background:#FDECEC;border:1px solid #D9534F;border-radius:8px;color:#B3261E;font-size:12.5px"><b>⚠ 월별손익에 상각비가 0원이에요</b> — 결산 때 들어갈 상각비가 빠져 있어서 예상 이익이 크게 나와요. '${Y-1}년 금액 넣기'를 누르거나 세무사무실에 물어본 금액을 넣어주세요.</div>`:""}
+        <div class="unit">월별손익에 이미 들어 있는 상각비: 올해 ${fmt(depIn)}원 · ${Y-1}년 결산은 감가상각 33,161,237 + 무형자산상각 90,764,194 = 123,925,431원 · 넣은 금액만큼 예상 이익에서 빠져요 (이미 들어 있으면 비워두세요)</div></div>
       <div>재고 차이</div><div>${inp("inv","0")} <span class="unit">연말 재고 실사로 이익이 늘면 +, 줄면 − (예: 재고가 장부보다 많으면 +)</span></div>
       <div>기타 조정</div><div>${inp("etc","0")} <span class="unit">연말 상여·퇴직급여, 빠진 비용(−) / 빠진 수익(+)</span></div>
       <div>법인세 부담률</div><div>${isAd?`<input value="${C.rate!=null?C.rate:""}" placeholder="${H?(H.tax/H.pre*100).toFixed(1):"10"}" onchange="stSet('rate',this.value)" style="width:70px;text-align:right;font:inherit;padding:3px 6px;border:1px solid var(--line,#ddd);border-radius:6px">%`:(rate*100).toFixed(1)+"%"} <span class="unit">비우면 ${Y-1}년 실제 부담률(법인세 ÷ 법인세차감전이익)로 계산 · 정확한 세율은 세무사무실 확인</span></div>
