@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v589</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v590</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -21134,8 +21134,8 @@ function renderSettle(){
     <div class="card"><div class="st-fit"><div class="card-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">손익 비교 <span class="unit">결산서(확정) vs 최근 12개월 (= ${Y}년 예상)</span>
       <label onclick="stDetTog()" style="margin-left:auto;display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600" title="판매비와관리비를 인건비·판매비·관리비·상각비와 계정별로 펼쳐 보기"><span>세부 항목 보기</span><span style="position:relative;width:42px;height:24px;border-radius:12px;background:${window.__st.det?"#2F6B3F":"#c9cec6"};transition:background .15s;display:inline-block"><span style="position:absolute;top:3px;left:${window.__st.det?21:3}px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3);transition:left .15s"></span></span></label></div>${tbl}
       ${window.__st.det?`<div class="footnote">% = 매출액 대비 · 묶음은 계정 이름으로 자동 (보험료는 인건비에 넣었어요 — 결산서 보험료에 4대보험이 들어 있어서)</div>`:""}</div></div>
-    <div class="card"><div class="st-fit"><div class="card-title">이익잉여금</div>${reTbl}</div></div>
-    <div class="card"><div class="st-fit"><div class="card-title">사업장별 영업이익</div>${bizTbl}</div></div>
+    <div class="st-row"><div class="card"><div class="st-fit"><div class="card-title">이익잉여금</div>${reTbl}</div></div>
+    <div class="card"><div class="st-fit"><div class="card-title">사업장별 영업이익</div>${bizTbl}</div></div></div>
     <div class="card"><div class="st-fit"><div class="card-title">최근 12개월 월별 <span class="unit">사업장을 골라서 보세요</span></div>${monTbl}</div></div>
   </div>${setCard}${note}`;
 }
@@ -21157,7 +21157,7 @@ window.stCapture=async function(mode){
 };
 RENDERERS.settle=renderSettle;
 /* v567: 결산 탭은 내용만큼만 — 화면 꽉 채우지 않고 왼쪽 정렬 */
-(function(){const st=document.createElement("style");st.textContent="#tab-settle table.rpt{width:auto!important;margin-left:auto!important;margin-right:auto!important}#tab-settle .table-wrap{display:block}#tab-settle .stp{display:inline-block;min-width:40px;margin-left:6px;padding:0 5px;border-radius:5px;background:#EAF1FB;color:#2F5FD0;font-size:10.5px;font-weight:600;text-align:right;vertical-align:1px;cursor:help}#tab-settle .stp:empty{display:none}#tab-settle td.stpc{width:48px;padding-left:10px!important;padding-right:0!important;text-align:right;border-right:none!important}#tab-settle td.stpc .stp{margin-left:0}#tab-settle td.stpc+td{border-left:none!important;padding-left:6px!important}#tab-settle .st-fit{width:fit-content;max-width:100%;margin:0 auto}#tab-settle .st-fit .footnote{max-width:640px}#tab-settle .st-fit>.card-title{margin-bottom:16px!important}#tab-settle .st-fit>.footnote,#tab-settle .st-fit .table-wrap+.footnote{margin-top:10px!important}";document.head.appendChild(st);})();
+(function(){const st=document.createElement("style");st.textContent="#tab-settle table.rpt{width:auto!important;margin-left:auto!important;margin-right:auto!important}#tab-settle .table-wrap{display:block}#tab-settle .stp{display:inline-block;min-width:40px;margin-left:6px;padding:0 5px;border-radius:5px;background:#EAF1FB;color:#2F5FD0;font-size:10.5px;font-weight:600;text-align:right;vertical-align:1px;cursor:help}#tab-settle .stp:empty{display:none}#tab-settle td.stpc{width:48px;padding-left:10px!important;padding-right:0!important;text-align:right;border-right:none!important}#tab-settle td.stpc .stp{margin-left:0}#tab-settle td.stpc+td{border-left:none!important;padding-left:6px!important}#tab-settle .st-row{display:flex;gap:14px;flex-wrap:wrap;align-items:stretch}#tab-settle .st-row>.card{flex:1 1 auto;min-width:0}#tab-settle .st-fit{width:fit-content;max-width:100%;margin:0 auto}#tab-settle .st-fit .footnote{max-width:640px}#tab-settle .st-fit>.card-title{margin-bottom:16px!important}#tab-settle .st-fit>.footnote,#tab-settle .st-fit .table-wrap+.footnote{margin-top:10px!important}";document.head.appendChild(st);})();
 /* ===== v536: 엑셀처럼 표 머리글을 눌러 정렬 (한 번 더 누르면 반대로) — 꽃밥에피다 탭의 모든 표
    · 합계 줄(total)은 제자리 · 분류 순위 표는 분류끼리, 분류 안의 품목끼리 정렬 · 「순위」 칸은 정렬한 순서대로 다시 번호 ===== */
 function pidaCellVal(td){if(!td)return null;const t=td.textContent.replace(/\s+/g," ").trim();
