@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v577</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v578</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -20924,6 +20924,8 @@ SETTLE_HIST[2023]={rev:2718038817,cogs:1057149635,sga:1137100588,op:523788594,no
 SETTLE_HIST[2020]={rev:688887857,cogs:469091662,sga:252325383,op:-32529188,noi:5856277,noe:1586837,pre:-28259748,tax:0,ni:-28259748,reBeg:0,div:0,reEnd:-28259748,src:"확정 (홈택스 표준) · 8~12월",memo:"설립 첫해 8월~12월 (5개월) — 적자 28,259,748",sgaD:{"직원급여":94467230,"상여금":700000,"잡급":31452780,"보험료":6195839,"복리후생비":2523800,"여비교통비":286370,"임차료":58100000,"감가상각비":9997507,"무형자산상각비":349861,"세금과공과금":4235500,"광고선전비":255490,"차량유지비":1597650,"수수료비용":16806222,"소모품비":12383108,"통신비":1802132,"운반비":942000,"수선비":700000,"수도광열비":1024814,"전력비":7046915,"도서인쇄비":1141190,"교육훈련비":7273,"기타(표준재무제표)":309702}};
 SETTLE_HIST[2021]={rev:1936231057,cogs:1070685232,sga:792158401,op:73387424,noi:29182062,noe:2921275,pre:99648211,tax:8051811,ni:91596400,reBeg:-28259748,div:0,reEnd:63336652,src:"확정 (홈택스 표준)",sgaD:{"직원급여":295832963,"상여금":20300000,"잡급":91554760,"퇴직급여":7389302,"보험료":19999151,"복리후생비":5951700,"여비교통비":427214,"임차료":132000000,"접대비":1232000,"감가상각비":32107687,"무형자산상각비":971666,"세금과공과금":14838670,"광고선전비":1112679,"차량유지비":8153002,"수수료비용":50284548,"소모품비":32439544,"통신비":4770469,"운반비":2991560,"보관료":27568192,"수선비":5340550,"수도광열비":5215420,"전력비":20133586,"도서인쇄비":1345027,"기타(표준재무제표)":10198711}};
 SETTLE_HIST[2022]={rev:2265255397,cogs:1008997749,sga:1057496400,op:198761248,noi:161949116,noe:2694604,pre:358015760,tax:0,ni:358015760,reBeg:63336652,div:0,reEnd:421352412,src:"확정 (홈택스 표준)",memo:"영업외수익 161,949,116 · 법인세 0원",sgaD:{"직원급여":441255771,"상여금":44389406,"잡급":75614588,"퇴직급여":10521832,"보험료":28779850,"복리후생비":13075614,"여비교통비":1725015,"임차료":132675000,"접대비":441390,"감가상각비":22811133,"무형자산상각비":971866,"세금과공과금":19521520,"광고선전비":5030191,"차량유지비":4354355,"수수료비용":41424080,"소모품비":60468621,"통신비":2389986,"운반비":2430710,"보관료":38601971,"수선비":2080620,"수도광열비":8547068,"전력비":25680929,"도서인쇄비":2101610,"교육훈련비":9235000,"기타(표준재무제표)":63368274}};
+/* v578: 매출원가 = 기초재고 + 당기 매입 − 기말재고 (결산서·표준재무제표) */
+[[2020,0,515428052,46336390],[2021,46336390,1047836040,23487198],[2022,23487198,1005561187,20050636],[2023,20050636,1058023635,20924636],[2024,20924636,1074664392,41855969],[2025,41855969,1098536678,25684222]].forEach(([y,b,u,e])=>{if(SETTLE_HIST[y])SETTLE_HIST[y].cD={beg:b,buy:u,end:e};});
 SETTLE_HIST[2024].sgaD={"직원급여":568153232,"상여금":66470000,"잡급":19751678,"퇴직급여":8921347,"복리후생비":31958804,"여비교통비":1991600,"접대비":1700000,"통신비":2977132,"수도광열비":13640294,"전력비":29882515,"세금과공과금":24264085,"감가상각비":25200467,"임차료":137240000,"수선비":2530000,"보험료":38779450,"차량유지비":2129920,"운반비":2179660,"교육훈련비":1060000,"도서인쇄비":4530539,"포장비":1027812,"사무용품비":746386,"소모품비":53860519,"수수료비용":54371836,"판매수수료":57810185,"광고선전비":10075940,"판매촉진비":1419760,"무형자산상각비":9244593,"외주용역비":99567803,"인적용역비":12129184};
 SETTLE_HIST[2025].sgaD={"직원급여":615662539,"상여금":72438904,"잡급":24313232,"퇴직급여":24831477,"복리후생비":35001100,"여비교통비":6546962,"접대비":1600000,"통신비":2521817,"수도광열비":14419023,"전력비":28102892,"세금과공과금":27331140,"감가상각비":33161237,"임차료":137540000,"수선비":1056818,"보험료":47348522,"차량유지비":3147597,"운반비":2573530,"교육훈련비":16658426,"도서인쇄비":4528810,"포장비":171875,"사무용품비":564586,"소모품비":42280733,"수수료비용":47037249,"판매수수료":56829022,"광고선전비":23537042,"판매촉진비":887350,"무형자산상각비":90764194,"외주용역비":102490316,"인적용역비":8335820};
 /* v564: 판관비를 인건비 / 판매비 / 관리비 / 상각비로 묶어서 */
@@ -20961,10 +20963,12 @@ function stLineOf(n){const t=stC(n);
 /* 한 달 값 {rev,cogs,gp,sga,op,noi,noe,pre,dep} (e = total/insadong/bukchon/...) */
 function stMonth(y,m,e){
   const k=stKey(y,m);if(!k)return null;const d=(S.data.pnl||{})[k];if(!d||!d.rows)return null;
-  const o={};let dep=0;let cur=null;const sg=[];
+  const o={};let dep=0;let cur=null;const sg=[],cg=[];
   d.rows.forEach(r=>{const v=r.v?r.v[e]:null;
     if(r.lv===0){const L=stLineOf(r.n);cur=L;if(L&&o[L]==null&&v!=null)o[L]=v;}
-    else{if(/상각/.test(r.n)&&v!=null)dep+=v;if(cur==="sga"&&v!=null)sg.push({n:r.n,lv:r.lv,v});}});
+    else{if(/상각/.test(r.n)&&v!=null)dep+=v;if(cur==="sga"&&v!=null)sg.push({n:r.n,lv:r.lv,v});if(cur==="cogs"&&v!=null)cg.push({n:r.n,lv:r.lv,v});}});
+  /* v578: 매출원가 아래 줄 → 기초재고 / 당기 매입 / 기말재고 / 기타 */
+  if(cg.length){const ml=Math.min(...cg.map(x=>x.lv));o.cD={};cg.filter(x=>x.lv===ml).forEach(x=>{const t=stC(x.n);const k=/기초/.test(t)?"beg":/기말/.test(t)?"end":/매입|구입/.test(t)?"buy":"etc";o.cD[k]=(o.cD[k]||0)+x.v;});}
   const mlv=sg.length?Math.min(...sg.map(x=>x.lv)):0;o.sgaD={};sg.filter(x=>x.lv===mlv).forEach(x=>{const k=stAcc(x.n);o.sgaD[k]=(o.sgaD[k]||0)+x.v;});
   if(o.rev==null&&o.op==null)return null;
   const z=x=>x||0;
@@ -20975,7 +20979,10 @@ function stMonth(y,m,e){
   o.dep=dep;return o;
 }
 const ST_LINES=["rev","cogs","gp","sga","op","noi","noe","pre","dep"];
-function stAdd(a,b,f){ST_LINES.forEach(x=>{a[x]=(a[x]||0)+(b[x]||0)*(f==null?1:f);});a.sgaD=a.sgaD||{};const bd=b.sgaD||{};for(const k in bd)a.sgaD[k]=(a.sgaD[k]||0)+bd[k]*(f==null?1:f);return a;}
+function stAdd(a,b,f){ST_LINES.forEach(x=>{a[x]=(a[x]||0)+(b[x]||0)*(f==null?1:f);});a.sgaD=a.sgaD||{};const bd=b.sgaD||{};for(const k in bd)a.sgaD[k]=(a.sgaD[k]||0)+bd[k]*(f==null?1:f);
+  /* v578: 매출원가 세부 — 기초는 첫 달, 기말은 마지막 달, 매입·기타는 합 (오래된 달부터 더함) */
+  if(b.cD){a.cD=a.cD||{};if(a.cD.beg==null&&b.cD.beg!=null)a.cD.beg=b.cD.beg;if(b.cD.end!=null)a.cD.end=b.cD.end;["buy","etc"].forEach(k=>{if(b.cD[k]!=null)a.cD[k]=(a.cD[k]||0)+b.cD[k]*(f==null?1:f);});}
+  return a;}
 function stLatest(){let best=null;for(const k in (S.data.pnl||{})){const [y,m]=k.split("-").map(Number);if(!stMonth(y,m,"total"))continue;if(!best||y*12+m>best.y*12+best.m)best={y,m};}return best;}
 function stShift(y,m,d){const t=y*12+(m-1)+d;return {y:Math.floor(t/12),m:t%12+1};}
 const stYm=(o)=>String(o.y).slice(2)+"."+String(o.m).padStart(2,"0");
@@ -21039,7 +21046,7 @@ function renderSettle(){
   cols.push({t:"최근 12개월",s:stYm(R.from)+" ~ "+stYm(R.to)+(R.miss.length?" · "+R.miss.length+"개월 빠짐":""),v:RR,hl:1});
   const rowsDef=[["rev","매출액",1],["cogs","매출원가"],["gp","매출총이익",1],["sga","판매비와관리비"],["op","영업이익",1],["noi","영업외수익"],["noe","영업외비용"],["pre","법인세차감전이익",1],["adj","결산 조정 (재고·기타)"],["tax","법인세 (예상)"],["ni","당기순이익",2]];
   let tbl=`<div class="table-wrap"><table class="rpt" style="font-size:13px;margin:0"><thead><tr><th class="l">과목</th>${cols.map(c=>`<th style="min-width:130px${c.hl?";background:#EAF1FB":""}">${c.t}<div style="font-weight:400;font-size:11px;color:var(--sub)">${c.s}</div></th>`).join("")}</tr></thead><tbody>
-    ${rowsDef.map(([k,n,b])=>`<tr${b===2?' style="background:#F8CBAD"':b?' style="background:#F4F7F2"':""}><td class="l">${b?"<b>"+n+"</b>":n}</td>${cols.map(c=>{const v=c.v[k];const t=k==="adj"&&v==null?"":W(v);const p=(k==="op"||k==="ni"||(k==="sga"&&window.__st.det))&&c.v.rev?` <span class="unit" style="font-size:11px">${pct(c.v[k],c.v.rev)}</span>`:"";return `<td style="text-align:right">${b?"<b>"+t+"</b>":t}${p}</td>`;}).join("")}</tr>${k==="sga"?"<!--SGA-->":""}`).join("")}
+    ${rowsDef.map(([k,n,b])=>`<tr${b===2?' style="background:#F8CBAD"':b?' style="background:#F4F7F2"':""}><td class="l">${b?"<b>"+n+"</b>":n}</td>${cols.map(c=>{const v=c.v[k];const t=k==="adj"&&v==null?"":W(v);const p=(k==="op"||k==="ni"||k==="cogs"||(k==="sga"&&window.__st.det))&&c.v.rev?` <span class="unit" style="font-size:11px">${pct(c.v[k],c.v.rev)}</span>`:"";return `<td style="text-align:right">${b?"<b>"+t+"</b>":t}${p}</td>`;}).join("")}</tr>${k==="sga"?"<!--SGA-->":k==="cogs"?"<!--COGS-->":""}`).join("")}
   </tbody></table></div>
   <div class="footnote" style="margin-top:6px">${histYs.filter(y=>SETTLE_HIST[y].memo).map(y=>"· "+y+"년: "+esc(SETTLE_HIST[y].memo)+"<br>").join("")}· 법인세(예상) = 법인세차감전이익(조정 후) × ${(rate*100).toFixed(1)}%${C.rate!=null?" (직접 입력)":H?" ("+(Y-1)+"년 실제 부담률)":""} · 실제 세액은 세무사무실 계산과 달라요</div>`;
   /* v564: 판관비 세부 (인건비·판매비·관리비·상각비) */
@@ -21061,10 +21068,13 @@ function renderSettle(){
   if(window.__st.det){
     const inl=gOrder.map(g=>{const acc=accAll.filter(a=>stGrpOf(a)===g).sort((x,y)=>(sgaCols[sgaCols.length-2]?(sgaCols[sgaCols.length-2].d[y]||0)-(sgaCols[sgaCols.length-2].d[x]||0):0));if(!acc.length)return "";
       const gs=sgaCols.map(c=>acc.reduce((s2,a)=>s2+(c.d[a]||0),0));
-      return `<tr style="background:#FFF8E1"><td class="l" style="padding-left:18px"><b>${g}</b> <span class="unit" style="font-size:11px">${gNote[g]}</span></td>${gs.map((v,i)=>`<td style="text-align:right"><b>${W(v)}</b> <span class="unit" style="font-size:11px">${pct(v,sgaCols[i].rev)}</span></td>`).join("")}</tr>`
+      return `<tr style="background:#FFF8E1"><td class="l" style="padding-left:18px"><b>${g}</b> <span title="${esc(gNote[g])}" style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;background:#C9A227;color:#fff;font-size:10.5px;font-weight:800;cursor:help;vertical-align:middle;margin-left:3px">!</span></td>${gs.map((v,i)=>`<td style="text-align:right"><b>${W(v)}</b> <span class="unit" style="font-size:11px">${pct(v,sgaCols[i].rev)}</span></td>`).join("")}</tr>`
         +acc.map(a=>`<tr style="font-size:12px;color:#555"><td class="l" style="padding-left:34px">${esc(a)}</td>${sgaCols.map(c=>`<td style="text-align:right">${c.d[a]?W(c.d[a]):'<span style="color:#ccc">-</span>'}</td>`).join("")}</tr>`).join("");}).join("")
       +(sgaMiss.some(x=>x)?`<tr style="font-size:12px"><td class="l unit" style="padding-left:18px">세부 없는 금액</td>${sgaMiss.map(v=>`<td style="text-align:right" class="unit">${v?W(v):""}</td>`).join("")}</tr>`:"");
     tbl=tbl.replace("<!--SGA-->",inl);
+    /* v578: 매출원가 세부 */
+    const cRows=[["beg","+ 기초재고"],["buy","+ 당기 매입"],["end","− 기말재고"],["etc","기타"]].filter(([k])=>cols.some(c=>c.v.cD&&c.v.cD[k]!=null&&(k!=="etc"||c.v.cD[k])));
+    tbl=tbl.replace("<!--COGS-->",cRows.map(([k,n])=>`<tr style="font-size:12px;color:#555"><td class="l" style="padding-left:24px">${n}</td>${cols.map(c=>{const v=c.v.cD?c.v.cD[k]:null;return `<td style="text-align:right">${v!=null?W(v):'<span style="color:#ccc">-</span>'}</td>`;}).join("")}</tr>`).join(""));
   }
   /* 이익잉여금 */
   const reRows=[];
@@ -21075,8 +21085,8 @@ function renderSettle(){
   </tbody></table></div>`;
   /* v568: 사업장별 — 월별손익처럼 꽃밥이야기 / 꽃밥에피다 / 북촌 / 마켓 / 보자기 */
   const ents=[["total","꽃밥이야기 (전체)",0],["insadong","꽃밥에피다",0],["market","꽃밥마켓",0],["bojagi","보자기꽃밥",0]]; /* v569: 북촌 줄은 뺌 */
-  const bizTbl=`<div class="table-wrap"><table class="rpt" style="font-size:13px;margin:0"><thead><tr><th class="l">사업장 (최근 12개월)</th><th>매출액</th><th>매출총이익</th><th>판매비와관리비</th><th>영업이익</th><th>법인세차감전</th></tr></thead><tbody>
-    ${ents.map(([e,n,sub])=>{const r=stRolling(L,e).sum;return `<tr${e==="total"?' style="background:#F4F7F2;font-weight:700"':""}><td class="l"${sub?' style="padding-left:24px;color:#555"':""}>${sub?"└ ":""}${n}</td><td style="text-align:right">${W(r.rev)}</td><td style="text-align:right">${W(r.gp)}</td><td style="text-align:right">${W(r.sga)}</td><td style="text-align:right"><b>${W(r.op)}</b> <span class="unit" style="font-size:11px">${pct(r.op,r.rev)}</span></td><td style="text-align:right">${W(r.pre)}</td></tr>`;}).join("")}
+  const bizTbl=`<div class="table-wrap"><table class="rpt" style="font-size:13px;margin:0"><thead><tr><th class="l">사업장 (최근 12개월)</th><th>매출액</th><th>매출원가 (원가율)</th><th>매출총이익</th><th>판매비와관리비</th><th>영업이익</th><th>법인세차감전</th></tr></thead><tbody>
+    ${ents.map(([e,n,sub])=>{const r=stRolling(L,e).sum;return `<tr${e==="total"?' style="background:#F4F7F2;font-weight:700"':""}><td class="l"${sub?' style="padding-left:24px;color:#555"':""}>${sub?"└ ":""}${n}</td><td style="text-align:right">${W(r.rev)}</td><td style="text-align:right">${W(r.cogs)} <span class="unit" style="font-size:11px">${pct(r.cogs,r.rev)}</span></td><td style="text-align:right">${W(r.gp)}</td><td style="text-align:right">${W(r.sga)}</td><td style="text-align:right"><b>${W(r.op)}</b> <span class="unit" style="font-size:11px">${pct(r.op,r.rev)}</span></td><td style="text-align:right">${W(r.pre)}</td></tr>`;}).join("")}
   </tbody></table></div><div class="footnote">꽃밥이야기 (전체)에는 공통(본사) 비용·영업외도 들어 있어서 꽃밥에피다 + 마켓 + 보자기 합과 달라요.</div>`;
   /* 월별 — 사업장 고르기 */
   const ent=ents.some(x=>x[0]===window.__st.ent)?window.__st.ent:"total";const entN=(ents.find(x=>x[0]===ent)||ents[0])[1];
