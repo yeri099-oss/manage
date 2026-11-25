@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v567</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v568</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -21063,16 +21063,22 @@ function renderSettle(){
   const reTbl=`<div class="table-wrap"><table class="rpt" style="font-size:13px;margin:0;max-width:760px"><thead><tr><th class="l">연도</th><th>기초 이익잉여금</th><th>+ 당기순이익</th><th>− 배당</th><th>= 기말 이익잉여금</th></tr></thead><tbody>
     ${reRows.map((r,i)=>`<tr${i===reRows.length-1&&r[0].indexOf("예상")>=0?' style="background:#EAF1FB"':""}><td class="l">${r[0]}</td><td style="text-align:right">${W(r[1])}</td><td style="text-align:right"><b>${W(r[2])}</b></td><td style="text-align:right">${W(r[3])}</td><td style="text-align:right"><b>${W(r[4])}</b></td></tr>`).join("")}
   </tbody></table></div>`;
-  /* 사업장별 영업이익 */
-  const ents=[["insadong","꽃밥에피다"],["bukchon","북촌 (마켓+보자기)"],["total","꽃밥이야기 전체"]];
-  const bizTbl=`<div class="table-wrap"><table class="rpt" style="font-size:13px;margin:0;max-width:760px"><thead><tr><th class="l">사업장</th><th>매출 (최근 12개월)</th><th>영업이익 (최근 12개월)</th></tr></thead><tbody>
-    ${ents.map(([e,n])=>{const r=stRolling(L,e).sum;return `<tr${e==="total"?' style="background:#F4F7F2;font-weight:700"':""}><td class="l">${n}</td><td style="text-align:right">${W(r.rev)}</td><td style="text-align:right">${W(r.op)} <span class="unit" style="font-size:11px">${pct(r.op,r.rev)}</span></td></tr>`;}).join("")}
-  </tbody></table></div><div class="footnote">전체에는 공통(꽃밥이야기 본사) 비용도 들어 있어서 두 사업장 합과 달라요.</div>`;
-  /* 월별 */
+  /* v568: 사업장별 — 월별손익처럼 꽃밥이야기 / 꽃밥에피다 / 북촌 / 마켓 / 보자기 */
+  const ents=[["total","꽃밥이야기 (전체)",0],["insadong","꽃밥에피다",0],["bukchon","북촌 (마켓+보자기)",0],["market","꽃밥마켓",1],["bojagi","보자기꽃밥",1]];
+  const bizTbl=`<div class="table-wrap"><table class="rpt" style="font-size:13px;margin:0"><thead><tr><th class="l">사업장 (최근 12개월)</th><th>매출액</th><th>매출총이익</th><th>판매비와관리비</th><th>영업이익</th><th>법인세차감전</th></tr></thead><tbody>
+    ${ents.map(([e,n,sub])=>{const r=stRolling(L,e).sum;return `<tr${e==="total"?' style="background:#F4F7F2;font-weight:700"':""}><td class="l"${sub?' style="padding-left:24px;color:#555"':""}>${sub?"└ ":""}${n}</td><td style="text-align:right">${W(r.rev)}</td><td style="text-align:right">${W(r.gp)}</td><td style="text-align:right">${W(r.sga)}</td><td style="text-align:right"><b>${W(r.op)}</b> <span class="unit" style="font-size:11px">${pct(r.op,r.rev)}</span></td><td style="text-align:right">${W(r.pre)}</td></tr>`;}).join("")}
+  </tbody></table></div><div class="footnote">꽃밥이야기 (전체)에는 공통(본사) 비용·영업외도 들어 있어서 꽃밥에피다 + 북촌 합과 달라요.</div>`;
+  /* 월별 — 사업장 고르기 */
+  const ent=window.__st.ent||"total";const entN=(ents.find(x=>x[0]===ent)||ents[0])[1];
+  const chips=ents.map(([e,n])=>`<button class="btn btn-sm${e===ent?" btn-primary":""}" onclick="stEnt('${e}')">${n.replace(" (전체)","")}</button>`).join(" ");
   const mons=[];for(let i=11;i>=0;i--)mons.push(stShift(L.y,L.m,-i));
-  const mv=mons.map(p=>stMonth(p.y,p.m,"total"));
-  const monTbl=`<div class="table-wrap"><table class="rpt" style="font-size:12px;margin:0;white-space:nowrap"><thead><tr><th class="l">월</th>${mons.map((p,i)=>`<th${mv[i]?"":' style="background:#FDECEC;color:#B3261E"'}>${stYm(p)}</th>`).join("")}<th>합계</th></tr></thead><tbody>
-    ${[["rev","매출액"],["op","영업이익"],["pre","법인세차감전"]].map(([k,n])=>`<tr><td class="l">${n}</td>${mv.map(v=>v?`<td style="text-align:right">${W(v[k])}</td>`:'<td style="text-align:center;color:#B3261E;background:#FDECEC">미입력</td>').join("")}<td style="text-align:right"><b>${W(R.sum[k])}</b></td></tr>`).join("")}
+  const mT=mons.map(p=>stMonth(p.y,p.m,"total"));
+  const mv=mons.map(p=>stMonth(p.y,p.m,ent));
+  const RS=stRolling(L,ent).sum;
+  const monRows=[["rev","매출액",1],["cogs","매출원가"],["gp","매출총이익"],["sga","판매비와관리비"],["op","영업이익",1],["opr","영업이익률"],["pre","법인세차감전",1]];
+  const cellV=(v,k)=>k==="opr"?(v&&v.rev?(v.op/v.rev*100).toFixed(1)+"%":""):W(v[k]);
+  const monTbl=`<div style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 8px">${chips}</div><div class="table-wrap"><table class="rpt" style="font-size:12px;margin:0;white-space:nowrap"><thead><tr><th class="l">${esc(entN)}</th>${mons.map((p,i)=>`<th${mT[i]?"":' style="background:#FDECEC;color:#B3261E"'}>${stYm(p)}</th>`).join("")}<th>합계</th></tr></thead><tbody>
+    ${monRows.map(([k,n,b])=>`<tr${b?' style="font-weight:700"':""}><td class="l">${n}</td>${mv.map((v,i)=>!mT[i]?'<td style="text-align:center;color:#B3261E;background:#FDECEC">미입력</td>':!v?'<td style="text-align:center;color:#bbb">-</td>':`<td style="text-align:right${k!=="opr"&&v[k]<0?";color:#C00000":""}">${cellV(v,k)}</td>`).join("")}<td style="text-align:right"><b>${cellV(RS,k)}</b></td></tr>`).join("")}
   </tbody></table></div>${R.miss.length?`<div class="footnote" style="color:#B3261E">빨간 달은 월별손익에 아직 없어요 — 월별손익 탭에 이카운트 월별손익분석 파일을 넣으면 자동으로 채워져요 (그 전까지 최근 12개월 합계는 ${R.have.length}개월치만이에요)</div>`:""}`;
   /* 예상 달 설명 */
   const estTxt=E.estM.length?E.estM.map(x=>x.m+"월="+x.how).join(", "):"없음";
@@ -21102,9 +21108,10 @@ function renderSettle(){
       ${window.__st.det?`<div class="footnote">% = 매출액 대비 · 묶음은 계정 이름으로 자동 (보험료는 4대보험 회사부담이 대부분이라 인건비에 넣었어요)</div>`:""}</div>
     <div class="card"><div class="card-title">이익잉여금</div>${reTbl}</div>
     <div class="card"><div class="card-title">사업장별 영업이익</div>${bizTbl}</div>
-    <div class="card"><div class="card-title">최근 12개월 월별 <span class="unit">꽃밥이야기 전체</span></div>${monTbl}</div>
+    <div class="card"><div class="card-title">최근 12개월 월별 <span class="unit">사업장을 골라서 보세요</span></div>${monTbl}</div>
   </div>${setCard}${note}`;
 }
+window.stEnt=function(e){window.__st.ent=e;renderSettle();};
 window.stDetTog=function(){window.__st.det=!window.__st.det;try{localStorage.setItem("ssv2_stDet",window.__st.det?"1":"");}catch(e){}renderSettle();};
 try{window.__st.det=!!localStorage.getItem("ssv2_stDet");}catch(e){}
 window.stSgaTog=function(g){const o=window.__st.sgaOpen=window.__st.sgaOpen||{};if(g==="*"){if(Object.keys(o).length)window.__st.sgaOpen={};else ["인건비","판매비","관리비","상각비"].forEach(k=>o[k]=1);}else if(o[g])delete o[g];else o[g]=1;renderSettle();};
