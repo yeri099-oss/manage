@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v578</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v579</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -21025,7 +21025,7 @@ function renderSettle(){
   if(!L){el.innerHTML=head+`<div class="card"><div class="hint" style="padding:14px">월별손익에 입력된 달이 없어요. 월별손익 탭에서 이카운트 월별손익분석 파일을 먼저 넣어주세요.</div></div>`;return;}
   const R=stRolling(L,"total");
   const E=stYear(Y,L,"total",C.method||"ly");
-  const mk=(s)=>{const sd=Object.assign({},s.sgaD||{});if(dep)sd["감가상각비·무형자산상각비 (결산 예상)"]=(sd["감가상각비·무형자산상각비 (결산 예상)"]||0)+dep;
+  const mk=(s)=>{const sd=Object.assign({},s.sgaD||{});if(dep)sd["감가상각"]=(sd["감가상각"]||0)+dep;
     const sga=s.sga+dep,op=s.op-dep,pre0=s.pre-dep,pre=pre0+adj;const tax=stTax(pre,rate);return Object.assign({},s,{sgaD:sd,sga,op,pre:pre0,adj:adj||null,preA:pre,tax,ni:pre-tax});};
   const RR=mk(R.sum),EE=RR; /* v566: '작년 같은 달'로 채운 올해 예상은 최근 12개월과 같아서 최근 12개월 하나로 */
   const reBeg=H?H.reEnd:null;const div=C.div||0;
