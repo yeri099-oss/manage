@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v574</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v575</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -20917,6 +20917,9 @@ const SETTLE_HIST={
   2025:{rev:2860893248,cogs:1114708425,sga:1471682213,op:274502610,noi:144825436,noe:7085134,pre:412242912,tax:40681290,ni:371561622,reBeg:1334777905,div:0,reEnd:1706339527,
         memo:"영업외수익 중 국고보조금 116,900,000 (일회성) · 감가상각비 33,161,237 + 무형자산상각비 90,764,194"}
 };
+/* v575: 2023년 — 홈택스 표준재무제표증명 (그 해 숫자만, 계정이 묶여 있음) */
+SETTLE_HIST[2023]={rev:2718038817,cogs:1057149635,sga:1137100588,op:523788594,noi:51846838,noe:2026254,pre:573609178,tax:65253003,ni:508356175,reBeg:393973196,div:0,reEnd:902329371,src:"확정 (홈택스 표준)",
+  memo:"홈택스 표준재무제표 — 판관비 '기타' 73,478,926은 외주용역비·판매수수료 등이 묶인 금액",sgaD:{"직원급여":485197723,"상여금":52360000,"잡급":74657377,"퇴직급여":21948014,"보험료":38831040,"복리후생비":14081952,"여비교통비":3293327,"임차료":134303637,"접대비":3830190,"감가상각비":22791642,"무형자산상각비":1555199,"세금과공과금":21945190,"광고선전비":4452632,"차량유지비":2825141,"수수료비용":34668812,"소모품비":21784202,"통신비":2799854,"운반비":1518900,"보관료":52670584,"수선비":5132108,"수도광열비":15484023,"전력비":30441508,"도서인쇄비":6674400,"교육훈련비":2712843,"인적용역비":7661364,"기타(표준재무제표)":73478926}};
 SETTLE_HIST[2024].sgaD={"직원급여":568153232,"상여금":66470000,"잡급":19751678,"퇴직급여":8921347,"복리후생비":31958804,"여비교통비":1991600,"접대비":1700000,"통신비":2977132,"수도광열비":13640294,"전력비":29882515,"세금과공과금":24264085,"감가상각비":25200467,"임차료":137240000,"수선비":2530000,"보험료":38779450,"차량유지비":2129920,"운반비":2179660,"교육훈련비":1060000,"도서인쇄비":4530539,"포장비":1027812,"사무용품비":746386,"소모품비":53860519,"수수료비용":54371836,"판매수수료":57810185,"광고선전비":10075940,"판매촉진비":1419760,"무형자산상각비":9244593,"외주용역비":99567803,"인적용역비":12129184};
 SETTLE_HIST[2025].sgaD={"직원급여":615662539,"상여금":72438904,"잡급":24313232,"퇴직급여":24831477,"복리후생비":35001100,"여비교통비":6546962,"접대비":1600000,"통신비":2521817,"수도광열비":14419023,"전력비":28102892,"세금과공과금":27331140,"감가상각비":33161237,"임차료":137540000,"수선비":1056818,"보험료":47348522,"차량유지비":3147597,"운반비":2573530,"교육훈련비":16658426,"도서인쇄비":4528810,"포장비":171875,"사무용품비":564586,"소모품비":42280733,"수수료비용":47037249,"판매수수료":56829022,"광고선전비":23537042,"판매촉진비":887350,"무형자산상각비":90764194,"외주용역비":102490316,"인적용역비":8335820};
 /* v564: 판관비를 인건비 / 판매비 / 관리비 / 상각비로 묶어서 */
@@ -21025,20 +21028,20 @@ function renderSettle(){
   </div>`;
   /* 손익 비교표 */
   const cols=[];
-  [Y-2,Y-1].forEach(y=>{const h=SETTLE_HIST[y];if(h)cols.push({t:y+"년 결산",s:"확정 (결산서)",v:Object.assign({gp:h.rev-h.cogs,adj:null,preA:null},h)});});
+  [Y-3,Y-2,Y-1].forEach(y=>{const h=SETTLE_HIST[y];if(h)cols.push({t:y+"년 결산",s:h.src||"확정 (결산서)",v:Object.assign({gp:h.rev-h.cogs,adj:null,preA:null},h)});});
   cols.push({t:"최근 12개월",s:stYm(R.from)+" ~ "+stYm(R.to)+(R.miss.length?" · "+R.miss.length+"개월 빠짐":""),v:RR,hl:1});
   const rowsDef=[["rev","매출액",1],["cogs","매출원가"],["gp","매출총이익",1],["sga","판매비와관리비"],["op","영업이익",1],["noi","영업외수익"],["noe","영업외비용"],["pre","법인세차감전이익",1],["adj","결산 조정 (아래 입력)"],["tax","법인세 (예상)"],["ni","당기순이익",2]];
   let tbl=`<div class="table-wrap"><table class="rpt" style="font-size:13px;margin:0"><thead><tr><th class="l">과목</th>${cols.map(c=>`<th style="min-width:130px${c.hl?";background:#EAF1FB":""}">${c.t}<div style="font-weight:400;font-size:11px;color:var(--sub)">${c.s}</div></th>`).join("")}</tr></thead><tbody>
     ${rowsDef.map(([k,n,b])=>`<tr${b===2?' style="background:#F8CBAD"':b?' style="background:#F4F7F2"':""}><td class="l">${b?"<b>"+n+"</b>":n}</td>${cols.map(c=>{const v=c.v[k];const t=k==="adj"&&v==null?"":W(v);const p=(k==="op"||k==="ni"||(k==="sga"&&window.__st.det))&&c.v.rev?` <span class="unit" style="font-size:11px">${pct(c.v[k],c.v.rev)}</span>`:"";return `<td style="text-align:right">${b?"<b>"+t+"</b>":t}${p}</td>`;}).join("")}</tr>${k==="sga"?"<!--SGA-->":""}`).join("")}
   </tbody></table></div>
-  <div class="footnote" style="margin-top:6px">· ${Y-1}년 결산: ${esc((H&&H.memo)||"")}<br>· 법인세(예상) = 법인세차감전이익(조정 후) × ${(rate*100).toFixed(1)}%${C.rate!=null?" (직접 입력)":H?" ("+(Y-1)+"년 실제 부담률)":""} · 실제 세액은 세무사무실 계산과 달라요</div>`;
+  <div class="footnote" style="margin-top:6px">${[Y-3,Y-1].filter(y=>SETTLE_HIST[y]&&SETTLE_HIST[y].memo).map(y=>"· "+y+"년: "+esc(SETTLE_HIST[y].memo)+"<br>").join("")}· 법인세(예상) = 법인세차감전이익(조정 후) × ${(rate*100).toFixed(1)}%${C.rate!=null?" (직접 입력)":H?" ("+(Y-1)+"년 실제 부담률)":""} · 실제 세액은 세무사무실 계산과 달라요</div>`;
   /* v564: 판관비 세부 (인건비·판매비·관리비·상각비) */
   const sgaCols=cols.map(c=>({t:c.t,s:c.s,hl:c.hl,d:c.v.sgaD||{},tot:c.v.sga,rev:c.v.rev}));
   const accAll=[];sgaCols.forEach(c=>{for(const k in c.d)if(accAll.indexOf(k)<0)accAll.push(k);});
   const gOrder=["인건비","판매비","관리비","상각비"];
   const gNote={"인건비":"급여·상여·잡급·퇴직급여·복리후생·4대보험 등 보험료·용역비","판매비":"판매수수료·광고·운반·포장·접대","관리비":"임차료·전기·수도·통신·세금·소모품·수수료 등","상각비":"감가상각비·무형자산상각비 (돈은 안 나가는 비용)"};
   const sgaOpen=window.__st.sgaOpen||{};
-  const sgaRows=gOrder.map(g=>{const acc=accAll.filter(a=>stGrpOf(a)===g).sort((x,y)=>(sgaCols[1]?(sgaCols[1].d[y]||0)-(sgaCols[1].d[x]||0):0));if(!acc.length)return "";
+  const sgaRows=gOrder.map(g=>{const acc=accAll.filter(a=>stGrpOf(a)===g).sort((x,y)=>(sgaCols[sgaCols.length-2]?(sgaCols[sgaCols.length-2].d[y]||0)-(sgaCols[sgaCols.length-2].d[x]||0):0));if(!acc.length)return "";
     const gs=sgaCols.map(c=>acc.reduce((s,a)=>s+(c.d[a]||0),0));const op=!!sgaOpen[g];
     return `<tr style="background:#FFF2CC;cursor:pointer" onclick="stSgaTog('${g}')"><td class="l"><b>${op?"▾":"▸"} ${g}</b> <span class="unit" style="font-size:11px">${gNote[g]}</span></td>${gs.map((v,i)=>`<td style="text-align:right"><b>${W(v)}</b> <span class="unit" style="font-size:11px">${pct(v,sgaCols[i].rev)}</span></td>`).join("")}</tr>`
       +(op?acc.map(a=>`<tr><td class="l" style="padding-left:26px">${esc(a)}</td>${sgaCols.map(c=>`<td style="text-align:right">${c.d[a]?W(c.d[a]):'<span style="color:#ccc">-</span>'}</td>`).join("")}</tr>`).join(""):"");}).join("");
@@ -21049,7 +21052,7 @@ function renderSettle(){
     <div class="footnote">% = 매출액 대비 · 인건비·판매비·관리비 나누는 기준은 계정 이름으로 자동 (보험료는 4대보험 사용자부담이 대부분이라 인건비에 넣었어요)</div>`;
   /* v565: 스위치를 켜면 손익 비교표의 판매비와관리비 아래에 인건비·판매비·관리비·상각비와 계정별 금액 */
   if(window.__st.det){
-    const inl=gOrder.map(g=>{const acc=accAll.filter(a=>stGrpOf(a)===g).sort((x,y)=>(sgaCols[1]?(sgaCols[1].d[y]||0)-(sgaCols[1].d[x]||0):0));if(!acc.length)return "";
+    const inl=gOrder.map(g=>{const acc=accAll.filter(a=>stGrpOf(a)===g).sort((x,y)=>(sgaCols[sgaCols.length-2]?(sgaCols[sgaCols.length-2].d[y]||0)-(sgaCols[sgaCols.length-2].d[x]||0):0));if(!acc.length)return "";
       const gs=sgaCols.map(c=>acc.reduce((s2,a)=>s2+(c.d[a]||0),0));
       return `<tr style="background:#FFF8E1"><td class="l" style="padding-left:18px"><b>${g}</b> <span class="unit" style="font-size:11px">${gNote[g]}</span></td>${gs.map((v,i)=>`<td style="text-align:right"><b>${W(v)}</b> <span class="unit" style="font-size:11px">${pct(v,sgaCols[i].rev)}</span></td>`).join("")}</tr>`
         +acc.map(a=>`<tr style="font-size:12px;color:#555"><td class="l" style="padding-left:34px">${esc(a)}</td>${sgaCols.map(c=>`<td style="text-align:right">${c.d[a]?W(c.d[a]):'<span style="color:#ccc">-</span>'}</td>`).join("")}</tr>`).join("");}).join("")
@@ -21058,7 +21061,7 @@ function renderSettle(){
   }
   /* 이익잉여금 */
   const reRows=[];
-  [Y-2,Y-1].forEach(y=>{const h=SETTLE_HIST[y];if(h)reRows.push([y+"년 (확정)",h.reBeg,h.ni,h.div,h.reEnd]);});
+  [Y-3,Y-2,Y-1].forEach(y=>{const h=SETTLE_HIST[y];if(h)reRows.push([y+"년 (확정)",h.reBeg,h.ni,h.div,h.reEnd]);});
   if(reBeg!=null)reRows.push([Y+"년 (예상)",reBeg,EE.ni,div,reEnd]);
   const reTbl=`<div class="table-wrap"><table class="rpt" style="font-size:13px;margin:0;max-width:760px"><thead><tr><th class="l">연도</th><th>기초 이익잉여금</th><th>+ 당기순이익</th><th>− 배당</th><th>= 기말 이익잉여금</th></tr></thead><tbody>
     ${reRows.map((r,i)=>`<tr${i===reRows.length-1&&r[0].indexOf("예상")>=0?' style="background:#EAF1FB"':""}><td class="l">${r[0]}</td><td style="text-align:right">${W(r[1])}</td><td style="text-align:right"><b>${W(r[2])}</b></td><td style="text-align:right">${W(r[3])}</td><td style="text-align:right"><b>${W(r[4])}</b></td></tr>`).join("")}
