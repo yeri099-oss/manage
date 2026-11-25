@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v580</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v581</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -21045,8 +21045,8 @@ function renderSettle(){
   histYs.forEach(y=>{const h=SETTLE_HIST[y];if(h)cols.push({t:y+"년 결산",s:h.src||"확정 (결산서)",v:Object.assign({gp:h.rev-h.cogs,adj:null,preA:null},h)});});
   cols.push({t:"최근 12개월",s:stYm(R.from)+" ~ "+stYm(R.to)+(R.miss.length?" · "+R.miss.length+"개월 빠짐":""),v:RR,hl:1});
   const rowsDef=[["rev","매출액",1],["cogs","매출원가"],["gp","매출총이익",1],["sga","판매비와관리비"],["op","영업이익",1],["noi","영업외수익"],["noe","영업외비용"],["pre","법인세차감전이익",1],["adj","결산 조정 (재고·기타)"],["tax","법인세 (예상)"],["ni","당기순이익",2]];
-  let tbl=`<div class="table-wrap"><table class="rpt" style="font-size:13px;margin:0"><thead><tr><th class="l">과목</th>${cols.map(c=>`<th style="min-width:130px${c.hl?";background:#EAF1FB":""}">${c.t}<div style="font-weight:400;font-size:11px;color:var(--sub)">${c.s}</div></th>`).join("")}</tr></thead><tbody>
-    ${rowsDef.map(([k,n,b])=>`<tr${b===2?' style="background:#F8CBAD"':b?' style="background:#F4F7F2"':""}><td class="l">${b?"<b>"+n+"</b>":n}</td>${cols.map(c=>{const v=c.v[k];const t=k==="adj"&&v==null?"":W(v);const p=(k==="op"||k==="ni"||k==="cogs"||(k==="sga"&&window.__st.det))&&c.v.rev?` <span class="stp" title="매출액 대비 비율 = 이 금액 ÷ 같은 칸 매출액 × 100">${pct(c.v[k],c.v.rev)}</span>`:"";return `<td style="text-align:right">${b?"<b>"+t+"</b>":t}${p}</td>`;}).join("")}</tr>${k==="sga"?"<!--SGA-->":k==="cogs"?"<!--COGS-->":""}`).join("")}
+  let tbl=`<div class="table-wrap"><table class="rpt" style="font-size:13px;margin:0"><thead><tr><th class="l">과목</th>${cols.map(c=>`<th colspan="2" style="min-width:150px${c.hl?";background:#EAF1FB":""}">${c.t}<div style="font-weight:400;font-size:11px;color:var(--sub)">${c.s}</div></th>`).join("")}</tr></thead><tbody>
+    ${rowsDef.map(([k,n,b])=>`<tr${b===2?' style="background:#F8CBAD"':b?' style="background:#F4F7F2"':""}><td class="l">${b?"<b>"+n+"</b>":n}</td>${cols.map(c=>{const v=c.v[k];const t=k==="adj"&&v==null?"":W(v);const p=(k==="op"||k==="ni"||k==="cogs"||(k==="sga"&&window.__st.det))&&c.v.rev?`<span class="stp" title="매출액 대비 비율 = 이 금액 ÷ 같은 칸 매출액 × 100">${pct(c.v[k],c.v.rev)}</span>`:"";return `<td style="text-align:right">${b?"<b>"+t+"</b>":t}</td><td class="stpc">${p}</td>`;}).join("")}</tr>${k==="sga"?"<!--SGA-->":k==="cogs"?"<!--COGS-->":""}`).join("")}
   </tbody></table></div>
   <div class="footnote" style="margin-top:6px">· <span class="stp" style="margin-left:0">%</span> = 매출액 대비 비율 = 그 줄 금액 ÷ 같은 칸 매출액 × 100 (예: 원가율 = 매출원가 ÷ 매출액 × 100, 영업이익률 = 영업이익 ÷ 매출액 × 100)<br>${histYs.filter(y=>SETTLE_HIST[y].memo).map(y=>"· "+y+"년: "+esc(SETTLE_HIST[y].memo)+"<br>").join("")}· 법인세(예상) = 법인세차감전이익(조정 후) × ${(rate*100).toFixed(1)}%${C.rate!=null?" (직접 입력)":H?" ("+(Y-1)+"년 실제 부담률)":""} · 실제 세액은 세무사무실 계산과 달라요</div>`;
   /* v564: 판관비 세부 (인건비·판매비·관리비·상각비) */
@@ -21057,24 +21057,24 @@ function renderSettle(){
   const sgaOpen=window.__st.sgaOpen||{};
   const sgaRows=gOrder.map(g=>{const acc=accAll.filter(a=>stGrpOf(a)===g).sort((x,y)=>(sgaCols[sgaCols.length-2]?(sgaCols[sgaCols.length-2].d[y]||0)-(sgaCols[sgaCols.length-2].d[x]||0):0));if(!acc.length)return "";
     const gs=sgaCols.map(c=>acc.reduce((s,a)=>s+(c.d[a]||0),0));const op=!!sgaOpen[g];
-    return `<tr style="background:#FFF2CC;cursor:pointer" onclick="stSgaTog('${g}')"><td class="l"><b>${op?"▾":"▸"} ${g}</b> <span class="unit" style="font-size:11px">${gNote[g]}</span></td>${gs.map((v,i)=>`<td style="text-align:right"><b>${W(v)}</b> <span class="stp" title="매출액 대비 비율 = 이 금액 ÷ 같은 칸 매출액 × 100">${pct(v,sgaCols[i].rev)}</span></td>`).join("")}</tr>`
-      +(op?acc.map(a=>`<tr><td class="l" style="padding-left:26px">${esc(a)}</td>${sgaCols.map(c=>`<td style="text-align:right">${c.d[a]?W(c.d[a]):'<span style="color:#ccc">-</span>'}</td>`).join("")}</tr>`).join(""):"");}).join("");
+    return `<tr style="background:#FFF2CC;cursor:pointer" onclick="stSgaTog('${g}')"><td class="l"><b>${op?"▾":"▸"} ${g}</b> <span class="unit" style="font-size:11px">${gNote[g]}</span></td>${gs.map((v,i)=>`<td style="text-align:right"><b>${W(v)}</b></td><td class="stpc"><span class="stp" title="매출액 대비 비율 = 이 금액 ÷ 같은 칸 매출액 × 100">${pct(v,sgaCols[i].rev)}</span></td>`).join("")}</tr>`
+      +(op?acc.map(a=>`<tr><td class="l" style="padding-left:26px">${esc(a)}</td>${sgaCols.map(c=>`<td style="text-align:right">${c.d[a]?W(c.d[a]):'<span style="color:#ccc">-</span>'}</td><td class="stpc"></td>`).join("")}</tr>`).join(""):"");}).join("");
   const sgaMiss=sgaCols.map(c=>{const s=Object.values(c.d).reduce((a,b)=>a+b,0);return c.tot&&Math.abs(s-c.tot)>1?c.tot-s:0;});
   const sgaTbl=`<div class="table-wrap"><table class="rpt" style="font-size:13px;margin:0"><thead><tr><th class="l">판매비와관리비 <span style="font-weight:400;font-size:11px">(줄을 누르면 계정별로 펼쳐요)</span></th>${sgaCols.map(c=>`<th style="min-width:130px${c.hl?";background:#EAF1FB":""}">${c.t}</th>`).join("")}</tr></thead><tbody>${sgaRows}
-    ${sgaMiss.some(x=>x)?`<tr><td class="l unit">세부 없는 금액</td>${sgaMiss.map(v=>`<td style="text-align:right" class="unit">${v?W(v):""}</td>`).join("")}</tr>`:""}
+    ${sgaMiss.some(x=>x)?`<tr><td class="l unit">세부 없는 금액</td>${sgaMiss.map(v=>`<td style="text-align:right" class="unit">${v?W(v):""}</td><td class="stpc"></td>`).join("")}</tr>`:""}
     <tr style="background:#F4F7F2;font-weight:700"><td class="l">판매비와관리비 합계</td>${sgaCols.map(c=>`<td style="text-align:right">${W(c.tot)} <span class="stp" title="매출액 대비 비율 = 이 금액 ÷ 같은 칸 매출액 × 100">${pct(c.tot,c.rev)}</span></td>`).join("")}</tr></tbody></table></div>
     <div class="footnote">% = 매출액 대비 · 인건비·판매비·관리비 나누는 기준은 계정 이름으로 자동 (4대보험 회사부담은 복리후생비라 인건비, 보험료는 화재보험 등이라 관리비)</div>`;
   /* v565: 스위치를 켜면 손익 비교표의 판매비와관리비 아래에 인건비·판매비·관리비·상각비와 계정별 금액 */
   if(window.__st.det){
     const inl=gOrder.map(g=>{const acc=accAll.filter(a=>stGrpOf(a)===g).sort((x,y)=>(sgaCols[sgaCols.length-2]?(sgaCols[sgaCols.length-2].d[y]||0)-(sgaCols[sgaCols.length-2].d[x]||0):0));if(!acc.length)return "";
       const gs=sgaCols.map(c=>acc.reduce((s2,a)=>s2+(c.d[a]||0),0));
-      return `<tr style="background:#FFF8E1"><td class="l" style="padding-left:18px"><b>${g}</b> <span title="${esc(gNote[g])}" style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;background:#C9A227;color:#fff;font-size:10.5px;font-weight:800;cursor:help;vertical-align:middle;margin-left:3px">!</span></td>${gs.map((v,i)=>`<td style="text-align:right"><b>${W(v)}</b> <span class="stp" title="매출액 대비 비율 = 이 금액 ÷ 같은 칸 매출액 × 100">${pct(v,sgaCols[i].rev)}</span></td>`).join("")}</tr>`
-        +acc.map(a=>`<tr style="font-size:12px;color:#555"><td class="l" style="padding-left:34px">${esc(a)}</td>${sgaCols.map(c=>`<td style="text-align:right">${c.d[a]?W(c.d[a]):'<span style="color:#ccc">-</span>'}</td>`).join("")}</tr>`).join("");}).join("")
-      +(sgaMiss.some(x=>x)?`<tr style="font-size:12px"><td class="l unit" style="padding-left:18px">세부 없는 금액</td>${sgaMiss.map(v=>`<td style="text-align:right" class="unit">${v?W(v):""}</td>`).join("")}</tr>`:"");
+      return `<tr style="background:#FFF8E1"><td class="l" style="padding-left:18px"><b>${g}</b> <span title="${esc(gNote[g])}" style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;background:#C9A227;color:#fff;font-size:10.5px;font-weight:800;cursor:help;vertical-align:middle;margin-left:3px">!</span></td>${gs.map((v,i)=>`<td style="text-align:right"><b>${W(v)}</b></td><td class="stpc"><span class="stp" title="매출액 대비 비율 = 이 금액 ÷ 같은 칸 매출액 × 100">${pct(v,sgaCols[i].rev)}</span></td>`).join("")}</tr>`
+        +acc.map(a=>`<tr style="font-size:12px;color:#555"><td class="l" style="padding-left:34px">${esc(a)}</td>${sgaCols.map(c=>`<td style="text-align:right">${c.d[a]?W(c.d[a]):'<span style="color:#ccc">-</span>'}</td><td class="stpc"></td>`).join("")}</tr>`).join("");}).join("")
+      +(sgaMiss.some(x=>x)?`<tr style="font-size:12px"><td class="l unit" style="padding-left:18px">세부 없는 금액</td>${sgaMiss.map(v=>`<td style="text-align:right" class="unit">${v?W(v):""}</td><td class="stpc"></td>`).join("")}</tr>`:"");
     tbl=tbl.replace("<!--SGA-->",inl);
     /* v578: 매출원가 세부 */
     const cRows=[["beg","+ 기초재고"],["buy","+ 당기 매입"],["end","− 기말재고"],["etc","기타"]].filter(([k])=>cols.some(c=>c.v.cD&&c.v.cD[k]!=null&&(k!=="etc"||c.v.cD[k])));
-    tbl=tbl.replace("<!--COGS-->",cRows.map(([k,n])=>`<tr style="font-size:12px;color:#555"><td class="l" style="padding-left:24px">${n}</td>${cols.map(c=>{const v=c.v.cD?c.v.cD[k]:null;return `<td style="text-align:right">${v!=null?W(v):'<span style="color:#ccc">-</span>'}</td>`;}).join("")}</tr>`).join(""));
+    tbl=tbl.replace("<!--COGS-->",cRows.map(([k,n])=>`<tr style="font-size:12px;color:#555"><td class="l" style="padding-left:24px">${n}</td>${cols.map(c=>{const v=c.v.cD?c.v.cD[k]:null;return `<td style="text-align:right">${v!=null?W(v):'<span style="color:#ccc">-</span>'}</td><td class="stpc"></td>`;}).join("")}</tr>`).join(""));
   }
   /* 이익잉여금 */
   const reRows=[];
@@ -21149,7 +21149,7 @@ window.stCapture=async function(mode){
 };
 RENDERERS.settle=renderSettle;
 /* v567: 결산 탭은 내용만큼만 — 화면 꽉 채우지 않고 왼쪽 정렬 */
-(function(){const st=document.createElement("style");st.textContent="#tab-settle table.rpt{width:auto!important;margin-left:auto!important;margin-right:auto!important}#tab-settle .table-wrap{display:block}#tab-settle .stp{display:inline-block;min-width:40px;margin-left:6px;padding:0 5px;border-radius:5px;background:#EAF1FB;color:#2F5FD0;font-size:10.5px;font-weight:600;text-align:right;vertical-align:1px;cursor:help}#tab-settle .stp:empty{display:none}#tab-settle .st-fit{width:fit-content;max-width:100%;margin:0 auto}#tab-settle .st-fit .footnote{max-width:640px}#tab-settle .st-fit>.card-title{margin-bottom:16px!important}#tab-settle .st-fit>.footnote,#tab-settle .st-fit .table-wrap+.footnote{margin-top:10px!important}";document.head.appendChild(st);})();
+(function(){const st=document.createElement("style");st.textContent="#tab-settle table.rpt{width:auto!important;margin-left:auto!important;margin-right:auto!important}#tab-settle .table-wrap{display:block}#tab-settle .stp{display:inline-block;min-width:40px;margin-left:6px;padding:0 5px;border-radius:5px;background:#EAF1FB;color:#2F5FD0;font-size:10.5px;font-weight:600;text-align:right;vertical-align:1px;cursor:help}#tab-settle .stp:empty{display:none}#tab-settle td.stpc{width:48px;padding-left:0!important;padding-right:10px!important;text-align:left;border-left:none!important}#tab-settle td.stpc .stp{margin-left:0}#tab-settle td:has(+td.stpc){border-right:none!important;padding-right:6px!important}#tab-settle .st-fit{width:fit-content;max-width:100%;margin:0 auto}#tab-settle .st-fit .footnote{max-width:640px}#tab-settle .st-fit>.card-title{margin-bottom:16px!important}#tab-settle .st-fit>.footnote,#tab-settle .st-fit .table-wrap+.footnote{margin-top:10px!important}";document.head.appendChild(st);})();
 /* ===== v536: 엑셀처럼 표 머리글을 눌러 정렬 (한 번 더 누르면 반대로) — 꽃밥에피다 탭의 모든 표
    · 합계 줄(total)은 제자리 · 분류 순위 표는 분류끼리, 분류 안의 품목끼리 정렬 · 「순위」 칸은 정렬한 순서대로 다시 번호 ===== */
 function pidaCellVal(td){if(!td)return null;const t=td.textContent.replace(/\s+/g," ").trim();
