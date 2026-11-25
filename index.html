@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v563</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v564</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -20917,6 +20917,13 @@ const SETTLE_HIST={
   2025:{rev:2860893248,cogs:1114708425,sga:1471682213,op:274502610,noi:144825436,noe:7085134,pre:412242912,tax:40681290,ni:371561622,reBeg:1334777905,div:0,reEnd:1706339527,
         memo:"영업외수익 중 국고보조금 116,900,000 (일회성) · 감가상각비 33,161,237 + 무형자산상각비 90,764,194"}
 };
+SETTLE_HIST[2024].sgaD={"직원급여":568153232,"상여금":66470000,"잡급":19751678,"퇴직급여":8921347,"복리후생비":31958804,"여비교통비":1991600,"접대비":1700000,"통신비":2977132,"수도광열비":13640294,"전력비":29882515,"세금과공과금":24264085,"감가상각비":25200467,"임차료":137240000,"수선비":2530000,"보험료":38779450,"차량유지비":2129920,"운반비":2179660,"교육훈련비":1060000,"도서인쇄비":4530539,"포장비":1027812,"사무용품비":746386,"소모품비":53860519,"수수료비용":54371836,"판매수수료":57810185,"광고선전비":10075940,"판매촉진비":1419760,"무형자산상각비":9244593,"외주용역비":99567803,"인적용역비":12129184};
+SETTLE_HIST[2025].sgaD={"직원급여":615662539,"상여금":72438904,"잡급":24313232,"퇴직급여":24831477,"복리후생비":35001100,"여비교통비":6546962,"접대비":1600000,"통신비":2521817,"수도광열비":14419023,"전력비":28102892,"세금과공과금":27331140,"감가상각비":33161237,"임차료":137540000,"수선비":1056818,"보험료":47348522,"차량유지비":3147597,"운반비":2573530,"교육훈련비":16658426,"도서인쇄비":4528810,"포장비":171875,"사무용품비":564586,"소모품비":42280733,"수수료비용":47037249,"판매수수료":56829022,"광고선전비":23537042,"판매촉진비":887350,"무형자산상각비":90764194,"외주용역비":102490316,"인적용역비":8335820};
+/* v564: 판관비를 인건비 / 판매비 / 관리비 / 상각비로 묶어서 */
+const ST_ALIAS={"지급수수료":"수수료비용","세금과공과":"세금과공과금","급여":"직원급여","직원급여(판)":"직원급여"};
+function stAcc(n){let t=String(n||"").replace(/\s/g,"").replace(/^\d+[.)]/,"").replace(/\((판|제)\)$/,"");if(/접대비/.test(t))t="접대비";return ST_ALIAS[t]||t;}
+const ST_GRP=[["인건비",/급여|상여|잡급|퇴직|복리후생|용역비|보험료|인건비|수당/],["판매비",/판매|광고|운반|포장|접대|홍보|판촉/],["상각비",/상각/],["관리비",/.*/]];
+function stGrpOf(a){for(const [g,re] of ST_GRP)if(re.test(a))return g;return "관리비";}
 const SETTLE_FOUND=2020; /* 제1기 = 2020년 (2025년이 제6기) */
 window.__st=window.__st||{cfg:null,loading:false};
 function stCfg(){return window.__st.cfg||{};}
@@ -20947,10 +20954,11 @@ function stLineOf(n){const t=stC(n);
 /* 한 달 값 {rev,cogs,gp,sga,op,noi,noe,pre,dep} (e = total/insadong/bukchon/...) */
 function stMonth(y,m,e){
   const k=stKey(y,m);if(!k)return null;const d=(S.data.pnl||{})[k];if(!d||!d.rows)return null;
-  const o={};let dep=0;
+  const o={};let dep=0;let cur=null;const sg=[];
   d.rows.forEach(r=>{const v=r.v?r.v[e]:null;
-    if(r.lv===0){const L=stLineOf(r.n);if(L&&o[L]==null&&v!=null)o[L]=v;}
-    else if(/상각/.test(r.n)&&v!=null)dep+=v;});
+    if(r.lv===0){const L=stLineOf(r.n);cur=L;if(L&&o[L]==null&&v!=null)o[L]=v;}
+    else{if(/상각/.test(r.n)&&v!=null)dep+=v;if(cur==="sga"&&v!=null)sg.push({n:r.n,lv:r.lv,v});}});
+  const mlv=sg.length?Math.min(...sg.map(x=>x.lv)):0;o.sgaD={};sg.filter(x=>x.lv===mlv).forEach(x=>{const k=stAcc(x.n);o.sgaD[k]=(o.sgaD[k]||0)+x.v;});
   if(o.rev==null&&o.op==null)return null;
   const z=x=>x||0;
   if(o.gp==null)o.gp=z(o.rev)-z(o.cogs);
@@ -20960,7 +20968,7 @@ function stMonth(y,m,e){
   o.dep=dep;return o;
 }
 const ST_LINES=["rev","cogs","gp","sga","op","noi","noe","pre","dep"];
-function stAdd(a,b,f){ST_LINES.forEach(x=>{a[x]=(a[x]||0)+(b[x]||0)*(f==null?1:f);});return a;}
+function stAdd(a,b,f){ST_LINES.forEach(x=>{a[x]=(a[x]||0)+(b[x]||0)*(f==null?1:f);});a.sgaD=a.sgaD||{};const bd=b.sgaD||{};for(const k in bd)a.sgaD[k]=(a.sgaD[k]||0)+bd[k]*(f==null?1:f);return a;}
 function stLatest(){let best=null;for(const k in (S.data.pnl||{})){const [y,m]=k.split("-").map(Number);if(!stMonth(y,m,"total"))continue;if(!best||y*12+m>best.y*12+best.m)best={y,m};}return best;}
 function stShift(y,m,d){const t=y*12+(m-1)+d;return {y:Math.floor(t/12),m:t%12+1};}
 const stYm=(o)=>String(o.y).slice(2)+"."+String(o.m).padStart(2,"0");
@@ -21026,6 +21034,21 @@ function renderSettle(){
     ${rowsDef.map(([k,n,b])=>`<tr${b===2?' style="background:#F8CBAD"':b?' style="background:#F4F7F2"':""}><td class="l">${b?"<b>"+n+"</b>":n}</td>${cols.map(c=>{const v=c.v[k];const t=k==="adj"&&v==null?"":W(v);const p=(k==="op"||k==="ni")&&c.v.rev?` <span class="unit" style="font-size:11px">${pct(c.v[k],c.v.rev)}</span>`:"";return `<td style="text-align:right">${b?"<b>"+t+"</b>":t}${p}</td>`;}).join("")}</tr>`).join("")}
   </tbody></table></div>
   <div class="footnote" style="margin-top:6px">· ${Y-1}년 결산: ${esc((H&&H.memo)||"")}<br>· 법인세(예상) = 법인세차감전이익(조정 후) × ${(rate*100).toFixed(1)}%${C.rate!=null?" (직접 입력)":H?" ("+(Y-1)+"년 실제 부담률)":""} · 실제 세액은 세무사무실 계산과 달라요</div>`;
+  /* v564: 판관비 세부 (인건비·판매비·관리비·상각비) */
+  const sgaCols=cols.map(c=>({t:c.t,s:c.s,hl:c.hl,d:c.v.sgaD||{},tot:c.v.sga,rev:c.v.rev}));
+  const accAll=[];sgaCols.forEach(c=>{for(const k in c.d)if(accAll.indexOf(k)<0)accAll.push(k);});
+  const gOrder=["인건비","판매비","관리비","상각비"];
+  const gNote={"인건비":"급여·상여·잡급·퇴직급여·복리후생·4대보험 등 보험료·용역비","판매비":"판매수수료·광고·운반·포장·접대","관리비":"임차료·전기·수도·통신·세금·소모품·수수료 등","상각비":"감가상각비·무형자산상각비 (돈은 안 나가는 비용)"};
+  const sgaOpen=window.__st.sgaOpen||{};
+  const sgaRows=gOrder.map(g=>{const acc=accAll.filter(a=>stGrpOf(a)===g).sort((x,y)=>(sgaCols[1]?(sgaCols[1].d[y]||0)-(sgaCols[1].d[x]||0):0));if(!acc.length)return "";
+    const gs=sgaCols.map(c=>acc.reduce((s,a)=>s+(c.d[a]||0),0));const op=!!sgaOpen[g];
+    return `<tr style="background:#FFF2CC;cursor:pointer" onclick="stSgaTog('${g}')"><td class="l"><b>${op?"▾":"▸"} ${g}</b> <span class="unit" style="font-size:11px">${gNote[g]}</span></td>${gs.map((v,i)=>`<td style="text-align:right"><b>${W(v)}</b> <span class="unit" style="font-size:11px">${pct(v,sgaCols[i].rev)}</span></td>`).join("")}</tr>`
+      +(op?acc.map(a=>`<tr><td class="l" style="padding-left:26px">${esc(a)}</td>${sgaCols.map(c=>`<td style="text-align:right">${c.d[a]?W(c.d[a]):'<span style="color:#ccc">-</span>'}</td>`).join("")}</tr>`).join(""):"");}).join("");
+  const sgaMiss=sgaCols.map(c=>{const s=Object.values(c.d).reduce((a,b)=>a+b,0);return c.tot&&Math.abs(s-c.tot)>1?c.tot-s:0;});
+  const sgaTbl=`<div class="table-wrap"><table class="rpt" style="font-size:13px;margin:0"><thead><tr><th class="l">판매비와관리비 <span style="font-weight:400;font-size:11px">(줄을 누르면 계정별로 펼쳐요)</span></th>${sgaCols.map(c=>`<th style="min-width:130px${c.hl?";background:#EAF1FB":""}">${c.t}</th>`).join("")}</tr></thead><tbody>${sgaRows}
+    ${sgaMiss.some(x=>x)?`<tr><td class="l unit">세부 없는 금액</td>${sgaMiss.map(v=>`<td style="text-align:right" class="unit">${v?W(v):""}</td>`).join("")}</tr>`:""}
+    <tr style="background:#F4F7F2;font-weight:700"><td class="l">판매비와관리비 합계</td>${sgaCols.map(c=>`<td style="text-align:right">${W(c.tot)} <span class="unit" style="font-size:11px">${pct(c.tot,c.rev)}</span></td>`).join("")}</tr></tbody></table></div>
+    <div class="footnote">% = 매출액 대비 · 인건비·판매비·관리비 나누는 기준은 계정 이름으로 자동 (보험료는 4대보험 사용자부담이 대부분이라 인건비에 넣었어요)</div>`;
   /* 이익잉여금 */
   const reRows=[];
   [Y-2,Y-1].forEach(y=>{const h=SETTLE_HIST[y];if(h)reRows.push([y+"년 (확정)",h.reBeg,h.ni,h.div,h.reEnd]);});
@@ -21069,11 +21092,13 @@ function renderSettle(){
   el.innerHTML=head+`<div id="stReport" style="background:#fff">
     <div class="card"><div class="card-title">📘 ${Y}년 가결산 요약 <span class="unit">${L.y}년 ${L.m}월까지 입력 · 단위: 원</span></div>${kpis}</div>
     <div class="card"><div class="card-title">손익 비교 <span class="unit">결산서(확정) vs 최근 12개월 vs ${Y}년 예상</span></div>${tbl}</div>
+    <div class="card"><div class="card-title">판관비 세부 <span class="unit">인건비 · 판매비 · 관리비 · 상각비</span> <button class="btn btn-sm" style="margin-left:8px" onclick="stSgaTog('*')">${Object.keys(window.__st.sgaOpen||{}).length?"모두 접기":"모두 펼치기"}</button></div>${sgaTbl}</div>
     <div class="card"><div class="card-title">이익잉여금</div>${reTbl}</div>
     <div class="card"><div class="card-title">사업장별 영업이익</div>${bizTbl}</div>
     <div class="card"><div class="card-title">최근 12개월 월별 <span class="unit">꽃밥이야기 전체</span></div>${monTbl}</div>
   </div>${setCard}${note}`;
 }
+window.stSgaTog=function(g){const o=window.__st.sgaOpen=window.__st.sgaOpen||{};if(g==="*"){if(Object.keys(o).length)window.__st.sgaOpen={};else ["인건비","판매비","관리비","상각비"].forEach(k=>o[k]=1);}else if(o[g])delete o[g];else o[g]=1;renderSettle();};
 window.stCapture=async function(mode){
   const el=document.getElementById("stReport");if(!el)return;
   try{
