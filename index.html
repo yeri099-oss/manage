@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v597</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v598</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -21098,7 +21098,7 @@ function renderSettle(){
   const ents=[["total","꽃밥이야기 (전체)",0],["insadong","꽃밥에피다",0],["market","꽃밥마켓",0],["bojagi","보자기꽃밥",0]]; /* v569: 북촌 줄은 뺌 */
   const bizTbl=`<div class="table-wrap"><table class="rpt" style="font-size:13px;margin:0"><thead><tr><th class="l">사업장 (최근 12개월)</th><th>매출액</th><th>매출원가 (원가율)</th><th>매출총이익</th><th>판매비와관리비</th><th>영업이익</th><th>법인세차감전</th></tr></thead><tbody>
     ${ents.map(([e,n,sub])=>{const r=stRolling(L,e).sum;return `<tr${e==="total"?' style="background:#F4F7F2;font-weight:700"':""}><td class="l"${sub?' style="padding-left:24px;color:#555"':""}>${sub?"└ ":""}${n}</td><td style="text-align:right">${W(r.rev)}</td><td style="text-align:right">${W(r.cogs)} <span class="stp" title="매출액 대비 비율 = 이 금액 ÷ 같은 칸 매출액 × 100">${pct(r.cogs,r.rev)}</span></td><td style="text-align:right">${W(r.gp)}</td><td style="text-align:right">${W(r.sga)}</td><td style="text-align:right"><b>${W(r.op)}</b> <span class="stp" title="매출액 대비 비율 = 이 금액 ÷ 같은 칸 매출액 × 100">${pct(r.op,r.rev)}</span></td><td style="text-align:right">${W(r.pre)}</td></tr>`;}).join("")}
-  </tbody></table></div><div class="footnote">꽃밥이야기 (전체)에는 공통(본사) 비용·영업외도 들어 있어서 꽃밥에피다 + 마켓 + 보자기 합과 달라요.</div>`;
+  </tbody></table></div><div class="footnote">*꽃밥이야기 (전체) = 꽃밥에피다 + 마켓 + 보자기 + 공통(본사) 비용·영업외</div>`;
   /* 월별 — 사업장 고르기 */
   const ent=ents.some(x=>x[0]===window.__st.ent)?window.__st.ent:"total";const entN=(ents.find(x=>x[0]===ent)||ents[0])[1];
   const chips=ents.map(([e,n])=>`<button class="btn btn-sm${e===ent?" btn-primary":""}" onclick="stEnt('${e}')">${n.replace(" (전체)","")}</button>`).join(" ");
@@ -21141,7 +21141,7 @@ function renderSettle(){
       ${window.__st.det?`<div class="footnote">% = 매출액 대비 · 묶음은 계정 이름으로 자동 (보험료는 인건비에 넣었어요 — 결산서 보험료에 4대보험이 들어 있어서)</div>`:""}</div></div>
     <div class="st-row"><div class="card"><div class="st-fit"><div class="card-title">이익잉여금</div>${reTbl}</div></div>
     <div class="card"><div class="st-fit"><div class="card-title">사업장별 영업이익</div>${bizTbl}</div></div></div>
-    <div class="card"><div class="st-fit"><div class="card-title">최근 12개월 월별 <span class="unit">사업장을 골라서 보세요</span></div>${monTbl}</div></div>
+    <div class="card"><div class="st-fit"><div class="card-title">최근 12개월 월별</div>${monTbl}</div></div>
   </div>${isAd?setCard+note:""}`; /* v594: 결산 조정·알아두기는 관리자만 */
   /* v596: 요약 카드 줄 폭 = 손익 비교 표 폭 */
   requestAnimationFrame(()=>{const w=document.getElementById("stKpiWrap"),tb=document.querySelector("#stReport .st-fit table.rpt");if(w&&tb&&tb.offsetWidth)w.style.width=Math.min(tb.offsetWidth,w.parentNode.clientWidth)+"px";});
