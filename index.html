@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v596</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v597</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -21026,7 +21026,7 @@ function renderSettle(){
   const adj=(C.inv||0)+(C.etc||0); /* 결산 조정 (연간) — 재고 차이·기타 */
   const W=(n)=>n==null?"":fmt(Math.round(n));
   const pct=(a,b)=>b?(a/b*100).toFixed(1)+"%":"";
-  const head=`<div class="card" style="padding:12px 16px"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b style="font-size:17px">📘 결산 (가결산)</b><span class="unit">월별손익(이카운트 월별손익분석 · 공급가) 숫자를 모아서 올해 이익과 이익잉여금을 미리 계산해요 · 회계연도 1월~12월</span>
+  const head=`<div class="card" style="padding:12px 16px"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b style="font-size:17px">📘 결산 (가결산)</b>
     <span style="margin-left:auto"></span><button class="btn btn-sm btn-primary" onclick="stXlsx()">📥 엑셀 받기</button><button class="btn btn-sm" onclick="stCapture('img')">📸 보고용 이미지 복사</button><button class="btn btn-sm" onclick="stCapture('dl')">이미지 저장</button></div></div>`;
   if(!L){el.innerHTML=head+`<div class="card"><div class="hint" style="padding:14px">월별손익에 입력된 달이 없어요. 월별손익 탭에서 이카운트 월별손익분석 파일을 먼저 넣어주세요.</div></div>`;return;}
   const R=stRolling(L,"total");
