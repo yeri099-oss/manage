@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v565</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v566</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -21011,7 +21011,7 @@ function renderSettle(){
   const R=stRolling(L,"total");
   const E=stYear(Y,L,"total",C.method||"ly");
   const mk=(s)=>{const pre=s.pre+adj;const tax=stTax(pre,rate);return Object.assign({},s,{adj,preA:pre,tax,ni:pre-tax});};
-  const RR=mk(R.sum),EE=mk(E.tot);
+  const RR=mk(R.sum),EE=RR; /* v566: '작년 같은 달'로 채운 올해 예상은 최근 12개월과 같아서 최근 12개월 하나로 */
   const reBeg=H?H.reEnd:null;const div=C.div||0;
   const reEnd=reBeg!=null?reBeg+EE.ni-div:null;
   const avgAll=H?H.reEnd/((Y-1)-SETTLE_FOUND+1):null;
@@ -21019,16 +21019,14 @@ function renderSettle(){
   const kpi=(lb,v,sub,col)=>`<div style="flex:1;min-width:170px;border:1px solid var(--line,#e3e3e3);border-radius:12px;padding:10px 14px;background:#fff"><div class="unit">${lb}</div><div style="font-size:20px;font-weight:800;color:${col||"inherit"}">${v}</div><div class="unit" style="font-size:11.5px">${sub||""}</div></div>`;
   const eok=(n)=>n==null?"-":(n/1e8).toFixed(2)+"억";
   const kpis=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin:4px 0 2px">
-    ${kpi("최근 12개월 예상 당기순이익",eok(RR.ni),stYm(R.from)+" ~ "+stYm(R.to)+(R.miss.length?` · <span style="color:#B3261E">${R.miss.length}개월 미입력</span>`:""),"#2F6B3F")}
-    ${kpi(Y+"년 예상 당기순이익",eok(EE.ni),"1~"+L.m+"월 실적"+(E.miss.length?` (${E.miss.length}개월 미입력)`:"")+" + "+E.estM.length+"개월 예상","#2F5FD0")}
-    ${kpi(Y+"년 말 예상 이익잉여금",eok(reEnd),reBeg!=null?(Y-1)+"년 말 "+eok(reBeg)+" + 올해 예상":"")}
+    ${kpi("최근 12개월 당기순이익 (예상)",eok(RR.ni),stYm(R.from)+" ~ "+stYm(R.to)+" = "+Y+"년 1년치로 봐요"+(R.miss.length?` · <span style="color:#B3261E">${R.miss.length}개월 미입력</span>`:""),"#2F6B3F")}
+    ${kpi(Y+"년 말 예상 이익잉여금",eok(reEnd),reBeg!=null?(Y-1)+"년 말 "+eok(reBeg)+" + 최근 12개월 순이익":"")}
     ${H?kpi("설립 후 연평균 이익",eok(avgAll),SETTLE_FOUND+"~"+(Y-1)+"년 "+((Y-1)-SETTLE_FOUND+1)+"년 · 배당 없음"):""}
   </div>`;
   /* 손익 비교표 */
   const cols=[];
   [Y-2,Y-1].forEach(y=>{const h=SETTLE_HIST[y];if(h)cols.push({t:y+"년 결산",s:"확정 (결산서)",v:Object.assign({gp:h.rev-h.cogs,adj:null,preA:null},h)});});
   cols.push({t:"최근 12개월",s:stYm(R.from)+" ~ "+stYm(R.to)+(R.miss.length?" · "+R.miss.length+"개월 빠짐":""),v:RR,hl:1});
-  cols.push({t:Y+"년 예상",s:"1~"+L.m+"월 실적 + "+E.estM.length+"개월 예상",v:EE,hl:1});
   const rowsDef=[["rev","매출액",1],["cogs","매출원가"],["gp","매출총이익",1],["sga","판매비와관리비"],["op","영업이익",1],["noi","영업외수익"],["noe","영업외비용"],["pre","법인세차감전이익",1],["adj","결산 조정 (아래 입력)"],["tax","법인세 (예상)"],["ni","당기순이익",2]];
   let tbl=`<div class="table-wrap"><table class="rpt" style="font-size:13px;margin:0"><thead><tr><th class="l">과목</th>${cols.map(c=>`<th style="min-width:130px${c.hl?";background:#EAF1FB":""}">${c.t}<div style="font-weight:400;font-size:11px;color:var(--sub)">${c.s}</div></th>`).join("")}</tr></thead><tbody>
     ${rowsDef.map(([k,n,b])=>`<tr${b===2?' style="background:#F8CBAD"':b?' style="background:#F4F7F2"':""}><td class="l">${b?"<b>"+n+"</b>":n}</td>${cols.map(c=>{const v=c.v[k];const t=k==="adj"&&v==null?"":W(v);const p=(k==="op"||k==="ni"||(k==="sga"&&window.__st.det))&&c.v.rev?` <span class="unit" style="font-size:11px">${pct(c.v[k],c.v.rev)}</span>`:"";return `<td style="text-align:right">${b?"<b>"+t+"</b>":t}${p}</td>`;}).join("")}</tr>${k==="sga"?"<!--SGA-->":""}`).join("")}
@@ -21067,8 +21065,8 @@ function renderSettle(){
   </tbody></table></div>`;
   /* 사업장별 영업이익 */
   const ents=[["insadong","꽃밥에피다"],["bukchon","북촌 (마켓+보자기)"],["total","꽃밥이야기 전체"]];
-  const bizTbl=`<div class="table-wrap"><table class="rpt" style="font-size:13px;margin:0;max-width:760px"><thead><tr><th class="l">사업장</th><th>매출 (최근 12개월)</th><th>영업이익 (최근 12개월)</th><th>매출 (${Y}년 예상)</th><th>영업이익 (${Y}년 예상)</th></tr></thead><tbody>
-    ${ents.map(([e,n])=>{const r=stRolling(L,e).sum,y=stYear(Y,L,e,C.method||"ly").tot;return `<tr${e==="total"?' style="background:#F4F7F2;font-weight:700"':""}><td class="l">${n}</td><td style="text-align:right">${W(r.rev)}</td><td style="text-align:right">${W(r.op)} <span class="unit" style="font-size:11px">${pct(r.op,r.rev)}</span></td><td style="text-align:right">${W(y.rev)}</td><td style="text-align:right">${W(y.op)} <span class="unit" style="font-size:11px">${pct(y.op,y.rev)}</span></td></tr>`;}).join("")}
+  const bizTbl=`<div class="table-wrap"><table class="rpt" style="font-size:13px;margin:0;max-width:760px"><thead><tr><th class="l">사업장</th><th>매출 (최근 12개월)</th><th>영업이익 (최근 12개월)</th></tr></thead><tbody>
+    ${ents.map(([e,n])=>{const r=stRolling(L,e).sum;return `<tr${e==="total"?' style="background:#F4F7F2;font-weight:700"':""}><td class="l">${n}</td><td style="text-align:right">${W(r.rev)}</td><td style="text-align:right">${W(r.op)} <span class="unit" style="font-size:11px">${pct(r.op,r.rev)}</span></td></tr>`;}).join("")}
   </tbody></table></div><div class="footnote">전체에는 공통(꽃밥이야기 본사) 비용도 들어 있어서 두 사업장 합과 달라요.</div>`;
   /* 월별 */
   const mons=[];for(let i=11;i>=0;i--)mons.push(stShift(L.y,L.m,-i));
@@ -21079,14 +21077,13 @@ function renderSettle(){
   /* 예상 달 설명 */
   const estTxt=E.estM.length?E.estM.map(x=>x.m+"월="+x.how).join(", "):"없음";
   /* 결산 조정 입력 */
-  const depIn=(E.tot.dep||0);
+  const depIn=(R.sum.dep||0);
   const inp=(k,ph,w)=>isAd?`<input value="${C[k]?fmt(C[k]):""}" placeholder="${ph||"0"}" onchange="stSet('${k}',this.value)" style="width:${w||120}px;text-align:right;font:inherit;padding:3px 6px;border:1px solid var(--line,#ddd);border-radius:6px">`:`<b>${C[k]?fmt(C[k]):"0"}</b>`;
   const setCard=`<div class="card"><div class="card-title">⚙ 예상 방법과 결산 조정 <span class="unit">결산 때 세무사무실이 넣는 것 중 월별손익에 없는 것을 미리 넣어 보세요 (연간 금액)</span></div>
     <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 14px;align-items:center;font-size:13px;max-width:860px">
-      <div>남은 달 예상</div><div>${isAd?`<select class="ctl" onchange="stSet('method',this.value)"><option value="ly" ${(C.method||"ly")==="ly"?"selected":""}>작년 같은 달 (없으면 최근 3개월 평균)</option><option value="avg3" ${C.method==="avg3"?"selected":""}>최근 3개월 평균</option></select>`:(C.method==="avg3"?"최근 3개월 평균":"작년 같은 달")} <span class="unit">${Y}년 예상에 쓴 달: ${estTxt}</span></div>
       <div>감가상각비·무형자산상각비</div><div>${inp("dep","0",140)}${isAd&&H?` <button class="btn btn-sm" onclick="stSet('dep','123925431')">${Y-1}년 금액 넣기 (123,925,431)</button>${C.dep?` <button class="btn btn-sm" onclick="stSet('dep','')">비우기</button>`:""}`:""}
         ${!depIn&&!C.dep?`<div style="margin-top:4px;padding:6px 10px;background:#FDECEC;border:1px solid #D9534F;border-radius:8px;color:#B3261E;font-size:12.5px"><b>⚠ 월별손익에 상각비가 0원이에요</b> — 결산 때 들어갈 상각비가 빠져 있어서 예상 이익이 크게 나와요. '${Y-1}년 금액 넣기'를 누르거나 세무사무실에 물어본 금액을 넣어주세요.</div>`:""}
-        <div class="unit">월별손익에 이미 들어 있는 상각비: 올해 ${fmt(depIn)}원 · ${Y-1}년 결산은 감가상각 33,161,237 + 무형자산상각 90,764,194 = 123,925,431원 · 넣은 금액만큼 예상 이익에서 빠져요 (이미 들어 있으면 비워두세요)</div></div>
+        <div class="unit">월별손익에 이미 들어 있는 상각비: 최근 12개월 ${fmt(depIn)}원 · ${Y-1}년 결산은 감가상각 33,161,237 + 무형자산상각 90,764,194 = 123,925,431원 · 넣은 금액만큼 예상 이익에서 빠져요 (이미 들어 있으면 비워두세요)</div></div>
       <div>재고 차이</div><div>${inp("inv","0")} <span class="unit">연말 재고 실사로 이익이 늘면 +, 줄면 − (예: 재고가 장부보다 많으면 +)</span></div>
       <div>기타 조정</div><div>${inp("etc","0")} <span class="unit">연말 상여·퇴직급여, 빠진 비용(−) / 빠진 수익(+)</span></div>
       <div>법인세 부담률</div><div>${isAd?`<input value="${C.rate!=null?C.rate:""}" placeholder="${H?(H.tax/H.pre*100).toFixed(1):"10"}" onchange="stSet('rate',this.value)" style="width:70px;text-align:right;font:inherit;padding:3px 6px;border:1px solid var(--line,#ddd);border-radius:6px">%`:(rate*100).toFixed(1)+"%"} <span class="unit">비우면 ${Y-1}년 실제 부담률(법인세 ÷ 법인세차감전이익)로 계산 · 정확한 세율은 세무사무실 확인</span></div>
@@ -21094,13 +21091,13 @@ function renderSettle(){
     </div></div>`;
   const note=`<div class="card"><div class="card-title">📝 알아두기</div><div style="font-size:13px;line-height:1.8">
     · <b>이익잉여금</b> = 회사가 낸 당기순이익(세금 낸 뒤)이 해마다 쌓인 것 − 배당. ${Y-1}년 말 ${H?fmt(H.reEnd):"-"}원, 설립 후 ${H?((Y-1)-SETTLE_FOUND+1):"-"}년 평균 ${H?eok(avgAll):"-"}.<br>
-    · <b>최근 12개월</b>은 1년 규모를 보는 용도, <b>${Y}년 예상</b>은 올해 이익잉여금이 얼마나 늘지 보는 용도예요 (이익잉여금은 회계연도 1~12월 단위).<br>
+    · <b>최근 12개월</b>(예: 25.11~26.10)을 ${Y}년 1년치 예상으로 봐요 — 남은 달을 작년 같은 달로 채운 것과 같아요. 12월 월별손익까지 넣으면 ${Y}년 1~12월 실제가 돼요.<br>
     · 월별손익은 이카운트 장부 기준이라 결산 때 감가상각·재고 실사·법인세 등이 들어가면 달라져요 → 위 '결산 조정'에 넣어 보세요.<br>
     · ${Y-1}년 순이익에는 국고보조금 1.17억(일회성)이 들어 있어서, 그걸 빼면 영업으로 번 이익은 더 적었어요.<br>
     · 지점(꽃밥에피다)은 같은 법인이라 재무상태표·이익잉여금은 회사 전체 하나로 봐요. 사업장별로는 위 '사업장별 영업이익'처럼 손익만 나눠 보면 돼요.</div></div>`;
   el.innerHTML=head+`<div id="stReport" style="background:#fff">
     <div class="card"><div class="card-title">📘 ${Y}년 가결산 요약 <span class="unit">${L.y}년 ${L.m}월까지 입력 · 단위: 원</span></div>${kpis}</div>
-    <div class="card"><div class="card-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">손익 비교 <span class="unit">결산서(확정) vs 최근 12개월 vs ${Y}년 예상</span>
+    <div class="card"><div class="card-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">손익 비교 <span class="unit">결산서(확정) vs 최근 12개월 (= ${Y}년 예상)</span>
       <label onclick="stDetTog()" style="margin-left:auto;display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600" title="판매비와관리비를 인건비·판매비·관리비·상각비와 계정별로 펼쳐 보기"><span>세부 항목 보기</span><span style="position:relative;width:42px;height:24px;border-radius:12px;background:${window.__st.det?"#2F6B3F":"#c9cec6"};transition:background .15s;display:inline-block"><span style="position:absolute;top:3px;left:${window.__st.det?21:3}px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3);transition:left .15s"></span></span></label></div>${tbl}
       ${window.__st.det?`<div class="footnote">% = 매출액 대비 · 묶음은 계정 이름으로 자동 (보험료는 4대보험 회사부담이 대부분이라 인건비에 넣었어요)</div>`:""}</div>
     <div class="card"><div class="card-title">이익잉여금</div>${reTbl}</div>
