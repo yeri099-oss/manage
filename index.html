@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v591</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v592</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -4559,9 +4559,14 @@ function pnlAggOf(name,vals){
   const has=vals.filter(v=>v!=null);
   return has.length?has.reduce((a,b)=>a+b,0):null;
 }
-function pnlUnionNames(yKeys){
+function pnlUnionNames(yKeys,noMerge){
+  /* v592: 달마다 계정이 다르면(국고보조금처럼 어떤 달에만 있는 계정) 맨 끝이 아니라 그 달에서 바로 앞에 있던 계정 다음에 끼워 넣음
+     → 영업외수익 계정이 영업외비용 아래로 내려가지 않게 */
   const names=[];
-  for(const k of yKeys)for(const r0 of S.data.pnl[k].rows){const r=(r0.lv>0&&/접대비/.test(r0.n))?{n:"접대비",lv:r0.lv}:r0;/* 접대비 한 줄로 */if(!names.some(x=>x.n===r.n))names.push({n:r.n,lv:r.lv});}
+  for(const k of yKeys){let last=-1;for(const r0 of S.data.pnl[k].rows){const r=(!noMerge&&r0.lv>0&&/접대비/.test(r0.n))?{n:"접대비",lv:r0.lv}:r0;/* 접대비 한 줄로 */
+    let at=names.findIndex(x=>x.n===r.n);
+    if(at<0){at=last+1;names.splice(at,0,{n:r.n,lv:r.lv});}
+    last=at;}}
   return names;
 }
 /* ---- 엑셀(.xlsx) 생성: 예리님 양식 그대로 ---- */
@@ -5106,8 +5111,7 @@ function renderPnl(){
     const ent=S.ui.pnlEnt||"total";
     const entInfo=PNL_ENTS.find(([k])=>k===ent);
     const yKeys=keys.filter(k=>k.split("-")[0]===year);
-    const names=[];
-    for(const k of yKeys)for(const r of S.data.pnl[k].rows)if(!names.some(x=>x.n===r.n))names.push({n:r.n,lv:r.lv});
+    const names=pnlUnionNames(yKeys,true); /* v592: 계정 순서 — 그 달 앞 계정 다음에 */
     const entTabs=`<div class="subtabs" style="flex-wrap:wrap">`+PNL_ENTS.map(([k,n])=>`<button class="subtab ${k===ent?"active":""}" onclick="pnlSetEnt('${k}')">${n}</button>`).join("")+`</div>`
       +(years.length>1?`<div class="subtabs" style="flex-wrap:wrap">`+years.map(y=>`<button class="subtab ${y===year?"active":""}" onclick="pnlSetYear('${y}')">${y}년</button>`).join("")+`</div>`:"");
     const saleName=names.find(x=>x.n.indexOf("매출")>=0&&x.lv===0);
