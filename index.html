@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v586</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v587</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -20933,7 +20933,7 @@ const ST_ALIAS={"지급수수료":"수수료비용","세금과공과":"세금과
   /* v584: 이카운트 계정 → 결산서 계정 (시급직은 일용직으로 신고 → 잡급, 수당은 급여에 포함) */
   "시급직급여":"잡급","제수당":"직원급여","용역비":"인적용역비","용역직급여":"인적용역비"}; /* v585: 이카운트 용역비(연 1,800만원 정도, 3.3% 용역직) → 인적용역비 */
 function stAcc(n){let t=String(n||"").replace(/\s/g,"").replace(/^\d+[.)]/,"").replace(/\((판|제)\)$/,"");if(/접대비/.test(t))t="접대비";return ST_ALIAS[t]||t;}
-const ST_GRP=[["인건비",/급여|상여|잡급|퇴직|복리후생|용역비|인건비|수당/],["판매비",/판매|광고|운반|포장|접대|홍보|판촉/],["상각비",/상각/],["관리비",/.*/]];
+const ST_GRP=[["인건비",/급여|상여|잡급|퇴직|복리후생|용역비|보험료|인건비|수당/],["판매비",/판매|광고|운반|포장|접대|홍보|판촉/],["상각비",/상각/],["관리비",/.*/]];
 function stGrpOf(a){for(const [g,re] of ST_GRP)if(re.test(a))return g;return "관리비";}
 const SETTLE_FOUND=2020; /* 제1기 = 2020년 (2025년이 제6기) */
 window.__st=window.__st||{cfg:null,loading:false};
@@ -21055,7 +21055,7 @@ function renderSettle(){
   const sgaCols=cols.map(c=>({t:c.t,s:c.s,hl:c.hl,d:c.v.sgaD||{},tot:c.v.sga,rev:c.v.rev}));
   const accAll=[];sgaCols.forEach(c=>{for(const k in c.d)if(accAll.indexOf(k)<0)accAll.push(k);});
   const gOrder=["인건비","판매비","관리비","상각비"];
-  const gNote={"인건비":"급여·상여·잡급·퇴직급여·복리후생비(4대보험 회사부담 포함)·외주/인적 용역비","판매비":"판매수수료·광고·운반·포장·접대","관리비":"임차료·보험료(화재보험 등)·전기·수도·통신·세금·소모품·수수료 등","상각비":"감가상각비·무형자산상각비 (돈은 안 나가는 비용)"};
+  const gNote={"인건비":"급여·상여·잡급(시급직)·퇴직급여·복리후생비·보험료(4대보험 등)·외주/인적 용역비","판매비":"판매수수료·광고·운반·포장·접대","관리비":"임차료·전기·수도·통신·세금·소모품·수수료 등","상각비":"감가상각비·무형자산상각비 (돈은 안 나가는 비용)"};
   const sgaOpen=window.__st.sgaOpen||{};
   const sgaRows=gOrder.map(g=>{const acc=accAll.filter(a=>stGrpOf(a)===g).sort((x,y)=>(sgaCols[sgaCols.length-2]?(sgaCols[sgaCols.length-2].d[y]||0)-(sgaCols[sgaCols.length-2].d[x]||0):0));if(!acc.length)return "";
     const gs=sgaCols.map(c=>acc.reduce((s,a)=>s+(c.d[a]||0),0));const op=!!sgaOpen[g];
@@ -21065,7 +21065,7 @@ function renderSettle(){
   const sgaTbl=`<div class="table-wrap"><table class="rpt" style="font-size:13px;margin:0"><thead><tr><th class="l">판매비와관리비 <span style="font-weight:400;font-size:11px">(줄을 누르면 계정별로 펼쳐요)</span></th>${sgaCols.map(c=>`<th style="min-width:130px${c.hl?";background:#EAF1FB":""}">${c.t}</th>`).join("")}</tr></thead><tbody>${sgaRows}
     ${sgaMiss.some(x=>x)?`<tr><td class="l unit">세부 없는 금액</td>${sgaMiss.map(v=>`<td class="stpc"></td><td style="text-align:right" class="unit">${v?W(v):""}</td>`).join("")}</tr>`:""}
     <tr style="background:#F4F7F2;font-weight:700"><td class="l">판매비와관리비 합계</td>${sgaCols.map(c=>`<td style="text-align:right">${W(c.tot)} <span class="stp" title="매출액 대비 비율 = 이 금액 ÷ 같은 칸 매출액 × 100">${pct(c.tot,c.rev)}</span></td>`).join("")}</tr></tbody></table></div>
-    <div class="footnote">% = 매출액 대비 · 인건비·판매비·관리비 나누는 기준은 계정 이름으로 자동 (4대보험 회사부담은 복리후생비라 인건비, 보험료는 화재보험 등이라 관리비)</div>`;
+    <div class="footnote">% = 매출액 대비 · 인건비·판매비·관리비 나누는 기준은 계정 이름으로 자동 (보험료는 인건비에 넣었어요 — 결산서 보험료에 4대보험이 들어 있어서)</div>`;
   /* v565: 스위치를 켜면 손익 비교표의 판매비와관리비 아래에 인건비·판매비·관리비·상각비와 계정별 금액 */
   if(window.__st.det){
     const inl=gOrder.map(g=>{const acc=accAll.filter(a=>stGrpOf(a)===g).sort((x,y)=>(sgaCols[sgaCols.length-2]?(sgaCols[sgaCols.length-2].d[y]||0)-(sgaCols[sgaCols.length-2].d[x]||0):0));if(!acc.length)return "";
@@ -21127,7 +21127,7 @@ function renderSettle(){
     <div class="card"><div class="card-title">📘 ${Y}년 가결산 요약 <span class="unit">${L.y}년 ${L.m}월까지 입력 · 단위: 원</span></div>${kpis}</div>
     <div class="card"><div class="st-fit"><div class="card-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">손익 비교 <span class="unit">결산서(확정) vs 최근 12개월 (= ${Y}년 예상)</span>
       <label onclick="stDetTog()" style="margin-left:auto;display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600" title="판매비와관리비를 인건비·판매비·관리비·상각비와 계정별로 펼쳐 보기"><span>세부 항목 보기</span><span style="position:relative;width:42px;height:24px;border-radius:12px;background:${window.__st.det?"#2F6B3F":"#c9cec6"};transition:background .15s;display:inline-block"><span style="position:absolute;top:3px;left:${window.__st.det?21:3}px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3);transition:left .15s"></span></span></label></div>${tbl}
-      ${window.__st.det?`<div class="footnote">% = 매출액 대비 · 묶음은 계정 이름으로 자동 (4대보험 회사부담은 복리후생비라 인건비, 보험료는 화재보험 등이라 관리비)</div>`:""}</div></div>
+      ${window.__st.det?`<div class="footnote">% = 매출액 대비 · 묶음은 계정 이름으로 자동 (보험료는 인건비에 넣었어요 — 결산서 보험료에 4대보험이 들어 있어서)</div>`:""}</div></div>
     <div class="card"><div class="st-fit"><div class="card-title">이익잉여금</div>${reTbl}</div></div>
     <div class="card"><div class="st-fit"><div class="card-title">사업장별 영업이익</div>${bizTbl}</div></div>
     <div class="card"><div class="st-fit"><div class="card-title">최근 12개월 월별 <span class="unit">사업장을 골라서 보세요</span></div>${monTbl}</div></div>
