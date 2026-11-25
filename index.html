@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v566</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v567</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -21121,6 +21121,8 @@ window.stCapture=async function(mode){
   }catch(e){console.error(e);toast("캡쳐 실패: "+(e.message||e),true);}
 };
 RENDERERS.settle=renderSettle;
+/* v567: 결산 탭은 내용만큼만 — 화면 꽉 채우지 않고 왼쪽 정렬 */
+(function(){const st=document.createElement("style");st.textContent="#tab-settle{max-width:900px}#tab-settle table.rpt{width:auto!important;margin-left:0!important;margin-right:auto!important}#tab-settle .table-wrap{display:block}";document.head.appendChild(st);})();
 /* ===== v536: 엑셀처럼 표 머리글을 눌러 정렬 (한 번 더 누르면 반대로) — 꽃밥에피다 탭의 모든 표
    · 합계 줄(total)은 제자리 · 분류 순위 표는 분류끼리, 분류 안의 품목끼리 정렬 · 「순위」 칸은 정렬한 순서대로 다시 번호 ===== */
 function pidaCellVal(td){if(!td)return null;const t=td.textContent.replace(/\s+/g," ").trim();
