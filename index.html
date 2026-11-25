@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v575</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v576</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -20918,8 +20918,12 @@ const SETTLE_HIST={
         memo:"영업외수익 중 국고보조금 116,900,000 (일회성) · 감가상각비 33,161,237 + 무형자산상각비 90,764,194"}
 };
 /* v575: 2023년 — 홈택스 표준재무제표증명 (그 해 숫자만, 계정이 묶여 있음) */
-SETTLE_HIST[2023]={rev:2718038817,cogs:1057149635,sga:1137100588,op:523788594,noi:51846838,noe:2026254,pre:573609178,tax:65253003,ni:508356175,reBeg:393973196,div:0,reEnd:902329371,src:"확정 (홈택스 표준)",
-  memo:"홈택스 표준재무제표 — 판관비 '기타' 73,478,926은 외주용역비·판매수수료 등이 묶인 금액",sgaD:{"직원급여":485197723,"상여금":52360000,"잡급":74657377,"퇴직급여":21948014,"보험료":38831040,"복리후생비":14081952,"여비교통비":3293327,"임차료":134303637,"접대비":3830190,"감가상각비":22791642,"무형자산상각비":1555199,"세금과공과금":21945190,"광고선전비":4452632,"차량유지비":2825141,"수수료비용":34668812,"소모품비":21784202,"통신비":2799854,"운반비":1518900,"보관료":52670584,"수선비":5132108,"수도광열비":15484023,"전력비":30441508,"도서인쇄비":6674400,"교육훈련비":2712843,"인적용역비":7661364,"기타(표준재무제표)":73478926}};
+SETTLE_HIST[2023]={rev:2718038817,cogs:1057149635,sga:1137100588,op:523788594,noi:51846838,noe:2026254,pre:573609178,tax:65253003,ni:508356175,reBeg:421352412,div:27379216,reEnd:902329371,src:"확정 (홈택스 표준)",
+  memo:"홈택스 표준재무제표 — 판관비 '기타' 73,478,926은 외주용역비·판매수수료 등이 묶인 금액 · 이익잉여금이 순이익보다 27,379,216 덜 늘었어요 (배당·전기오류수정 등 — 세무사무실 확인)",sgaD:{"직원급여":485197723,"상여금":52360000,"잡급":74657377,"퇴직급여":21948014,"보험료":38831040,"복리후생비":14081952,"여비교통비":3293327,"임차료":134303637,"접대비":3830190,"감가상각비":22791642,"무형자산상각비":1555199,"세금과공과금":21945190,"광고선전비":4452632,"차량유지비":2825141,"수수료비용":34668812,"소모품비":21784202,"통신비":2799854,"운반비":1518900,"보관료":52670584,"수선비":5132108,"수도광열비":15484023,"전력비":30441508,"도서인쇄비":6674400,"교육훈련비":2712843,"인적용역비":7661364,"기타(표준재무제표)":73478926}};
+/* v576: 2020~2022년 — 홈택스 표준재무제표증명 (2020년은 설립한 8월~12월) */
+SETTLE_HIST[2020]={rev:688887857,cogs:469091662,sga:252325383,op:-32529188,noi:5856277,noe:1586837,pre:-28259748,tax:0,ni:-28259748,reBeg:0,div:0,reEnd:-28259748,src:"확정 (홈택스 표준) · 8~12월",memo:"설립 첫해 8월~12월 (5개월) — 적자 28,259,748",sgaD:{"직원급여":94467230,"상여금":700000,"잡급":31452780,"보험료":6195839,"복리후생비":2523800,"여비교통비":286370,"임차료":58100000,"감가상각비":9997507,"무형자산상각비":349861,"세금과공과금":4235500,"광고선전비":255490,"차량유지비":1597650,"수수료비용":16806222,"소모품비":12383108,"통신비":1802132,"운반비":942000,"수선비":700000,"수도광열비":1024814,"전력비":7046915,"도서인쇄비":1141190,"교육훈련비":7273,"기타(표준재무제표)":309702}};
+SETTLE_HIST[2021]={rev:1936231057,cogs:1070685232,sga:792158401,op:73387424,noi:29182062,noe:2921275,pre:99648211,tax:8051811,ni:91596400,reBeg:-28259748,div:0,reEnd:63336652,src:"확정 (홈택스 표준)",sgaD:{"직원급여":295832963,"상여금":20300000,"잡급":91554760,"퇴직급여":7389302,"보험료":19999151,"복리후생비":5951700,"여비교통비":427214,"임차료":132000000,"접대비":1232000,"감가상각비":32107687,"무형자산상각비":971666,"세금과공과금":14838670,"광고선전비":1112679,"차량유지비":8153002,"수수료비용":50284548,"소모품비":32439544,"통신비":4770469,"운반비":2991560,"보관료":27568192,"수선비":5340550,"수도광열비":5215420,"전력비":20133586,"도서인쇄비":1345027,"기타(표준재무제표)":10198711}};
+SETTLE_HIST[2022]={rev:2265255397,cogs:1008997749,sga:1057496400,op:198761248,noi:161949116,noe:2694604,pre:358015760,tax:0,ni:358015760,reBeg:63336652,div:0,reEnd:421352412,src:"확정 (홈택스 표준)",memo:"영업외수익 161,949,116 · 법인세 0원",sgaD:{"직원급여":441255771,"상여금":44389406,"잡급":75614588,"퇴직급여":10521832,"보험료":28779850,"복리후생비":13075614,"여비교통비":1725015,"임차료":132675000,"접대비":441390,"감가상각비":22811133,"무형자산상각비":971866,"세금과공과금":19521520,"광고선전비":5030191,"차량유지비":4354355,"수수료비용":41424080,"소모품비":60468621,"통신비":2389986,"운반비":2430710,"보관료":38601971,"수선비":2080620,"수도광열비":8547068,"전력비":25680929,"도서인쇄비":2101610,"교육훈련비":9235000,"기타(표준재무제표)":63368274}};
 SETTLE_HIST[2024].sgaD={"직원급여":568153232,"상여금":66470000,"잡급":19751678,"퇴직급여":8921347,"복리후생비":31958804,"여비교통비":1991600,"접대비":1700000,"통신비":2977132,"수도광열비":13640294,"전력비":29882515,"세금과공과금":24264085,"감가상각비":25200467,"임차료":137240000,"수선비":2530000,"보험료":38779450,"차량유지비":2129920,"운반비":2179660,"교육훈련비":1060000,"도서인쇄비":4530539,"포장비":1027812,"사무용품비":746386,"소모품비":53860519,"수수료비용":54371836,"판매수수료":57810185,"광고선전비":10075940,"판매촉진비":1419760,"무형자산상각비":9244593,"외주용역비":99567803,"인적용역비":12129184};
 SETTLE_HIST[2025].sgaD={"직원급여":615662539,"상여금":72438904,"잡급":24313232,"퇴직급여":24831477,"복리후생비":35001100,"여비교통비":6546962,"접대비":1600000,"통신비":2521817,"수도광열비":14419023,"전력비":28102892,"세금과공과금":27331140,"감가상각비":33161237,"임차료":137540000,"수선비":1056818,"보험료":47348522,"차량유지비":3147597,"운반비":2573530,"교육훈련비":16658426,"도서인쇄비":4528810,"포장비":171875,"사무용품비":564586,"소모품비":42280733,"수수료비용":47037249,"판매수수료":56829022,"광고선전비":23537042,"판매촉진비":887350,"무형자산상각비":90764194,"외주용역비":102490316,"인적용역비":8335820};
 /* v564: 판관비를 인건비 / 판매비 / 관리비 / 상각비로 묶어서 */
@@ -21017,24 +21021,25 @@ function renderSettle(){
   const RR=mk(R.sum),EE=RR; /* v566: '작년 같은 달'로 채운 올해 예상은 최근 12개월과 같아서 최근 12개월 하나로 */
   const reBeg=H?H.reEnd:null;const div=C.div||0;
   const reEnd=reBeg!=null?reBeg+EE.ni-div:null;
-  const avgAll=H?H.reEnd/((Y-1)-SETTLE_FOUND+1):null;
+  const histYs=[];for(let y=SETTLE_FOUND;y<Y;y++)if(SETTLE_HIST[y])histYs.push(y);
+  const avgAll=histYs.length?histYs.reduce((a,y)=>a+SETTLE_HIST[y].ni,0)/histYs.length:null; /* v576: 연도별 당기순이익 평균 */
   /* KPI */
   const kpi=(lb,v,sub,col)=>`<div style="flex:1;min-width:170px;border:1px solid var(--line,#e3e3e3);border-radius:12px;padding:10px 14px;background:#fff"><div class="unit">${lb}</div><div style="font-size:20px;font-weight:800;color:${col||"inherit"}">${v}</div><div class="unit" style="font-size:11.5px">${sub||""}</div></div>`;
   const eok=(n)=>n==null?"-":(n/1e8).toFixed(2)+"억";
   const kpis=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin:4px 0 2px">
     ${kpi("최근 12개월 당기순이익 (예상)",eok(RR.ni),stYm(R.from)+" ~ "+stYm(R.to)+" = "+Y+"년 1년치로 봐요"+(R.miss.length?` · <span style="color:#B3261E">${R.miss.length}개월 미입력</span>`:""),"#2F6B3F")}
     ${kpi(Y+"년 말 예상 이익잉여금",eok(reEnd),reBeg!=null?(Y-1)+"년 말 "+eok(reBeg)+" + 최근 12개월 순이익":"")}
-    ${H?kpi("설립 후 연평균 이익",eok(avgAll),SETTLE_FOUND+"~"+(Y-1)+"년 "+((Y-1)-SETTLE_FOUND+1)+"년 · 배당 없음"):""}
+    ${histYs.length?kpi("설립 후 연평균 당기순이익",eok(avgAll),histYs[0]+"~"+histYs[histYs.length-1]+"년 "+histYs.length+"년 평균 (2020년은 8~12월)"):""}
   </div>`;
   /* 손익 비교표 */
   const cols=[];
-  [Y-3,Y-2,Y-1].forEach(y=>{const h=SETTLE_HIST[y];if(h)cols.push({t:y+"년 결산",s:h.src||"확정 (결산서)",v:Object.assign({gp:h.rev-h.cogs,adj:null,preA:null},h)});});
+  histYs.forEach(y=>{const h=SETTLE_HIST[y];if(h)cols.push({t:y+"년 결산",s:h.src||"확정 (결산서)",v:Object.assign({gp:h.rev-h.cogs,adj:null,preA:null},h)});});
   cols.push({t:"최근 12개월",s:stYm(R.from)+" ~ "+stYm(R.to)+(R.miss.length?" · "+R.miss.length+"개월 빠짐":""),v:RR,hl:1});
   const rowsDef=[["rev","매출액",1],["cogs","매출원가"],["gp","매출총이익",1],["sga","판매비와관리비"],["op","영업이익",1],["noi","영업외수익"],["noe","영업외비용"],["pre","법인세차감전이익",1],["adj","결산 조정 (아래 입력)"],["tax","법인세 (예상)"],["ni","당기순이익",2]];
   let tbl=`<div class="table-wrap"><table class="rpt" style="font-size:13px;margin:0"><thead><tr><th class="l">과목</th>${cols.map(c=>`<th style="min-width:130px${c.hl?";background:#EAF1FB":""}">${c.t}<div style="font-weight:400;font-size:11px;color:var(--sub)">${c.s}</div></th>`).join("")}</tr></thead><tbody>
     ${rowsDef.map(([k,n,b])=>`<tr${b===2?' style="background:#F8CBAD"':b?' style="background:#F4F7F2"':""}><td class="l">${b?"<b>"+n+"</b>":n}</td>${cols.map(c=>{const v=c.v[k];const t=k==="adj"&&v==null?"":W(v);const p=(k==="op"||k==="ni"||(k==="sga"&&window.__st.det))&&c.v.rev?` <span class="unit" style="font-size:11px">${pct(c.v[k],c.v.rev)}</span>`:"";return `<td style="text-align:right">${b?"<b>"+t+"</b>":t}${p}</td>`;}).join("")}</tr>${k==="sga"?"<!--SGA-->":""}`).join("")}
   </tbody></table></div>
-  <div class="footnote" style="margin-top:6px">${[Y-3,Y-1].filter(y=>SETTLE_HIST[y]&&SETTLE_HIST[y].memo).map(y=>"· "+y+"년: "+esc(SETTLE_HIST[y].memo)+"<br>").join("")}· 법인세(예상) = 법인세차감전이익(조정 후) × ${(rate*100).toFixed(1)}%${C.rate!=null?" (직접 입력)":H?" ("+(Y-1)+"년 실제 부담률)":""} · 실제 세액은 세무사무실 계산과 달라요</div>`;
+  <div class="footnote" style="margin-top:6px">${histYs.filter(y=>SETTLE_HIST[y].memo).map(y=>"· "+y+"년: "+esc(SETTLE_HIST[y].memo)+"<br>").join("")}· 법인세(예상) = 법인세차감전이익(조정 후) × ${(rate*100).toFixed(1)}%${C.rate!=null?" (직접 입력)":H?" ("+(Y-1)+"년 실제 부담률)":""} · 실제 세액은 세무사무실 계산과 달라요</div>`;
   /* v564: 판관비 세부 (인건비·판매비·관리비·상각비) */
   const sgaCols=cols.map(c=>({t:c.t,s:c.s,hl:c.hl,d:c.v.sgaD||{},tot:c.v.sga,rev:c.v.rev}));
   const accAll=[];sgaCols.forEach(c=>{for(const k in c.d)if(accAll.indexOf(k)<0)accAll.push(k);});
@@ -21061,9 +21066,9 @@ function renderSettle(){
   }
   /* 이익잉여금 */
   const reRows=[];
-  [Y-3,Y-2,Y-1].forEach(y=>{const h=SETTLE_HIST[y];if(h)reRows.push([y+"년 (확정)",h.reBeg,h.ni,h.div,h.reEnd]);});
+  histYs.forEach(y=>{const h=SETTLE_HIST[y];if(h)reRows.push([y+"년 (확정)",h.reBeg,h.ni,h.div,h.reEnd]);});
   if(reBeg!=null)reRows.push([Y+"년 (예상)",reBeg,EE.ni,div,reEnd]);
-  const reTbl=`<div class="table-wrap"><table class="rpt" style="font-size:13px;margin:0;max-width:760px"><thead><tr><th class="l">연도</th><th>기초 이익잉여금</th><th>+ 당기순이익</th><th>− 배당</th><th>= 기말 이익잉여금</th></tr></thead><tbody>
+  const reTbl=`<div class="table-wrap"><table class="rpt" style="font-size:13px;margin:0;max-width:760px"><thead><tr><th class="l">연도</th><th>기초 이익잉여금</th><th>+ 당기순이익</th><th>− 배당·기타</th><th>= 기말 이익잉여금</th></tr></thead><tbody>
     ${reRows.map((r,i)=>`<tr${i===reRows.length-1&&r[0].indexOf("예상")>=0?' style="background:#EAF1FB"':""}><td class="l">${r[0]}</td><td style="text-align:right">${W(r[1])}</td><td style="text-align:right"><b>${W(r[2])}</b></td><td style="text-align:right">${W(r[3])}</td><td style="text-align:right"><b>${W(r[4])}</b></td></tr>`).join("")}
   </tbody></table></div>`;
   /* v568: 사업장별 — 월별손익처럼 꽃밥이야기 / 꽃밥에피다 / 북촌 / 마켓 / 보자기 */
@@ -21099,7 +21104,7 @@ function renderSettle(){
       <div>배당 (예정)</div><div>${inp("div","0")} <span class="unit">올해 배당을 하면 이익잉여금에서 빠져요</span></div>
     </div></div>`;
   const note=`<div class="card"><div class="card-title">📝 알아두기</div><div style="font-size:13px;line-height:1.8">
-    · <b>이익잉여금</b> = 회사가 낸 당기순이익(세금 낸 뒤)이 해마다 쌓인 것 − 배당. ${Y-1}년 말 ${H?fmt(H.reEnd):"-"}원, 설립 후 ${H?((Y-1)-SETTLE_FOUND+1):"-"}년 평균 ${H?eok(avgAll):"-"}.<br>
+    · <b>이익잉여금</b> = 회사가 낸 당기순이익(세금 낸 뒤)이 해마다 쌓인 것 − 배당. ${Y-1}년 말 ${H?fmt(H.reEnd):"-"}원, 설립 후 ${histYs.length}년 당기순이익 평균 ${eok(avgAll)} (2020년은 8~12월 5개월).<br>
     · <b>최근 12개월</b>(예: 25.11~26.10)을 ${Y}년 1년치 예상으로 봐요 — 남은 달을 작년 같은 달로 채운 것과 같아요. 12월 월별손익까지 넣으면 ${Y}년 1~12월 실제가 돼요.<br>
     · 월별손익은 이카운트 장부 기준이라 결산 때 감가상각·재고 실사·법인세 등이 들어가면 달라져요 → 위 '결산 조정'에 넣어 보세요.<br>
     · ${Y-1}년 순이익에는 국고보조금 1.17억(일회성)이 들어 있어서, 그걸 빼면 영업으로 번 이익은 더 적었어요.<br>
