@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v584</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v585</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -20931,7 +20931,7 @@ SETTLE_HIST[2025].sgaD={"직원급여":615662539,"상여금":72438904,"잡급":2
 /* v564: 판관비를 인건비 / 판매비 / 관리비 / 상각비로 묶어서 */
 const ST_ALIAS={"지급수수료":"수수료비용","세금과공과":"세금과공과금","급여":"직원급여","직원급여(판)":"직원급여",
   /* v584: 이카운트 계정 → 결산서 계정 (시급직은 일용직으로 신고 → 잡급, 수당은 급여에 포함) */
-  "시급직급여":"잡급","제수당":"직원급여"};
+  "시급직급여":"잡급","제수당":"직원급여","용역비":"인적용역비"}; /* v585: 이카운트 용역비(연 1,800만원 정도, 3.3% 용역직) → 인적용역비 */
 function stAcc(n){let t=String(n||"").replace(/\s/g,"").replace(/^\d+[.)]/,"").replace(/\((판|제)\)$/,"");if(/접대비/.test(t))t="접대비";return ST_ALIAS[t]||t;}
 const ST_GRP=[["인건비",/급여|상여|잡급|퇴직|복리후생|용역비|인건비|수당/],["판매비",/판매|광고|운반|포장|접대|홍보|판촉/],["상각비",/상각/],["관리비",/.*/]];
 function stGrpOf(a){for(const [g,re] of ST_GRP)if(re.test(a))return g;return "관리비";}
