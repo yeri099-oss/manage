@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v590</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v591</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -19281,7 +19281,7 @@ async function cardBuildXlsx(sheets,ext){
     const cols=sh.cols&&sh.cols.length?`<cols>${sh.cols.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join("")}</cols>`:"";
     const dim=sh.rows.length?`A1:${cardColL(Math.max(maxC,1)-1)}${sh.rows.length}`:"A1";
     const mg=sh.merges&&sh.merges.length?`<mergeCells count="${sh.merges.length}">${sh.merges.map(m=>`<mergeCell ref="${m}"/>`).join("")}</mergeCells>`:"";
-    zip.file(`xl/worksheets/sheet${si+1}.xml`,`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><dimension ref="${dim}"/><sheetViews><sheetView workbookViewId="0"${si===0?' tabSelected="1"':""}/></sheetViews><sheetFormatPr defaultRowHeight="16.5"/>${cols}<sheetData>${rowsXml}</sheetData>${mg}<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/></worksheet>`);
+    zip.file(`xl/worksheets/sheet${si+1}.xml`,`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">${sh.fit?'<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>':""}<dimension ref="${dim}"/><sheetViews><sheetView workbookViewId="0"${si===0?' tabSelected="1"':""}/></sheetViews><sheetFormatPr defaultRowHeight="16.5"/>${cols}<sheetData>${rowsXml}</sheetData>${mg}<pageMargins left="${sh.fit?0.4:0.7}" right="${sh.fit?0.4:0.7}" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>${sh.fit?'<pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/>':""}</worksheet>`);
   });
   return await zip.generateAsync({type:"blob",mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
 }
@@ -21023,7 +21023,7 @@ function renderSettle(){
   const W=(n)=>n==null?"":fmt(Math.round(n));
   const pct=(a,b)=>b?(a/b*100).toFixed(1)+"%":"";
   const head=`<div class="card" style="padding:12px 16px"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b style="font-size:17px">📘 결산 (가결산)</b><span class="unit">월별손익(이카운트 월별손익분석 · 공급가) 숫자를 모아서 올해 이익과 이익잉여금을 미리 계산해요 · 회계연도 1월~12월</span>
-    <span style="margin-left:auto"></span><button class="btn btn-sm btn-primary" onclick="stCapture('img')">📸 보고용 이미지 복사</button><button class="btn btn-sm" onclick="stCapture('dl')">이미지 저장</button></div></div>`;
+    <span style="margin-left:auto"></span><button class="btn btn-sm btn-primary" onclick="stXlsx()">📥 엑셀 받기</button><button class="btn btn-sm" onclick="stCapture('img')">📸 보고용 이미지 복사</button><button class="btn btn-sm" onclick="stCapture('dl')">이미지 저장</button></div></div>`;
   if(!L){el.innerHTML=head+`<div class="card"><div class="hint" style="padding:14px">월별손익에 입력된 달이 없어요. 월별손익 탭에서 이카운트 월별손익분석 파일을 먼저 넣어주세요.</div></div>`;return;}
   const R=stRolling(L,"total");
   const E=stYear(Y,L,"total",C.method||"ly");
@@ -21129,6 +21129,7 @@ function renderSettle(){
     · 월별손익은 이카운트 장부 기준이라 결산 때 감가상각·재고 실사·법인세 등이 들어가면 달라져요 → 위 '결산 조정'에 넣어 보세요.<br>
     · ${Y-1}년 순이익에는 국고보조금 1.17억(일회성)이 들어 있어서, 그걸 빼면 영업으로 번 이익은 더 적었어요.<br>
     · 지점(꽃밥에피다)은 같은 법인이라 재무상태표·이익잉여금은 회사 전체 하나로 봐요. 사업장별로는 위 '사업장별 영업이익'처럼 손익만 나눠 보면 돼요.</div></div>`;
+  window.__st.M={Y,L,R,RR,reBeg,reEnd,avgAll,histYs,cols,rowsDef,sgaCols,accAll,gOrder,gNote,sgaMiss,reRows,ents,mons,rate,C,H,insR,dep}; /* v591: 엑셀용 */
   el.innerHTML=head+`<div id="stReport" style="background:#fff">
     <div class="card"><div class="card-title">📘 ${Y}년 가결산 요약 <span class="unit">${L.y}년 ${L.m}월까지 입력 · 단위: 원</span></div>${kpis}</div>
     <div class="card"><div class="st-fit"><div class="card-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">손익 비교 <span class="unit">결산서(확정) vs 최근 12개월 (= ${Y}년 예상)</span>
@@ -21143,6 +21144,149 @@ window.stEnt=function(e){window.__st.ent=e;renderSettle();};
 window.stDetTog=function(){window.__st.det=!window.__st.det;try{localStorage.setItem("ssv2_stDet",window.__st.det?"1":"");}catch(e){}renderSettle();};
 try{window.__st.det=!!localStorage.getItem("ssv2_stDet");}catch(e){}
 window.stSgaTog=function(g){const o=window.__st.sgaOpen=window.__st.sgaOpen||{};if(g==="*"){if(Object.keys(o).length)window.__st.sgaOpen={};else ["인건비","판매비","관리비","상각비"].forEach(k=>o[k]=1);}else if(o[g])delete o[g];else o[g]=1;renderSettle();};
+/* ===== v591: 결산 엑셀 — ① 요약 ② 손익 세부 ③ 이익잉여금 ④ 사업장별 ⑤ 월별 (값으로, 테두리·칸 색·칸 너비 맞춤) ===== */
+function stXStyle(){
+  const fonts=[],fills=["<fill><patternFill patternType=\"none\"/></fill>","<fill><patternFill patternType=\"gray125\"/></fill>"],xfs=[],fK={},fiK={},xK={};
+  const font=(o)=>{const k=JSON.stringify(o);if(fK[k]!=null)return fK[k];fK[k]=fonts.length;fonts.push(`<font>${o.b?"<b/>":""}<sz val="${o.sz||10}"/><color rgb="FF${o.c||"222222"}"/><name val="맑은 고딕"/><family val="3"/><charset val="129"/></font>`);return fK[k];};
+  const fill=(c)=>{if(!c)return 0;if(fiK[c]!=null)return fiK[c];fiK[c]=fills.length;fills.push(`<fill><patternFill patternType="solid"><fgColor rgb="FF${c}"/><bgColor indexed="64"/></patternFill></fill>`);return fiK[c];};
+  font({});
+  /* o: {b,sz,c(글자색),bg(칸색),bd(0 없음/1 얇은 회색/2 머리글 아래 진하게),nf(0 글자/1 금액/2 %),ha,ind,wrap} */
+  const x=(o)=>{const k=JSON.stringify(o);if(xK[k]!=null)return xK[k];
+    const nf=o.nf===1?164:o.nf===2?165:0,ha=o.ha||(o.nf?"right":"left");
+    xK[k]=xfs.length;xfs.push(`<xf numFmtId="${nf}" fontId="${font({b:o.b||0,sz:o.sz||10,c:o.c||"222222"})}" fillId="${fill(o.bg)}" borderId="${o.bd||0}" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="${ha}" vertical="center"${o.ind?` indent="${o.ind}"`:""}${o.wrap?' wrapText="1"':""}/></xf>`);return xK[k];};
+  x({});
+  const xml=()=>{const T='<left style="thin"><color rgb="FFC9CFD6"/></left><right style="thin"><color rgb="FFC9CFD6"/></right><top style="thin"><color rgb="FFC9CFD6"/></top>';
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="2"><numFmt numFmtId="164" formatCode="#,##0;[Red]\\-#,##0;&quot;-&quot;"/><numFmt numFmtId="165" formatCode="0.0%;[Red]\\-0.0%"/></numFmts>
+<fonts count="${fonts.length}">${fonts.join("")}</fonts><fills count="${fills.length}">${fills.join("")}</fills>
+<borders count="3"><border><left/><right/><top/><bottom/><diagonal/></border><border>${T}<bottom style="thin"><color rgb="FFC9CFD6"/></bottom><diagonal/></border><border>${T}<bottom style="medium"><color rgb="FF6B7A8C"/></bottom><diagonal/></border></borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="${xfs.length}">${xfs.join("")}</cellXfs><cellStyles count="1"><cellStyle name="표준" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;};
+  return {x,xml};
+}
+/* 칸 너비: 글자 수(한글 2칸)로 — nw 표시한 칸(병합 제목 등)은 빼고 */
+function stXWidths(rows,minW){
+  const w=[];
+  rows.forEach(r=>r.forEach((c,i)=>{if(!c||c.nw)return;let n=0;
+    if(typeof c.v==="number")n=c.pc?7:fmt(Math.round(c.v)).length*1.15+1;
+    else{const t=String(c.v==null?"":c.v);for(const ch of t)n+=ch.charCodeAt(0)>255?1.9:1.05;}
+    n=n*(c.sz||10)/10+(c.ind?c.ind*1.6:0)+2.2;w[i]=Math.max(w[i]||0,n);}));
+  return w.map((v,i)=>Math.min(60,Math.max((minW&&minW[i])||6,Math.round((v||6)*10)/10)));
+}
+window.stXlsx=async function(){
+  const M=window.__st.M;if(!M){toast("결산 화면을 먼저 열어주세요",true);return;}
+  try{
+    if(typeof JSZip==="undefined")await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js");
+    const {x,xml}=stXStyle();
+    const C0={bd:1};
+    const HD=(o)=>x(Object.assign({b:1,bg:"E4E9E1",bd:2,ha:"center",wrap:1},o||{}));
+    const t=(v,o)=>({v:v==null?"":v,s:x(Object.assign({},C0,o||{})),sz:(o&&o.sz)||10,ind:o&&o.ind});
+    const n=(v,o)=>v==null||v===""?{v:"",s:x(Object.assign({},C0,{nf:1},o||{}))}:{v:Math.round(v),s:x(Object.assign({},C0,{nf:1},o||{}))};
+    const p=(a,b,o)=>(a==null||!b)?{v:"",s:x(Object.assign({},C0,o||{}))}:{v:Math.round(a/b*10000)/10000,pc:1,s:x(Object.assign({},C0,{nf:2,c:"2F5FD0",sz:9},o||{}))};
+    const title=(txt,span)=>({v:txt,s:x({b:1,sz:14,c:"2F6B3F"}),nw:1,span});
+    const sub=(txt)=>({v:txt,s:x({sz:9,c:"6B7280"}),nw:1});
+    const sheets=[];
+    const Y=M.Y,L=M.L,cols=M.cols,ymTxt=L.y+"년 "+L.m+"월까지 입력";
+    /* 손익 비교 표 (det: 세부 포함) → rows, merges */
+    const pnlTable=(det,r0,rows,merges)=>{
+      const ncol=1+cols.length*2;
+      const h1=[{v:"과목",s:HD({ha:"left"}),nw:1}],h2=[{v:"",s:HD()}];
+      cols.forEach((c,i)=>{const cc=1+i*2,bg=c.hl?"D6E4F7":"E4E9E1";
+        h1.push({v:c.t,s:HD({bg}),nw:1},{v:"",s:HD({bg})});h2.push({v:"비율",s:HD({bg,sz:9,c:"2F5FD0"})},{v:c.s,s:HD({bg,sz:9,c:"4B5563",b:0}),nw:1});
+        merges.push(stXRef(r0,cc)+":"+stXRef(r0,cc+1));});
+      merges.push(stXRef(r0,0)+":"+stXRef(r0+1,0));
+      rows.push(h1,h2);
+      const P_ROWS={cogs:1,sga:1,op:1,ni:1};
+      const line=(lab,get,st,pk)=>{const o=st||{};const r=[t(lab,{b:o.b,bg:o.bg,ind:o.ind,c:o.c,sz:o.sz})];
+        cols.forEach(c=>{const v=get(c);r.push(pk?p(v,c.v.rev,{bg:o.bg}):t("",{bg:o.bg}),n(v,{b:o.b,bg:o.bg,c:o.c,sz:o.sz}));});rows.push(r);};
+      const BOLD={b:1,bg:"F4F7F2"};
+      M.rowsDef.forEach(([k,nm,b])=>{
+        const st=b===2?{b:1,bg:"F8CBAD"}:b?BOLD:{};
+        line(nm,c=>k==="adj"?c.v.adj:c.v[k],st,!!P_ROWS[k]);
+        if(det&&k==="cogs"){[["beg","+ 기초재고"],["buy","+ 당기 매입"],["end","− 기말재고"],["etc","기타"]].forEach(([q,nm2])=>{if(!cols.some(c=>c.v.cD&&c.v.cD[q]!=null&&(q!=="etc"||c.v.cD[q])))return;line(nm2,c=>c.v.cD?c.v.cD[q]:null,{ind:2,c:"555555",sz:9});});}
+        if(det&&k==="sga"){
+          M.gOrder.forEach(g=>{const ref=M.sgaCols[M.sgaCols.length-2];const acc=M.accAll.filter(a=>stGrpOf(a)===g).sort((a1,a2)=>ref?(ref.d[a2]||0)-(ref.d[a1]||0):0);if(!acc.length)return;
+            line(g,c=>acc.reduce((s2,a)=>s2+((c.v.sgaD||{})[a]||0),0),{b:1,bg:"FFF8E1",ind:1},true);
+            acc.forEach(a=>line(a,c=>(c.v.sgaD||{})[a]||null,{ind:3,c:"555555",sz:9}));});
+          if(M.sgaMiss.some(v=>v))line("세부 없는 금액",c=>{const i=cols.indexOf(c);return M.sgaMiss[i]||null;},{ind:1,c:"6B7280",sz:9});
+        }
+      });
+      return ncol;
+    };
+    const notes=[
+      "· 비율 = 매출액 대비 = 그 줄 금액 ÷ 같은 칸 매출액 × 100 (원가율 = 매출원가 ÷ 매출액, 영업이익률 = 영업이익 ÷ 매출액)",
+      ...M.histYs.filter(y=>SETTLE_HIST[y].memo).map(y=>"· "+y+"년: "+SETTLE_HIST[y].memo),
+      "· 최근 12개월 = 이카운트 월별손익(공급가) 합계"+(M.R.miss.length?" — "+M.R.miss.length+"개월 미입력":"")+(M.dep?" · 감가상각 "+fmt(M.dep)+"원을 판관비에 더함 (결산 예상)":"")+(M.insR?" · 4대보험 "+fmt(M.insR)+"원을 복리후생비 → 보험료로 옮김"+(M.C.ins!=null?"":" (추정)"):""),
+      "· 법인세(최근 12개월) = 법인세차감전이익(조정 후) × "+(M.rate*100).toFixed(1)+"% — 실제 세액은 세무사무실 계산과 달라요"
+    ];
+    const addNotes=(rows,merges,ncol)=>{rows.push([]);notes.forEach(tx=>{const r=rows.length;rows.push([sub(tx)]);merges.push(stXRef(r,0)+":"+stXRef(r,ncol-1));});};
+    /* ① 요약 */
+    {const rows=[],merges=[],ht={};
+      rows.push([title("꽃밥이야기 "+Y+"년 가결산 요약")]);ht[1]=30;
+      rows.push([sub(ymTxt+" · 단위: 원 · 결산서(2020~"+(Y-1)+") + 이카운트 월별손익(최근 12개월)")]);
+      rows.push([]);
+      const k0=rows.length;
+      rows.push([{v:"항목",s:HD({ha:"left"}),nw:1},{v:"금액",s:HD()},{v:"",s:HD()},{v:"설명",s:HD({ha:"left"}),nw:1}]);
+      const kp=[["최근 12개월 당기순이익 (예상)",M.RR.ni,stYm(M.R.from)+" ~ "+stYm(M.R.to)+" = "+Y+"년 1년치로 봄"],
+        [Y+"년 말 예상 이익잉여금",M.reEnd,(Y-1)+"년 말 "+fmt(M.reBeg)+"원 + 최근 12개월 당기순이익"],
+        ["설립 후 연평균 당기순이익",M.avgAll,M.histYs[0]+"~"+M.histYs[M.histYs.length-1]+"년 "+M.histYs.length+"년 평균 (2020년은 8~12월)"]];
+      kp.forEach(([a,v,d])=>{rows.push([t(a,{b:1}),Object.assign(n(v,{b:1,c:"2F6B3F"}),{nw:1}),t("",{}),Object.assign(t(d,{c:"4B5563",sz:9}),{nw:1})]);});
+      rows.push([]);
+      const r1=rows.length;rows.push([{v:"손익 비교 — 결산서(확정) vs 최근 12개월 (= "+Y+"년 예상)",s:x({b:1,sz:11}),nw:1}]);
+      const r0=rows.length;ht[r0+1]=20;ht[r0+2]=30;const ncol=pnlTable(false,r0,rows,merges);
+      merges.push(stXRef(0,0)+":"+stXRef(0,ncol-1),stXRef(1,0)+":"+stXRef(1,ncol-1),stXRef(r1,0)+":"+stXRef(r1,ncol-1));
+      for(let i=0;i<4;i++){const r=k0+i;merges.push(stXRef(r,1)+":"+stXRef(r,2),stXRef(r,3)+":"+stXRef(r,ncol-1));
+        for(let c=4;c<ncol;c++)rows[r][c]={v:"",s:rows[r][3].s};}
+      addNotes(rows,merges,ncol);
+      const minW=[22];for(let i=0;i<cols.length;i++){minW.push(8,15);}
+      sheets.push({name:"요약",rows,merges,rowHt:ht,fit:1,cols:stXWidths(rows,minW)});}
+    /* ② 손익 세부 */
+    {const rows=[],merges=[],ht={};
+      rows.push([title("손익 비교 (세부 항목) — "+Y+"년 가결산")]);ht[1]=30;
+      rows.push([sub(ymTxt+" · 단위: 원 · 인건비·판매비·관리비·상각비는 계정 이름으로 묶음 (보험료는 4대보험이 들어 있어 인건비)")]);rows.push([]);
+      const r0=rows.length;ht[r0+1]=20;ht[r0+2]=30;const ncol=pnlTable(true,r0,rows,merges);
+      merges.push(stXRef(0,0)+":"+stXRef(0,ncol-1),stXRef(1,0)+":"+stXRef(1,ncol-1));
+      addNotes(rows,merges,ncol);
+      M.gOrder.forEach(g=>{const r=rows.length;rows.push([sub("· "+g+": "+M.gNote[g])]);merges.push(stXRef(r,0)+":"+stXRef(r,ncol-1));});
+      const minW=[26];for(let i=0;i<cols.length;i++){minW.push(8,15);}
+      sheets.push({name:"손익 세부",rows,merges,rowHt:ht,fit:1,cols:stXWidths(rows,minW)});}
+    /* ③ 이익잉여금 */
+    {const rows=[],merges=[],ht={};
+      rows.push([title("이익잉여금")]);ht[1]=30;rows.push([sub("기초 + 당기순이익 − 배당·기타 = 기말 · 단위: 원")]);rows.push([]);
+      rows.push(["연도","기초 이익잉여금","+ 당기순이익","− 배당·기타","= 기말 이익잉여금"].map((h,i)=>({v:h,s:HD(i?{}:{ha:"left"})})));
+      M.reRows.forEach((r,i)=>{const last=i===M.reRows.length-1&&String(r[0]).indexOf("예상")>=0;const bg=last?"EAF1FB":null;
+        rows.push([t(r[0],{bg,b:last?1:0}),n(r[1],{bg}),n(r[2],{bg,b:1}),n(r[3],{bg}),n(r[4],{bg,b:1})]);});
+      merges.push(stXRef(0,0)+":"+stXRef(0,4),stXRef(1,0)+":"+stXRef(1,4));
+      rows.push([]);const nr=rows.length;rows.push([sub("· 2023년 배당·기타 27,379,216 = 이익잉여금이 순이익보다 덜 늘어난 금액 (배당·전기오류수정 등 — 세무사무실 확인)")]);merges.push(stXRef(nr,0)+":"+stXRef(nr,4));
+      sheets.push({name:"이익잉여금",rows,merges,rowHt:ht,fit:1,cols:stXWidths(rows,[16,16,16,14,18])});}
+    /* ④ 사업장별 */
+    {const rows=[],merges=[],ht={};
+      rows.push([title("사업장별 손익 — 최근 12개월 ("+stYm(M.R.from)+" ~ "+stYm(M.R.to)+")")]);ht[1]=30;rows.push([sub("이카운트 월별손익 · 단위: 원 · 꽃밥이야기(전체)에는 공통(본사) 비용·영업외도 들어 있어 세 사업장 합과 달라요")]);rows.push([]);
+      const H4=["사업장","매출액","원가율","매출원가","매출총이익","판관비 비율","판매비와관리비","영업이익률","영업이익","법인세차감전"];
+      rows.push(H4.map((h,i)=>({v:h,s:HD(Object.assign(i?{}:{ha:"left"},/비율|원가율|이익률/.test(h)?{c:"2F5FD0",sz:9}:{}))})));
+      M.ents.forEach(([e,nm])=>{const r=stRolling(L,e).sum;const tot=e==="total";const o=tot?{b:1,bg:"F4F7F2"}:{};
+        rows.push([t(nm,o),n(r.rev,o),p(r.cogs,r.rev,{bg:o.bg}),n(r.cogs,o),n(r.gp,o),p(r.sga,r.rev,{bg:o.bg}),n(r.sga,o),p(r.op,r.rev,{bg:o.bg}),n(r.op,Object.assign({},o,{b:1})),n(r.pre,o)]);});
+      merges.push(stXRef(0,0)+":"+stXRef(0,9),stXRef(1,0)+":"+stXRef(1,9));
+      sheets.push({name:"사업장별",rows,merges,rowHt:ht,fit:1,cols:stXWidths(rows,[18,15,8,15,15,9,15,9,15,15])});}
+    /* ⑤ 월별 — 사업장 4개를 위아래로 */
+    {const rows=[],merges=[],ht={};const mons=M.mons;const nc=2+mons.length;
+      rows.push([title("최근 12개월 월별 — 사업장별")]);ht[1]=30;rows.push([sub("이카운트 월별손익 · 단위: 원 · 빨간 칸 = 아직 월별손익에 없는 달")]);
+      merges.push(stXRef(0,0)+":"+stXRef(0,nc-1),stXRef(1,0)+":"+stXRef(1,nc-1));
+      const mT=mons.map(q=>stMonth(q.y,q.m,"total"));
+      M.ents.forEach(([e,nm])=>{
+        rows.push([]);const rt=rows.length;rows.push([{v:nm,s:x({b:1,sz:11,bg:"DDE8D6",bd:1}),nw:1}].concat(Array.from({length:nc-1},()=>({v:"",s:x({bg:"DDE8D6",bd:1})}))));merges.push(stXRef(rt,0)+":"+stXRef(rt,nc-1));
+        rows.push([{v:"과목",s:HD({ha:"left"})}].concat(mons.map((q,i)=>({v:stYm(q),s:HD(mT[i]?{}:{bg:"FDECEC",c:"B3261E"})})),[{v:"합계",s:HD()}]));
+        const mv=mons.map(q=>stMonth(q.y,q.m,e));const RS=stRolling(L,e).sum;
+        [["rev","매출액",1],["cogs","매출원가"],["gp","매출총이익"],["sga","판매비와관리비"],["op","영업이익",1],["opr","영업이익률"],["pre","법인세차감전",1]].forEach(([k,lab,b])=>{
+          const o=b?{b:1,bg:"F4F7F2"}:{};const cell=(v)=>k==="opr"?p(v&&v.op,v&&v.rev,{bg:o.bg}):n(v?v[k]:null,o);
+          rows.push([t(lab,o)].concat(mv.map((v,i)=>!mT[i]?t("미입력",{bg:"FDECEC",c:"B3261E",ha:"center",sz:9}):!v?t("-",{ha:"center",c:"AAAAAA"}):cell(v)),[k==="opr"?p(RS.op,RS.rev,{bg:"EEF2F7",b:1}):n(RS[k],{b:1,bg:"EEF2F7"})]));});
+      });
+      sheets.push({name:"월별",rows,merges,rowHt:ht,fit:1,cols:stXWidths(rows,[14].concat(mons.map(()=>12),[14]))});}
+    const blob=await cardBuildXlsx(sheets,()=>xml());
+    const fname="결산_"+String(L.y).slice(2)+String(L.m).padStart(2,"0")+".xlsx";
+    const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=fname;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},800);
+    toast(fname+" 를 받았어요 (요약 · 손익 세부 · 이익잉여금 · 사업장별 · 월별)");
+  }catch(e){console.error(e);toast("엑셀 만들기 실패: "+(e.message||e),true);}
+};
+function stXRef(r,c){return cardColL(c)+(r+1);}
 window.stCapture=async function(mode){
   const el=document.getElementById("stReport");if(!el)return;
   try{
