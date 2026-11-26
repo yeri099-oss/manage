@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v601</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v602</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -5077,7 +5077,7 @@ function renderPnl(){
     const ents=PNL_ENTS.filter(([k])=>doc.rows.some(r=>r.v[k]!=null));
     const saleRow=doc.rows.find(r=>r.n.indexOf("매출")>=0&&r.lv===0);
     const monthTabs=`<div class="subtabs"><select class="ctl" onchange="pnlSetKey(this.value)">${[...keys].reverse().map(k=>`<option value="${k}" ${k===key?"selected":""}>${k.split("-")[0]}년 ${k.split("-")[1]}월</option>`).join("")}</select></div>`;
-    body=`<div class="card">
+    body=(typeof pnlReportCard==="function"?pnlReportCard(key):"")+`<div class="card">
       <div class="card-head"><div class="card-title">${ky}년 ${km}월 손익현황 <span class="unit">매출액 대비 손익율 · 단위: 원</span></div>
       ${canEdit?`<button class="btn btn-sm" onclick="pnlDelete('${key}')">이 달 삭제</button>`:""}</div>
       ${monthTabs}
@@ -21323,6 +21323,58 @@ window.stCapture=async function(mode){
   }catch(e){console.error(e);toast("캡쳐 실패: "+(e.message||e),true);}
 };
 RENDERERS.settle=renderSettle;
+/* ===== v602: 월별손익 › 그 달 보고용 요약 — 전체 KPI(전월·전년 같은 달 대비) · 사업장별 · 올해 누계 ===== */
+function pnlRptDelta(c,p,unit){
+  if(c==null||p==null)return '<span style="color:#aaa">-</span>';
+  const d=c-p;const up=d>=0;const col=d===0?"#6B7280":up?"#1c6b2f":"#C00000";
+  const pc=p?` (${up?"+":""}${(d/Math.abs(p)*100).toFixed(1)}%)`:"";
+  return `<span style="color:${col};font-weight:600">${d===0?"":up?"▲":"▼"} ${fmt(Math.abs(Math.round(d)))}${unit||""}</span><span style="color:${col};font-size:11px">${pc}</span>`;
+}
+function pnlReportCard(key){
+  try{
+    if(typeof stMonth!=="function")return "";
+    const [y,m]=key.split("-").map(Number);
+    const cur=stMonth(y,m,"total");if(!cur)return "";
+    const pq=stShift(y,m,-1),prv=stMonth(pq.y,pq.m,"total"),yoy=stMonth(y-1,m,"total");
+    const W=v=>v==null?"-":(v<0?`<span style="color:#C00000">${fmt(Math.round(v))}</span>`:fmt(Math.round(v)));
+    const R=(a,b)=>a==null||!b?"":`<span class="stp" style="display:inline-block;min-width:40px;padding:0 5px;border-radius:5px;background:#EAF1FB;color:#2F5FD0;font-size:10.5px;font-weight:600;text-align:right">${(a/b*100).toFixed(1)}%</span>`;
+    const kpi=(lb,k,rate)=>`<div style="flex:1 1 0;min-width:210px;border:1px solid var(--line,#e3e3e3);border-radius:12px;padding:10px 16px;background:#fff">
+      <div class="unit">${lb}</div><div style="font-size:20px;font-weight:800;${cur[k]<0?"color:#C00000":""}">${fmt(Math.round(cur[k]))}<span style="font-size:13px;font-weight:600">원</span>${rate?` <span style="font-size:12px;color:#2F5FD0;font-weight:600">${cur.rev?(cur[k]/cur.rev*100).toFixed(1)+"%":""}</span>`:""}</div>
+      <div style="font-size:12px;margin-top:3px">전월 대비 ${pnlRptDelta(cur[k],prv&&prv[k])}</div>
+      <div style="font-size:12px">전년 ${m}월 대비 ${pnlRptDelta(cur[k],yoy&&yoy[k])}</div></div>`;
+    const kpis=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 4px">${kpi("매출액","rev")}${kpi("영업이익 (영업이익률)","op",1)}${kpi("법인세차감전이익","pre",1)}</div>`;
+    /* 사업장별 */
+    const ents=[["total","꽃밥이야기 (전체)"],["insadong","꽃밥에피다"],["market","꽃밥마켓"],["bojagi","보자기꽃밥"]];
+    const biz=ents.map(([e,nm])=>{const c=stMonth(y,m,e);if(!c)return "";const p0=stMonth(pq.y,pq.m,e);const tot=e==="total";
+      return `<tr${tot?' style="background:#F4F7F2;font-weight:700"':""}><td class="l">${nm}</td><td style="text-align:right">${W(c.rev)}</td><td style="text-align:right">${pnlRptDelta(c.rev,p0&&p0.rev)}</td><td style="text-align:right">${R(c.cogs,c.rev)}</td><td style="text-align:right">${R(c.sga,c.rev)}</td><td style="text-align:right"><b>${W(c.op)}</b></td><td style="text-align:right">${R(c.op,c.rev)}</td><td style="text-align:right">${pnlRptDelta(c.op,p0&&p0.op)}</td></tr>`;}).join("");
+    const bizTbl=`<table class="rpt" style="font-size:13px;margin:8px auto 0;width:auto"><thead><tr><th class="l">사업장 (${m}월)</th><th>매출액</th><th>전월 대비</th><th>원가율</th><th>판관비율</th><th>영업이익</th><th>영업이익률</th><th>영업이익 전월 대비</th></tr></thead><tbody>${biz}</tbody></table>`;
+    /* 올해 누계 vs 작년 같은 기간 */
+    const acc=(yy)=>{const o={};let n=0;for(let i=1;i<=m;i++){const v=stMonth(yy,i,"total");if(v){stAdd(o,v);n++;}}return n?Object.assign(o,{n}):null;};
+    const A=acc(y),B=acc(y-1);
+    const cum=A?`<table class="rpt" style="font-size:13px;margin:10px auto 0;width:auto"><thead><tr><th class="l">누계 (1~${m}월)</th><th>매출액</th><th>영업이익</th><th>영업이익률</th><th>법인세차감전이익</th></tr></thead><tbody>
+      <tr style="font-weight:700;background:#F4F7F2"><td class="l">${y}년${A.n<m?` <span class="unit">(${A.n}개월)</span>`:""}</td><td style="text-align:right">${W(A.rev)}</td><td style="text-align:right">${W(A.op)}</td><td style="text-align:right">${R(A.op,A.rev)}</td><td style="text-align:right">${W(A.pre)}</td></tr>
+      ${B?`<tr><td class="l">${y-1}년${B.n<m?` <span class="unit">(${B.n}개월)</span>`:""}</td><td style="text-align:right">${W(B.rev)}</td><td style="text-align:right">${W(B.op)}</td><td style="text-align:right">${R(B.op,B.rev)}</td><td style="text-align:right">${W(B.pre)}</td></tr>
+      <tr><td class="l">증감</td><td style="text-align:right">${pnlRptDelta(A.rev,B.rev)}</td><td style="text-align:right">${pnlRptDelta(A.op,B.op)}</td><td></td><td style="text-align:right">${pnlRptDelta(A.pre,B.pre)}</td></tr>`:""}
+    </tbody></table>`:"";
+    const mode=S.ui.pnlMode==="incl"?" · 포함가":"";
+    return `<div class="card"><div class="card-head"><div class="card-title">📋 ${y}년 ${m}월 손익 요약 <span class="unit">보고용 · 단위: 원${mode}</span></div>
+      <div style="display:flex;gap:6px"><button class="btn btn-sm btn-primary" onclick="pnlRptCapture('img')">📸 이미지 복사</button><button class="btn btn-sm" onclick="pnlRptCapture('dl')">이미지 저장</button></div></div>
+      <div id="pnlRpt" style="background:#fff;padding:6px 4px"><div style="font-weight:800;font-size:15px;margin:0 0 2px">꽃밥이야기 ${y}년 ${m}월 손익 요약</div>${kpis}${bizTbl}${cum}
+      <div class="footnote" style="margin-top:6px">*비율 = 매출액 대비 · 전년 대비는 ${y-1}년 ${m}월 월별손익이 있을 때만</div></div></div>`;
+  }catch(e){console.error(e);return "";}
+}
+window.pnlRptCapture=async function(mode){
+  const el=document.getElementById("pnlRpt");if(!el)return;
+  try{
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
+    const cv=await html2canvas(el,{backgroundColor:"#ffffff",scale:2});
+    const blob=await new Promise(r=>cv.toBlob(r,"image/png"));
+    const k=(S.data.pnl&&S.data.pnl[S.ui.pnlKey])?S.ui.pnlKey:"";const fname="손익요약_"+(k?k.slice(2,4)+k.split("-")[1].padStart(2,"0"):"")+".png";
+    const dl=()=>{const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=fname;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},800);};
+    if(mode==="dl"){dl();toast(fname+" 을 저장했어요");return;}
+    try{await navigator.clipboard.write([new ClipboardItem({"image/png":blob})]);toast("손익 요약 이미지를 복사했어요 — 보고 창에 Ctrl+V");}catch(e){dl();toast("복사가 막혀서 이미지 파일로 저장했어요");}
+  }catch(e){console.error(e);toast("캡쳐 실패: "+(e.message||e),true);}
+};
 /* v567: 결산 탭은 내용만큼만 — 화면 꽉 채우지 않고 왼쪽 정렬 */
 (function(){const st=document.createElement("style");st.textContent="#tab-settle table.rpt{width:auto!important;margin-left:auto!important;margin-right:auto!important}#tab-settle .table-wrap{display:block}#tab-settle .stp{display:inline-block;min-width:40px;margin-left:6px;padding:0 5px;border-radius:5px;background:#EAF1FB;color:#2F5FD0;font-size:10.5px;font-weight:600;text-align:right;vertical-align:1px;cursor:help}#tab-settle .stp:empty{display:none}#tab-settle td.stpc{width:48px;padding-left:10px!important;padding-right:0!important;text-align:right;border-right:none!important}#tab-settle td.stpc .stp{margin-left:0}#tab-settle td.stpc+td{border-left:none!important;padding-left:6px!important}#tab-settle .st-row{display:flex;gap:14px;flex-wrap:wrap;align-items:stretch}#tab-settle .st-row>.card{flex:1 1 auto;min-width:0}#tab-settle .st-fit{width:fit-content;max-width:100%;margin:0 auto}#tab-settle .st-fit .footnote{max-width:640px}#tab-settle .st-fit>.card-title{margin-bottom:16px!important}#tab-settle .st-fit>.footnote,#tab-settle .st-fit .table-wrap+.footnote{margin-top:10px!important}";document.head.appendChild(st);})();
 /* ===== v536: 엑셀처럼 표 머리글을 눌러 정렬 (한 번 더 누르면 반대로) — 꽃밥에피다 탭의 모든 표
