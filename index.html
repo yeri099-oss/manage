@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v612</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v613</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -21173,10 +21173,10 @@ function stXStyle(){
     bds.push(`<border>${side("left",L[0],L[1])}${side("right",R[0],R[1])}${side("top",T[0],T[1])}${side("bottom",B[0],B[1])}<diagonal/></border>`);return bK[k];};
   font({});border(0);
   const x=(o)=>{o=o||{};const k=JSON.stringify(o);if(xK[k]!=null)return xK[k];
-    const nf=o.nf===1?164:o.nf===2?165:0,ha=o.ha||(o.nf?"right":"left");
+    const nf=o.nf===1?164:o.nf===2?165:o.nf===3?166:o.nf===4?167:0,ha=o.ha||(o.nf?"right":"left");
     xK[k]=xfs.length;xfs.push(`<xf numFmtId="${nf}" fontId="${font({b:o.b||0,sz:o.sz||10,c:o.c||"222222"})}" fillId="${fill(o.bg)}" borderId="${border(o.bd||0,o.ol)}" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="${ha}" vertical="center"${o.wrap?' wrapText="1"':""}/></xf>`);return xK[k];};
   x({});
-  const xml=()=>`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="2"><numFmt numFmtId="164" formatCode="#,##0;[Red]\\-#,##0;&quot;-&quot;"/><numFmt numFmtId="165" formatCode="0.0%;[Red]\\-0.0%"/></numFmts>
+  const xml=()=>`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="4"><numFmt numFmtId="164" formatCode="#,##0;[Red]\\-#,##0;&quot;-&quot;"/><numFmt numFmtId="165" formatCode="0.0%;[Red]\\-0.0%"/><numFmt numFmtId="166" formatCode="#,##0;\\-#,##0;&quot;-&quot;"/><numFmt numFmtId="167" formatCode="0.0%;\\-0.0%"/></numFmts>
 <fonts count="${fonts.length}">${fonts.join("")}</fonts><fills count="${fills.length}">${fills.join("")}</fills><borders count="${bds.length}">${bds.join("")}</borders>
 <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="${xfs.length}">${xfs.join("")}</cellXfs><cellStyles count="1"><cellStyle name="표준" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
   return {x,xml};
@@ -21223,7 +21223,9 @@ window.stXlsx=async function(){
       rows.push(h1,h2);ht[r0+1]=20;ht[r0+2]=30;
       const P_ROWS={cogs:1,sga:1,op:1,ni:1};
       const line=(lab,get,st,pk)=>{const o=st||{};const r=[LB(lab,{b:o.b,bg:o.bg,c:o.c,sz:o.sz})];
-        cols.forEach(c=>{const v=get(c);r.push(pk?p(v,c.v.rev,{bg:o.bg}):t("",{bg:o.bg}),n(v,{b:o.b,bg:o.bg,c:o.c,sz:o.sz}));});rows.push(r);};
+        cols.forEach(c=>{const v=get(c);const nr=/^2020년/.test(c.t); /* v613: 2020년은 빨간색 없음 */
+          const pc=pk?p(v,c.v.rev,{bg:o.bg}):t("",{bg:o.bg});if(nr&&pc.o.nf===2)pc.o=Object.assign({},pc.o,{nf:4});
+          const nc=n(v,{b:o.b,bg:o.bg,c:o.c,sz:o.sz});if(nr)nc.o=Object.assign({},nc.o,{nf:3});r.push(pc,nc);});rows.push(r);};
       const BOLD={b:1,bg:"F4F7F2"};
       M.rowsDef.forEach(([k,nm,b])=>{
         const st=b===2?{b:1,bg:"F8CBAD"}:b?BOLD:{};
@@ -21271,7 +21273,8 @@ window.stXlsx=async function(){
       const r0=rows.length;
       rows.push(["연도","기초 이익잉여금","+ 당기순이익","− 배당·기타","= 기말 이익잉여금"].map(h=>hd(h)));
       M.reRows.forEach((r,i)=>{const last=i===M.reRows.length-1&&String(r[0]).indexOf("예상")>=0;const bg=last?"EAF1FB":null;
-        rows.push([LB(r[0],{bg,b:last?1:0}),n(r[1],{bg}),n(r[2],{bg,b:1}),n(r[3],{bg}),n(r[4],{bg,b:1})]);});
+        const y0=/^2020년/.test(String(r[0])),y1=/^2021년/.test(String(r[0]));const nr=o=>Object.assign(o,{nf:3});
+        rows.push([LB(r[0],{bg,b:last?1:0}),n(r[1],y0||y1?nr({bg}):{bg}),n(r[2],y0?nr({bg,b:1}):{bg,b:1}),n(r[3],{bg}),n(r[4],y0?nr({bg,b:1}):{bg,b:1})]);});
       box(rows,r0,rows.length-1,0,4);fin();
       sheets.push({name:"이익잉여금",rows,merges,rowHt:ht,fit:1,pre:1,cols:stXWidths(rows,[16,16,16,14,18])});}
     /* ④ 사업장별 */
@@ -21319,7 +21322,8 @@ function stSumHtml(){
   const td=(h,b)=>`<td style="text-align:right;padding:7px 12px;${VB}${b?";font-weight:700":""}">${h}</td>`;
   const rows=M.cols.map(c=>{const h=c.v;const yr=/^\d{4}년 결산/.test(c.t)?Number(c.t.slice(0,4)):null;
     const re=yr&&SETTLE_HIST[yr]?SETTLE_HIST[yr].reEnd:(c.v===M.AA?M.reEnd:null);const est=c.hl;
-    return `<tr style="${c.v===M.RR?"border-top:1px solid #9AA3AE;":""}${est?"background:#F5F9FE":""}"><td class="l" style="padding:7px 12px;white-space:nowrap;${VB}">${c.v===M.AA?"연환산":esc(c.t.replace(" 결산",""))}</td>${td(W(h.rev))}${td(W(h.op))}${td(P(h.op,h.rev))}${td(W(h.ni),1)}${td(P(h.ni,h.rev),1)}${td(re==null?"-":W(re))}</tr>`;}).join("");
+    const html=`<tr style="${c.v===M.RR?"border-top:1px solid #9AA3AE;":""}${est?"background:#F5F9FE":""}"><td class="l" style="padding:7px 12px;white-space:nowrap;${VB}">${c.v===M.AA?"연환산":esc(c.t.replace(" 결산",""))}</td>${td(W(h.rev))}${td(W(h.op))}${td(P(h.op,h.rev))}${td(W(h.ni),1)}${td(P(h.ni,h.rev),1)}${td(re==null?"-":W(re))}</tr>`;
+    return yr===SETTLE_FOUND?html.replace(/color:#C00000/g,"color:inherit"):html; /* v613: 2020년(설립 첫해)은 적자여도 빨간색 없음 */}).join("");
   const th=(t)=>`<th style="padding:7px 12px;text-align:center;border-bottom:1.5px solid #555;border-top:1.5px solid #555;white-space:nowrap;${VB}">${t}</th>`;
   return `<div style="font-weight:800;font-size:15px;margin:0 0 4px;text-align:center">꽃밥이야기 결산 요약 <span style="font-weight:400;font-size:12px;color:#6B7280">${M.L.y}년 ${M.L.m}월까지 입력 · 단위: 원</span></div>
     <div style="display:flex;gap:18px;margin:4px 0 8px;font-size:13px;flex-wrap:wrap;justify-content:center">
