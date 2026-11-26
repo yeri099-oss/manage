@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">경영관리</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v617</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v618</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -21069,10 +21069,15 @@ function renderSettle(){
     ${histYs.length?kpi("설립 후 연평균 당기순이익",eok(avgAll),histYs[0]+"~"+histYs[histYs.length-1]+"년 "+histYs.length+"년 평균 (2020년은 8~12월)"):""}
   </div>`;
   /* 손익 비교표 */
-  const cols=[];
-  histYs.forEach(y=>{const h=SETTLE_HIST[y];if(h)cols.push({t:y+"년 결산",s:h.src||"확정 (결산서)",v:Object.assign({gp:h.rev-h.cogs,adj:null,preA:null},h)});});
-  cols.push({t:"최근 12개월",s:stYm(R.from)+" ~ "+stYm(R.to)+(R.miss.length?" · "+R.miss.length+"개월 빠짐":""),v:RR,hl:1});
-  cols.push({t:Y+"년 연환산",s:"1~"+L.m+"월 × 12/"+nAct,v:AA,hl:1});
+  const colsAll=[];
+  histYs.forEach(y=>{const h=SETTLE_HIST[y];if(h)colsAll.push({y,t:y+"년 결산",s:h.src||"확정 (결산서)",v:Object.assign({gp:h.rev-h.cogs,adj:null,preA:null},h)});});
+  colsAll.push({t:"최근 12개월",s:stYm(R.from)+" ~ "+stYm(R.to)+(R.miss.length?" · "+R.miss.length+"개월 빠짐":""),v:RR,hl:1});
+  colsAll.push({t:Y+"년 연환산",s:"1~"+L.m+"월 × 12/"+nAct,v:AA,hl:1});
+  /* v618: 화면 표는 고른 연도부터 (기본 2년 전부터) — 엑셀·요약 이미지는 전체 */
+  let fromY=window.__st.fromY;if(fromY==null){try{fromY=Number(localStorage.getItem("ssv2_stFromY"))||null;}catch(e){}}
+  if(!fromY||histYs.indexOf(fromY)<0)fromY=Math.max(histYs[0]||Y,Y-2);
+  const cols=colsAll.filter(c=>!c.y||c.y>=fromY);
+  const lastH=cols.filter(c=>c.y).length-1;
   const rowsDef=[["rev","매출액",1],["cogs","매출원가"],["gp","매출총이익",1],["sga","판매비와관리비"],["op","영업이익",1],["noi","영업외수익"],["noe","영업외비용"],["pre","법인세차감전이익",1],["adj","결산 조정 (재고·기타)"],["tax","법인세 (예상)"],["ni","당기순이익",2]];
   let tbl=`<div class="table-wrap"><table class="rpt" style="font-size:13px;margin:0"><thead><tr><th class="l">과목</th>${cols.map(c=>`<th colspan="2" style="min-width:150px${c.hl?";background:#EAF1FB":""}">${c.t}<div style="font-weight:400;font-size:11px;color:var(--sub)">${c.s}</div></th>`).join("")}</tr></thead><tbody>
     ${rowsDef.map(([k,n,b])=>`<tr${b===2?' style="background:#F8CBAD"':b?' style="background:#F4F7F2"':""}><td class="l">${b?"<b>"+n+"</b>":n}</td>${cols.map(c=>{const v=c.v[k];const red=v<0&&!/^2020년/.test(c.t); /* v614: 마이너스 빨간색 (2020년 제외) */
@@ -21085,7 +21090,7 @@ function renderSettle(){
   const gOrder=["인건비","판매비","관리비","상각비"];
   const gNote={"인건비":"급여·상여·잡급(시급직)·퇴직급여·복리후생비·보험료(4대보험 등)·외주/인적 용역비","판매비":"판매수수료·광고·운반·포장·접대","관리비":"임차료·전기·수도·통신·세금·소모품·수수료 등","상각비":"감가상각비·무형자산상각비 (돈은 안 나가는 비용)"};
   const sgaOpen=window.__st.sgaOpen||{};
-  const sgaRows=gOrder.map(g=>{const acc=accAll.filter(a=>stGrpOf(a)===g).sort((x,y)=>(sgaCols[histYs.length-1]?(sgaCols[histYs.length-1].d[y]||0)-(sgaCols[histYs.length-1].d[x]||0):0));if(!acc.length)return "";
+  const sgaRows=gOrder.map(g=>{const acc=accAll.filter(a=>stGrpOf(a)===g).sort((x,y)=>(sgaCols[lastH]?(sgaCols[lastH].d[y]||0)-(sgaCols[lastH].d[x]||0):0));if(!acc.length)return "";
     const gs=sgaCols.map(c=>acc.reduce((s,a)=>s+(c.d[a]||0),0));const op=!!sgaOpen[g];
     return `<tr style="background:#FFF2CC;cursor:pointer" onclick="stSgaTog('${g}')"><td class="l"><b>${op?"▾":"▸"} ${g}</b> <span class="unit" style="font-size:11px">${gNote[g]}</span></td>${gs.map((v,i)=>`<td class="stpc"><span class="stp" title="매출액 대비 비율 = 이 금액 ÷ 같은 칸 매출액 × 100">${pct(v,sgaCols[i].rev)}</span></td><td style="text-align:right"><b>${W(v)}</b></td>`).join("")}</tr>`
       +(op?acc.map(a=>`<tr><td class="l" style="padding-left:26px">${esc(a)}</td>${sgaCols.map(c=>`<td class="stpc"></td><td style="text-align:right">${c.d[a]?W(c.d[a]):'<span style="color:#ccc">-</span>'}</td>`).join("")}</tr>`).join(""):"");}).join("");
@@ -21096,7 +21101,7 @@ function renderSettle(){
     <div class="footnote">% = 매출액 대비 · 인건비·판매비·관리비 나누는 기준은 계정 이름으로 자동 (보험료는 인건비에 넣었어요 — 결산서 보험료에 4대보험이 들어 있어서)</div>`;
   /* v565: 스위치를 켜면 손익 비교표의 판매비와관리비 아래에 인건비·판매비·관리비·상각비와 계정별 금액 */
   if(window.__st.det){
-    const inl=gOrder.map(g=>{const acc=accAll.filter(a=>stGrpOf(a)===g).sort((x,y)=>(sgaCols[histYs.length-1]?(sgaCols[histYs.length-1].d[y]||0)-(sgaCols[histYs.length-1].d[x]||0):0));if(!acc.length)return "";
+    const inl=gOrder.map(g=>{const acc=accAll.filter(a=>stGrpOf(a)===g).sort((x,y)=>(sgaCols[lastH]?(sgaCols[lastH].d[y]||0)-(sgaCols[lastH].d[x]||0):0));if(!acc.length)return "";
       const gs=sgaCols.map(c=>acc.reduce((s2,a)=>s2+(c.d[a]||0),0));
       return `<tr style="background:#FFF8E1"><td class="l" style="padding-left:18px"><b>${g}</b> <span title="${esc(gNote[g])}" style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;background:#C9A227;color:#fff;font-size:10.5px;font-weight:800;cursor:help;vertical-align:middle;margin-left:3px">!</span></td>${gs.map((v,i)=>`<td class="stpc"><span class="stp" title="매출액 대비 비율 = 이 금액 ÷ 같은 칸 매출액 × 100">${pct(v,sgaCols[i].rev)}</span></td><td style="text-align:right"><b>${W(v)}</b></td>`).join("")}</tr>`
         +acc.map(a=>`<tr style="font-size:12px;color:#555"><td class="l" style="padding-left:34px">${esc(a)}</td>${sgaCols.map(c=>`<td class="stpc"></td><td style="text-align:right">${c.d[a]?W(c.d[a]):'<span style="color:#ccc">-</span>'}</td>`).join("")}</tr>`).join("");}).join("")
@@ -21152,10 +21157,15 @@ function renderSettle(){
     · 월별손익 = 이카운트 장부 기준 · 결산 때 감가상각·재고 실사·법인세 등으로 차이 발생 → 위 '결산 조정'에 입력<br>
     · ${Y-1}년 순이익 = 국고보조금 1.17억(일회성) 포함 · 제외 시 영업으로 번 이익은 더 적음<br>
     · 지점(꽃밥에피다) = 같은 법인 · 재무상태표·이익잉여금은 회사 전체 하나, 사업장별로는 손익만 구분</div></div>`;
-  window.__st.M={AA,nAct,Y,L,R,RR,reBeg,reEnd,avgAll,histYs,cols,rowsDef,sgaCols,accAll,gOrder,gNote,sgaMiss,reRows,ents,mons,rate,C,H,insR,dep}; /* v591: 엑셀용 */
+  /* 엑셀·요약 이미지는 모든 연도 */
+  const sgaColsA=colsAll.map(c=>({t:c.t,s:c.s,hl:c.hl,d:c.v.sgaD||{},tot:c.v.sga,rev:c.v.rev}));
+  const accAllA=[];sgaColsA.forEach(c=>{for(const k in c.d)if(accAllA.indexOf(k)<0)accAllA.push(k);});
+  const sgaMissA=sgaColsA.map(c=>{const s2=Object.values(c.d).reduce((a,b)=>a+b,0);return c.tot&&Math.abs(s2-c.tot)>1?c.tot-s2:0;});
+  window.__st.M={AA,nAct,Y,L,R,RR,reBeg,reEnd,avgAll,histYs,cols:colsAll,rowsDef,sgaCols:sgaColsA,accAll:accAllA,gOrder,gNote,sgaMiss:sgaMissA,reRows,ents,mons,rate,C,H,insR,dep}; /* v591: 엑셀용 */
   el.innerHTML=head+`<div id="stReport" style="background:#fff">
     <div class="card"><div class="st-fit" id="stKpiWrap"><div class="card-title">📘 ${Y}년 가결산 요약 <span class="unit">${L.y}년 ${L.m}월까지 입력 · 단위: 원</span></div>${kpis}</div></div>
     <div class="card"><div class="st-fit"><div class="card-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">손익 비교 <span class="unit">결산서(확정) vs 최근 12개월 vs ${Y}년 연환산</span>
+      <select class="ctl" onchange="stFromY(this.value)" style="font-size:12.5px;padding:2px 6px" title="손익 비교 표에 보일 첫 연도">${histYs.map(y=>`<option value="${y}" ${y===fromY?"selected":""}>${y}년부터</option>`).join("")}</select>
       <label onclick="stDetTog()" style="margin-left:auto;display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600" title="판매비와관리비를 인건비·판매비·관리비·상각비와 계정별로 펼쳐 보기"><span>세부 항목 보기</span><span style="position:relative;width:42px;height:24px;border-radius:12px;background:${window.__st.det?"#2F6B3F":"#c9cec6"};transition:background .15s;display:inline-block"><span style="position:absolute;top:3px;left:${window.__st.det?21:3}px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3);transition:left .15s"></span></span></label></div>${tbl}
       </div></div>
     <div class="st-row"><div class="card"><div class="st-fit"><div class="card-title">이익잉여금</div>${reTbl}</div></div>
@@ -21165,6 +21175,7 @@ function renderSettle(){
   /* v596: 요약 카드 줄 폭 = 손익 비교 표 폭 */
   requestAnimationFrame(()=>{const w=document.getElementById("stKpiWrap"),tb=document.querySelector("#stReport .st-fit table.rpt");if(w&&tb&&tb.offsetWidth)w.style.width=Math.min(tb.offsetWidth,w.parentNode.clientWidth)+"px";});
 }
+window.stFromY=function(v){window.__st.fromY=Number(v);try{localStorage.setItem("ssv2_stFromY",String(v));}catch(e){}renderSettle();};
 window.stEnt=function(e){window.__st.ent=e;renderSettle();};
 window.stDetTog=function(){window.__st.det=!window.__st.det;try{localStorage.setItem("ssv2_stDet",window.__st.det?"1":"");}catch(e){}renderSettle();};
 try{window.__st.det=!!localStorage.getItem("ssv2_stDet");}catch(e){}
