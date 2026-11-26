@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>꽃밥이야기 매출현황</title>
+<title>꽃밥이야기 경영관리</title>
 <meta name="theme-color" content="#2a6b46">
 <link rel="icon" id="page-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E%F0%9F%8C%B8%3C/text%3E%3C/svg%3E">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="매출현황">
+<meta name="apple-mobile-web-app-title" content="경영관리">
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
@@ -461,7 +461,7 @@ window.FIREBASE_CONFIG = {
 <div id="login-screen" class="login-screen hidden">
   <div class="login-card">
     <div class="login-logo">꽃밥이야기</div>
-    <div class="login-sub">매출현황 보고</div>
+    <div class="login-sub">경영관리</div>
     <form id="login-form" autocomplete="on">
       <label>아이디
         <input type="text" id="login-username" autocomplete="username" autocapitalize="none" required>
@@ -480,10 +480,10 @@ window.FIREBASE_CONFIG = {
   <header class="topbar">
     <div class="topbar-title">
       <span class="brand">꽃밥이야기</span>
-      <span class="brand-sub">매출현황</span>
+      <span class="brand-sub">경영관리</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v615</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v616</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -14193,7 +14193,7 @@ function switchTab(tab) {
 // 출금기록부 탭이 열려 있으면 브라우저 탭 이름·아이콘을 바꿔서 즐겨찾기를 매출현황과 따로 구분
 function pageIdentity(tab) {
   const wd = tab === "withdraw";
-  document.title = wd ? "출금기록부 · 꽃밥이야기" : "꽃밥이야기 매출현황";
+  document.title = wd ? "출금기록부 · 꽃밥이야기" : "꽃밥이야기 경영관리";
   const ic = document.getElementById("page-icon");
   if (ic) ic.href = "data:image/svg+xml," + encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>${wd ? "💸" : "🌸"}</text></svg>`);
 }
