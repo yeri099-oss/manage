@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v611</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v612</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -21315,16 +21315,16 @@ function stSumHtml(){
   const M=window.__st.M;if(!M)return "";
   const W=v=>v==null?"-":(v<0?`<span style="color:#C00000">${fmt(Math.round(v))}</span>`:fmt(Math.round(v)));
   const P=(a,b)=>a==null||!b?"":`<span style="${a<0?"color:#C00000":"color:#4B5563"}">${(a/b*100).toFixed(1)}%</span>`;
-  const td=(h,b)=>`<td style="text-align:right;padding:7px 12px${b?";font-weight:700":""}">${h}</td>`;
+  const VB="border-left:1px solid #D0D5DD;border-right:1px solid #D0D5DD"; /* v612: 세로선 */
+  const td=(h,b)=>`<td style="text-align:right;padding:7px 12px;${VB}${b?";font-weight:700":""}">${h}</td>`;
   const rows=M.cols.map(c=>{const h=c.v;const yr=/^\d{4}년 결산/.test(c.t)?Number(c.t.slice(0,4)):null;
     const re=yr&&SETTLE_HIST[yr]?SETTLE_HIST[yr].reEnd:(c.v===M.AA?M.reEnd:null);const est=c.hl;
-    return `<tr style="${c.v===M.RR?"border-top:1px solid #9AA3AE;":""}${est?"background:#F5F9FE":""}"><td class="l" style="padding:7px 12px;white-space:nowrap">${esc(c.t.replace(" 결산",""))}${est?` <span style="font-size:11px;color:#6B7280">${esc(c.s)}</span>`:""}</td>${td(W(h.rev))}${td(W(h.op))}${td(P(h.op,h.rev))}${td(W(h.ni),1)}${td(P(h.ni,h.rev),1)}${td(re==null?"-":W(re))}</tr>`;}).join("");
-  const th=(t,l)=>`<th style="padding:7px 12px;${l?"text-align:left":"text-align:right"};border-bottom:1.5px solid #555;white-space:nowrap">${t}</th>`;
-  return `<div style="font-weight:800;font-size:15px;margin:0 0 4px">꽃밥이야기 결산 요약 <span style="font-weight:400;font-size:12px;color:#6B7280">${M.L.y}년 ${M.L.m}월까지 입력 · 단위: 원</span></div>
-    <div style="display:flex;gap:18px;margin:4px 0 8px;font-size:13px;flex-wrap:wrap">
+    return `<tr style="${c.v===M.RR?"border-top:1px solid #9AA3AE;":""}${est?"background:#F5F9FE":""}"><td class="l" style="padding:7px 12px;white-space:nowrap;${VB}">${c.v===M.AA?"연환산":esc(c.t.replace(" 결산",""))}</td>${td(W(h.rev))}${td(W(h.op))}${td(P(h.op,h.rev))}${td(W(h.ni),1)}${td(P(h.ni,h.rev),1)}${td(re==null?"-":W(re))}</tr>`;}).join("");
+  const th=(t)=>`<th style="padding:7px 12px;text-align:center;border-bottom:1.5px solid #555;border-top:1.5px solid #555;white-space:nowrap;${VB}">${t}</th>`;
+  return `<div style="font-weight:800;font-size:15px;margin:0 0 4px;text-align:center">꽃밥이야기 결산 요약 <span style="font-weight:400;font-size:12px;color:#6B7280">${M.L.y}년 ${M.L.m}월까지 입력 · 단위: 원</span></div>
+    <div style="display:flex;gap:18px;margin:4px 0 8px;font-size:13px;flex-wrap:wrap;justify-content:center">
       <div>${M.Y}년 연환산 당기순이익 <b style="font-size:16px">${W(M.AA.ni)}</b></div><div>${M.Y}년 말 예상 이익잉여금 <b style="font-size:16px">${W(M.reEnd)}</b></div><div>설립 후 연평균 당기순이익 <b style="font-size:16px">${W(M.avgAll)}</b></div></div>
-    <table style="border-collapse:collapse;font-size:13.5px;font-variant-numeric:tabular-nums"><thead><tr>${th("구분",1)}${th("매출")}${th("영업이익")}${th("영업이익률")}${th("당기순이익")}${th("순이익률")}${th("연말 이익잉여금")}</tr></thead><tbody>${rows}</tbody></table>
-    <div style="font-size:11px;color:#5B7DB1;margin-top:6px">*연환산 = ${M.Y}년 1~${M.L.m}월 합계 × 12/${M.nAct} · 최근 12개월·연환산은 감가상각(1년치)·법인세 ${(M.rate*100).toFixed(1)}% 반영한 예상치 · 2020년은 8~12월</div>`;
+    <table style="border-collapse:collapse;border-bottom:1.5px solid #555;font-size:13.5px;font-variant-numeric:tabular-nums"><thead><tr>${th("구분",1)}${th("매출")}${th("영업이익")}${th("영업이익률")}${th("당기순이익")}${th("순이익률")}${th("연말 이익잉여금")}</tr></thead><tbody>${rows}</tbody></table>`;
 }
 window.stCapture=async function(mode,which){
   let el=document.getElementById("stReport");if(!el)return;let tmp=null;
