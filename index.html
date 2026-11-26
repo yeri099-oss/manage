@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">경영관리</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v616</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v617</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -4567,6 +4567,15 @@ function pnlUnionNames(yKeys,noMerge){
     let at=names.findIndex(x=>x.n===r.n);
     if(at<0){at=last+1;names.splice(at,0,{n:r.n,lv:r.lv});}
     last=at;}}
+  /* v617: 영업외수익 계정(국고보조금·이자수익·잡이익 등)이 7. 영업외비용 아래에 끼어 있으면 6. 영업외수익 쪽으로, 반대도 */
+  const hi=re=>names.findIndex(x=>x.lv===0&&re.test(x.n));
+  const INC=/국고보조금|이자수익|잡이익|외환차익|처분이익|환급|배당금수익|임대료수익/,EXP=/이자비용|기부금|잡손실|외환차손|처분손실/;
+  let i7=hi(/^7\./),i8=hi(/^8\./);
+  if(i7>0){const end=i8>i7?i8:names.length;const mv=[];for(let i=end-1;i>i7;i--){if(names[i].lv>0&&INC.test(names[i].n)&&!EXP.test(names[i].n))mv.unshift(names.splice(i,1)[0]);}
+    if(mv.length){i7=hi(/^7\./);names.splice(i7,0,...mv);}}
+  const i6=hi(/^6\./);i7=hi(/^7\./);i8=hi(/^8\./);
+  if(i6>=0&&i7>i6){const mv=[];for(let i=i7-1;i>i6;i--){if(names[i].lv>0&&EXP.test(names[i].n)&&!INC.test(names[i].n))mv.unshift(names.splice(i,1)[0]);}
+    if(mv.length){i8=hi(/^8\./);names.splice(i8>0?i8:names.length,0,...mv);}}
   return names;
 }
 /* ---- 엑셀(.xlsx) 생성: 예리님 양식 그대로 ---- */
