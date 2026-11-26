@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v610</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v611</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -21031,7 +21031,7 @@ function renderSettle(){
   const W=(n)=>n==null?"":fmt(Math.round(n));
   const pct=(a,b)=>b?(a/b*100).toFixed(1)+"%":"";
   const head=`<div class="card" style="padding:12px 16px"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b style="font-size:17px">📘 결산 (가결산)</b>
-    <span style="margin-left:auto"></span><button class="btn btn-sm btn-primary adm-rpt" onclick="stXlsx()">📥 엑셀 받기</button><button class="btn btn-sm adm-rpt" onclick="stCapture('img')">📸 보고용 이미지 복사</button><button class="btn btn-sm adm-rpt" onclick="stCapture('dl')">이미지 저장</button></div></div>`;
+    <span style="margin-left:auto"></span><button class="btn btn-sm btn-primary adm-rpt" onclick="stXlsx()">📥 엑셀 받기</button><button class="btn btn-sm adm-rpt" onclick="stCapture('img','sum')">📸 요약 이미지 복사</button><button class="btn btn-sm adm-rpt" onclick="stCapture('dl','sum')">요약 이미지 저장</button><button class="btn btn-sm adm-rpt" onclick="stCapture('img')" title="화면 전체(손익 비교·이익잉여금·사업장별·월별)">전체 이미지 복사</button></div></div>`;
   if(!L){el.innerHTML=head+`<div class="card"><div class="hint" style="padding:14px">월별손익에 입력된 달이 없어요. 월별손익 탭에서 이카운트 월별손익분석 파일을 먼저 넣어주세요.</div></div>`;return;}
   const R=stRolling(L,"total");
   const E=stYear(Y,L,"total",C.method||"ly");
@@ -21310,17 +21310,35 @@ window.stXlsx=async function(){
     toast(fname+" 를 받았어요 (요약 · 손익 세부 · 이익잉여금 · 사업장별 · 월별)");
   }catch(e){console.error(e);toast("엑셀 만들기 실패: "+(e.message||e),true);}
 };
-window.stCapture=async function(mode){
-  const el=document.getElementById("stReport");if(!el)return;
+/* v611: 결산 요약 이미지 — 연도별 매출·영업이익·당기순이익·연말 이익잉여금 한 표 (색 없이) */
+function stSumHtml(){
+  const M=window.__st.M;if(!M)return "";
+  const W=v=>v==null?"-":(v<0?`<span style="color:#C00000">${fmt(Math.round(v))}</span>`:fmt(Math.round(v)));
+  const P=(a,b)=>a==null||!b?"":`<span style="${a<0?"color:#C00000":"color:#4B5563"}">${(a/b*100).toFixed(1)}%</span>`;
+  const td=(h,b)=>`<td style="text-align:right;padding:7px 12px${b?";font-weight:700":""}">${h}</td>`;
+  const rows=M.cols.map(c=>{const h=c.v;const yr=/^\d{4}년 결산/.test(c.t)?Number(c.t.slice(0,4)):null;
+    const re=yr&&SETTLE_HIST[yr]?SETTLE_HIST[yr].reEnd:(c.v===M.AA?M.reEnd:null);const est=c.hl;
+    return `<tr style="${c.v===M.RR?"border-top:1px solid #9AA3AE;":""}${est?"background:#F5F9FE":""}"><td class="l" style="padding:7px 12px;white-space:nowrap">${esc(c.t.replace(" 결산",""))}${est?` <span style="font-size:11px;color:#6B7280">${esc(c.s)}</span>`:""}</td>${td(W(h.rev))}${td(W(h.op))}${td(P(h.op,h.rev))}${td(W(h.ni),1)}${td(P(h.ni,h.rev),1)}${td(re==null?"-":W(re))}</tr>`;}).join("");
+  const th=(t,l)=>`<th style="padding:7px 12px;${l?"text-align:left":"text-align:right"};border-bottom:1.5px solid #555;white-space:nowrap">${t}</th>`;
+  return `<div style="font-weight:800;font-size:15px;margin:0 0 4px">꽃밥이야기 결산 요약 <span style="font-weight:400;font-size:12px;color:#6B7280">${M.L.y}년 ${M.L.m}월까지 입력 · 단위: 원</span></div>
+    <div style="display:flex;gap:18px;margin:4px 0 8px;font-size:13px;flex-wrap:wrap">
+      <div>${M.Y}년 연환산 당기순이익 <b style="font-size:16px">${W(M.AA.ni)}</b></div><div>${M.Y}년 말 예상 이익잉여금 <b style="font-size:16px">${W(M.reEnd)}</b></div><div>설립 후 연평균 당기순이익 <b style="font-size:16px">${W(M.avgAll)}</b></div></div>
+    <table style="border-collapse:collapse;font-size:13.5px;font-variant-numeric:tabular-nums"><thead><tr>${th("구분",1)}${th("매출")}${th("영업이익")}${th("영업이익률")}${th("당기순이익")}${th("순이익률")}${th("연말 이익잉여금")}</tr></thead><tbody>${rows}</tbody></table>
+    <div style="font-size:11px;color:#5B7DB1;margin-top:6px">*연환산 = ${M.Y}년 1~${M.L.m}월 합계 × 12/${M.nAct} · 최근 12개월·연환산은 감가상각(1년치)·법인세 ${(M.rate*100).toFixed(1)}% 반영한 예상치 · 2020년은 8~12월</div>`;
+}
+window.stCapture=async function(mode,which){
+  let el=document.getElementById("stReport");if(!el)return;let tmp=null;
+  if(which==="sum"){tmp=document.createElement("div");tmp.style.cssText="position:fixed;left:-10000px;top:0;background:#fff;padding:14px 16px;width:max-content;font-family:inherit;color:#222";tmp.innerHTML=stSumHtml();document.body.appendChild(tmp);el=tmp;}
   try{
     await loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
     const cv=await html2canvas(el,{backgroundColor:"#ffffff",scale:2});
     const blob=await new Promise(r=>cv.toBlob(r,"image/png"));
-    const L=stLatest();const fname="결산_"+(L?String(L.y).slice(2)+String(L.m).padStart(2,"0"):"")+".png";
+    const L=stLatest();const fname="결산"+(which==="sum"?"요약":"")+"_"+(L?String(L.y).slice(2)+String(L.m).padStart(2,"0"):"")+".png";
     const dl=()=>{const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=fname;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},800);};
     if(mode==="dl"){dl();toast(fname+" 을 저장했어요");return;}
     try{await navigator.clipboard.write([new ClipboardItem({"image/png":blob})]);toast("결산 요약 이미지를 복사했어요 — 보고 창에 Ctrl+V");}catch(e){dl();toast("복사가 막혀서 이미지 파일로 저장했어요");}
   }catch(e){console.error(e);toast("캡쳐 실패: "+(e.message||e),true);}
+  finally{if(tmp)tmp.remove();}
 };
 RENDERERS.settle=renderSettle;
 /* ===== v602: 월별손익 › 그 달 보고용 요약 — 전체 KPI(전월·전년 같은 달 대비) · 사업장별 · 올해 누계 ===== */
