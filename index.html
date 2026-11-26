@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v609</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v610</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -21340,7 +21340,7 @@ function pnlReportCard(key){
     /* v608: 전체 / 꽃밥이야기(북촌: 마켓·보자기) / 꽃밥에피다 / 공통 */
     const g=e=>stMonth(y,m,e);const T=g("total"),I=g("insadong"),B=g("bukchon");
     const sub2=(a,...bs)=>{if(!a)return null;const o={};["rev","cogs","sga","op"].forEach(k=>{o[k]=(a[k]||0)-bs.reduce((s2,b)=>s2+((b&&b[k])||0),0);});return o;};
-    const ents=[["꽃밥이야기 (전체)",T,0],["북촌",B,0],["꽃밥마켓",g("market"),1],["보자기꽃밥",g("bojagi"),1],["꽃밥에피다",I,0],["공통 (본사)",sub2(T,I,B),0]]; /* v608: 꽃밥이야기 = 북촌(마켓·보자기), 공통 = 전체 − 북촌 − 피다 */
+    const ents=[["꽃밥이야기 (전체)",T,0],["북촌",B,0],["꽃밥마켓",g("market"),1],["보자기꽃밥",g("bojagi"),1],["꽃밥에피다",I,0]]; /* v610: 공통 줄은 뺌 (엑셀에 없음) */ /* v608: 꽃밥이야기 = 북촌(마켓·보자기), 공통 = 전체 − 북촌 − 피다 */
     const rows=ents.map(([nm,c,lv])=>{if(!c||c.rev==null&&c.op==null)return "";const tot=lv===0&&c===T;
       const td=(h,b)=>`<td style="text-align:right;padding:7px 12px${b?";font-weight:700":""}">${h}</td>`;
       return `<tr style="${tot?"border-bottom:1px solid #C9CFD6":""}${lv?";color:#4B5563":""}"><td class="l" style="padding:7px 12px;padding-left:${12+lv*16}px">${lv?"└ ":""}${nm}</td>${td(W(c.rev))}${td(P(c.cogs,c.rev))}${td(P(c.sga,c.rev))}${td(W(c.op),1)}${td(P(c.op,c.rev),1)}</tr>`;}).join("");
