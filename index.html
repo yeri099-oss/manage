@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v614</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v615</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -21266,7 +21266,7 @@ window.stXlsx=async function(){
     /* ② 손익 세부 */
     {const rows=[],merges=[],ht={};let NC=0;const fin=head(rows,merges,ht,"손익 비교 (세부 항목)",ymTxt,()=>NC);
       NC=pnlTable(true,rows,merges,ht);fin();
-      addNotes(rows,merges,NC,M.gOrder.map(g=>"*"+g+": "+M.gNote[g]));
+      addNotes(rows,merges,NC); /* v615: 설명은 *비율 · *연환산 · *법인세 세 줄만 */
       const minW=[22];for(let i=0;i<cols.length;i++){minW.push(8,15);}
       sheets.push({name:"손익 세부",rows,merges,rowHt:ht,fit:1,pre:1,cols:stXWidths(rows,minW)});}
     /* ③ 이익잉여금 */
