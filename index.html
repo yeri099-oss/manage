@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v599</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v600</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -21011,6 +21011,10 @@ function stYear(Y,L,e,method){
   return {act,est,tot,have,miss,estM,fill};
 }
 function stTax(pre,rate){return Math.max(0,Math.round(pre*rate));}
+/* v600: 연환산 — 금액 × f (기초·기말재고는 그대로) */
+function stScale(o,f){const r=Object.assign({},o);ST_LINES.forEach(k=>{if(r[k]!=null)r[k]=r[k]*f;});
+  r.sgaD={};for(const k in (o.sgaD||{}))r.sgaD[k]=o.sgaD[k]*f;
+  if(o.cD){r.cD={beg:o.cD.beg,end:o.cD.end};if(o.cD.buy!=null)r.cD.buy=o.cD.buy*f;if(o.cD.etc!=null)r.cD.etc=o.cD.etc*f;}return r;}
 function renderSettle(){
   const el=document.getElementById("tab-settle");if(!el)return;
   el.classList.remove("hidden");
@@ -21038,7 +21042,10 @@ function renderSettle(){
   const insR=insOf(R.sum.sgaD||{});
   const mk=(s)=>{const sd=Object.assign({},s.sgaD||{});{const x=insOf(sd);if(x){sd["보험료"]=(sd["보험료"]||0)+x;sd["복리후생비"]=(sd["복리후생비"]||0)-x;}}if(dep)sd["감가상각"]=(sd["감가상각"]||0)+dep;
     const sga=s.sga+dep,op=s.op-dep,pre0=s.pre-dep,pre=pre0+adj;const tax=stTax(pre,rate);return Object.assign({},s,{sgaD:sd,sga,op,pre:pre0,adj:adj||null,preA:pre,tax,ni:pre-tax});};
-  const RR=mk(R.sum),EE=RR; /* v566: '작년 같은 달'로 채운 올해 예상은 최근 12개월과 같아서 최근 12개월 하나로 */
+  const RR=mk(R.sum);
+  /* v600: 올해 예상 = 올해 1월~최근 달 합계 × 12/개월 수 (연환산 — 회계사 방식), 감가상각은 1년치 그대로 */
+  const YA=stYear(Y,L,"total","ly");const nAct=YA.have.length||1;const AA=mk(stScale(YA.act,12/nAct));
+  const EE=AA;
   const reBeg=H?H.reEnd:null;const div=C.div||0;
   const reEnd=reBeg!=null?reBeg+EE.ni-div:null;
   const histYs=[];for(let y=SETTLE_FOUND;y<Y;y++)if(SETTLE_HIST[y])histYs.push(y);
@@ -21047,26 +21054,28 @@ function renderSettle(){
   const kpi=(lb,v,sub,col)=>`<div style="flex:1 1 0;min-width:200px;border:1px solid var(--line,#e3e3e3);border-radius:12px;padding:10px 16px;background:#fff"><div class="unit">${lb}</div><div style="font-size:20px;font-weight:800;color:${col||"inherit"}">${v}</div><div class="unit" style="font-size:11.5px">${sub||""}</div></div>`;
   const eok=(n)=>n==null?"-":(n/1e8).toFixed(2)+"억";
   const kpis=`<div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin:4px 0 2px">
-    ${kpi("최근 12개월 당기순이익 (예상)",eok(RR.ni),stYm(R.from)+" ~ "+stYm(R.to)+" = "+Y+"년 1년치"+(R.miss.length?` · <span style="color:#B3261E">${R.miss.length}개월 미입력</span>`:""),"#2F6B3F")}
-    ${kpi(Y+"년 말 예상 이익잉여금",eok(reEnd),reBeg!=null?(Y-1)+"년 말 "+eok(reBeg)+" + 최근 12개월 순이익":"")}
+    ${kpi(Y+"년 예상 당기순이익 (연환산)",eok(AA.ni),"1~"+L.m+"월 × 12/"+nAct+(YA.miss.length?` · <span style="color:#B3261E">${YA.miss.length}개월 미입력</span>`:""),"#2F5FD0")}
+    ${kpi("최근 12개월 당기순이익",eok(RR.ni),stYm(R.from)+" ~ "+stYm(R.to)+(R.miss.length?` · <span style="color:#B3261E">${R.miss.length}개월 미입력</span>`:""),"#2F6B3F")}
+    ${kpi(Y+"년 말 예상 이익잉여금",eok(reEnd),reBeg!=null?(Y-1)+"년 말 "+eok(reBeg)+" + "+Y+"년 예상 순이익":"")}
     ${histYs.length?kpi("설립 후 연평균 당기순이익",eok(avgAll),histYs[0]+"~"+histYs[histYs.length-1]+"년 "+histYs.length+"년 평균 (2020년은 8~12월)"):""}
   </div>`;
   /* 손익 비교표 */
   const cols=[];
   histYs.forEach(y=>{const h=SETTLE_HIST[y];if(h)cols.push({t:y+"년 결산",s:h.src||"확정 (결산서)",v:Object.assign({gp:h.rev-h.cogs,adj:null,preA:null},h)});});
   cols.push({t:"최근 12개월",s:stYm(R.from)+" ~ "+stYm(R.to)+(R.miss.length?" · "+R.miss.length+"개월 빠짐":""),v:RR,hl:1});
+  cols.push({t:Y+"년 예상 (연환산)",s:"1~"+L.m+"월 × 12/"+nAct,v:AA,hl:1});
   const rowsDef=[["rev","매출액",1],["cogs","매출원가"],["gp","매출총이익",1],["sga","판매비와관리비"],["op","영업이익",1],["noi","영업외수익"],["noe","영업외비용"],["pre","법인세차감전이익",1],["adj","결산 조정 (재고·기타)"],["tax","법인세 (예상)"],["ni","당기순이익",2]];
   let tbl=`<div class="table-wrap"><table class="rpt" style="font-size:13px;margin:0"><thead><tr><th class="l">과목</th>${cols.map(c=>`<th colspan="2" style="min-width:150px${c.hl?";background:#EAF1FB":""}">${c.t}<div style="font-weight:400;font-size:11px;color:var(--sub)">${c.s}</div></th>`).join("")}</tr></thead><tbody>
     ${rowsDef.map(([k,n,b])=>`<tr${b===2?' style="background:#F8CBAD"':b?' style="background:#F4F7F2"':""}><td class="l">${b?"<b>"+n+"</b>":n}</td>${cols.map(c=>{const v=c.v[k];const t=k==="adj"&&v==null?"":W(v);const p=(k==="op"||k==="ni"||k==="cogs"||k==="sga")&&c.v.rev?`<span class="stp" title="매출액 대비 비율 = 이 금액 ÷ 같은 칸 매출액 × 100">${pct(c.v[k],c.v.rev)}</span>`:"";return `<td class="stpc">${p}</td><td style="text-align:right">${b?"<b>"+t+"</b>":t}</td>`;}).join("")}</tr>${k==="sga"?"<!--SGA-->":k==="cogs"?"<!--COGS-->":""}`).join("")}
   </tbody></table></div>
-  <div class="footnote" style="margin-top:6px">*비율 = 매출액 대비 = 해당금액 ÷ 같은 해 매출액 × 100 (원가율 = 매출원가 ÷ 매출액, 영업이익률 = 영업이익 ÷ 매출액)<br>*법인세(최근 12개월) = 법인세차감전이익(조정 후) × ${(rate*100).toFixed(1)}%</div>`;
+  <div class="footnote" style="margin-top:6px">*비율 = 매출액 대비 = 해당금액 ÷ 같은 해 매출액 × 100 (원가율 = 매출원가 ÷ 매출액, 영업이익률 = 영업이익 ÷ 매출액)<br>*연환산 = ${Y}년 1~${L.m}월 합계 × 12/${nAct} (감가상각은 1년치 그대로)<br>*법인세(최근 12개월·연환산) = 법인세차감전이익(조정 후) × ${(rate*100).toFixed(1)}%</div>`;
   /* v564: 판관비 세부 (인건비·판매비·관리비·상각비) */
   const sgaCols=cols.map(c=>({t:c.t,s:c.s,hl:c.hl,d:c.v.sgaD||{},tot:c.v.sga,rev:c.v.rev}));
   const accAll=[];sgaCols.forEach(c=>{for(const k in c.d)if(accAll.indexOf(k)<0)accAll.push(k);});
   const gOrder=["인건비","판매비","관리비","상각비"];
   const gNote={"인건비":"급여·상여·잡급(시급직)·퇴직급여·복리후생비·보험료(4대보험 등)·외주/인적 용역비","판매비":"판매수수료·광고·운반·포장·접대","관리비":"임차료·전기·수도·통신·세금·소모품·수수료 등","상각비":"감가상각비·무형자산상각비 (돈은 안 나가는 비용)"};
   const sgaOpen=window.__st.sgaOpen||{};
-  const sgaRows=gOrder.map(g=>{const acc=accAll.filter(a=>stGrpOf(a)===g).sort((x,y)=>(sgaCols[sgaCols.length-2]?(sgaCols[sgaCols.length-2].d[y]||0)-(sgaCols[sgaCols.length-2].d[x]||0):0));if(!acc.length)return "";
+  const sgaRows=gOrder.map(g=>{const acc=accAll.filter(a=>stGrpOf(a)===g).sort((x,y)=>(sgaCols[histYs.length-1]?(sgaCols[histYs.length-1].d[y]||0)-(sgaCols[histYs.length-1].d[x]||0):0));if(!acc.length)return "";
     const gs=sgaCols.map(c=>acc.reduce((s,a)=>s+(c.d[a]||0),0));const op=!!sgaOpen[g];
     return `<tr style="background:#FFF2CC;cursor:pointer" onclick="stSgaTog('${g}')"><td class="l"><b>${op?"▾":"▸"} ${g}</b> <span class="unit" style="font-size:11px">${gNote[g]}</span></td>${gs.map((v,i)=>`<td class="stpc"><span class="stp" title="매출액 대비 비율 = 이 금액 ÷ 같은 칸 매출액 × 100">${pct(v,sgaCols[i].rev)}</span></td><td style="text-align:right"><b>${W(v)}</b></td>`).join("")}</tr>`
       +(op?acc.map(a=>`<tr><td class="l" style="padding-left:26px">${esc(a)}</td>${sgaCols.map(c=>`<td class="stpc"></td><td style="text-align:right">${c.d[a]?W(c.d[a]):'<span style="color:#ccc">-</span>'}</td>`).join("")}</tr>`).join(""):"");}).join("");
@@ -21077,7 +21086,7 @@ function renderSettle(){
     <div class="footnote">% = 매출액 대비 · 인건비·판매비·관리비 나누는 기준은 계정 이름으로 자동 (보험료는 인건비에 넣었어요 — 결산서 보험료에 4대보험이 들어 있어서)</div>`;
   /* v565: 스위치를 켜면 손익 비교표의 판매비와관리비 아래에 인건비·판매비·관리비·상각비와 계정별 금액 */
   if(window.__st.det){
-    const inl=gOrder.map(g=>{const acc=accAll.filter(a=>stGrpOf(a)===g).sort((x,y)=>(sgaCols[sgaCols.length-2]?(sgaCols[sgaCols.length-2].d[y]||0)-(sgaCols[sgaCols.length-2].d[x]||0):0));if(!acc.length)return "";
+    const inl=gOrder.map(g=>{const acc=accAll.filter(a=>stGrpOf(a)===g).sort((x,y)=>(sgaCols[histYs.length-1]?(sgaCols[histYs.length-1].d[y]||0)-(sgaCols[histYs.length-1].d[x]||0):0));if(!acc.length)return "";
       const gs=sgaCols.map(c=>acc.reduce((s2,a)=>s2+(c.d[a]||0),0));
       return `<tr style="background:#FFF8E1"><td class="l" style="padding-left:18px"><b>${g}</b> <span title="${esc(gNote[g])}" style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;background:#C9A227;color:#fff;font-size:10.5px;font-weight:800;cursor:help;vertical-align:middle;margin-left:3px">!</span></td>${gs.map((v,i)=>`<td class="stpc"><span class="stp" title="매출액 대비 비율 = 이 금액 ÷ 같은 칸 매출액 × 100">${pct(v,sgaCols[i].rev)}</span></td><td style="text-align:right"><b>${W(v)}</b></td>`).join("")}</tr>`
         +acc.map(a=>`<tr style="font-size:12px;color:#555"><td class="l" style="padding-left:34px">${esc(a)}</td>${sgaCols.map(c=>`<td class="stpc"></td><td style="text-align:right">${c.d[a]?W(c.d[a]):'<span style="color:#ccc">-</span>'}</td>`).join("")}</tr>`).join("");}).join("")
@@ -21129,14 +21138,14 @@ function renderSettle(){
     </div></div>`;
   const note=`<div class="card"><div class="card-title">📝 알아두기</div><div style="font-size:13px;line-height:1.8">
     · <b>이익잉여금</b> = 회사가 낸 당기순이익(세금 낸 뒤)이 해마다 쌓인 것 − 배당. ${Y-1}년 말 ${H?fmt(H.reEnd):"-"}원, 설립 후 ${histYs.length}년 당기순이익 평균 ${eok(avgAll)} (2020년은 8~12월 5개월).<br>
-    · <b>최근 12개월</b>(예: 25.11~26.10) = ${Y}년 1년치 예상 (남은 달을 작년 같은 달로 채운 것과 동일) · 12월까지 입력 시 ${Y}년 1~12월 실적<br>
+    · <b>${Y}년 예상(연환산)</b> = 1월~최근 달 합계 × 12/개월 수 (회계연도 기준) · <b>최근 12개월</b> = 작년 같은 달 포함 실제 12개월 (계절 반영) · 12월까지 입력 시 둘 다 ${Y}년 1~12월 실적<br>
     · 월별손익 = 이카운트 장부 기준 · 결산 때 감가상각·재고 실사·법인세 등으로 차이 발생 → 위 '결산 조정'에 입력<br>
     · ${Y-1}년 순이익 = 국고보조금 1.17억(일회성) 포함 · 제외 시 영업으로 번 이익은 더 적음<br>
     · 지점(꽃밥에피다) = 같은 법인 · 재무상태표·이익잉여금은 회사 전체 하나, 사업장별로는 손익만 구분</div></div>`;
-  window.__st.M={Y,L,R,RR,reBeg,reEnd,avgAll,histYs,cols,rowsDef,sgaCols,accAll,gOrder,gNote,sgaMiss,reRows,ents,mons,rate,C,H,insR,dep}; /* v591: 엑셀용 */
+  window.__st.M={AA,nAct,Y,L,R,RR,reBeg,reEnd,avgAll,histYs,cols,rowsDef,sgaCols,accAll,gOrder,gNote,sgaMiss,reRows,ents,mons,rate,C,H,insR,dep}; /* v591: 엑셀용 */
   el.innerHTML=head+`<div id="stReport" style="background:#fff">
     <div class="card"><div class="st-fit" id="stKpiWrap"><div class="card-title">📘 ${Y}년 가결산 요약 <span class="unit">${L.y}년 ${L.m}월까지 입력 · 단위: 원</span></div>${kpis}</div></div>
-    <div class="card"><div class="st-fit"><div class="card-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">손익 비교 <span class="unit">결산서(확정) vs 최근 12개월 (= ${Y}년 예상)</span>
+    <div class="card"><div class="st-fit"><div class="card-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">손익 비교 <span class="unit">결산서(확정) vs 최근 12개월 vs ${Y}년 예상(연환산)</span>
       <label onclick="stDetTog()" style="margin-left:auto;display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600" title="판매비와관리비를 인건비·판매비·관리비·상각비와 계정별로 펼쳐 보기"><span>세부 항목 보기</span><span style="position:relative;width:42px;height:24px;border-radius:12px;background:${window.__st.det?"#2F6B3F":"#c9cec6"};transition:background .15s;display:inline-block"><span style="position:absolute;top:3px;left:${window.__st.det?21:3}px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3);transition:left .15s"></span></span></label></div>${tbl}
       </div></div>
     <div class="st-row"><div class="card"><div class="st-fit"><div class="card-title">이익잉여금</div>${reTbl}</div></div>
@@ -21221,7 +21230,7 @@ window.stXlsx=async function(){
         line(nm,c=>k==="adj"?c.v.adj:c.v[k],st,!!P_ROWS[k]);
         if(det&&k==="cogs"){[["beg","+ 기초재고"],["buy","+ 당기 매입"],["end","− 기말재고"],["etc","기타"]].forEach(([q,nm2])=>{if(!cols.some(c=>c.v.cD&&c.v.cD[q]!=null&&(q!=="etc"||c.v.cD[q])))return;line(nm2,c=>c.v.cD?c.v.cD[q]:null,{c:"555555",sz:9});});}
         if(det&&k==="sga"){
-          M.gOrder.forEach(g=>{const ref=M.sgaCols[M.sgaCols.length-2];const acc=M.accAll.filter(a=>stGrpOf(a)===g).sort((a1,a2)=>ref?(ref.d[a2]||0)-(ref.d[a1]||0):0);if(!acc.length)return;
+          M.gOrder.forEach(g=>{const ref=M.sgaCols[M.histYs.length-1];const acc=M.accAll.filter(a=>stGrpOf(a)===g).sort((a1,a2)=>ref?(ref.d[a2]||0)-(ref.d[a1]||0):0);if(!acc.length)return;
             line(g,c=>acc.reduce((s2,a)=>s2+((c.v.sgaD||{})[a]||0),0),{b:1,bg:"FFF8E1"},true);
             acc.forEach(a=>line(a,c=>(c.v.sgaD||{})[a]||null,{c:"555555",sz:9}));});
           if(M.sgaMiss.some(v=>v))line("세부 없는 금액",c=>{const i=cols.indexOf(c);return M.sgaMiss[i]||null;},{c:"6B7280",sz:9});
@@ -21231,15 +21240,17 @@ window.stXlsx=async function(){
       return ncol;
     };
     const NOTES=["*비율 = 매출액 대비 = 해당금액 ÷ 같은 해 매출액 × 100 (원가율 = 매출원가 ÷ 매출액, 영업이익률 = 영업이익 ÷ 매출액)",
-      "*법인세(최근 12개월) = 법인세차감전이익(조정 후) × "+(M.rate*100).toFixed(1)+"%"];
+      "*연환산 = "+Y+"년 1~"+L.m+"월 합계 × 12/"+M.nAct+" (감가상각은 1년치 그대로)",
+      "*법인세(최근 12개월·연환산) = 법인세차감전이익(조정 후) × "+(M.rate*100).toFixed(1)+"%"];
     const addNotes=(rows,merges,ncol,extra)=>{rows.push([]);NOTES.concat(extra||[]).forEach(tx=>{const r=rows.length;rows.push([note(tx)]);merges.push(stXRef(r,0)+":"+stXRef(r,ncol-1));});};
     const head=(rows,merges,ht,txt,unit,ncolRef)=>{rows.push([title(txt)]);ht[1]=30;rows.push([unit?unitR(unit):{v:""}]);rows.push([]);return ()=>{merges.push(stXRef(0,0)+":"+stXRef(0,ncolRef()-1));if(unit)merges.push(stXRef(1,0)+":"+stXRef(1,ncolRef()-1));};};
     /* ① 요약 */
     {const rows=[],merges=[],ht={};let NC=0;const fin=head(rows,merges,ht,"꽃밥이야기 "+Y+"년 가결산 요약",ymTxt,()=>NC);
       const k0=rows.length;
       rows.push([hd("항목",{},1),hd("금액",{},1),hd(""),hd("설명",{},1),hd(""),hd(""),hd("")]);
-      const kp=[["최근 12개월 순이익 (예상)",M.RR.ni,stYm(M.R.from)+" ~ "+stYm(M.R.to)+" = "+Y+"년 1년치로 봄"],
-        [Y+"년 말 예상 이익잉여금",M.reEnd,(Y-1)+"년 말 "+fmt(M.reBeg)+"원 + 최근 12개월 당기순이익"],
+      const kp=[[Y+"년 예상 순이익 (연환산)",M.AA.ni,"1~"+L.m+"월 × 12/"+M.nAct],
+        ["최근 12개월 순이익",M.RR.ni,stYm(M.R.from)+" ~ "+stYm(M.R.to)],
+        [Y+"년 말 예상 이익잉여금",M.reEnd,(Y-1)+"년 말 "+fmt(M.reBeg)+"원 + "+Y+"년 예상 순이익"],
         ["설립 후 연평균 당기순이익",M.avgAll,M.histYs[0]+"~"+M.histYs[M.histYs.length-1]+"년 "+M.histYs.length+"년 평균 (2020년은 8~12월)"]];
       kp.forEach(([a,v,d])=>{rows.push([t(a,{b:1}),Object.assign(n(v,{b:1,c:"2F6B3F"}),{nw:1}),t(""),Object.assign(t(d,{c:"4B5563",sz:9,ha:"center"}),{nw:1}),t(""),t(""),t("")]);});
       for(let r=k0;r<rows.length;r++)merges.push(stXRef(r,1)+":"+stXRef(r,2),stXRef(r,3)+":"+stXRef(r,6));
