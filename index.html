@@ -483,7 +483,7 @@ window.FIREBASE_CONFIG = {
       <span class="brand-sub">매출현황</span>
     </div>
     <div class="topbar-right">
-      <span style="font-size:11px;color:#999;margin-right:6px">v602</span><span id="user-badge" class="user-badge"></span>
+      <span style="font-size:11px;color:#999;margin-right:6px">v603</span><span id="user-badge" class="user-badge"></span>
       <button id="logout-btn" class="btn btn-ghost btn-sm">로그아웃</button>
     </div>
   </header>
@@ -2884,9 +2884,9 @@ window.scSumOpen=async function(y,m){
       <select style="${inpS}" onchange="scSumOpen(this.value,0)">${yrs.slice().reverse().map(yy=>`<option ${yy===y?"selected":""}>${yy}</option>`).join("")}</select>
       <select style="${inpS}" onchange="scSumOpen(${y},this.value)">${(ms.length?ms:[m]).map(mm=>`<option value="${mm}" ${+mm===m?"selected":""}>${mm}월</option>`).join("")}</select>
       <span style="margin-left:auto"></span>
-      <button class="btn btn-primary btn-sm" onclick="scSumCopy('img')">🖼 이미지 복사</button>
-      <button class="btn btn-sm" onclick="scSumCopy('text')">📄 텍스트 복사</button>
-      <button class="btn btn-sm" onclick="scSumCopy('dl')">💾 이미지 저장</button>
+      <button class="btn btn-primary btn-sm adm-rpt" onclick="scSumCopy('img')">🖼 이미지 복사</button>
+      <button class="btn btn-sm adm-rpt" onclick="scSumCopy('text')">📄 텍스트 복사</button>
+      <button class="btn btn-sm adm-rpt" onclick="scSumCopy('dl')">💾 이미지 저장</button>
       <button class="btn btn-sm" onclick="document.getElementById('scSumOv').remove()">✕ 닫기</button>
     </div>
     <div style="padding:12px 16px">
@@ -5132,7 +5132,7 @@ function renderPnl(){
         }).join("")}</tbody></table></div>
     </div>`;
   }
-  const viewTabs=`<div class="subtabs" style="align-items:center;flex-wrap:wrap"><button class="subtab ${view==="month"?"active":""}" onclick="pnlSetView('month')">월별 상세</button><button class="subtab ${view==="total"?"active":""}" onclick="pnlSetView('total')">연간 합산</button><button class="subtab ${view==="year"?"active":""}" onclick="pnlSetView('year')">사업장별 추이</button>${keys.length?`<span style="margin-left:auto"></span>${typeof pnlModeBtns==="function"?pnlModeBtns():""}<button class="btn btn-sm" onclick="pnlExportSep()">📥 별도가 엑셀</button><button class="btn btn-sm" onclick="pnlExportIncl()">📥 포함가 엑셀</button>`:""}</div>`;
+  const viewTabs=`<div class="subtabs" style="align-items:center;flex-wrap:wrap"><button class="subtab ${view==="month"?"active":""}" onclick="pnlSetView('month')">월별 상세</button><button class="subtab ${view==="total"?"active":""}" onclick="pnlSetView('total')">연간 합산</button><button class="subtab ${view==="year"?"active":""}" onclick="pnlSetView('year')">사업장별 추이</button>${keys.length?`<span style="margin-left:auto"></span>${typeof pnlModeBtns==="function"?pnlModeBtns():""}<button class="btn btn-sm adm-rpt" onclick="pnlExportSep()">📥 별도가 엑셀</button><button class="btn btn-sm adm-rpt" onclick="pnlExportIncl()">📥 포함가 엑셀</button>`:""}</div>`;
   el.innerHTML=pasteBox+viewTabs+(typeof pnlInclExtra==="function"?pnlInclExtra(view,keys):"")+body;
 }
 /* ===== 도우미 (데이터 질문 답변) ===== */
@@ -6317,7 +6317,7 @@ function renderJagum(){
     <button class="subtab ${sub==="bs"?"active":""}" onclick="jgSetSub('bs')">재무상태표(월말)</button>
     <button class="subtab ${sub==="nenia"?"active":""}" onclick="jgSetSub('nenia')">네니아대여금</button>
     <button class="subtab ${sub==="pullo"?"active":""}" onclick="jgSetSub('pullo')">풀로만대여금</button>
-    ${jgPeriods().length?`<button class="btn btn-sm" style="margin-left:auto" onclick="jgExportXlsx()">📥 엑셀 받기</button>`:""}
+    ${jgPeriods().length?`<button class="btn btn-sm adm-rpt" style="margin-left:auto" onclick="jgExportXlsx()">📥 엑셀 받기</button>`:""}
   </div>`;
   if(sub==="nenia"||sub==="pullo"){el.innerHTML=subtabs+jgStaticHtml(sub);return;}
   if(sub==="bs"){
@@ -6344,10 +6344,10 @@ function jgRepCard(){
   return `<div class="card"><div class="card-title">📸 보고용 자금현황 <span class="unit">엑셀에서 복사해 올리던 요약 그대로 — 이미지로 붙이거나 표로 붙여넣어요</span></div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:4px 2px">
       <select class="ctl" onchange="jgRepSet(this.value)">${opts}</select>
-      <button class="btn btn-sm btn-primary" onclick="jgRepCopy('${f}')">🖼 이미지 복사</button>
-      <button class="btn btn-sm" onclick="jgRepCopy('${f}','dl')">💾 이미지 저장</button>
-      <button class="btn btn-sm" onclick="jgRepCopy('${f}','table')">📋 표로 복사</button>
-      <button class="btn btn-sm" onclick="jgExportXlsx()">📥 엑셀 받기 (첨부용)</button>
+      <button class="btn btn-sm btn-primary adm-rpt" onclick="jgRepCopy('${f}')">🖼 이미지 복사</button>
+      <button class="btn btn-sm adm-rpt" onclick="jgRepCopy('${f}','dl')">💾 이미지 저장</button>
+      <button class="btn btn-sm adm-rpt" onclick="jgRepCopy('${f}','table')">📋 표로 복사</button>
+      <button class="btn btn-sm adm-rpt" onclick="jgExportXlsx()">📥 엑셀 받기 (첨부용)</button>
       <a href="#" class="unit" onclick="event.preventDefault();const b=document.getElementById('jgRepPrev');b.style.display=b.style.display==='none'?'':'none'">미리보기</a></div>
     <div id="jgRepPrev" style="display:none;margin-top:8px;overflow-x:auto">${jgRepHtml(f)}</div></div>`;
 }
@@ -21031,7 +21031,7 @@ function renderSettle(){
   const W=(n)=>n==null?"":fmt(Math.round(n));
   const pct=(a,b)=>b?(a/b*100).toFixed(1)+"%":"";
   const head=`<div class="card" style="padding:12px 16px"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b style="font-size:17px">📘 결산 (가결산)</b>
-    <span style="margin-left:auto"></span><button class="btn btn-sm btn-primary" onclick="stXlsx()">📥 엑셀 받기</button><button class="btn btn-sm" onclick="stCapture('img')">📸 보고용 이미지 복사</button><button class="btn btn-sm" onclick="stCapture('dl')">이미지 저장</button></div></div>`;
+    <span style="margin-left:auto"></span><button class="btn btn-sm btn-primary adm-rpt" onclick="stXlsx()">📥 엑셀 받기</button><button class="btn btn-sm adm-rpt" onclick="stCapture('img')">📸 보고용 이미지 복사</button><button class="btn btn-sm adm-rpt" onclick="stCapture('dl')">이미지 저장</button></div></div>`;
   if(!L){el.innerHTML=head+`<div class="card"><div class="hint" style="padding:14px">월별손익에 입력된 달이 없어요. 월별손익 탭에서 이카운트 월별손익분석 파일을 먼저 넣어주세요.</div></div>`;return;}
   const R=stRolling(L,"total");
   const E=stYear(Y,L,"total",C.method||"ly");
@@ -21358,7 +21358,7 @@ function pnlReportCard(key){
     </tbody></table>`:"";
     const mode=S.ui.pnlMode==="incl"?" · 포함가":"";
     return `<div class="card"><div class="card-head"><div class="card-title">📋 ${y}년 ${m}월 손익 요약 <span class="unit">보고용 · 단위: 원${mode}</span></div>
-      <div style="display:flex;gap:6px"><button class="btn btn-sm btn-primary" onclick="pnlRptCapture('img')">📸 이미지 복사</button><button class="btn btn-sm" onclick="pnlRptCapture('dl')">이미지 저장</button></div></div>
+      <div style="display:flex;gap:6px"><button class="btn btn-sm btn-primary adm-rpt" onclick="pnlRptCapture('img')">📸 이미지 복사</button><button class="btn btn-sm adm-rpt" onclick="pnlRptCapture('dl')">이미지 저장</button></div></div>
       <div id="pnlRpt" style="background:#fff;padding:6px 4px"><div style="font-weight:800;font-size:15px;margin:0 0 2px">꽃밥이야기 ${y}년 ${m}월 손익 요약</div>${kpis}${bizTbl}${cum}
       <div class="footnote" style="margin-top:6px">*비율 = 매출액 대비 · 전년 대비는 ${y-1}년 ${m}월 월별손익이 있을 때만</div></div></div>`;
   }catch(e){console.error(e);return "";}
@@ -22325,6 +22325,8 @@ async function showApp() {
   document.getElementById("user-badge").innerHTML =
     `${esc(S.user.username)}<span class="role ${S.user.role === "admin" ? "role-admin" : "role-user"}">${S.user.role === "admin" ? "관리자" : "일반"}</span>`;
   document.querySelectorAll(".admin-only").forEach((n) => n.classList.toggle("hidden", S.user.role !== "admin"));
+  document.body.classList.toggle("is-admin", S.user.role === "admin"); /* v603: 요약 보고용 버튼(.adm-rpt)은 관리자만 */
+  if(!document.getElementById("admRptCss")){const st=document.createElement("style");st.id="admRptCss";st.textContent="body:not(.is-admin) .adm-rpt{display:none!important}";document.head.appendChild(st);}
   // 패널 초기화
   document.getElementById("main").innerHTML = `
     <div id="pw-warn" class="pw-warn hidden">🔐 admin 비밀번호가 초기값(1234) 그대로예요. <a href="#" onclick="switchTab('settings');return false;">설정</a>에서 꼭 바꿔주세요. <button onclick="this.parentElement.classList.add('hidden')">닫기</button></div>
